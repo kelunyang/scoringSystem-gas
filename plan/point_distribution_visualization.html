@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基準權重分配視覺化</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .title {
+            font-size: 2.5rem;
+            font-weight: bold;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 1.1rem;
+        }
+        
+        .controls-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border-left: 5px solid #667eea;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .control-item {
+            display: flex;
+            flex-direction: column;
+            min-width: 120px;
+        }
+        
+        .control-item label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        
+        .control-item input {
+            padding: 8px 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        .control-item input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .total-points-control {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-left: auto;
+        }
+        
+        .total-points-control input {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .visualization-container {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+        }
+        
+        .summary-panel {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+        }
+        
+        .summary-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .team-summary {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid;
+            transition: transform 0.2s;
+        }
+        
+        .team-summary:hover {
+            transform: translateX(5px);
+        }
+        
+        .team-rank {
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        .team-stats {
+            font-size: 0.9rem;
+            color: #666;
+            line-height: 1.4;
+        }
+        
+        .validation-panel {
+            background: #e8f5e8;
+            border: 2px solid #4caf50;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        @media (max-width: 1000px) {
+            .visualization-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">基準權重分配系統</h1>
+            <p class="subtitle">橫向stack bar chart：每個方塊=1權重，同組同色，個人用虛線框</p>
+        </div>
+        
+        <div class="controls-section">
+            <div class="control-group">
+                <div class="control-item">
+                    <label for="team1">第1名組人數</label>
+                    <input type="number" id="team1" value="4" min="0">
+                </div>
+                <div class="control-item">
+                    <label for="team2">第2名組人數</label>
+                    <input type="number" id="team2" value="3" min="0">
+                </div>
+                <div class="control-item">
+                    <label for="team3">第3名組人數</label>
+                    <input type="number" id="team3" value="4" min="0">
+                </div>
+                <div class="control-item">
+                    <label for="team4">第4名組人數</label>
+                    <input type="number" id="team4" value="2" min="0">
+                </div>
+                <div class="control-item total-points-control">
+                    <label for="totalPoints">總點數</label>
+                    <input type="number" id="totalPoints" value="100" min="1">
+                </div>
+            </div>
+            
+            <div class="control-group" style="margin-top: 20px; padding: 15px; background: #f0f4f8; border-radius: 10px;">
+                <h4 style="margin: 0 0 15px 0; color: #333;">各組內部分工比例設定 (5%為最小單位)</h4>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                    <!-- 第1名組 -->
+                    <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #4caf50;">
+                        <h5 style="color: #4caf50; margin: 0 0 10px 0;">第1名組分工</h5>
+                        <div id="team1-roles"></div>
+                        <button onclick="addRole('team1')" style="background: #4caf50; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">+ 添加成員</button>
+                        <div style="margin-top: 5px; font-size: 11px; color: #666;">總計: <span id="team1-total">0</span>%</div>
+                    </div>
+                    
+                    <!-- 第2名組 -->
+                    <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #2196f3;">
+                        <h5 style="color: #2196f3; margin: 0 0 10px 0;">第2名組分工</h5>
+                        <div id="team2-roles"></div>
+                        <button onclick="addRole('team2')" style="background: #2196f3; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">+ 添加成員</button>
+                        <div style="margin-top: 5px; font-size: 11px; color: #666;">總計: <span id="team2-total">0</span>%</div>
+                    </div>
+                    
+                    <!-- 第3名組 -->
+                    <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #ff9800;">
+                        <h5 style="color: #ff9800; margin: 0 0 10px 0;">第3名組分工</h5>
+                        <div id="team3-roles"></div>
+                        <button onclick="addRole('team3')" style="background: #ff9800; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">+ 添加成員</button>
+                        <div style="margin-top: 5px; font-size: 11px; color: #666;">總計: <span id="team3-total">0</span>%</div>
+                    </div>
+                    
+                    <!-- 第4名組 -->
+                    <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #f44336;">
+                        <h5 style="color: #f44336; margin: 0 0 10px 0;">第4名組分工</h5>
+                        <div id="team4-roles"></div>
+                        <button onclick="addRole('team4')" style="background: #f44336; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">+ 添加成員</button>
+                        <div style="margin-top: 5px; font-size: 11px; color: #666;">總計: <span id="team4-total">0</span>%</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 15px; padding: 10px; background: #e3f2fd; border-radius: 6px; font-size: 12px; color: #1976d2;">
+                    💡 <strong>使用說明：</strong>各組自行決定內部分工，比例總和應為100%，系統會以全局最小比例(5%)為基準權重1
+                </div>
+            </div>
+        </div>
+        
+        <div class="visualization-container">
+            <div class="chart-container">
+                <h3>橫向權重分配圖</h3>
+                <div id="chart"></div>
+            </div>
+            
+            <div class="summary-panel">
+                <h3 class="summary-title">分配詳情</h3>
+                <div id="summary"></div>
+                
+                <div class="validation-panel">
+                    <h4>系統保證</h4>
+                    <div>統一權重系統確保公平分配</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tooltip"></div>
+
+    <script>
+        // 統一權重分配系統
+        class UnifiedPointDistributionSystem {
+            calculateUnifiedDistribution(teamMembers, teamRoles, totalPoints = 100) {
+                const rankWeights = {1: 4, 2: 3, 3: 2, 4: 1};
+                
+                // 收集所有比例，找到最小值
+                const allRatios = [];
+                for (let rank in teamRoles) {
+                    if (teamRoles[rank] && teamRoles[rank].length > 0) {
+                        teamRoles[rank].forEach(role => {
+                            if (role.ratio > 0) allRatios.push(role.ratio);
+                        });
+                    }
+                }
+                
+                if (allRatios.length === 0) return null;
+                const minRatio = Math.min(...allRatios);
+                
+                // 生成每個人的數據
+                const allPeople = [];
+                let personId = 0;
+                
+                for (let rank in teamMembers) {
+                    if (teamMembers[rank] > 0 && teamRoles[rank] && teamRoles[rank].length > 0) {
+                        const roles = teamRoles[rank].filter(role => role.name && role.ratio > 0);
+                        
+                        roles.forEach(role => {
+                            const roleWeight = role.ratio / minRatio;
+                            const finalWeight = rankWeights[rank] * roleWeight;
+                            
+                            allPeople.push({
+                                id: personId++,
+                                rank: parseInt(rank),
+                                name: role.name,
+                                roleRatio: role.ratio,
+                                finalWeight: finalWeight,
+                                displayName: `第${rank}名-${role.name}`
+                            });
+                        });
+                    }
+                }
+                
+                // 計算個人得分
+                const totalWeight = allPeople.reduce((sum, person) => sum + person.finalWeight, 0);
+                const pointsPerWeight = totalPoints / totalWeight;
+                
+                allPeople.forEach(person => {
+                    person.individualPoints = person.finalWeight * pointsPerWeight;
+                });
+                
+                allPeople.sort((a, b) => a.rank - b.rank);
+                
+                return {
+                    people: allPeople,
+                    summary: { totalPoints, totalWeight, pointsPerWeight, minRatio }
+                };
+            }
+        }
+
+        // 初始化
+        const system = new UnifiedPointDistributionSystem();
+        let data = null;
+        const colors = { 1: '#4caf50', 2: '#2196f3', 3: '#ff9800', 4: '#f44336' };
+        
+        // 創建SVG
+        const width = 800, height = 300;
+        const svg = d3.select("#chart")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
+        const g = svg.append("g").attr("transform", "translate(40, 40)");
+        const tooltip = d3.select(".tooltip");
+
+        // 更新圖表
+        function updateChart() {
+            g.selectAll("*").remove();
+            
+            if (!data || data.people.length === 0) {
+                g.append("text")
+                    .attr("x", (width-80) / 2)
+                    .attr("y", (height-80) / 2)
+                    .attr("text-anchor", "middle")
+                    .text("請設定各組分工比例");
+                return;
+            }
+            
+            const people = data.people;
+            const blocks = [];
+            let pos = 0;
+            
+            // 創建所有權重塊
+            people.forEach(person => {
+                const numBlocks = Math.round(person.finalWeight);
+                for (let i = 0; i < numBlocks; i++) {
+                    blocks.push({ person, position: pos++, blockIndex: i, totalBlocks: numBlocks });
+                }
+            });
+            
+            const blockSize = Math.min(12, (width - 100) / blocks.length);
+            const startX = (width - 80 - blocks.length * blockSize) / 2;
+            const blockHeight = 40;
+            const startY = (height - 80) / 2 - blockHeight / 2;
+            
+            // 繪製權重塊
+            g.selectAll(".block")
+                .data(blocks)
+                .enter()
+                .append("rect")
+                .attr("class", "block")
+                .attr("x", d => startX + d.position * blockSize)
+                .attr("y", startY)
+                .attr("width", blockSize - 1)
+                .attr("height", blockHeight)
+                .attr("fill", d => colors[d.person.rank])
+                .attr("stroke", "#fff")
+                .attr("stroke-width", 0.5)
+                .on("mouseover", function(event, d) {
+                    tooltip.style("opacity", 0.9)
+                        .html(`<strong>${d.person.displayName}</strong><br/>
+                               權重: ${d.person.finalWeight.toFixed(1)}<br/>
+                               得分: ${d.person.individualPoints.toFixed(2)}點`)
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", () => tooltip.style("opacity", 0));
+            
+            // 繪製個人邊框
+            let framePos = 0;
+            people.forEach(person => {
+                const numBlocks = Math.round(person.finalWeight);
+                if (numBlocks > 0) {
+                    g.append("rect")
+                        .attr("x", startX + framePos * blockSize)
+                        .attr("y", startY - 2)
+                        .attr("width", numBlocks * blockSize - 1)
+                        .attr("height", blockHeight + 4)
+                        .attr("fill", "none")
+                        .attr("stroke", "#333")
+                        .attr("stroke-width", 2)
+                        .attr("stroke-dasharray", "3,2");
+                    
+                    // 個人標籤
+                    g.append("text")
+                        .attr("x", startX + framePos * blockSize + (numBlocks * blockSize) / 2)
+                        .attr("y", startY - 8)
+                        .attr("text-anchor", "middle")
+                        .attr("font-size", "10px")
+                        .attr("font-weight", "bold")
+                        .text(`${person.name}(${numBlocks})`);
+                    
+                    framePos += numBlocks;
+                }
+            });
+            
+            // 組別分隔線
+            let sepPos = 0;
+            for (let rank = 1; rank <= 4; rank++) {
+                const teamPeople = people.filter(p => p.rank === rank);
+                if (teamPeople.length > 0) {
+                    const teamBlocks = teamPeople.reduce((sum, p) => sum + Math.round(p.finalWeight), 0);
+                    sepPos += teamBlocks;
+                    
+                    if (rank < 4) {
+                        g.append("line")
+                            .attr("x1", startX + sepPos * blockSize - 1)
+                            .attr("x2", startX + sepPos * blockSize - 1)
+                            .attr("y1", startY - 20)
+                            .attr("y2", startY + blockHeight + 20)
+                            .attr("stroke", "#000")
+                            .attr("stroke-width", 2)
+                            .attr("stroke-dasharray", "4,2");
+                    }
+                }
+            }
+            
+            // 組別標籤
+            let labelPos = 0;
+            for (let rank = 1; rank <= 4; rank++) {
+                const teamPeople = people.filter(p => p.rank === rank);
+                if (teamPeople.length > 0) {
+                    const teamBlocks = teamPeople.reduce((sum, p) => sum + Math.round(p.finalWeight), 0);
+                    const centerPos = labelPos + teamBlocks / 2;
+                    
+                    g.append("text")
+                        .attr("x", startX + centerPos * blockSize)
+                        .attr("y", startY + blockHeight + 20)
+                        .attr("text-anchor", "middle")
+                        .attr("font-size", "12px")
+                        .attr("font-weight", "bold")
+                        .attr("fill", colors[rank])
+                        .text(`第${rank}名組`);
+                    
+                    labelPos += teamBlocks;
+                }
+            }
+        }
+
+        // 角色管理
+        function addRole(teamId) {
+            const container = document.getElementById(`${teamId}-roles`);
+            const div = document.createElement('div');
+            div.style.cssText = "display: flex; gap: 10px; align-items: center; margin-bottom: 8px;";
+            div.innerHTML = `
+                <input type="text" placeholder="成員名稱" style="width: 100px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px;" onchange="updateVisualization()">
+                <input type="number" placeholder="比例%" min="5" max="100" step="5" style="width: 60px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px;" onchange="updateVisualization()">
+                <button onclick="removeRole(this)" style="background: #ff4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">×</button>
+            `;
+            container.appendChild(div);
+            updateTeamTotal(teamId);
+        }
+        
+        function removeRole(button) {
+            const div = button.parentElement;
+            const teamId = div.parentElement.id.replace('-roles', '');
+            div.remove();
+            updateTeamTotal(teamId);
+            updateVisualization();
+        }
+        
+        function updateTeamTotal(teamId) {
+            const container = document.getElementById(`${teamId}-roles`);
+            const inputs = container.querySelectorAll('input[type="number"]');
+            let total = 0;
+            inputs.forEach(input => total += parseInt(input.value) || 0);
+            
+            const span = document.getElementById(`${teamId}-total`);
+            span.textContent = total;
+            span.style.color = total === 100 ? '#4caf50' : total > 100 ? '#f44336' : '#ff9800';
+        }
+        
+        function getTeamRoles() {
+            const teamRoles = {};
+            for (let i = 1; i <= 4; i++) {
+                const container = document.getElementById(`team${i}-roles`);
+                const divs = container.querySelectorAll('div');
+                teamRoles[i] = [];
+                
+                divs.forEach(div => {
+                    const nameInput = div.querySelector('input[type="text"]');
+                    const ratioInput = div.querySelector('input[type="number"]');
+                    
+                    if (nameInput && ratioInput && nameInput.value.trim() && ratioInput.value) {
+                        teamRoles[i].push({
+                            name: nameInput.value.trim(),
+                            ratio: parseInt(ratioInput.value) || 0
+                        });
+                    }
+                });
+            }
+            return teamRoles;
+        }
+
+        function updateSummary() {
+            if (!data || data.people.length === 0) {
+                document.getElementById('summary').innerHTML = '<p style="text-align: center; color: #999;">請設定各組分工比例</p>';
+                return;
+            }
+            
+            let html = '<h4 style="color: #333; margin-bottom: 15px;">權重分配結果</h4>';
+            
+            for (let rank = 1; rank <= 4; rank++) {
+                const teamPeople = data.people.filter(p => p.rank === rank);
+                if (teamPeople.length > 0) {
+                    html += `<div class="team-summary" style="border-left-color: ${colors[rank]}">
+                                <div class="team-rank" style="color: ${colors[rank]}">第${rank}名組</div>
+                                <div class="team-stats">`;
+                    
+                    teamPeople.forEach(person => {
+                        html += `👤 ${person.name}: ${person.roleRatio}% → ${Math.round(person.finalWeight)}權重 → ${person.individualPoints.toFixed(2)}點<br/>`;
+                    });
+                    
+                    html += `</div></div>`;
+                }
+            }
+            
+            document.getElementById('summary').innerHTML = html;
+        }
+
+        function updateVisualization() {
+            const teamMembers = {
+                1: parseInt(document.getElementById('team1').value) || 0,
+                2: parseInt(document.getElementById('team2').value) || 0,
+                3: parseInt(document.getElementById('team3').value) || 0,
+                4: parseInt(document.getElementById('team4').value) || 0
+            };
+            
+            const totalPoints = parseInt(document.getElementById('totalPoints').value) || 100;
+            const teamRoles = getTeamRoles();
+            
+            data = system.calculateUnifiedDistribution(teamMembers, teamRoles, totalPoints);
+            
+            ['team1', 'team2', 'team3', 'team4'].forEach(updateTeamTotal);
+            updateChart();
+            updateSummary();
+        }
+
+        // 事件監聽
+        ['team1', 'team2', 'team3', 'team4', 'totalPoints'].forEach(id => {
+            document.getElementById(id).addEventListener('input', updateVisualization);
+        });
+        
+        // 初始化示例數據
+        function init() {
+            const examples = {
+                team1: [['組長', 35], ['成員A', 25], ['成員B', 25], ['成員C', 15]],
+                team2: [['組長', 40], ['副組長', 35], ['成員', 25]],
+                team3: [['組長', 30], ['成員A', 25], ['成員B', 25], ['成員C', 20]],
+                team4: [['組長', 60], ['成員', 40]]
+            };
+            
+            Object.keys(examples).forEach(teamId => {
+                examples[teamId].forEach(([name, ratio]) => {
+                    addRole(teamId);
+                    const container = document.getElementById(`${teamId}-roles`);
+                    const lastDiv = container.lastElementChild;
+                    lastDiv.querySelector('input[type="text"]').value = name;
+                    lastDiv.querySelector('input[type="number"]').value = ratio;
+                });
+            });
+            
+            updateVisualization();
+        }
+        
+        setTimeout(init, 100);
+    </script>
+</body>
+</html>

@@ -1,0 +1,484 @@
+/**
+ * Tags Router
+ * Migrated from GAS scripts/tags_api.js
+ *
+ * ⚠️ DISABLED: Tags system has been disabled
+ * This entire file is commented out and kept for reference only
+ *
+ * Permission Requirements:
+ * - All endpoints require: manage_tags OR system_admin
+ *
+ * Endpoints:
+ * - POST /tags/create - Create tag
+ * - POST /tags/list - Get all tags
+ * - POST /tags/update - Update tag
+ * - POST /tags/delete - Delete tag
+ * - POST /tags/assign/project - Assign tag to project
+ * - POST /tags/assign/user - Assign tag to user
+ * - POST /tags/remove/project - Remove tag from project
+ * - POST /tags/remove/user - Remove tag from user
+ * - POST /tags/project - Get project tags
+ * - POST /tags/user - Get user tags
+ * - POST /tags/batch/user - Batch update user tags
+ * - POST /tags/batch/project - Batch update project tags
+ */
+
+/* ENTIRE FILE DISABLED - Tags system has been disabled
+
+import { Hono } from 'hono';
+import { authMiddleware } from '../middleware/auth';
+import { hasGlobalPermission, GLOBAL_PERMISSIONS } from '../utils/permissions';
+import {
+  createTag,
+  getTags,
+  updateTag,
+  deleteTag
+} from '../handlers/tags/manage';
+import {
+  assignTagToProject,
+  assignTagToUser,
+  removeTagFromProject,
+  removeTagFromUser,
+  getProjectTags,
+  getUserTags,
+  batchUpdateUserTags,
+  batchUpdateProjectTags,
+  getAllUserTagAssignments,
+  getAllProjectTagAssignments
+} from '../handlers/tags/assignments';
+import type { Env } from '../types';
+
+const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
+
+// Apply authentication middleware to all routes
+app.use('*', authMiddleware);
+
+// Apply permission check - requires manage_tags OR system_admin
+// EXCEPT for project-specific tag operations which are checked in the handler
+app.use('*', async (c, next) => {
+  const user = c.get('user');
+  const path = c.req.path;
+
+  // Skip global permission check for project-specific tag operations
+  // These will be checked by checkProjectPermission in the handler
+  const projectSpecificPaths = [
+    '/tags/assign/project',
+    '/tags/remove/project',
+    '/tags/project'
+  ];
+
+  if (projectSpecificPaths.some(p => path.endsWith(p))) {
+    return next();
+  }
+
+  // Check if user has manage_tags or system_admin permission
+  const hasPermission = await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.MANAGE_TAGS) ||
+                        await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.SYSTEM_ADMIN);
+
+  if (!hasPermission) {
+    return c.json({
+      success: false,
+      error: 'Insufficient permissions - requires manage_tags or system_admin',
+      errorCode: 'ACCESS_DENIED'
+    }, 403);
+  }
+
+  return next();
+});
+
+/**
+ * Create tag
+ * Body: { sessionId, tagData: { tagName, tagColor?, description? } }
+ */
+app.post('/create', async (c) => {
+  try {
+    const user = c.get('user');
+    const body = await c.req.json();
+    const { tagData } = body;
+
+    if (!tagData || !tagData.tagName) {
+      return c.json({
+        success: false,
+        error: 'Tag data with tagName is required',
+        errorCode: 'INVALID_INPUT'
+      }, 400);
+    }
+
+    const response = await createTag(c.env, user.userEmail, tagData);
+    return response;
+  } catch (error) {
+    console.error('Create tag route error:', error);
+    return c.json({
+      success: false,
+      error: 'Failed to create tag',
+      errorCode: 'SYSTEM_ERROR'
+    }, 500);
+  }
+});
+
+/**
+ * Get all tags
+ * Body: { sessionId, filters?: { isActive?, search? } }
+ */
+app.post('/list', async (c) => {
+  try {
+    const user = c.get('user');
+    const body = await c.req.json();
+    const { filters = {} } = body;
+
+    const response = await getTags(c.env, user.userEmail, filters);
+    return response;
+  } catch (error) {
+    console.error('Get tags route error:', error);
+    return c.json({
+      success: false,
+      error: 'Failed to get tags',
+      errorCode: 'SYSTEM_ERROR'
+    }, 500);
+  }
+});
+
+/**
+ * Update tag
+ * Body: { sessionId, tagId, updates: { tagName?, tagColor?, description?, isActive? } }
+ */
+app.post('/update', async (c) => {
+  try {
+    const user = c.get('user');
+    const body = await c.req.json();
+    const { tagId, updates } = body;
+
+    if (!tagId || !updates || typeof updates !== 'object') {
+      return c.json({
+        success: false,
+        error: 'Tag ID and updates are required',
+        errorCode: 'INVALID_INPUT'
+      }, 400);
+    }
+
+    const response = await updateTag(c.env, user.userEmail, tagId, updates);
+    return response;
+  } catch (error) {
+    console.error('Update tag route error:', error);
+    return c.json({
+      success: false,
+      error: 'Failed to update tag',
+      errorCode: 'SYSTEM_ERROR'
+    }, 500);
+  }
+});
+
+/**
+ * Delete tag
+ * Body: { sessionId, tagId }
+ */
+app.post('/delete', async (c) => {
+  try {
+    const user = c.get('user');
+    const body = await c.req.json();
+    const { tagId } = body;
+
+    if (!tagId) {
+      return c.json({
+        success: false,
+        error: 'Tag ID is required',
+        errorCode: 'INVALID_INPUT'
+      }, 400);
+    }
+
+    const response = await deleteTag(c.env, user.userEmail, tagId);
+    return response;
+  } catch (error) {
+    console.error('Delete tag route error:', error);
+    return c.json({
+      success: false,
+      error: 'Failed to delete tag',
+      errorCode: 'SYSTEM_ERROR'
+    }, 500);
+  }
+});
+
+/**
+ * Assign tag to project
+ * Body: { sessionId, projectId, tagId }
+ */
+app.post('/assign/project', async (c) => {
+  try {
+    const user = c.get('user');
+    const body = await c.req.json();
+    const { projectId, tagId } = body;
+
+    if (!projectId || !tagId) {
+      return c.json({
+        success: false,
+        error: 'Project ID and tag ID are required',
+        errorCode: 'INVALID_INPUT'
+      }, 400);
+    }
+
+    const response = await assignTagToProject(c.env, user.userEmail, projectId, tagId);
+    return response;
+  } catch (error) {
+    console.error('Assign tag to project route error:', error);
+    return c.json({
+      success: false,
+      error: 'Failed to assign tag to project',
+      errorCode: 'SYSTEM_ERROR'
+    }, 500);
+  }
+});
+
+/**
+ * Assign tag to user
+ * Body: { sessionId, userEmail, tagId }
+ */
+app.post('/assign/user', async (c) => {
+  try {
+    const user = c.get('user');
+    const body = await c.req.json();
+    const { userEmail, tagId } = body;
+
+    if (!userEmail || !tagId) {
+      return c.json({
+        success: false,
+        error: 'User email and tag ID are required',
+        errorCode: 'INVALID_INPUT'
+      }, 400);
+    }
+
+    const response = await assignTagToUser(c.env, user.userEmail, userEmail, tagId);
+    return response;
+  } catch (error) {
+    console.error('Assign tag to user route error:', error);
+    return c.json({
+      success: false,
+      error: 'Failed to assign tag to user',
+      errorCode: 'SYSTEM_ERROR'
+    }, 500);
+  }
+});
+
+/**
+ * Remove tag from project
+ * Body: { sessionId, projectId, tagId }
+ */
+app.post('/remove/project', async (c) => {
+  try {
+    const user = c.get('user');
+    const body = await c.req.json();
+    const { projectId, tagId } = body;
+
+    if (!projectId || !tagId) {
+      return c.json({
+        success: false,
+        error: 'Project ID and tag ID are required',
+        errorCode: 'INVALID_INPUT'
+      }, 400);
+    }
+
+    const response = await removeTagFromProject(c.env, user.userEmail, projectId, tagId);
+    return response;
+  } catch (error) {
+    console.error('Remove tag from project route error:', error);
+    return c.json({
+      success: false,
+      error: 'Failed to remove tag from project',
+      errorCode: 'SYSTEM_ERROR'
+    }, 500);
+  }
+});
+
+/**
+ * Remove tag from user
+ * Body: { sessionId, userEmail, tagId }
+ */
+app.post('/remove/user', async (c) => {
+  try {
+    const user = c.get('user');
+    const body = await c.req.json();
+    const { userEmail, tagId } = body;
+
+    if (!userEmail || !tagId) {
+      return c.json({
+        success: false,
+        error: 'User email and tag ID are required',
+        errorCode: 'INVALID_INPUT'
+      }, 400);
+    }
+
+    const response = await removeTagFromUser(c.env, user.userEmail, userEmail, tagId);
+    return response;
+  } catch (error) {
+    console.error('Remove tag from user route error:', error);
+    return c.json({
+      success: false,
+      error: 'Failed to remove tag from user',
+      errorCode: 'SYSTEM_ERROR'
+    }, 500);
+  }
+});
+
+/**
+ * Get project tags
+ * Body: { sessionId, projectId }
+ */
+app.post('/project', async (c) => {
+  try {
+    const user = c.get('user');
+    const body = await c.req.json();
+    const { projectId } = body;
+
+    if (!projectId) {
+      return c.json({
+        success: false,
+        error: 'Project ID is required',
+        errorCode: 'INVALID_INPUT'
+      }, 400);
+    }
+
+    const response = await getProjectTags(c.env, user.userEmail, projectId);
+    return response;
+  } catch (error) {
+    console.error('Get project tags route error:', error);
+    return c.json({
+      success: false,
+      error: 'Failed to get project tags',
+      errorCode: 'SYSTEM_ERROR'
+    }, 500);
+  }
+});
+
+/**
+ * Get user tags
+ * Body: { sessionId, userEmail }
+ */
+app.post('/user', async (c) => {
+  try {
+    const user = c.get('user');
+    const body = await c.req.json();
+    const { userEmail } = body;
+
+    if (!userEmail) {
+      return c.json({
+        success: false,
+        error: 'User email is required',
+        errorCode: 'INVALID_INPUT'
+      }, 400);
+    }
+
+    const response = await getUserTags(c.env, user.userEmail, userEmail);
+    return response;
+  } catch (error) {
+    console.error('Get user tags route error:', error);
+    return c.json({
+      success: false,
+      error: 'Failed to get user tags',
+      errorCode: 'SYSTEM_ERROR'
+    }, 500);
+  }
+});
+
+/**
+ * Batch update user tags
+ * Body: { sessionId, userEmail, operations: [{ tagId, action: 'add'|'remove' }] }
+ */
+app.post('/batch/user', async (c) => {
+  try {
+    const user = c.get('user');
+    const body = await c.req.json();
+    const { userEmail, operations } = body;
+
+    if (!userEmail || !operations) {
+      return c.json({
+        success: false,
+        error: 'User email and operations are required',
+        errorCode: 'INVALID_INPUT'
+      }, 400);
+    }
+
+    const response = await batchUpdateUserTags(c.env, user.userEmail, userEmail, operations);
+    return response;
+  } catch (error) {
+    console.error('Batch update user tags route error:', error);
+    return c.json({
+      success: false,
+      error: 'Failed to batch update user tags',
+      errorCode: 'SYSTEM_ERROR'
+    }, 500);
+  }
+});
+
+/**
+ * Batch update project tags
+ * Body: { sessionId, projectId, operations: [{ tagId, action: 'add'|'remove' }] }
+ */
+app.post('/batch/project', async (c) => {
+  try {
+    const user = c.get('user');
+    const body = await c.req.json();
+    const { projectId, operations } = body;
+
+    if (!projectId || !operations) {
+      return c.json({
+        success: false,
+        error: 'Project ID and operations are required',
+        errorCode: 'INVALID_INPUT'
+      }, 400);
+    }
+
+    const response = await batchUpdateProjectTags(c.env, user.userEmail, projectId, operations);
+    return response;
+  } catch (error) {
+    console.error('Batch update project tags route error:', error);
+    return c.json({
+      success: false,
+      error: 'Failed to batch update project tags',
+      errorCode: 'SYSTEM_ERROR'
+    }, 500);
+  }
+});
+
+/**
+ * Get all user tag assignments
+ * Body: { sessionId }
+ * Returns: Array of users with their assigned tags
+ */
+app.post('/assignments/users', async (c) => {
+  try {
+    const user = c.get('user');
+    const response = await getAllUserTagAssignments(c.env, user.userEmail);
+    return response;
+  } catch (error) {
+    console.error('Get all user tag assignments route error:', error);
+    return c.json({
+      success: false,
+      error: 'Failed to get user tag assignments',
+      errorCode: 'SYSTEM_ERROR'
+    }, 500);
+  }
+});
+
+/**
+ * Get all project tag assignments
+ * Body: { sessionId }
+ * Returns: Array of projects with their assigned tags
+ */
+app.post('/assignments/projects', async (c) => {
+  try {
+    const user = c.get('user');
+    const response = await getAllProjectTagAssignments(c.env, user.userEmail);
+    return response;
+  } catch (error) {
+    console.error('Get all project tag assignments route error:', error);
+    return c.json({
+      success: false,
+      error: 'Failed to get project tag assignments',
+      errorCode: 'SYSTEM_ERROR'
+    }, 500);
+  }
+});
+
+export default app;
+
+*/
+// END OF DISABLED CODE - Tags system has been disabled

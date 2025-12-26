@@ -1,0 +1,63 @@
+{
+  "name": "@repo/backend",
+  "version": "1.0.0",
+  "description": "Cloudflare Workers Backend",
+  "main": "src/index.ts",
+  "type": "module",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "dev": "wrangler dev --port 8787",
+    "deploy": "wrangler deploy",
+    "deploy:production": "wrangler deploy --env production",
+    "build": "tsc --noEmit",
+    "type-check": "tsc --noEmit",
+    "predeploy": "npm run type-check",
+    "logs": "wrangler tail",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write src/**/*.ts",
+    "clean": "rm -rf .wrangler dist",
+    "db:migrate": "wrangler d1 migrations apply scoring-system-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply scoring-system-db --remote",
+    "db:create": "wrangler d1 migrations create scoring-system-db",
+    "db:sync-schema": "cp ../../../database/schema.sql ./migrations/0003_init_schema.sql",
+    "db:reset:local": "npm run db:sync-schema && tsx scripts/reset-database.js --local",
+    "db:reset:remote": "tsx scripts/reset-database.js --remote",
+    "db:reset:all": "npm run db:sync-schema && tsx scripts/reset-database.js --all",
+    "db:nuke": "npm run db:sync-schema && tsx scripts/reset-database.js --all --force",
+    "db:rebuild": "npm run db:reset:local && npm run init:local",
+    "init:local": "tsx scripts/init-system.js",
+    "init:remote": "tsx scripts/init-system.js --remote",
+    "init:schema": "wrangler d1 execute scoring-system-db --local --file=migrations/0003_init_schema.sql",
+    "init:schema:remote": "wrangler d1 execute scoring-system-db --remote --file=migrations/0003_init_schema.sql"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.7.5",
+    "@repo/shared": "workspace:*",
+    "hono": "^4.10.7",
+    "jose": "^5.2.0",
+    "sanitize-html": "^2.17.0",
+    "worker-mailer": "^1.1.5",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240117.0",
+    "@types/sanitize-html": "^2.16.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.2.4",
+    "prompts": "^2.4.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.2",
+    "wrangler": "^4.45.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

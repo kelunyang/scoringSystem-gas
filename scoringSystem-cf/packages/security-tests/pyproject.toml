@@ -1,0 +1,58 @@
+[project]
+name = "scoring-system-security-tests"
+version = "1.0.0"
+description = "API Security Testing Suite for Scoring System (Cloudflare Worker)"
+authors = [
+    {name = "Security Team"}
+]
+requires-python = ">=3.11"
+dependencies = [
+    "pytest>=7.4.3",
+    "requests>=2.31.0",
+    "pyjwt>=2.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.7.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+minversion = "7.4"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--disable-warnings",
+]
+markers = [
+    "critical: Critical security tests that must pass",
+    "high: High priority security tests",
+    "medium: Medium priority security tests",
+    "low: Low priority security tests",
+    "slow: Tests that take a long time to run",
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

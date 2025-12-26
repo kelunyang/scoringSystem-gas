@@ -1,0 +1,246 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2025-11-01",
+  "description": "Frontend UI permission configuration - maps specific permissions to UI visibility",
+
+  "navigation": {
+    "description": "Main app navigation items in sidebar",
+    "items": {
+      "dashboard": {
+        "id": "nav_dashboard",
+        "label": "首頁",
+        "route": "dashboard",
+        "icon": "fas fa-home",
+        "permissions": {
+          "required": [],
+          "logic": "OR"
+        },
+        "visible": true,
+        "order": 1
+      },
+      "wallet": {
+        "id": "nav_wallet",
+        "label": "錢包",
+        "route": "wallet",
+        "icon": "fas fa-wallet",
+        "permissions": {
+          "required": [],
+          "logic": "OR"
+        },
+        "visible": true,
+        "order": 2
+      },
+      "admin": {
+        "id": "nav_admin",
+        "label": "系統管理",
+        "route": "admin",
+        "icon": "fas fa-cog",
+        "description": "有任何管理權限即可看到此導航項",
+        "permissions": {
+          "required": [
+            "system_admin",
+            "manage_users",
+            "manage_global_groups",
+            "create_project",
+            "manage_system_settings",
+            "view_system_logs",
+            "view_email_logs",
+            "notification_manager"
+          ],
+          "logic": "OR"
+        },
+        "visible": true,
+        "order": 3
+      }
+    }
+  },
+
+  "systemAdmin": {
+    "description": "System Admin page tabs",
+    "accessPermissions": {
+      "description": "需要至少一個管理權限才能進入系統管理頁面",
+      "required": [
+        "system_admin",
+        "manage_users",
+        "manage_global_groups",
+        "create_project",
+        "manage_system_settings",
+        "view_system_logs",
+        "view_email_logs",
+        "notification_manager"
+      ],
+      "logic": "OR"
+    },
+    "tabs": {
+      "users": {
+        "id": "admin_users",
+        "key": "users",
+        "label": "使用者管理",
+        "icon": "fas fa-users",
+        "component": "UserManagement",
+        "description": "管理系統使用者、權限和標籤（需要 system_admin 或 manage_users 權限）",
+        "permissions": {
+          "required": ["system_admin", "manage_users"],
+          "logic": "OR"
+        },
+        "visible": true,
+        "order": 1,
+        "features": {
+          "invitationManagement": {
+            "id": "admin_users_invitations",
+            "description": "邀請碼管理功能（產生、查看、停用邀請碼）",
+            "permissions": {
+              "required": ["generate_invites", "system_admin"],
+              "logic": "OR"
+            }
+          }
+        }
+      },
+      "projects": {
+        "id": "admin_projects",
+        "key": "projects",
+        "label": "專案管理",
+        "icon": "fas fa-project-diagram",
+        "component": "ProjectManagement",
+        "description": "建立和管理專案",
+        "permissions": {
+          "required": ["create_project", "system_admin"],
+          "logic": "OR"
+        },
+        "visible": true,
+        "order": 2
+      },
+      "groups": {
+        "id": "admin_groups",
+        "key": "groups",
+        "label": "群組管理",
+        "icon": "fas fa-layer-group",
+        "component": "GroupManagement",
+        "description": "管理全域和專案群組",
+        "permissions": {
+          "required": ["manage_global_groups", "system_admin"],
+          "logic": "OR"
+        },
+        "visible": true,
+        "order": 3
+      },
+      "notifications": {
+        "id": "admin_notifications",
+        "key": "notifications",
+        "label": "通知管理",
+        "icon": "fas fa-bell",
+        "component": "NotificationManagement",
+        "description": "發送系統通知",
+        "permissions": {
+          "required": ["system_admin", "notification_manager"],
+          "logic": "OR"
+        },
+        "visible": true,
+        "order": 4
+      },
+      "settings": {
+        "id": "admin_settings",
+        "key": "settings",
+        "label": "系統設定",
+        "icon": "fas fa-cogs",
+        "component": "SystemSettings",
+        "description": "系統層級設定",
+        "permissions": {
+          "required": ["system_admin"],
+          "logic": "AND"
+        },
+        "visible": true,
+        "order": 5
+      },
+      "logs": {
+        "id": "admin_logs",
+        "key": "logs",
+        "label": "系統日誌",
+        "icon": "fas fa-file-alt",
+        "component": "SystemLogs",
+        "description": "查看系統運行日誌和存取記錄",
+        "permissions": {
+          "required": ["view_system_logs", "system_admin"],
+          "logic": "OR"
+        },
+        "visible": true,
+        "order": 6
+      },
+      "email-logs": {
+        "id": "admin_email_logs",
+        "key": "email-logs",
+        "label": "郵件紀錄",
+        "icon": "fas fa-envelope",
+        "component": "EmailLogsManagement",
+        "description": "查看和管理系統郵件發送紀錄，支援重送功能",
+        "permissions": {
+          "required": ["view_email_logs", "system_admin"],
+          "logic": "OR"
+        },
+        "visible": true,
+        "order": 7
+      }
+    }
+  },
+
+  "projectDetail": {
+    "description": "Project detail page features",
+    "features": {
+      "manageStages": {
+        "id": "project_manage_stages",
+        "permissions": {
+          "required": ["manage_stages", "create_stages", "edit_stages"],
+          "logic": "OR"
+        }
+      },
+      "viewAllSubmissions": {
+        "id": "project_view_submissions",
+        "permissions": {
+          "required": ["view_all_submissions"],
+          "logic": "OR"
+        }
+      },
+      "scoreSubmissions": {
+        "id": "project_scoring",
+        "permissions": {
+          "required": ["score_submissions"],
+          "logic": "OR"
+        }
+      },
+      "moderateComments": {
+        "id": "project_comments",
+        "permissions": {
+          "required": ["moderate_comments", "delete_any_comment"],
+          "logic": "OR"
+        }
+      },
+      "manageWallets": {
+        "id": "project_wallet",
+        "permissions": {
+          "required": ["manage_wallets", "award_points"],
+          "logic": "OR"
+        }
+      }
+    }
+  },
+
+  "dashboard": {
+    "description": "Dashboard page features",
+    "features": {
+      "viewEventLogs": {
+        "id": "dashboard_eventlogs",
+        "permissions": {
+          "required": ["view_system_logs"],
+          "logic": "AND"
+        }
+      },
+      "manageGroupMembers": {
+        "id": "dashboard_group_mgmt",
+        "permissions": {
+          "required": [],
+          "customCheck": "isGroupLeader"
+        }
+      }
+    }
+  }
+}

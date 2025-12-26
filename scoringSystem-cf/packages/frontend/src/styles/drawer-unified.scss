@@ -1,0 +1,771 @@
+/**
+ * Unified Drawer Styles
+ * 統一的 Drawer 風格樣式
+ *
+ * 四種分類：
+ * 1. 錯誤/警告類 (maroon) - 由上而下 (ttb)
+ * 2. 系統資訊類 (深綠色) - 由下而上 (btt)
+ * 3. 正常操作類 (navy) - 由下而上 (btt)
+ * 4. 首次使用教學類 (紫色漸變) - 由下而上 (btt)
+ */
+
+/* ========================================
+   類別 1: 錯誤/警告類 (熱粉紅漸層 - Bubblegum 加深版)
+   ======================================== */
+.drawer-header-maroon,
+.el-drawer.drawer-maroon {
+  .el-drawer__header {
+    background: linear-gradient(135deg, #E91E63 0%, #C2185B 100%) !important;
+    color: white !important;
+    padding: 16px 20px !important;
+    margin: 0 !important;
+    border-bottom: none !important;
+  }
+
+  .el-drawer__title {
+    color: white !important;
+    font-size: 18px !important;
+    font-weight: 600 !important;
+  }
+
+  .el-drawer__close-btn {
+    color: white !important;
+    font-size: 20px !important;
+
+    &:hover {
+      color: rgba(255, 255, 255, 0.8) !important;
+    }
+  }
+}
+
+/* ========================================
+   類別 2: 系統資訊類 (薄荷糖漸層 - Bubblegum 加深版)
+   ======================================== */
+.drawer-header-green,
+.el-drawer.drawer-green {
+  .el-drawer__header {
+    background: linear-gradient(135deg, #44B9A5 0%, #359184 100%) !important;
+    color: white !important;
+    padding: 16px 20px !important;
+    margin: 0 !important;
+    border-bottom: none !important;
+  }
+
+  .el-drawer__title {
+    color: white !important;
+    font-size: 18px !important;
+    font-weight: 600 !important;
+  }
+
+  .el-drawer__close-btn {
+    color: white !important;
+    font-size: 20px !important;
+
+    &:hover {
+      color: rgba(255, 255, 255, 0.8) !important;
+    }
+  }
+}
+
+/* ========================================
+   類別 3: 正常操作類 (土耳其藍漸層 - Bubblegum 加深版)
+   ======================================== */
+.drawer-header-navy,
+.el-drawer.drawer-navy {
+  .el-drawer__header {
+    background: linear-gradient(135deg, #1A9B8E 0%, #147A6F 100%) !important;
+    color: white !important;
+    padding: 16px 20px !important;
+    margin: 0 !important;
+    border-bottom: none !important;
+  }
+
+  .el-drawer__title {
+    color: white !important;
+    font-size: 18px !important;
+    font-weight: 600 !important;
+  }
+
+  .el-drawer__close-btn {
+    color: white !important;
+    font-size: 20px !important;
+
+    &:hover {
+      color: rgba(255, 255, 255, 0.8) !important;
+    }
+  }
+}
+
+/* ========================================
+   類別 4: 首次使用教學類 (糖果紫漸層 - Bubblegum 加深版)
+   ======================================== */
+.drawer-header-tutorial,
+.el-drawer.drawer-tutorial {
+  .el-drawer__header {
+    background: linear-gradient(135deg, #B86DD9 0%, #9854C0 100%) !important;
+    color: white !important;
+    padding: 16px 20px !important;
+    margin: 0 !important;
+    border-bottom: none !important;
+  }
+
+  .el-drawer__title {
+    color: white !important;
+    font-size: 18px !important;
+    font-weight: 600 !important;
+  }
+
+  .el-drawer__close-btn {
+    color: white !important;
+    font-size: 20px !important;
+
+    &:hover {
+      color: rgba(255, 255, 255, 0.8) !important;
+    }
+  }
+}
+
+/* ========================================
+   全域覆蓋：確保所有深色 header 的關閉按鈕都是白色
+   ======================================== */
+.el-drawer {
+  &.drawer-maroon,
+  &.drawer-green,
+  &.drawer-navy,
+  &.drawer-tutorial {
+    .el-drawer__close-btn {
+      .el-icon {
+        color: white !important;
+      }
+    }
+  }
+}
+
+/* ========================================
+   統一 Drawer Body 樣式
+   ======================================== */
+.el-drawer__body {
+  padding: 20px;
+  overflow-y: auto;
+}
+
+/* ========================================
+   Drawer 內容結構樣式
+   ======================================== */
+
+/* Drawer Body - 主要內容容器 */
+.drawer-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 0;
+  gap: 0;
+}
+
+/* Drawer Actions - 底部浮動按鈕區 (STICKY) */
+.drawer-actions {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 20px;
+  display: flex;
+  gap: 12px;
+  justify-content: center !important; /* 強制置中，覆蓋組件內樣式 */
+  align-items: center;
+  background: white;
+  border-top: 1px solid #e1e8ed;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+  z-index: 10;
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+/* Form Section - 表單區塊分組 */
+.form-section {
+  padding: 20px 25px;
+  border-bottom: 1px solid #e1e8ed;
+  background: #fafbfc;
+}
+
+.form-section h4 {
+  margin: 0 0 15px 0;
+  color: #2c3e50;
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-section h4 i {
+  color: #5a6c7d;
+  font-size: 14px;
+}
+
+/* Form Group - 單一欄位容器 */
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #2c3e50;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.form-group label .required {
+  color: #f56c6c;
+  margin-left: 2px;
+}
+
+/* ========================================
+   DrawerAlertZone 說明文檔
+   ======================================== */
+
+/**
+ * DrawerAlertZone 使用指南
+ *
+ * DrawerAlertZone 是統一的 drawer alert 區域組件，提供：
+ * - Sticky 定位在 drawer header 下方
+ * - 自動管理 alert 的展開/收合
+ * - 支持自動關閉和手動關閉
+ * - 平滑的動畫效果
+ *
+ * 使用方式：
+ * 1. 在 drawer-body 最頂部放置 <DrawerAlertZone />
+ * 2. 在 <script setup> 中使用 useDrawerAlerts() 添加 alerts
+ *
+ * 範例：
+ * ```vue
+ * <el-drawer class="drawer-navy">
+ *   <div class="drawer-body">
+ *     <!-- STEP 1: 放置 DrawerAlertZone -->
+ *     <DrawerAlertZone />
+ *
+ *     <!-- 其他內容 -->
+ *     <div class="form-section">...</div>
+ *
+ *     <div class="drawer-actions">...</div>
+ *   </div>
+ * </el-drawer>
+ *
+ * <script setup>
+ * import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
+ * import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
+ *
+ * // STEP 2: 使用 composable
+ * const { addAlert, warning, error } = useDrawerAlerts()
+ *
+ * // STEP 3: 添加 alerts
+ * warning('此操作無法復原', '操作警告')
+ * error('操作失敗，請稍後再試')
+ * </script>
+ * ```
+ *
+ * Alert 類型：
+ * - success: 成功訊息（綠色，預設 5 秒自動關閉）
+ * - warning: 警告訊息（橙色，預設不自動關閉）
+ * - error: 錯誤訊息（紅色，預設不自動關閉）
+ * - info: 資訊訊息（藍色，預設 5 秒自動關閉）
+ *
+ * API 參考：
+ * ```typescript
+ * const { addAlert, warning, error, success, info, clearAlerts } = useDrawerAlerts()
+ *
+ * // 完整選項
+ * addAlert({
+ *   type: 'warning',
+ *   title: '操作警告',        // 可選
+ *   message: '此操作無法復原',
+ *   closable: false,          // 預設 true
+ *   showIcon: true,           // 預設 true
+ *   autoClose: 0              // 毫秒，0 = 不自動關閉
+ * })
+ *
+ * // 快捷方法
+ * warning('警告訊息', '標題')
+ * error('錯誤訊息')
+ * success('成功訊息')
+ * info('資訊訊息')
+ *
+ * // 清除所有 alerts
+ * clearAlerts()
+ * ```
+ *
+ * 遷移舊的 el-alert：
+ * BEFORE:
+ * ```vue
+ * <el-alert
+ *   type="warning"
+ *   :closable="false"
+ *   show-icon
+ *   style="margin-bottom: 20px;"
+ * >
+ *   <template #title>操作警告</template>
+ *   <div>此操作無法復原</div>
+ * </el-alert>
+ * ```
+ *
+ * AFTER:
+ * ```vue
+ * <DrawerAlertZone />
+ *
+ * <script setup>
+ * import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
+ * const { warning } = useDrawerAlerts()
+ *
+ * // 在適當時機添加 alert
+ * warning('此操作無法復原', '操作警告')
+ * </script>
+ * ```
+ */
+
+/* ========================================
+   手機版響應式調整
+   ======================================== */
+@media (max-width: 768px) {
+  .el-drawer__header {
+    padding: 12px 16px !important;
+  }
+
+  .el-drawer__title {
+    font-size: 16px !important;
+  }
+
+  .el-drawer__body {
+    padding: 16px;
+  }
+
+  /* Drawer Actions - 手機版調整 */
+  .drawer-actions {
+    padding: 16px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .drawer-actions .el-button {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  /* Form Section - 手機版調整 */
+  .form-section {
+    padding: 16px 20px;
+  }
+
+  .form-section h4 {
+    font-size: 15px;
+  }
+
+  /* Form Group - 手機版調整 */
+  .form-group {
+    margin-bottom: 16px;
+  }
+
+  .form-group label {
+    font-size: 13px;
+  }
+}
+
+/* ========================================
+   Drawer Actions - 漸層按鈕樣式
+   ======================================== */
+
+/**
+ * drawer-actions 區域內的按鈕統一使用漸層背景
+ *
+ * 設計理念：
+ * - 熱帶島嶼風格（Tropical Island）
+ * - 語義化顏色映射：青綠=主要、珊瑚紅=危險、陽光黃=警告、薄荷=成功、天空藍=資訊、沙灘灰=中性
+ * - 統一的 Hover/Active 動畫效果（簡約模式）
+ * - 適當的視覺回饋（opacity + shadow）
+ *
+ * 漸層配色（熱帶島嶼 Tropical Island）：
+ * - Primary（主要操作）: #00CED1 → #008B8B（深青綠/海水）
+ * - Danger（危險操作）: #FF4757 → #C0392B（珊瑚紅）
+ * - Warning（警告操作）: #FFEAA7 → #F39C12（陽光黃）
+ * - Success（成功操作）: #81ECEC → #00B894（薄荷海浪）
+ * - Info（資訊操作）: #74B9FF → #0984E3（天空藍）
+ * - Default（中性/取消）: #DFE6E9 → #B2BEC3（沙灘灰白）
+ */
+
+.drawer-actions {
+  /* Primary 按鈕 - 深青綠漸層（主要操作：保存、確認、提交等） */
+  .el-button--primary {
+    background: linear-gradient(135deg, #00CED1 0%, #008B8B 100%);
+    border: none;
+    color: white;
+    font-weight: 600;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled):not(.is-loading) {
+      opacity: 0.9;
+      box-shadow: 0 4px 8px rgba(0, 206, 209, 0.4);
+    }
+
+    &:active:not(:disabled):not(.is-loading) {
+      opacity: 0.85;
+      box-shadow: 0 2px 4px rgba(0, 206, 209, 0.3);
+    }
+
+    &:disabled {
+      background: linear-gradient(135deg, #00CED1 0%, #008B8B 100%);
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    &.is-loading {
+      background: linear-gradient(135deg, #00CED1 0%, #008B8B 100%);
+      opacity: 0.8;
+    }
+  }
+
+  /* Danger 按鈕 - 珊瑚紅漸層（危險操作：刪除、撤銷、停用等） */
+  .el-button--danger {
+    background: linear-gradient(135deg, #FF4757 0%, #C0392B 100%);
+    border: none;
+    color: white;
+    font-weight: 600;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled):not(.is-loading) {
+      opacity: 0.9;
+      box-shadow: 0 4px 8px rgba(255, 71, 87, 0.4);
+    }
+
+    &:active:not(:disabled):not(.is-loading) {
+      opacity: 0.85;
+      box-shadow: 0 2px 4px rgba(255, 71, 87, 0.3);
+    }
+
+    &:disabled {
+      background: linear-gradient(135deg, #FF4757 0%, #C0392B 100%);
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    &.is-loading {
+      background: linear-gradient(135deg, #FF4757 0%, #C0392B 100%);
+      opacity: 0.8;
+    }
+  }
+
+  /* Warning 按鈕 - 陽光黃漸層（警告操作：重置、清空、停用等） */
+  .el-button--warning {
+    background: linear-gradient(135deg, #FFEAA7 0%, #F39C12 100%);
+    border: none;
+    color: #2d3436;
+    font-weight: 600;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled):not(.is-loading) {
+      opacity: 0.9;
+      box-shadow: 0 4px 8px rgba(243, 156, 18, 0.4);
+    }
+
+    &:active:not(:disabled):not(.is-loading) {
+      opacity: 0.85;
+      box-shadow: 0 2px 4px rgba(243, 156, 18, 0.3);
+    }
+
+    &:disabled {
+      background: linear-gradient(135deg, #FFEAA7 0%, #F39C12 100%);
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    &.is-loading {
+      background: linear-gradient(135deg, #FFEAA7 0%, #F39C12 100%);
+      opacity: 0.8;
+    }
+  }
+
+  /* Info 按鈕 - 天空藍漸層（資訊操作：查看詳情、下載等） */
+  .el-button--info {
+    background: linear-gradient(135deg, #74B9FF 0%, #0984E3 100%);
+    border: none;
+    color: white;
+    font-weight: 600;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled):not(.is-loading) {
+      opacity: 0.9;
+      box-shadow: 0 4px 8px rgba(116, 185, 255, 0.4);
+    }
+
+    &:active:not(:disabled):not(.is-loading) {
+      opacity: 0.85;
+      box-shadow: 0 2px 4px rgba(116, 185, 255, 0.3);
+    }
+
+    &:disabled {
+      background: linear-gradient(135deg, #74B9FF 0%, #0984E3 100%);
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    &.is-loading {
+      background: linear-gradient(135deg, #74B9FF 0%, #0984E3 100%);
+      opacity: 0.8;
+    }
+  }
+
+  /* Default 按鈕 - 沙灘灰白漸層（中性操作：取消、關閉等） */
+  .el-button:not(.el-button--primary):not(.el-button--danger):not(.el-button--warning):not(.el-button--info):not(.el-button--success):not(.el-button--text) {
+    background: linear-gradient(135deg, #DFE6E9 0%, #B2BEC3 100%);
+    border: none;
+    color: #2d3436;
+    font-weight: 500;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled):not(.is-loading) {
+      opacity: 0.9;
+      box-shadow: 0 4px 8px rgba(178, 190, 195, 0.4);
+    }
+
+    &:active:not(:disabled):not(.is-loading) {
+      opacity: 0.85;
+      box-shadow: 0 2px 4px rgba(178, 190, 195, 0.3);
+    }
+
+    &:disabled {
+      background: linear-gradient(135deg, #DFE6E9 0%, #B2BEC3 100%);
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    &.is-loading {
+      background: linear-gradient(135deg, #DFE6E9 0%, #B2BEC3 100%);
+      opacity: 0.8;
+    }
+  }
+
+  /* Success 按鈕 - 薄荷海浪漸層（成功操作：新增、同意、發放等） */
+  .el-button--success {
+    background: linear-gradient(135deg, #81ECEC 0%, #00B894 100%);
+    border: none;
+    color: white;
+    font-weight: 600;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled):not(.is-loading) {
+      opacity: 0.9;
+      box-shadow: 0 4px 8px rgba(0, 184, 148, 0.4);
+    }
+
+    &:active:not(:disabled):not(.is-loading) {
+      opacity: 0.85;
+      box-shadow: 0 2px 4px rgba(0, 184, 148, 0.3);
+    }
+
+    &:disabled {
+      background: linear-gradient(135deg, #81ECEC 0%, #00B894 100%);
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    &.is-loading {
+      background: linear-gradient(135deg, #81ECEC 0%, #00B894 100%);
+      opacity: 0.8;
+    }
+  }
+
+  /* 統一按鈕尺寸 - 強制覆蓋所有 size variants */
+  .el-button,
+  .el-button--large,
+  .el-button--small,
+  .el-button--default {
+    padding: 12px 24px !important;
+    font-size: 15px !important;
+    border-radius: 6px !important;
+    min-width: 100px !important;
+    height: auto !important;
+  }
+}
+
+/* 手機版按鈕調整 - 統一尺寸 */
+@media (max-width: 768px) {
+  .drawer-actions {
+    .el-button,
+    .el-button--large,
+    .el-button--small,
+    .el-button--default {
+      font-size: 14px !important;
+      padding: 10px 20px !important;
+      min-width: 90px !important;
+    }
+  }
+}
+
+/* ========================================
+   Drawer Breadcrumb 導航樣式
+   ======================================== */
+
+/**
+ * Drawer Header Breadcrumb
+ *
+ * 設計理念：
+ * - 兩層結構：[當前頁面] > [Drawer功能]
+ * - 取代原有的 title，直接顯示在 header 區域
+ * - 第一層（頁面）：淡色、正常字重
+ * - 第二層（功能）：亮色、加粗字重
+ * - 支持圖標顯示
+ * - 自動適配 4 種 drawer 主題色
+ *
+ * 使用方式：
+ * ```vue
+ * <el-drawer class="drawer-navy">
+ *   <template #header>
+ *     <el-breadcrumb separator=">">
+ *       <el-breadcrumb-item>{{ currentPageName }}</el-breadcrumb-item>
+ *       <el-breadcrumb-item>編輯專案</el-breadcrumb-item>
+ *     </el-breadcrumb>
+ *   </template>
+ * </el-drawer>
+ *
+ * <script setup>
+ * import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
+ * const { currentPageName } = useDrawerBreadcrumb()
+ * </script>
+ * ```
+ */
+
+/* 所有 drawer header 內的 breadcrumb 基礎樣式 */
+/* 強制覆蓋 Element Plus CSS 變數，確保白色文字 */
+.el-drawer__header .el-breadcrumb {
+  --el-text-color-regular: white !important;
+  --el-text-color-primary: white !important;
+}
+
+.el-drawer__header .el-breadcrumb .el-breadcrumb__inner {
+  font-size: 18px !important;
+  font-weight: 400 !important;
+  color: white !important;
+  transition: color 0.2s ease;
+}
+
+.el-drawer__header .el-breadcrumb .el-breadcrumb__inner i {
+  margin-right: 8px;
+  font-size: 16px;
+  color: white !important;
+}
+
+.el-drawer__header .el-breadcrumb .el-breadcrumb__inner a,
+.el-drawer__header .el-breadcrumb .el-breadcrumb__inner a:hover {
+  color: white !important;
+}
+
+/* 最後一層（drawer 功能名稱）樣式 */
+.el-drawer__header .el-breadcrumb .el-breadcrumb__item:last-child .el-breadcrumb__inner {
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  color: white !important;
+  cursor: text !important;
+}
+
+.el-drawer__header .el-breadcrumb .el-breadcrumb__item:last-child .el-breadcrumb__inner i {
+  font-size: 18px;
+  color: white !important;
+}
+
+.el-drawer__header .el-breadcrumb .el-breadcrumb__item:last-child .el-breadcrumb__inner a,
+.el-drawer__header .el-breadcrumb .el-breadcrumb__item:last-child .el-breadcrumb__inner a:hover,
+.el-drawer__header .el-breadcrumb .el-breadcrumb__item:last-child .el-breadcrumb__inner:hover {
+  color: white !important;
+}
+
+/* 分隔符樣式 */
+.el-drawer__header .el-breadcrumb .el-breadcrumb__separator {
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  color: white !important;
+  margin: 0 12px !important;
+}
+
+/* 手機版 Breadcrumb 調整 */
+@media (max-width: 768px) {
+  .el-drawer__header {
+    .el-breadcrumb {
+      :deep(.el-breadcrumb__item) {
+        .el-breadcrumb__inner {
+          font-size: 16px;
+
+          i {
+            font-size: 14px;
+            margin-right: 6px;
+          }
+        }
+
+        &:last-child .el-breadcrumb__inner {
+          font-size: 18px;
+
+          i {
+            font-size: 16px;
+          }
+        }
+      }
+
+      :deep(.el-breadcrumb__separator) {
+        font-size: 14px;
+        margin: 0 8px;
+      }
+    }
+  }
+}
+
+/* ========================================
+   確認碼輸入框統一樣式
+   Auto-Uppercase Confirmation Code Input
+   ======================================== */
+
+/**
+ * 用於需要用戶輸入確認碼的 el-input 元素
+ * 例如：REVERSE, RESET, VOTING, SETTLE, CLONE, ARCHIVE, UNLOCK, UPDATE, REVERT, ADD, DELETE, RESTORE
+ *
+ * 使用方式：
+ * <el-input
+ *   v-model="confirmText"
+ *   class="confirmation-code-input"
+ *   @input="confirmText = String($event).toUpperCase()"
+ * />
+ */
+.confirmation-code-input {
+  :deep(.el-input__inner) {
+    font-family: 'Courier New', monospace;
+    font-size: 18px;
+    font-weight: bold;
+    text-align: center;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    border: 2px solid #f56c6c;
+    background: #fff;
+
+    &::placeholder {
+      text-transform: none;
+      letter-spacing: normal;
+      font-weight: normal;
+    }
+
+    &:focus {
+      border-color: #f56c6c;
+      box-shadow: 0 0 0 2px rgba(245, 108, 108, 0.2);
+    }
+  }
+}
+
+/* 手機版確認碼輸入框調整 */
+@media (max-width: 768px) {
+  .confirmation-code-input {
+    :deep(.el-input__inner) {
+      font-size: 16px;
+      letter-spacing: 2px;
+    }
+  }
+}

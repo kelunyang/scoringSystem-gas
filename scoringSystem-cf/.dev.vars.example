@@ -1,0 +1,29 @@
+# Local Development Secrets
+# Copy this file to .dev.vars and fill in your local development secrets
+# DO NOT commit .dev.vars to git!
+
+# JWT Secret (REQUIRED)
+# Generate with: npm run secret:generate
+# Must be at least 32 characters long
+JWT_SECRET=your-local-development-jwt-secret-must-be-at-least-32-characters-long
+
+# Gmail SMTP for sending emails (OPTIONAL)
+# Use Gmail SMTP with app-specific password
+# Get app password from: https://myaccount.google.com/apppasswords
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-gmail@gmail.com
+SMTP_PASSWORD=your-app-specific-password
+SMTP_FROM_NAME=Scoring System
+SMTP_FROM_EMAIL=your-gmail@gmail.com
+
+# Cloudflare Turnstile for CAPTCHA (OPTIONAL)
+# Get from: https://dash.cloudflare.com/?to=/:account/turnstile
+TURNSTILE_SITE_KEY=your-turnstile-site-key
+TURNSTILE_SECRET_KEY=your-turnstile-secret-key
+
+# Notes:
+# - These are for LOCAL DEVELOPMENT ONLY
+# - Use different secrets for production
+# - Never commit .dev.vars to version control
+# - For production, use: npx wrangler secret put SECRET_NAME

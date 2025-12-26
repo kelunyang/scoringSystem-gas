@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投票計分模擬器</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body {
+            font-family: 'Microsoft JhengHei', 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #409eff;
+        }
+        
+        .controls {
+            background: #f5f7fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .control-group {
+            margin: 15px 0;
+            text-align: center;
+        }
+        
+        .control-group label {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .slider-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        input[type="range"] {
+            width: 300px;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+        }
+        
+        input[type="number"] {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            width: 80px;
+        }
+        
+        .voter-count-display {
+            font-size: 28px;
+            font-weight: bold;
+            color: #667eea;
+            min-width: 60px;
+        }
+        
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            margin: 5px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+        
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #909399;
+        }
+        
+        .btn-secondary:hover {
+            background: #82848a;
+        }
+        
+        .section-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+            margin: 30px 0 15px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+        
+        .charts-container {
+            display: flex;
+            gap: 30px;
+            margin-top: 30px;
+        }
+        
+        .chart-box {
+            flex: 1;
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .chart-title {
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .table-container {
+            overflow-x: auto;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+            font-size: 14px;
+        }
+        
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        th.voter-header {
+            background: #409eff;
+            min-width: 100px;
+        }
+        
+        th.stats-header {
+            background: #67c23a;
+        }
+        
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+        
+        tr:hover {
+            background: #e8f4ff;
+        }
+        
+        .rank-1 { background: #ffd700; font-weight: bold; color: #c7254e; }
+        .rank-2 { background: #ffeaa7; }
+        .rank-3 { background: #fff4cc; }
+        
+        .stats-cell {
+            background: #f0f9ff;
+            font-weight: bold;
+        }
+        
+        .candidate-rank {
+            display: inline-block;
+            background: #ffd700;
+            color: #c7254e;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+        
+        .legend {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 10px;
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .legend-color {
+            width: 30px;
+            height: 20px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗳️ 投票計分模擬器</h1>
+        <p class="subtitle">使用遞歸淘汰排名系統進行點數分配</p>
+        
+        <div class="info-box">
+            <strong>💡 使用說明：</strong>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+                <li>設定投票人數（每人給其他人排名，不含自己）</li>
+                <li>設定總獎金池（所有人分配的總分數）</li>
+                <li><strong>計票規則</strong>：
+                    <ul style="margin-top: 5px;">
+                        <li>先比較誰獲得最多第1名票</li>
+                        <li>如果第1名票相同，再比較第2名票</li>
+                        <li>如果第2名票也相同，繼續比較第3名票...</li>
+                        <li>依此類推，直到分出勝負</li>
+                        <li>只有所有名次票數都相同時才會並列</li>
+                    </ul>
+                </li>
+                <li><strong>獎金分配</strong>：線性權重分配（第1名權重=n，第2名權重=n-1，...，第n名權重=1），按權重比例分配總獎金池，所有人獎金總和=總獎金池</li>
+            </ul>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <div class="slider-container">
+                    <label>投票人數：</label>
+                    <input type="range" id="voterSlider" min="2" max="20" value="5" step="1">
+                    <span class="voter-count-display" id="voterCount">5</span>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <label>🏆 獎金池設定：</label>
+                <div style="margin-top: 10px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; align-items: center;">
+                    <span>總獎金池：<input type="number" id="totalPrize" value="100" min="1" max="10000" style="width: 100px;">分</span>
+                </div>
+                <div style="margin-top: 10px; color: #666; font-size: 13px;">
+                    💡 根據最終排名分配獎金，所有人的獎金總和 = 總獎金池
+                </div>
+            </div>
+            
+            <div class="control-group" style="margin-top: 20px;">
+                <button class="btn" onclick="generateVotes()">🎲 生成投票</button>
+                <button class="btn btn-secondary" onclick="clearVotes()">🗑️ 清除</button>
+            </div>
+        </div>
+        
+        <div id="resultsSection" style="display: none;">
+            <div class="section-title">📊 投票結果表格</div>
+            
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color rank-1"></div>
+                    <span>第 1 名投票</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color rank-2"></div>
+                    <span>第 2 名投票</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color rank-3"></div>
+                    <span>第 3 名投票</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(to right, #4169e1, #87ceeb);"></div>
+                    <span>表頭：排名顏色（越深=越前面）</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(to right, #dc143c, #ffb6c1);"></div>
+                    <span>得票數：票數顏色（越深=越多票）</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(to right, #228b22, #90ee90);"></div>
+                    <span>獎金：金額顏色（越深=越多錢）</span>
+                </div>
+            </div>
+            
+            <div class="table-container">
+                <table id="votingTable"></table>
+            </div>
+            
+            <div class="section-title">📈 點數分布圖表</div>
+            
+            <div class="charts-container">
+                <div class="chart-box">
+                    <div class="chart-title">🏆 獎金分配結果</div>
+                    <div id="stackedBarChart"></div>
+                </div>
+                
+                <div class="chart-box">
+                    <div class="chart-title">📊 最終排名分布</div>
+                    <div id="rankDistributionChart"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="emptyState" style="text-align: center; padding: 60px; color: #999;">
+            <p style="font-size: 18px;">👆 請設定人數和點數規則，然後點擊「生成投票」開始模擬</p>
+        </div>
+    </div>
+    
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        // 全域變數
+        let voterCount = 5;
+        let voters = [];
+        let candidates = [];
+        let votes = [];
+        let totalPrize = 100;
+        
+        // 初始化
+        document.getElementById('voterSlider').addEventListener('input', function(e) {
+            voterCount = parseInt(e.target.value);
+            document.getElementById('voterCount').textContent = voterCount;
+        });
+        
+        // 生成投票
+        function generateVotes() {
+            voters = [];
+            candidates = [];
+            votes = [];
+            
+            // 讀取總獎金池
+            totalPrize = parseFloat(document.getElementById('totalPrize').value) || 100;
+            
+            // 生成參與者
+            for (let i = 1; i <= voterCount; i++) {
+                const person = { id: i, name: `參與者 ${i}` };
+                voters.push({ ...person });
+                candidates.push({ ...person });
+            }
+            
+            // 每個選舉人給其他候選人排名
+            voters.forEach(voter => {
+                const otherCandidates = candidates.filter(c => c.id !== voter.id);
+                
+                // Fisher-Yates shuffle 生成隨機排名
+                const shuffled = [...otherCandidates];
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                }
+                
+                // 分配排名
+                shuffled.forEach((candidate, index) => {
+                    votes.push({
+                        voterId: voter.id,
+                        candidateId: candidate.id,
+                        rank: index + 1
+                    });
+                });
+            });
+            
+            // 顯示結果
+            document.getElementById('resultsSection').style.display = 'block';
+            document.getElementById('emptyState').style.display = 'none';
+            
+            updateTable();
+            updateCharts();
+        }
+        
+        // 清除投票
+        function clearVotes() {
+            voters = [];
+            candidates = [];
+            votes = [];
+            document.getElementById('resultsSection').style.display = 'none';
+            document.getElementById('emptyState').style.display = 'block';
+        }
+        
+        // 計算排名和獎金分配
+        function calculateRankingsAndScores() {
+            // 計算每個候選人的各名次票數分布
+            const candidatesWithStats = candidates.map(candidate => {
+                const candidateVotes = votes.filter(v => v.candidateId === candidate.id);
+                
+                const rankDistribution = {};
+                for (let rank = 1; rank < voterCount; rank++) {
+                    const count = candidateVotes.filter(v => v.rank === rank).length;
+                    rankDistribution[rank] = count;
+                }
+                
+                return {
+                    ...candidate,
+                    rankDistribution,
+                    finalRank: null,
+                    allocatedScore: 0
+                };
+            });
+            
+            // 改進的排名算法：同票時往下比較下一名次
+            const remainingCandidates = [...candidatesWithStats];
+            let currentFinalRank = 1;
+            
+            while (remainingCandidates.length > 0) {
+                // 對剩餘候選人進行排序
+                // 排序規則：依次比較第1名票、第2名票、第3名票...
+                remainingCandidates.sort((a, b) => {
+                    for (let rank = 1; rank < voterCount; rank++) {
+                        const aVotes = a.rankDistribution[rank] || 0;
+                        const bVotes = b.rankDistribution[rank] || 0;
+                        
+                        if (aVotes !== bVotes) {
+                            return bVotes - aVotes; // 降序：票數多的排前面
+                        }
+                    }
+                    return 0; // 所有名次都相同，真正的並列
+                });
+                
+                // 找出第一組（得票最多的一組，可能有真正的並列）
+                const firstCandidate = remainingCandidates[0];
+                const winners = [firstCandidate];
+                
+                // 檢查是否有真正的並列（所有排名票數都相同）
+                for (let i = 1; i < remainingCandidates.length; i++) {
+                    const candidate = remainingCandidates[i];
+                    let isTie = true;
+                    
+                    for (let rank = 1; rank < voterCount; rank++) {
+                        const firstVotes = firstCandidate.rankDistribution[rank] || 0;
+                        const candidateVotes = candidate.rankDistribution[rank] || 0;
+                        
+                        if (firstVotes !== candidateVotes) {
+                            isTie = false;
+                            break;
+                        }
+                    }
+                    
+                    if (isTie) {
+                        winners.push(candidate);
+                    } else {
+                        break; // 已經排序過，後面的不可能再並列
+                    }
+                }
+                
+                // 記錄這組獲勝者的主要得票級別（票數最多的那一級）
+                let winningRankLevel = 1;
+                let maxVotesAtRank = 0;
+                for (let rank = 1; rank < voterCount; rank++) {
+                    const votes = firstCandidate.rankDistribution[rank] || 0;
+                    if (votes > maxVotesAtRank) {
+                        maxVotesAtRank = votes;
+                        winningRankLevel = rank;
+                    }
+                }
+                
+                // 分配排名
+                winners.forEach(winner => {
+                    winner.finalRank = currentFinalRank;
+                    winner.winningRankLevel = winningRankLevel;
+                    winner.winningVotes = maxVotesAtRank;
+                });
+                
+                // 從剩餘候選人中移除這些獲勝者
+                winners.forEach(winner => {
+                    const index = remainingCandidates.findIndex(c => c.id === winner.id);
+                    if (index > -1) {
+                        remainingCandidates.splice(index, 1);
+                    }
+                });
+                
+                currentFinalRank += winners.length;
+            }
+            
+            // 按最終排名排序
+            candidatesWithStats.sort((a, b) => a.finalRank - b.finalRank);
+            
+            // 根據排名分配獎金（線性權重分配）
+            const totalParticipants = candidatesWithStats.length;
+            
+            // 處理並列名次
+            const rankGroups = {};
+            candidatesWithStats.forEach(candidate => {
+                if (!rankGroups[candidate.finalRank]) {
+                    rankGroups[candidate.finalRank] = [];
+                }
+                rankGroups[candidate.finalRank].push(candidate);
+            });
+            
+            // 計算每個位置的權重
+            // 第1名權重 = n, 第2名權重 = n-1, ..., 第n名權重 = 1
+            const uniqueRanks = Object.keys(rankGroups).map(Number).sort((a, b) => a - b);
+            let assignedPosition = 0;
+            let totalWeight = 0;
+            const rankWeights = {};
+            
+            uniqueRanks.forEach(rank => {
+                const group = rankGroups[rank];
+                const groupSize = group.length;
+                
+                // 計算這組的總權重（取平均）
+                let groupTotalWeight = 0;
+                for (let i = 0; i < groupSize; i++) {
+                    groupTotalWeight += (totalParticipants - assignedPosition - i);
+                }
+                
+                rankWeights[rank] = groupTotalWeight / groupSize; // 每人的平均權重
+                totalWeight += groupTotalWeight;
+                assignedPosition += groupSize;
+            });
+            
+            // 按權重分配獎金
+            uniqueRanks.forEach(rank => {
+                const group = rankGroups[rank];
+                const weightPerPerson = rankWeights[rank];
+                const scorePerPerson = (weightPerPerson / totalWeight) * totalPrize;
+                
+                group.forEach(candidate => {
+                    candidate.allocatedScore = Math.round(scorePerPerson * 100) / 100;
+                });
+            });
+            
+            // 微調以確保總和等於獎金池（處理四捨五入誤差）
+            const actualTotal = candidatesWithStats.reduce((sum, c) => sum + c.allocatedScore, 0);
+            const diff = totalPrize - actualTotal;
+            if (Math.abs(diff) > 0.01 && candidatesWithStats.length > 0) {
+                candidatesWithStats[0].allocatedScore = Math.round((candidatesWithStats[0].allocatedScore + diff) * 100) / 100;
+            }
+            
+            return candidatesWithStats;
+        }
+        
+        // 更新表格
+        function updateTable() {
+            const sortedCandidates = calculateRankingsAndScores();
+            
+            // 創建顏色比例尺
+            const maxScore = d3.max(sortedCandidates, d => d.allocatedScore);
+            const minScore = d3.min(sortedCandidates, d => d.allocatedScore);
+            
+            // 獎金顏色比例尺（綠色系）
+            const scoreColorScale = d3.scaleSequential()
+                .domain([minScore, maxScore])
+                .interpolator(d3.interpolateGreens);
+            
+            // 排名顏色比例尺（倒序，第1名最深）
+            const rankColorScale = d3.scaleSequential()
+                .domain([sortedCandidates.length, 1])
+                .interpolator(d3.interpolateBlues);
+            
+            // 票數顏色比例尺
+            const maxVotes = d3.max(sortedCandidates, d => d.winningVotes);
+            const voteColorScale = d3.scaleSequential()
+                .domain([0, maxVotes])
+                .interpolator(d3.interpolateReds);
+            
+            let tableHTML = '<thead><tr>';
+            tableHTML += '<th class="voter-header">選舉人 \\ 候選人</th>';
+            
+            sortedCandidates.forEach(candidate => {
+                const rankColor = rankColorScale(candidate.finalRank);
+                tableHTML += `<th style="background: ${rankColor}; color: white;">${candidate.name}<span class="candidate-rank" style="background: rgba(255,255,255,0.3);">第${candidate.finalRank}名</span></th>`;
+            });
+            tableHTML += '<th class="stats-header">統計</th></tr></thead><tbody>';
+            
+            // 投票結果行
+            voters.forEach(voter => {
+                tableHTML += '<tr>';
+                tableHTML += `<td style="font-weight: bold; background: #e3f2fd;">${voter.name}</td>`;
+                
+                sortedCandidates.forEach(candidate => {
+                    const vote = votes.find(v => v.voterId === voter.id && v.candidateId === candidate.id);
+                    const rank = vote ? vote.rank : null;
+                    
+                    let cellStyle = '';
+                    if (rank) {
+                        // 使用顏色比例尺根據排名設定背景色
+                        const rankValue = rank;
+                        const maxRank = voterCount - 1;
+                        const colorIntensity = 1 - ((rankValue - 1) / maxRank);
+                        
+                        if (rank === 1) {
+                            cellStyle = 'background: #ffd700; font-weight: bold; color: #c7254e;';
+                        } else if (rank === 2) {
+                            cellStyle = 'background: #ffeaa7; font-weight: bold;';
+                        } else if (rank === 3) {
+                            cellStyle = 'background: #fff4cc; font-weight: bold;';
+                        } else {
+                            // 其他排名用漸變色
+                            const bgColor = d3.interpolateRgb('#fff', '#e0e0e0')(colorIntensity);
+                            cellStyle = `background: ${bgColor};`;
+                        }
+                    }
+                    tableHTML += `<td style="${cellStyle}">${rank || '-'}</td>`;
+                });
+                
+                tableHTML += '<td style="background: #f5f5f5;">-</td></tr>';
+            });
+            
+            // 主要得票行（加入顏色編碼）
+            tableHTML += '<tr style="font-weight: bold;">';
+            tableHTML += '<td style="background: #67c23a; color: white;">主要得票</td>';
+            sortedCandidates.forEach(candidate => {
+                const voteColor = voteColorScale(candidate.winningVotes);
+                tableHTML += `<td style="background: ${voteColor}; color: white;"><div>第${candidate.winningRankLevel}名票</div><div style="font-size: 18px;">${candidate.winningVotes} 票</div></td>`;
+            });
+            tableHTML += '<td style="background: #f5f5f5;">-</td></tr>';
+            
+            // 獲得獎金行（加入顏色編碼）
+            const totalAllocated = sortedCandidates.reduce((sum, c) => sum + c.allocatedScore, 0);
+            tableHTML += '<tr style="font-weight: bold;">';
+            tableHTML += '<td style="background: #e6a23c; color: white;">獲得獎金</td>';
+            sortedCandidates.forEach(candidate => {
+                const scoreColor = scoreColorScale(candidate.allocatedScore);
+                tableHTML += `<td style="background: ${scoreColor}; color: white; font-size: 20px;">🏆 ${candidate.allocatedScore} 分</td>`;
+            });
+            tableHTML += `<td style="background: #fff9e6; font-size: 18px; color: #c7254e;">總計: ${Math.round(totalAllocated * 100) / 100}分</td></tr>`;
+            
+            // 各名次分布行
+            tableHTML += '<tr style="background: #f5f7fa;">';
+            tableHTML += '<td style="background: #909399; color: white;">票數分布</td>';
+            sortedCandidates.forEach(candidate => {
+                let detailHTML = '<div style="font-size: 12px; padding: 4px;">';
+                for (let rank in candidate.rankDistribution) {
+                    const count = candidate.rankDistribution[rank];
+                    if (count > 0) {
+                        detailHTML += `第${rank}名: ${count}票<br>`;
+                    }
+                }
+                detailHTML += '</div>';
+                tableHTML += `<td>${detailHTML}</td>`;
+            });
+            tableHTML += '<td style="background: #f5f5f5;">-</td></tr>';
+            
+            tableHTML += '</tbody>';
+            document.getElementById('votingTable').innerHTML = tableHTML;
+        }
+        
+        // 更新圖表
+        function updateCharts() {
+            drawStackedBarChart();
+            drawRankDistribution();
+        }
+        
+        // 繪製獎金分配 Stacked Bar Chart（單一橫向條形）
+        function drawStackedBarChart() {
+            const sortedCandidates = calculateRankingsAndScores();
+            
+            d3.select('#stackedBarChart').selectAll('*').remove();
+            
+            const margin = {top: 50, right: 100, bottom: 80, left: 100};
+            const width = 700 - margin.left - margin.right;
+            const height = 250 - margin.top - margin.bottom;
+            
+            const svg = d3.select('#stackedBarChart')
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom)
+                .append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+            
+            // 準備 stacked 數據
+            let cumulativeX = 0;
+            const stackedData = sortedCandidates.map(candidate => {
+                const data = {
+                    ...candidate,
+                    x0: cumulativeX,
+                    x1: cumulativeX + candidate.allocatedScore
+                };
+                cumulativeX += candidate.allocatedScore;
+                return data;
+            });
+            
+            // X軸比例尺
+            const x = d3.scaleLinear()
+                .domain([0, totalPrize])
+                .range([0, width]);
+            
+            // 顏色比例尺
+            const getColor = (rank) => {
+                if (rank === 1) return '#ffd700';
+                if (rank === 2) return '#ffeaa7';
+                if (rank === 3) return '#fff4cc';
+                if (rank === 4) return '#e8f4ff';
+                return d3.interpolateRgb('#d4e6f1', '#e0e0e0')((rank - 5) / Math.max(sortedCandidates.length - 5, 1));
+            };
+            
+            // 工具提示
+            const tooltip = d3.select('#tooltip');
+            
+            const barHeight = 80;
+            const barY = (height - barHeight) / 2;
+            
+            // 繪製 stacked segments
+            svg.selectAll('.segment')
+                .data(stackedData)
+                .enter()
+                .append('rect')
+                .attr('class', 'segment')
+                .attr('x', d => x(d.x0))
+                .attr('y', barY)
+                .attr('width', d => Math.max(x(d.x1) - x(d.x0), 1))
+                .attr('height', barHeight)
+                .attr('fill', d => getColor(d.finalRank))
+                .attr('stroke', 'white')
+                .attr('stroke-width', 3)
+                .attr('opacity', 0.9)
+                .on('mouseover', function(event, d) {
+                    tooltip.style('display', 'block')
+                        .html(`
+                            <strong>${d.name}</strong><br>
+                            排名: 第${d.finalRank}名<br>
+                            獲得: ${d.allocatedScore}分<br>
+                            佔比: ${Math.round((d.allocatedScore / totalPrize) * 1000) / 10}%
+                        `)
+                        .style('left', (event.pageX + 10) + 'px')
+                        .style('top', (event.pageY - 10) + 'px');
+                    d3.select(this).attr('opacity', 1).attr('stroke-width', 4);
+                })
+                .on('mouseout', function() {
+                    tooltip.style('display', 'none');
+                    d3.select(this).attr('opacity', 0.9).attr('stroke-width', 3);
+                });
+            
+            // 在每個區塊內顯示資訊
+            svg.selectAll('.segment-label')
+                .data(stackedData.filter(d => (x(d.x1) - x(d.x0)) > 40))
+                .enter()
+                .append('g')
+                .attr('class', 'segment-label')
+                .each(function(d) {
+                    const g = d3.select(this);
+                    const centerX = x((d.x0 + d.x1) / 2);
+                    
+                    g.append('text')
+                        .attr('x', centerX)
+                        .attr('y', barY + barHeight / 2 - 12)
+                        .attr('text-anchor', 'middle')
+                        .attr('font-size', '12px')
+                        .attr('font-weight', 'bold')
+                        .attr('fill', '#333')
+                        .text(d.name);
+                    
+                    g.append('text')
+                        .attr('x', centerX)
+                        .attr('y', barY + barHeight / 2 + 8)
+                        .attr('text-anchor', 'middle')
+                        .attr('font-size', '16px')
+                        .attr('font-weight', 'bold')
+                        .attr('fill', '#c7254e')
+                        .text(`${d.allocatedScore}`);
+                    
+                    g.append('text')
+                        .attr('x', centerX)
+                        .attr('y', barY + barHeight / 2 + 24)
+                        .attr('text-anchor', 'middle')
+                        .attr('font-size', '10px')
+                        .attr('fill', '#666')
+                        .text(`#${d.finalRank}`);
+                });
+            
+            // X軸
+            svg.append('g')
+                .attr('transform', `translate(0,${height - 20})`)
+                .call(d3.axisBottom(x).ticks(10));
+            
+            // X軸標籤
+            svg.append('text')
+                .attr('x', width / 2)
+                .attr('y', height + 30)
+                .attr('text-anchor', 'middle')
+                .attr('font-size', '14px')
+                .attr('font-weight', 'bold')
+                .attr('fill', '#333')
+                .text(`獎金分數（總獎金池: ${totalPrize}分）`);
+            
+            // 標題
+            svg.append('text')
+                .attr('x', width / 2)
+                .attr('y', -25)
+                .attr('text-anchor', 'middle')
+                .attr('font-size', '18px')
+                .attr('font-weight', 'bold')
+                .attr('fill', '#333')
+                .text('🏆 獎金池分配視覺化');
+        }
+        
+        // 繪製排名分布圖
+        function drawRankDistribution() {
+            const sortedCandidates = calculateRankingsAndScores();
+            
+            d3.select('#rankDistributionChart').selectAll('*').remove();
+            
+            const margin = {top: 20, right: 30, bottom: 80, left: 60};
+            const width = 500 - margin.left - margin.right;
+            const height = 400 - margin.top - margin.bottom;
+            
+            const svg = d3.select('#rankDistributionChart')
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom)
+                .append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+            
+            // 統計各排名的人數
+            const rankCounts = {};
+            sortedCandidates.forEach(candidate => {
+                const rank = candidate.finalRank;
+                rankCounts[rank] = (rankCounts[rank] || 0) + 1;
+            });
+            
+            const data = Object.keys(rankCounts).map(rank => ({
+                rank: `第${rank}名`,
+                count: rankCounts[rank]
+            }));
+            
+            // X軸
+            const x = d3.scaleBand()
+                .domain(data.map(d => d.rank))
+                .range([0, width])
+                .padding(0.3);
+            
+            // Y軸
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(data, d => d.count)])
+                .nice()
+                .range([height, 0]);
+            
+            // 繪製條形圖
+            svg.selectAll('.bar')
+                .data(data)
+                .enter()
+                .append('rect')
+                .attr('class', 'bar')
+                .attr('x', d => x(d.rank))
+                .attr('y', d => y(d.count))
+                .attr('width', x.bandwidth())
+                .attr('height', d => height - y(d.count))
+                .attr('fill', '#667eea')
+                .attr('stroke', '#5568d3')
+                .attr('stroke-width', 2)
+                .attr('opacity', 0.8);
+            
+            // 顯示人數
+            svg.selectAll('.count-label')
+                .data(data)
+                .enter()
+                .append('text')
+                .attr('class', 'count-label')
+                .attr('x', d => x(d.rank) + x.bandwidth()/2)
+                .attr('y', d => y(d.count) - 5)
+                .attr('text-anchor', 'middle')
+                .attr('font-size', '16px')
+                .attr('font-weight', 'bold')
+                .attr('fill', '#333')
+                .text(d => `${d.count} 人`);
+            
+            // X軸
+            svg.append('g')
+                .attr('transform', `translate(0,${height})`)
+                .call(d3.axisBottom(x));
+            
+            // Y軸
+            svg.append('g')
+                .call(d3.axisLeft(y))
+                .append('text')
+                .attr('transform', 'rotate(-90)')
+                .attr('y', -45)
+                .attr('x', -height/2)
+                .attr('fill', 'black')
+                .style('text-anchor', 'middle')
+                .text('人數');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>財產天梯圖</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #f5f5f5;
+            margin: 0;
+            box-sizing: border-box;
+            width: 100%;
+        }
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: clamp(20px, 5vw, 32px);
+            text-align: center;
+        }
+        
+        #generateBtn {
+            padding: 12px 30px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: background-color 0.3s;
+        }
+        
+        #generateBtn:hover {
+            background-color: #45a049;
+        }
+        
+        #generateBtn:active {
+            transform: scale(0.98);
+        }
+        
+        #chart {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+            width: 100%;
+            max-width: 1200px;
+            overflow: visible;
+        }
+        
+        #chart svg {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        
+        .axis-label {
+            font-size: 14px;
+            fill: #666;
+        }
+        
+        .tick text {
+            font-size: 12px;
+        }
+        
+        .ladder-line {
+            stroke: #2196F3;
+            stroke-width: 3;
+            fill: none;
+        }
+        
+        .connector-line {
+            stroke: #90CAF9;
+            stroke-width: 2;
+        }
+        
+        .person-circle {
+            fill: #FF9800;
+            stroke: white;
+            stroke-width: 2;
+        }
+        
+        .person-label {
+            font-size: 13px;
+            fill: #333;
+        }
+        
+        .wealth-label {
+            font-size: 11px;
+            fill: #666;
+        }
+        
+        .extreme-marker {
+            fill: #F44336;
+            stroke: white;
+            stroke-width: 2;
+        }
+        
+        .extreme-label {
+            font-size: 12px;
+            fill: #F44336;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>💰 財產天梯圖</h1>
+    <button id="generateBtn">🎲 生成隨機數據</button>
+    <div id="chart"></div>
+
+    <script>
+        // 響應式圖表尺寸
+        let margin = {top: 40, right: 200, bottom: 60, left: 80};
+        let width, height;
+        
+        // 根據螢幕大小調整 margin
+        function updateDimensions() {
+            const containerWidth = Math.min(window.innerWidth - 40, 1200);
+            
+            if (containerWidth < 600) {
+                margin = {top: 30, right: 120, bottom: 50, left: 60};
+            } else if (containerWidth < 900) {
+                margin = {top: 40, right: 150, bottom: 60, left: 70};
+            } else {
+                margin = {top: 40, right: 200, bottom: 60, left: 80};
+            }
+            
+            width = containerWidth - margin.left - margin.right;
+            height = Math.max(400, Math.min(600, window.innerHeight - 200)) - margin.top - margin.bottom;
+        }
+        
+        updateDimensions();
+
+        // 創建 SVG 容器
+        const svgContainer = d3.select("#chart")
+            .append("svg")
+            .attr("width", "100%")
+            .attr("height", height + margin.top + margin.bottom)
+            .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+            .attr("preserveAspectRatio", "xMidYMid meet");
+            
+        const svg = svgContainer
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // 隨機名字池
+        const names = [
+            "小明", "小華", "小美", "大雄", "靜香",
+            "胖虎", "小夫", "阿強", "阿珍", "志明",
+            "春嬌", "阿偉", "小芳", "建國", "淑芬",
+            "俊傑", "雅婷", "家豪", "怡君", "宗翰"
+        ];
+
+        // 生成隨機數據
+        function generateRandomData() {
+            const numPeople = Math.floor(Math.random() * 6) + 5; // 5-10人
+            const usedNames = new Set();
+            const data = [];
+
+            for (let i = 0; i < numPeople; i++) {
+                let name;
+                do {
+                    name = names[Math.floor(Math.random() * names.length)];
+                } while (usedNames.has(name));
+                usedNames.add(name);
+
+                // 生成財產（使用對數分布使數據更真實）
+                const wealth = Math.floor(Math.exp(Math.random() * 8 + 4)); // 約50萬到3000萬
+                
+                // 為每個人生成唯一的頭像種子
+                const avatarSeed = `${name}-${Date.now()}-${i}`;
+                
+                data.push({ name, wealth, avatarSeed });
+            }
+
+            // 按財產排序
+            data.sort((a, b) => b.wealth - a.wealth);
+            return data;
+        }
+
+        // 格式化數字
+        function formatWealth(value) {
+            if (value >= 10000000) {
+                return `${(value / 10000000).toFixed(1)}千萬`;
+            } else if (value >= 10000) {
+                return `${(value / 10000).toFixed(0)}萬`;
+            } else {
+                return `${value.toLocaleString()}元`;
+            }
+        }
+
+        // 繪製圖表
+        function drawChart(data) {
+            // 保存當前數據供 resize 使用
+            currentData = data;
+            
+            // 清除舊圖表
+            svg.selectAll("*").remove();
+            
+            // 添加 defs 區域用於存放頭像圖片
+            const defs = svg.append("defs");
+
+            const minWealth = d3.min(data, d => d.wealth);
+            const maxWealth = d3.max(data, d => d.wealth);
+
+            // 建立比例尺（X軸從0開始）
+            const xScale = d3.scaleLinear()
+                .domain([0, maxWealth * 1.1])
+                .range([0, width]);
+
+            const yScale = d3.scaleLinear()
+                .domain([minWealth, maxWealth])
+                .range([height, 0]);
+
+            // 繪製 X 軸
+            const xAxis = d3.axisBottom(xScale)
+                .ticks(8)
+                .tickFormat(d => formatWealth(d));
+
+            svg.append("g")
+                .attr("transform", `translate(0,${height})`)
+                .call(xAxis)
+                .selectAll("text")
+                .style("text-anchor", "end")
+                .attr("dx", "-.8em")
+                .attr("dy", ".15em")
+                .attr("transform", "rotate(-30)");
+
+            // X 軸標籤
+            svg.append("text")
+                .attr("class", "axis-label")
+                .attr("text-anchor", "middle")
+                .attr("x", width / 2)
+                .attr("y", height + 55)
+                .text("財產金額");
+
+            // 繪製左側天梯主軸（垂直線，從最小到最大）
+            svg.append("line")
+                .attr("class", "ladder-line")
+                .attr("x1", 0)
+                .attr("y1", yScale(minWealth))
+                .attr("x2", 0)
+                .attr("y2", yScale(maxWealth))
+                .style("stroke-dasharray", "5,5");
+
+            // 標記最富和最窮
+            // 最富標記
+            svg.append("circle")
+                .attr("class", "extreme-marker")
+                .attr("cx", 0)
+                .attr("cy", yScale(maxWealth))
+                .attr("r", 8);
+
+            svg.append("text")
+                .attr("class", "extreme-label")
+                .attr("x", -15)
+                .attr("y", yScale(maxWealth) + 5)
+                .attr("text-anchor", "end")
+                .text("最富");
+
+            // 最窮標記
+            svg.append("circle")
+                .attr("class", "extreme-marker")
+                .attr("cx", 0)
+                .attr("cy", yScale(minWealth))
+                .attr("r", 8);
+
+            svg.append("text")
+                .attr("class", "extreme-label")
+                .attr("x", -15)
+                .attr("y", yScale(minWealth) + 5)
+                .attr("text-anchor", "end")
+                .text("最窮");
+
+            // 繪製每個人的連接線和標記
+            data.forEach((person, i) => {
+                const y = yScale(person.wealth);
+                const x = xScale(person.wealth);
+                const avatarSize = 32;
+                
+                // 為每個頭像創建 pattern
+                const patternId = `avatar-${i}`;
+                const pattern = defs.append("pattern")
+                    .attr("id", patternId)
+                    .attr("width", 1)
+                    .attr("height", 1)
+                    .attr("patternContentUnits", "objectBoundingBox");
+                
+                // DiceBear API URL (使用 adventurer 風格)
+                const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(person.avatarSeed)}`;
+                
+                pattern.append("image")
+                    .attr("href", avatarUrl)
+                    .attr("width", 1)
+                    .attr("height", 1)
+                    .attr("preserveAspectRatio", "xMidYMid slice");
+
+                // 橫向連接線（從財產最小的人開始，即從最小值的位置開始）
+                svg.append("line")
+                    .attr("class", "connector-line")
+                    .attr("x1", 0)
+                    .attr("y1", y)
+                    .attr("x2", x)
+                    .attr("y2", y)
+                    .style("opacity", 0)
+                    .transition()
+                    .duration(500)
+                    .delay(i * 50)
+                    .style("opacity", 1);
+
+                // 人的頭像標記（使用圓形裁切）
+                const avatarGroup = svg.append("g")
+                    .attr("transform", `translate(${x},${y})`);
+                
+                // 背景圓（白色邊框效果）
+                avatarGroup.append("circle")
+                    .attr("r", avatarSize / 2 + 2)
+                    .attr("fill", "white")
+                    .attr("opacity", 0)
+                    .transition()
+                    .duration(300)
+                    .delay(i * 50 + 200)
+                    .attr("opacity", 1);
+                
+                // 頭像圓
+                avatarGroup.append("circle")
+                    .attr("r", 0)
+                    .attr("fill", `url(#${patternId})`)
+                    .attr("stroke", "white")
+                    .attr("stroke-width", 2)
+                    .style("cursor", "pointer")
+                    .transition()
+                    .duration(300)
+                    .delay(i * 50 + 200)
+                    .attr("r", avatarSize / 2);
+
+                // 姓名標籤
+                svg.append("text")
+                    .attr("class", "person-label")
+                    .attr("x", x + avatarSize / 2 + 8)
+                    .attr("y", y + 4)
+                    .style("opacity", 0)
+                    .text(person.name)
+                    .transition()
+                    .duration(300)
+                    .delay(i * 50 + 300)
+                    .style("opacity", 1);
+
+                // 財產金額標籤
+                svg.append("text")
+                    .attr("class", "wealth-label")
+                    .attr("x", x + avatarSize / 2 + 8)
+                    .attr("y", y + 18)
+                    .style("opacity", 0)
+                    .text(formatWealth(person.wealth))
+                    .transition()
+                    .duration(300)
+                    .delay(i * 50 + 300)
+                    .style("opacity", 1);
+            });
+        }
+
+        // 按鈕事件
+        document.getElementById("generateBtn").addEventListener("click", () => {
+            const data = generateRandomData();
+            drawChart(data);
+        });
+
+        // 視窗大小改變時重繪
+        let resizeTimer;
+        let currentData = generateRandomData();
+        
+        window.addEventListener("resize", () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                updateDimensions();
+                svgContainer
+                    .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`);
+                svg.attr("transform", `translate(${margin.left},${margin.top})`);
+                drawChart(currentData);
+            }, 250);
+        });
+
+        // 初始生成一次數據
+        drawChart(currentData);
+    </script>
+</body>
+</html>

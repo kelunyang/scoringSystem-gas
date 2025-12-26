@@ -1,0 +1,618 @@
+/**
+ * Wallet Composables using TanStack Query
+ *
+ * Provides:
+ * - useWalletTransactions() - Get user's wallet transactions
+ * - useWalletLeaderboard() - Get wallet leaderboard
+ * - useGlobalWalletBalance() - Get balance across all projects
+ * - useWalletProjectUsers() - Get users in a project (for admin view)
+ * - useWalletProjectStages() - Get stages in a project
+ * - useWalletData() - Combined wallet data (transactions + stages + users)
+ */
+
+import type { Ref, ComputedRef } from 'vue'
+import { useQuery, useQueries } from '@tanstack/vue-query'
+import type { UseQueryReturnType } from '@tanstack/vue-query'
+import { computed, unref } from 'vue'
+import { apiClient } from '@/utils/api'
+import { rpcClient } from '@/utils/rpc-client'
+import { useCurrentUser } from './useAuth'
+import { useProjectsWithStages } from './useProjects'
+import type { Stage, User, Project } from '@/types'
+import type { Transaction } from '@repo/shared' // Use shared Transaction type for consistency
+import { debugLog } from '@/utils/debug'
+
+/**
+ * Normalized transaction structure
+ */
+interface NormalizedTransaction {
+  id: string
+  transactionId: string
+  points: number
+  description: string
+  stage: number
+  stageId?: string
+  stageName?: string
+  stageOrder?: number
+  timestamp: number
+  createdAt: number
+  transactionType: string
+  settlementId?: string
+  relatedSubmissionId?: string
+  relatedCommentId?: string
+  relatedTransactionId?: string
+  displayName?: string
+  userEmail?: string
+}
+
+/**
+ * Wallet leaderboard entry
+ */
+interface LeaderboardEntry {
+  userId: string
+  userEmail: string
+  displayName: string
+  balance: number
+  rank: number
+}
+
+/**
+ * Wallet ladder response (full API response)
+ * Contains global min/max for accurate score estimation across all permission levels
+ */
+export interface WalletLadderData {
+  hasFullAccess: boolean
+  walletData: any[]
+  globalMinBalance: number
+  globalMaxBalance: number
+  currentUserEmail: string
+  scoreRangeMin: number
+  scoreRangeMax: number
+}
+
+/**
+ * Global wallet balance by project
+ */
+interface ProjectWalletData {
+  projectId: string
+  projectName: string
+  balance: number
+  transactions: NormalizedTransaction[]
+}
+
+/**
+ * Global wallet balance result
+ */
+interface GlobalWalletBalanceData {
+  totalBalance: number
+  byProject: Record<string, ProjectWalletData>
+  allTransactions: NormalizedTransaction[]
+}
+
+/**
+ * Combined wallet data result
+ */
+interface WalletDataResult {
+  projects: ComputedRef<Project[]>
+  projectsLoading: Ref<boolean>
+  projectsError: Ref<boolean>
+  stages: ComputedRef<Stage[]>
+  stagesLoading: Ref<boolean>
+  stagesError: Ref<boolean>
+  users: ComputedRef<User[]>
+  usersLoading: Ref<boolean>
+  usersError: Ref<boolean>
+  transactions: ComputedRef<NormalizedTransaction[]>
+  transactionsLoading: Ref<boolean>
+  transactionsError: Ref<boolean>
+  isLoading: ComputedRef<boolean>
+  isError: ComputedRef<boolean>
+}
+
+/**
+ * Helper: Safely unwrap ref/computed to get raw value
+ */
+function getValue<T>(value: T | Ref<T>): T {
+  return unref(value) as T
+}
+
+/**
+ * Get user's wallet transactions for a project
+ *
+ * Depends on: auth
+ *
+ * @param projectId - Reactive project ID (null for all projects)
+ * @param userId - Reactive user ID (null for current user)
+ * @returns Query result
+ */
+export function useWalletTransactions(
+  projectId: Ref<string | null> | string | null = null,
+  userId: Ref<string | null> | string | null = null
+): UseQueryReturnType<NormalizedTransaction[], Error> {
+  const userQuery = useCurrentUser()
+
+  const isEnabled = computed(() => {
+    const pid = getValue(projectId)
+    const enabled = userQuery.isSuccess.value && !!userQuery.data.value && !!pid
+
+    debugLog('🔍 [useWalletTransactions] enabled check:', {
+      projectId: pid,
+      userId: getValue(userId),
+      userQuerySuccess: userQuery.isSuccess.value,
+      userQueryData: !!userQuery.data.value,
+      enabled
+    })
+
+    return enabled
+  })
+
+  return useQuery({
+    queryKey: computed(() => {
+      const key = [
+        'wallet',
+        'transactions',
+        getValue(projectId),
+        getValue(userId)
+      ]
+      debugLog('🔑 [useWalletTransactions] queryKey:', key)
+      return key
+    }),
+    queryFn: async (): Promise<NormalizedTransaction[]> => {
+      const pid = getValue(projectId)
+      const uid = getValue(userId)
+
+      debugLog('📡 [useWalletTransactions] queryFn called:', {
+        projectId: pid,
+        userId: uid
+      })
+
+      const httpResponse = await rpcClient.wallets.transactions.$post({
+        json: {
+          projectId: pid,
+          targetUserEmail: uid
+        }
+      })
+      const response = await httpResponse.json()
+
+      debugLog('✅ [useWalletTransactions] API response:', {
+        success: response.success,
+        transactionCount: response.data?.transactions?.length || 0
+      })
+
+      if (!response.success) {
+        throw new Error(response.error?.message || '載入交易記錄失敗')
+      }
+
+      const rawTransactions = response.data.transactions || []
+
+      // Normalize transactions to match expected structure
+      return rawTransactions.map((t: any) => ({
+        id: t.transactionId,              // Add 'id' for compatibility
+        transactionId: t.transactionId,
+        points: t.amount,                 // Map 'amount' to 'points'
+        description: t.description || t.source,
+        stage: t.stageOrder || 1,
+        stageId: t.stageId,               // Add stageId for filtering
+        stageName: t.stageName,
+        timestamp: t.timestamp,
+        transactionType: t.type || t.transactionType,
+        settlementId: t.settlementId,     // Settlement ID for reversal and detail view
+        relatedSubmissionId: t.relatedSubmissionId,
+        relatedCommentId: t.relatedCommentId,
+        relatedTransactionId: t.relatedTransactionId,
+        displayName: t.displayName,       // User display name from users table
+        userEmail: t.userEmail            // User email for filtering
+      })).sort((a: NormalizedTransaction, b: NormalizedTransaction) => b.timestamp - a.timestamp)
+    },
+    enabled: isEnabled,
+    staleTime: 1000 * 60 * 2 // 2 minutes cache
+  })
+}
+
+/**
+ * Get wallet leaderboard for a project
+ *
+ * @param projectId - Reactive project ID
+ * @returns Query result
+ */
+export function useWalletLeaderboard(
+  projectId: Ref<string | null> | string | null
+): UseQueryReturnType<WalletLadderData, Error> {
+  const userQuery = useCurrentUser()
+
+  const isEnabled = computed(() => {
+    const pid = getValue(projectId)
+    return userQuery.isSuccess.value && !!pid
+  })
+
+  return useQuery({
+    queryKey: computed(() => [
+      'wallet',
+      'leaderboard',
+      getValue(projectId)
+    ]),
+    queryFn: async (): Promise<WalletLadderData> => {
+      const httpResponse = await (rpcClient.wallets as any)['project-ladder'].$post({
+        json: {
+          projectId: getValue(projectId)
+        }
+      })
+      const response = await httpResponse.json()
+
+      if (!response.success) {
+        throw new Error(response.error?.message || '載入排行榜失敗')
+      }
+
+      // Return full response data including globalMinBalance/globalMaxBalance
+      // for accurate score estimation across all permission levels
+      return response.data as WalletLadderData
+    },
+    enabled: isEnabled,
+    staleTime: 1000 * 60 * 5 // 5 minutes cache
+  })
+}
+
+/**
+ * Get global wallet balance across all projects
+ *
+ * This fetches transactions from all projects the user participates in
+ * and calculates the total balance.
+ *
+ * Depends on: auth, projects
+ *
+ * @returns Combined query result
+ */
+export function useGlobalWalletBalance() {
+  const userQuery = useCurrentUser()
+  const projectsQuery = useProjectsWithStages()
+
+  return useQueries({
+    queries: computed(() => {
+      const projects = projectsQuery.data?.value || []
+
+      if (!userQuery.isSuccess.value || !projects.length) {
+        return []
+      }
+
+      return projects.map((project: Project) => ({
+        queryKey: ['wallet', 'transactions', project.id],
+        queryFn: async () => {
+          const httpResponse = await rpcClient.wallets.transactions.$post({
+            json: {
+              projectId: project.id,
+              targetUserEmail: null
+            }
+          })
+          const response = await httpResponse.json()
+          if (!response.success) {
+            return { projectId: project.id, transactions: [], error: true }
+          }
+
+          const rawTransactions = response.data.transactions || []
+
+          // Normalize transactions
+          const normalizedTransactions = rawTransactions.map((t: any) => ({
+            id: t.transactionId,
+            transactionId: t.transactionId,
+            points: t.amount,
+            description: t.description || t.source,
+            stage: t.stageOrder || 1,
+            stageName: t.stageName,
+            timestamp: t.timestamp,
+            transactionType: t.type || t.transactionType,
+            settlementId: t.settlementId,     // Settlement ID for reversal and detail view
+            relatedSubmissionId: t.relatedSubmissionId,
+            relatedCommentId: t.relatedCommentId,
+            relatedTransactionId: t.relatedTransactionId,
+            displayName: t.displayName,       // User display name from users table
+            userEmail: t.userEmail            // User email for filtering
+          }))
+
+          return {
+            projectId: project.id,
+            projectName: project.name,
+            transactions: normalizedTransactions
+          }
+        },
+        staleTime: 1000 * 60 * 2
+      }))
+    }),
+    combine: (results) => {
+      const allTransactions: NormalizedTransaction[] = []
+      const byProject: Record<string, ProjectWalletData> = {}
+      let totalBalance = 0
+      let isLoading = results.some(r => r.isLoading)
+      let isError = results.some(r => r.isError)
+
+      results.forEach(result => {
+        if (result.data) {
+          const { projectId, projectName, transactions } = result.data as { projectId: string; projectName: string; transactions: NormalizedTransaction[] }
+
+          // Calculate balance for this project (using normalized 'points' field)
+          const projectBalance = transactions.reduce((sum: number, tx: NormalizedTransaction) => sum + (tx.points || 0), 0)
+
+          byProject[projectId] = {
+            projectId,
+            projectName,
+            balance: projectBalance,
+            transactions
+          }
+
+          totalBalance += projectBalance
+          allTransactions.push(...transactions)
+        }
+      })
+
+      return {
+        data: {
+          totalBalance,
+          byProject,
+          allTransactions: allTransactions.sort((a, b) =>
+            new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime()
+          )
+        },
+        isLoading,
+        isError
+      }
+    }
+  })
+}
+
+/**
+ * Helper: Calculate balance from transactions
+ *
+ * @param transactions - Array of transactions
+ * @returns Total balance
+ */
+export function calculateBalance(transactions: Transaction[] | NormalizedTransaction[]): number {
+  if (!Array.isArray(transactions)) return 0
+  return transactions.reduce((sum, tx) => sum + ((tx as any).amount || 0), 0)
+}
+
+/**
+ * Helper: Group transactions by type
+ *
+ * @param transactions - Array of transactions
+ * @returns Transactions grouped by type
+ */
+export function groupTransactionsByType(transactions: Transaction[] | NormalizedTransaction[]): Record<string, (Transaction | NormalizedTransaction)[]> {
+  if (!Array.isArray(transactions)) return {}
+
+  return transactions.reduce((groups, tx) => {
+    const type = (tx as any).type || 'other'
+    if (!groups[type]) {
+      groups[type] = []
+    }
+    groups[type].push(tx)
+    return groups
+  }, {} as Record<string, (Transaction | NormalizedTransaction)[]>)
+}
+
+/**
+ * Helper: Get transactions for a specific project
+ *
+ * @param transactions - Array of transactions
+ * @param projectId - Project ID to filter by
+ * @returns Filtered transactions
+ */
+export function getProjectTransactions(transactions: Transaction[] | NormalizedTransaction[], projectId: string): (Transaction | NormalizedTransaction)[] {
+  if (!Array.isArray(transactions)) return []
+  return transactions.filter(tx => (tx as any).projectId === projectId)
+}
+
+/**
+ * Get project stages
+ *
+ * Depends on: auth, projectId
+ *
+ * @param projectId - Reactive project ID
+ * @returns Query result
+ */
+export function useWalletProjectStages(
+  projectId: Ref<string> | string
+): UseQueryReturnType<Stage[], Error> {
+  const userQuery = useCurrentUser()
+
+  const isEnabled = computed(() => {
+    const pid = getValue(projectId)
+    return userQuery.isSuccess.value && !!pid
+  })
+
+  return useQuery({
+    queryKey: computed(() => [
+      'wallet',
+      'projectStages',
+      getValue(projectId)
+    ]),
+    queryFn: async (): Promise<Stage[]> => {
+      const httpResponse = await rpcClient.projects.get.$post({
+        json: {
+          projectId: getValue(projectId)
+        }
+      })
+      const response = await httpResponse.json()
+
+      if (!response.success) {
+        throw new Error(response.error?.message || '載入專案階段失敗')
+      }
+
+      const stages = response.data?.stages || []
+      return stages.sort((a: Stage, b: Stage) => (a.stageOrder || 0) - (b.stageOrder || 0))
+    },
+    enabled: isEnabled,
+    staleTime: 1000 * 60 * 5 // 5 minutes cache (stages don't change often)
+  })
+}
+
+/**
+ * Get project users (for admin/teacher view)
+ *
+ * Uses the same API as ProjectDetail to get all participants
+ * Depends on: auth, projectId
+ *
+ * @param projectId - Reactive project ID
+ * @returns Query result
+ */
+export function useWalletProjectUsers(
+  projectId: Ref<string> | string
+): UseQueryReturnType<User[], Error> {
+  const userQuery = useCurrentUser()
+
+  const isEnabled = computed(() => {
+    const pid = getValue(projectId)
+    return userQuery.isSuccess.value && !!pid
+  })
+
+  return useQuery({
+    queryKey: computed(() => [
+      'wallet',
+      'projectUsers',
+      getValue(projectId)
+    ]),
+    queryFn: async (): Promise<User[]> => {
+      const httpResponse = await rpcClient.projects.core.$post({
+        json: {
+          projectId: getValue(projectId)
+        }
+      })
+      const response = await httpResponse.json()
+
+      if (!response.success) {
+        throw new Error(response.error?.message || '載入專案參與者失敗')
+      }
+
+      return response.data?.users || []
+    },
+    enabled: isEnabled,
+    staleTime: 1000 * 60 * 5 // 5 minutes cache
+  })
+}
+
+/**
+ * Combined wallet data hook
+ *
+ * Provides all data needed for WalletNew component:
+ * - Projects list with stages
+ * - Selected project's users (if user has permission)
+ * - Selected project's stages
+ * - Wallet transactions for selected project/user
+ *
+ * Depends on: auth, projectId
+ *
+ * @param projectId - Reactive project ID (can be null)
+ * @param userEmail - Reactive user email (can be null)
+ * @param canViewAllUsers - Whether user has permission to view all users
+ * @returns Combined query results
+ */
+export function useWalletData(
+  projectId: Ref<string | null> | string | null,
+  userEmail: Ref<string | null> | string | null,
+  canViewAllUsers: Ref<boolean> | boolean
+): WalletDataResult {
+  debugLog('🎯 [useWalletData] initialized:', {
+    projectId: getValue(projectId),
+    userEmail: getValue(userEmail),
+    canViewAllUsers: getValue(canViewAllUsers)
+  })
+
+  // Base queries that always run
+  const projectsQuery = useProjectsWithStages()
+
+  // Project-specific queries (only when projectId exists)
+  const stagesQuery = useWalletProjectStages(projectId as any)
+
+  // Users query (only when projectId exists AND user has permission)
+  const shouldLoadUsers = computed(() => {
+    const pid = getValue(projectId)
+    const canView = getValue(canViewAllUsers) ?? false
+    return !!pid && canView
+  })
+
+  const usersQuery = useQuery({
+    queryKey: computed(() => [
+      'wallet',
+      'projectUsers',
+      getValue(projectId)
+    ]),
+    queryFn: async (): Promise<User[]> => {
+      const httpResponse = await rpcClient.projects.core.$post({
+        json: {
+          projectId: getValue(projectId)
+        }
+      })
+      const response = await httpResponse.json()
+      if (!response.success) {
+        throw new Error(response.error?.message || '載入專案參與者失敗')
+      }
+      return response.data?.users || []
+    },
+    enabled: shouldLoadUsers,
+    staleTime: 1000 * 60 * 5
+  })
+
+  // Transactions query (when projectId exists)
+  const transactionsQuery = useWalletTransactions(projectId as any, userEmail as any)
+
+  return {
+    // Projects
+    projects: computed(() => projectsQuery.data?.value || []),
+    projectsLoading: projectsQuery.isLoading,
+    projectsError: projectsQuery.isError,
+
+    // Stages
+    stages: computed(() => stagesQuery.data?.value || []),
+    stagesLoading: stagesQuery.isLoading,
+    stagesError: stagesQuery.isError,
+
+    // Users
+    users: computed(() => usersQuery.data?.value || []),
+    usersLoading: usersQuery.isLoading,
+    usersError: usersQuery.isError,
+
+    // Transactions
+    transactions: computed(() => transactionsQuery.data?.value || []),
+    transactionsLoading: transactionsQuery.isLoading,
+    transactionsError: transactionsQuery.isError,
+
+    // Combined loading state
+    isLoading: computed(() =>
+      projectsQuery.isLoading.value ||
+      stagesQuery.isLoading.value ||
+      usersQuery.isLoading.value ||
+      transactionsQuery.isLoading.value
+    ),
+
+    // Combined error state
+    isError: computed(() =>
+      projectsQuery.isError.value ||
+      stagesQuery.isError.value ||
+      usersQuery.isError.value ||
+      transactionsQuery.isError.value
+    )
+  }
+}
+
+// ===== 財富排名常數 =====
+export const WEALTH_TOP_PERCENTAGE = 0.03  // 前 3% 富豪
+export const MIN_WEALTH_RANKINGS = 1       // 最少顯示 1 人
+
+/**
+ * 從 leaderboard 資料提取前 3% 富豪排名
+ * @param walletData - 已按財富排序的使用者陣列（從 project-ladder API）
+ * @returns 前 3% 富豪的排名陣列，包含 userEmail, rank, balance
+ */
+export function extractTopWealthRankings(walletData: any[]): Array<{userEmail: string, rank: number, balance: number}> {
+  if (!walletData || walletData.length === 0) return []
+
+  const totalUsers = walletData.length
+  const top3PercentCount = Math.max(
+    MIN_WEALTH_RANKINGS,
+    Math.ceil(totalUsers * WEALTH_TOP_PERCENTAGE)
+  )
+
+  return walletData.slice(0, top3PercentCount).map((user, index) => ({
+    userEmail: user.userEmail,
+    rank: index + 1,
+    balance: user.currentBalance || user.balance
+  }))
+}

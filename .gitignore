@@ -1,0 +1,128 @@
+# ===================================
+# 排除的備份目錄
+# ===================================
+Backup/
+claude.bak
+
+# ===================================
+# Dependencies
+# ===================================
+node_modules/
+.npm
+.pnpm-store/
+
+# ===================================
+# Cloudflare / Wrangler
+# ===================================
+.wrangler/
+.dev.vars
+.dev.vars.local
+worker-configuration.d.ts
+**/packages/**/.wrangler/
+**/packages/**/.dev.vars
+**/packages/**/.dev.vars.local
+
+# ===================================
+# Build outputs
+# ===================================
+dist/
+deploy/
+GAS/build/
+*.gs
+*.local
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# ===================================
+# Python
+# ===================================
+venv/
+.venv/
+ENV/
+__pycache__/
+*.pyc
+*.pyo
+
+# ===================================
+# Environment files (所有目錄)
+# ===================================
+.env
+.env.local
+.env.*.local
+.env.production
+.env.production.local
+**/.env
+**/.env.local
+**/.env.*.local
+
+# ===================================
+# Logs
+# ===================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===================================
+# Editor / IDE
+# ===================================
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ===================================
+# Google Apps Script (所有目錄)
+# ===================================
+.clasp.json
+.clasp.json.tmp
+.claspignore
+**/.clasp.json
+**/.clasp.json.tmp
+
+# ===================================
+# Database backups (敏感，但保留 schema.sql)
+# ===================================
+backup-*.sql
+**/dump*.sql
+**/export*.sql
+
+# ===================================
+# Test coverage
+# ===================================
+coverage/
+.nyc_output/
+
+# ===================================
+# Playwright
+# ===================================
+test-results/
+playwright-report/
+playwright/.cache/
+
+# ===================================
+# Temporary and backup files
+# ===================================
+tmp/
+temp/
+**/*.bak
+**/*.backup
+**/*.old
+**/bak/
+**/backup/
+
+# ===================================
+# Shell scripts (開發用)
+# ===================================
+*.sh
+
+# ===================================
+# Auto-generated files
+# ===================================
+scoringSystem-cf/packages/frontend/src/styles/_theme-generated.scss

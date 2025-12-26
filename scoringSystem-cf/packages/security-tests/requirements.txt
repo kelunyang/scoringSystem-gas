@@ -1,0 +1,31 @@
+# Core Testing Framework
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-timeout==2.2.0
+
+# HTTP Clients
+requests==2.31.0
+httpx==0.25.2
+
+# JWT & Crypto
+pyjwt==2.8.0
+cryptography==41.0.7
+
+# Test Data Generation
+faker==20.1.0
+
+# Reporting
+pytest-html==4.1.1
+pytest-json-report==1.5.0
+
+# Configuration
+python-dotenv==1.0.0
+pydantic==2.5.2
+pydantic-settings==2.1.0
+
+# WebSocket Testing
+websocket-client>=1.6.0
+
+# Security Testing (Optional - uncomment if needed)
+# owasp-zap-api-python==0.3.0
+# bandit==1.7.5

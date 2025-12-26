@@ -1,0 +1,46 @@
+{
+  "name": "scoring-system-monorepo",
+  "version": "2.0.0",
+  "description": "Scoring System - Monorepo with pnpm workspaces",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "postinstall": "node scripts/post-install-hooks.cjs",
+    "dev": "bash scripts/dev.sh",
+    "dev:backend": "pnpm --filter @repo/backend dev",
+    "dev:frontend": "pnpm --filter @repo/frontend dev",
+    "build": "pnpm --filter @repo/shared build && pnpm --parallel --filter \"!@repo/shared\" build",
+    "build:backend": "pnpm --filter @repo/backend build",
+    "build:frontend": "pnpm --filter @repo/frontend build",
+    "type-check": "tsc --build",
+    "lint": "pnpm --recursive lint",
+    "clean": "pnpm --recursive clean && rm -rf node_modules",
+    "deploy:backend": "pnpm --filter @repo/backend deploy",
+    "deploy:frontend": "pnpm --filter @repo/frontend deploy",
+    "test": "pnpm --recursive test",
+    "test:e2e": "pnpm --filter @repo/frontend test:e2e",
+    "test:e2e:ui": "pnpm --filter @repo/frontend test:e2e:ui",
+    "test:e2e:report": "pnpm --filter @repo/frontend test:e2e:report",
+    "test:security": "cd packages/security-tests && bash -c 'source venv/bin/activate 2>/dev/null || true && pytest -v'",
+    "test:security:critical": "cd packages/security-tests && bash -c 'source venv/bin/activate 2>/dev/null || true && pytest -v -m critical'",
+    "test:security:report": "cd packages/security-tests && bash -c 'source venv/bin/activate 2>/dev/null || true && pytest -v --html=reports/security_report.html --self-contained-html'",
+    "test:security:setup": "cd packages/security-tests && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt",
+    "db:create": "pnpm --filter @repo/backend run db:create",
+    "db:migrate": "pnpm --filter @repo/backend run db:migrate"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.4",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@10.24.0",
+  "dependencies": {
+    "@tanstack/vue-virtual": "^3.13.12",
+    "pinia": "^3.0.4"
+  }
+}

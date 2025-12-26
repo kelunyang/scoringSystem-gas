@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分數轉換算法比較</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .controls {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        .btn:hover {
+            background: #45a049;
+        }
+        .btn.active {
+            background: #2196F3;
+        }
+        .charts {
+            display: flex;
+            justify-content: space-around;
+            gap: 40px;
+        }
+        .chart-container {
+            flex: 1;
+            text-align: center;
+        }
+        .chart-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .info-box {
+            background: #e8f4f8;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #2196F3;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 15px 0;
+            font-size: 14px;
+            flex-wrap: wrap;
+        }
+        .stat-item {
+            text-align: center;
+            margin: 5px;
+            padding: 5px;
+        }
+        .stat-value {
+            font-weight: bold;
+            font-size: 16px;
+            color: #2196F3;
+        }
+        .control-group {
+            margin: 15px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        input[type="number"] {
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            margin: 0 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 style="text-align: center; color: #333;">分數轉換算法比較工具</h1>
+        
+        <div class="info-box">
+            <strong>說明：</strong>生成50筆隨機點數（50-5000分），比較不同轉換算法的效果。<strong>點擊「⚡ 極端outlier」看出算法真正差異！</strong>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <strong>數據生成模式：</strong><br>
+                <button class="btn" onclick="generateAndUpdate('random')">🎲 完全隨機</button>
+                <button class="btn" onclick="generateAndUpdate('highCluster')">📈 高分群集中</button>
+                <button class="btn" onclick="generateAndUpdate('lowCluster')">📉 低分群集中</button>
+                <button class="btn" onclick="generateAndUpdate('normal')">📊 常態分布</button>
+                <button class="btn" onclick="generateAndUpdate('extreme')">⚡ 極端outlier</button>
+            </div>
+            
+            <div class="control-group">
+                <strong>轉換算法：</strong><br>
+                <button class="btn active" onclick="setAlgorithm('linear')">📏 仿射變換</button>
+                <button class="btn" onclick="setAlgorithm('winsor')">✂️ Winsorizing (95%)</button>
+                <button class="btn" onclick="setAlgorithm('percentile')">📊 百分位轉換</button>
+                <button class="btn" onclick="setAlgorithm('sqrt')">📐 開根號轉換</button>
+            </div>
+        </div>
+
+        <div class="info-box">
+            <div class="control-group">
+                <strong>自定義分數區間：</strong>
+                <label>最低分：<input type="number" id="minScore" value="65" min="0" max="100"></label>
+                <label>最高分：<input type="number" id="maxScore" value="95" min="0" max="100"></label>
+                <button class="btn" onclick="updateCharts()">🔄 更新範圍</button>
+            </div>
+            
+            <div class="control-group">
+                <strong>個人成績查詢：</strong>
+                <label>你的原始點數：<input type="number" id="studentScore" placeholder="輸入你的點數" min="50" max="5000"></label>
+                <button class="btn" onclick="showPersonalScore()">📍 顯示我的位置</button>
+                <button class="btn" onclick="clearPersonalScore()">🗑️ 清除標記</button>
+            </div>
+        </div>
+
+        <div class="charts">
+            <div class="chart-container">
+                <div class="chart-title">原始點數分布</div>
+                <div id="originalChart"></div>
+                <div class="stats" id="originalStats"></div>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-title" id="transformedTitle">線性縮放 (65-95分)</div>
+                <div id="transformedChart"></div>
+                <div class="stats" id="transformedStats"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全域變數
+        let rawData = [];
+        let currentAlgorithm = 'linear';
+        let studentOriginalScore = null;
+        let studentTransformedScore = null;
+        
+        // 圖表設定
+        const margin = {top: 40, right: 30, bottom: 60, left: 50};
+        const width = 400 - margin.left - margin.right;
+        const height = 350 - margin.bottom - margin.top;
+
+        // 生成隨機數據
+        function generateData(type = 'random') {
+            rawData = [];
+            
+            switch(type) {
+                case 'random':
+                    for (let i = 0; i < 50; i++) {
+                        let score;
+                        if (Math.random() < 0.7) {
+                            score = Math.random() * 1500 + 50;
+                        } else {
+                            score = Math.random() * 3500 + 1500;
+                        }
+                        rawData.push(Math.round(score));
+                    }
+                    break;
+                    
+                case 'highCluster':
+                    for (let i = 0; i < 50; i++) {
+                        let score;
+                        if (Math.random() < 0.8) {
+                            score = Math.random() * 2000 + 3000;
+                        } else {
+                            score = Math.random() * 1450 + 50;
+                        }
+                        rawData.push(Math.round(score));
+                    }
+                    break;
+                    
+                case 'lowCluster':
+                    for (let i = 0; i < 50; i++) {
+                        let score;
+                        if (Math.random() < 0.8) {
+                            score = Math.random() * 1950 + 50;
+                        } else {
+                            score = Math.random() * 1500 + 3500;
+                        }
+                        rawData.push(Math.round(score));
+                    }
+                    break;
+                    
+                case 'normal':
+                    const mean = 2500;
+                    const stdDev = 800;
+                    for (let i = 0; i < 50; i++) {
+                        let u1 = Math.random();
+                        let u2 = Math.random();
+                        let z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+                        let score = mean + z * stdDev;
+                        score = Math.max(50, Math.min(5000, score));
+                        rawData.push(Math.round(score));
+                    }
+                    break;
+                    
+                case 'extreme':
+                    for (let i = 0; i < 50; i++) {
+                        let score;
+                        const rand = Math.random();
+                        if (rand < 0.75) {
+                            score = Math.random() * 2000 + 500;
+                        } else if (rand < 0.9) {
+                            score = Math.random() * 250 + 50;
+                        } else {
+                            score = Math.random() * 1000 + 4000;
+                        }
+                        rawData.push(Math.round(score));
+                    }
+                    break;
+            }
+            
+            rawData.sort((a, b) => a - b);
+        }
+
+        // 計算統計值
+        function calculateStats(data) {
+            const sorted = [...data].sort((a, b) => a - b);
+            const n = sorted.length;
+            return {
+                min: Math.round(sorted[0] * 10) / 10,
+                max: Math.round(sorted[n-1] * 10) / 10,
+                median: Math.round(sorted[Math.floor(n/2)] * 10) / 10,
+                q1: Math.round(sorted[Math.floor(n*0.25)] * 10) / 10,
+                q3: Math.round(sorted[Math.floor(n*0.75)] * 10) / 10,
+                mean: Math.round((sorted.reduce((a,b) => a+b, 0) / n) * 10) / 10
+            };
+        }
+
+        // 轉換算法
+        function transformScores(algorithm) {
+            const sorted = [...rawData].sort((a, b) => a - b);
+            const n = sorted.length;
+            const minRange = parseFloat(document.getElementById('minScore').value) || 50;
+            const maxRange = parseFloat(document.getElementById('maxScore').value) || 100;
+            
+            switch(algorithm) {
+                case 'linear':
+                    const min = sorted[0];
+                    const max = sorted[n-1];
+                    return rawData.map(score => 
+                        minRange + (score - min) / (max - min) * (maxRange - minRange)
+                    );
+                
+                case 'winsor':
+                    const p95 = sorted[Math.floor(n * 0.95)];
+                    const p5 = sorted[Math.floor(n * 0.05)];
+                    const winsorized = rawData.map(score => 
+                        Math.max(p5, Math.min(p95, score))
+                    );
+                    const wMin = Math.min(...winsorized);
+                    const wMax = Math.max(...winsorized);
+                    return winsorized.map(score => 
+                        minRange + (score - wMin) / (wMax - wMin) * (maxRange - minRange)
+                    );
+                
+                case 'percentile':
+                    return rawData.map(score => {
+                        const rank = sorted.filter(s => s <= score).length;
+                        const percentile = (rank - 1) / (n - 1);
+                        return minRange + percentile * (maxRange - minRange);
+                    });
+                
+                case 'sqrt':
+                    const sMin = sorted[0];
+                    const sMax = sorted[n-1];
+                    return rawData.map(score => 
+                        minRange + Math.sqrt((score - sMin) / (sMax - sMin)) * (maxRange - minRange)
+                    );
+                
+                default:
+                    return rawData;
+            }
+        }
+
+        // 繪製分布條形圖
+        function drawDistributionBarChart(containerId, data, title) {
+            d3.select(`#${containerId}`).selectAll("*").remove();
+            
+            const stats = calculateStats(data);
+            const svg = d3.select(`#${containerId}`)
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom);
+            
+            const g = svg.append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+            
+            const isOriginal = containerId === 'originalChart';
+            const minVal = stats.min;
+            const maxVal = stats.max;
+            const binCount = 10;
+            const binWidth = (maxVal - minVal) / binCount;
+            
+            // 創建分組
+            const bins = [];
+            for (let i = 0; i < binCount; i++) {
+                const start = minVal + i * binWidth;
+                const end = minVal + (i + 1) * binWidth;
+                const count = data.filter(d => d >= start && (i === binCount - 1 ? d <= end : d < end)).length;
+                bins.push({ start, end, count });
+            }
+            
+            const xScale = d3.scaleBand()
+                .domain(bins.map((d, i) => i))
+                .range([0, width])
+                .padding(0.1);
+            
+            const maxCount = Math.max(...bins.map(d => d.count));
+            const yScale = d3.scaleLinear()
+                .domain([0, maxCount])
+                .range([height, 0]);
+            
+            const xScaleContinuous = d3.scaleLinear()
+                .domain([minVal, maxVal])
+                .range([0, width]);
+            
+            // X軸
+            g.append("g")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(xScale).tickFormat((d, i) => Math.round(bins[i].start)))
+                .selectAll("text")
+                .attr("transform", "rotate(-45)")
+                .style("text-anchor", "end");
+            
+            // Y軸
+            g.append("g")
+                .call(d3.axisLeft(yScale))
+                .append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("y", -35)
+                .attr("x", -height/2)
+                .attr("fill", "black")
+                .style("text-anchor", "middle")
+                .text("人數");
+            
+            // X軸標籤
+            g.append("text")
+                .attr("x", width/2)
+                .attr("y", height + 50)
+                .attr("fill", "black")
+                .style("text-anchor", "middle")
+                .text("分數區間");
+            
+            // 繪製條形圖
+            g.selectAll(".bar")
+                .data(bins)
+                .enter()
+                .append("rect")
+                .attr("class", "bar")
+                .attr("x", (d, i) => xScale(i))
+                .attr("y", d => yScale(d.count))
+                .attr("width", xScale.bandwidth())
+                .attr("height", d => height - yScale(d.count))
+                .attr("fill", "#4CAF50")
+                .attr("stroke", "#45a049")
+                .attr("stroke-width", 1)
+                .attr("opacity", 0.8);
+            
+            // 在條形上顯示人數
+            g.selectAll(".bar-text")
+                .data(bins.filter(d => d.count > 0))
+                .enter()
+                .append("text")
+                .attr("class", "bar-text")
+                .attr("x", (d, i) => {
+                    const originalIndex = bins.findIndex(bin => bin === d);
+                    return xScale(originalIndex) + xScale.bandwidth()/2;
+                })
+                .attr("y", d => yScale(d.count) - 5)
+                .attr("text-anchor", "middle")
+                .attr("font-size", "12px")
+                .attr("fill", "#333")
+                .text(d => d.count);
+            
+            // 繪製個人成績標記
+            let personalScore = isOriginal ? studentOriginalScore : studentTransformedScore;
+            if (personalScore !== null && personalScore >= minVal && personalScore <= maxVal) {
+                const xPos = xScaleContinuous(personalScore);
+                
+                g.append("line")
+                    .attr("x1", xPos).attr("x2", xPos)
+                    .attr("y1", 0).attr("y2", height)
+                    .attr("stroke", "#FF0000")
+                    .attr("stroke-width", 3)
+                    .attr("opacity", 0.8);
+                
+                g.append("polygon")
+                    .attr("points", `${xPos-8},0 ${xPos+8},0 ${xPos},15`)
+                    .attr("fill", "#FF0000");
+                
+                g.append("rect")
+                    .attr("x", xPos - 25).attr("y", -25)
+                    .attr("width", 50).attr("height", 18)
+                    .attr("fill", "white")
+                    .attr("stroke", "#FF0000")
+                    .attr("rx", 2);
+                
+                g.append("text")
+                    .attr("x", xPos).attr("y", -10)
+                    .attr("text-anchor", "middle")
+                    .attr("font-size", "12px")
+                    .attr("font-weight", "bold")
+                    .attr("fill", "#FF0000")
+                    .text(Math.round(personalScore * 10) / 10);
+            }
+            
+            // 更新統計資訊
+            const statsContainer = d3.select(`#${containerId.replace('Chart', 'Stats')}`);
+            let personalInfo = '';
+            if (personalScore !== null) {
+                const rank = data.filter(d => d <= personalScore).length;
+                const percentile = Math.round((rank / data.length) * 100);
+                personalInfo = `<div class="stat-item" style="background: #ffebee; border: 1px solid #ff0000; border-radius: 4px;"><div class="stat-value" style="color: #ff0000;">${Math.round(personalScore * 10) / 10}</div><div style="color: #ff0000;">你的成績 (${percentile}%)</div></div>`;
+            }
+            
+            statsContainer.html(`
+                <div class="stat-item"><div class="stat-value">${stats.min}</div><div>最小值</div></div>
+                <div class="stat-item"><div class="stat-value">${stats.q1}</div><div>Q1</div></div>
+                <div class="stat-item"><div class="stat-value">${stats.median}</div><div>中位數</div></div>
+                <div class="stat-item"><div class="stat-value">${stats.q3}</div><div>Q3</div></div>
+                <div class="stat-item"><div class="stat-value">${stats.max}</div><div>最大值</div></div>
+                ${personalInfo}
+            `);
+        }
+
+        // 更新圖表
+        function updateCharts() {
+            const transformedData = transformScores(currentAlgorithm);
+            const minRange = parseFloat(document.getElementById('minScore').value) || 50;
+            const maxRange = parseFloat(document.getElementById('maxScore').value) || 100;
+            
+            drawDistributionBarChart('originalChart', rawData, '原始點數分布');
+            drawDistributionBarChart('transformedChart', transformedData, '轉換後分數分布');
+            
+            const titles = {
+                'linear': `仿射變換 (${minRange}-${maxRange}分)`,
+                'winsor': `Winsorizing 95% (${minRange}-${maxRange}分)`,
+                'percentile': `百分位轉換 (${minRange}-${maxRange}分)`,
+                'sqrt': `開根號轉換 (${minRange}-${maxRange}分)`
+            };
+            document.getElementById('transformedTitle').textContent = titles[currentAlgorithm];
+        }
+
+        // 全域函數
+        function generateAndUpdate(type) {
+            generateData(type);
+            updateCharts();
+        }
+
+        function setAlgorithm(algorithm) {
+            currentAlgorithm = algorithm;
+            document.querySelectorAll('.btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            updateCharts();
+        }
+
+        function showPersonalScore() {
+            const inputScore = parseFloat(document.getElementById('studentScore').value);
+            
+            if (isNaN(inputScore) || inputScore < 50 || inputScore > 5000) {
+                alert('請輸入50-5000之間的有效點數！');
+                return;
+            }
+            
+            studentOriginalScore = inputScore;
+            
+            const transformedData = transformScores(currentAlgorithm);
+            const sorted = [...rawData].sort((a, b) => a - b);
+            
+            let closestIndex = 0;
+            let minDiff = Math.abs(sorted[0] - inputScore);
+            
+            for (let i = 1; i < sorted.length; i++) {
+                const diff = Math.abs(sorted[i] - inputScore);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closestIndex = i;
+                }
+            }
+            
+            studentTransformedScore = transformedData[closestIndex];
+            updateCharts();
+        }
+
+        function clearPersonalScore() {
+            studentOriginalScore = null;
+            studentTransformedScore = null;
+            document.getElementById('studentScore').value = '';
+            updateCharts();
+        }
+
+        // 初始化
+        generateData('random');
+        updateCharts();
+    </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# SPA fallback - serve index.html for all routes except API and WebSocket
+/api/* 200
+/auth/* 200
+/projects/* 200
+/stages/* 200
+/submissions/* 200
+/users/* 200
+/wallets/* 200
+/groups/* 200
+/invitations/* 200
+/tags/* 200
+/notifications/* 200
+/ws/* 200
+/* /index.html 200

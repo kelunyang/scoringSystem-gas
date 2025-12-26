@@ -1,0 +1,93 @@
+flowchart TD
+    Start([系統啟動]) --> Config{檢查系統配置}
+    Config --> A[總PM群組建立專案<br/>• 生成 proj_uuid<br/>• 寫入核心資料庫]
+    
+    A --> B[配置階段參數<br/>• 評分模組啟用狀態<br/>• 審核通過門檻 67%<br/>• 總PM加權比例 30%<br/>• 最大重交次數<br/>• 錢包模組依賴檢查]
+    
+    B --> C[設定群組關係<br/>• 分配現有群組到專案<br/>• 設定群組角色和權限<br/>• 寫入 ProjectGroups 表]
+    
+    C --> D[初始化專案分片<br/>• 自動創建 proj_uuid/ 目錄<br/>• 建立 main_data 和 transaction_data<br/>• 初始化表結構]
+    
+    D --> E{到達階段開始時間?}
+    E -->|否| Wait[等待中...]
+    Wait --> E
+    E -->|是| F[通知交成果人群組<br/>檢查群組權限開放提交]
+    
+    F --> G[組員提交成果<br/>• Markdown內容到專案分片<br/>• 標註實際作者<br/>• 參與度分配提案]
+    
+    G --> H[組內共識確認期<br/>其他組員確認參與該階段]
+    H --> I{共識截止時間到?}
+    I -->|否| J{有組員提出異議?}
+    J -->|是| K[協商修改或重新提交<br/>更新專案分片資料]
+    K --> G
+    J -->|否| I
+    I -->|是| L[自動最終化提交<br/>• 確定階段參與名單<br/>• 寫入 Submissions 表]
+    
+    L --> M{交成果人要重交?}
+    M -->|是| N{未達重交次數上限?}
+    N -->|是| G
+    N -->|否| O[禁止重交，維持當前版本]
+    M -->|否| P{評分模組啟用?}
+    O --> P
+    
+    P -->|否| Pure[純專案管理模式<br/>直接進入審核投票]
+    P -->|是| Q[開放排名提案階段<br/>有提交報告的組別可建立排名提案]
+    
+    Q --> R[組內排名流程<br/>• 組員建立排名提案 → RankingProposals<br/>• 組內成員投票同意/不同意 → ProposalVotes<br/>• 全體同意自動提交 → FinalRankings]
+    
+    R --> S[並行進行評論活動<br/>• 個人自由撰寫評論（可@組別）→ Comments<br/>• 定時機器人通知被@組別 → CommentNotifications<br/>• 被@組別可回覆評論（限一層）→ Comments<br/>• 有寫評論的人提交評論排名 → CommentRankingProposals]
+    
+    S --> T[同時進行其他投票<br/>• 通過/不通過投票 → Votes 表<br/>• 總PM排名投票 → Votes 表]
+    
+    T --> U{階段結算時間到達?}
+    U -->|否| Wait2[等待階段結算...]
+    Wait2 --> U
+    U -->|是| V[處理未達共識的排名提案<br/>多數同意的提案自動提交<br/>無共識的組別不參與排名]
+    
+    V --> W[計算最終系統排名<br/>學生排名(FinalRankings)×70% + 總PM排名×30%<br/>存入SystemRankings表]
+    
+    W --> X[計算最佳評論排名<br/>統計CommentRankingProposals<br/>確定前三名評論並發放獎勵]
+    
+    X --> Y{總PM行使否決權?}
+    Y -->|是| Z[總PM重新設定排名和評論獎勵<br/>直接更新SystemRankings表]
+    Y -->|否| AA[確認最終排名結果<br/>SystemRankings表已完成]
+    
+    Z --> AA
+    AA --> BB[錢包模組處理獎勵<br/>• 按排名分配成果獎金<br/>• 按評論排名分配評論獎金<br/>• 批次寫入 Transactions 表]
+    
+    BB --> CC[跨分片批次更新<br/>• 核心庫：專案狀態<br/>• 主分片：排名結果<br/>• 交易分片：獎勵記錄]
+    CC --> DD{審核投票通過率≥門檻?}
+    Pure --> DD
+    
+    DD -->|是| EE[自動推進下階段<br/>更新專案當前階段]
+    DD -->|否| FF[總PM決策<br/>• 強制推進<br/>• 要求重做<br/>• 專案終止]
+    
+    FF --> GG{總PM決定?}
+    GG -->|推進| EE
+    GG -->|重做| F
+    GG -->|終止| HH[專案終止<br/>• 更新核心庫狀態<br/>• 保留專案分片作為歷史記錄]
+    
+    EE --> II{還有下階段?}
+    II -->|是| JJ[初始化下一階段<br/>• 重置階段狀態<br/>• 檢查群組權限設定]
+    JJ --> D
+    II -->|否| KK[專案完成<br/>• 計算最終個人總獲得點數<br/>• 更新核心庫專案狀態為 completed]
+    
+    KK --> End([系統結束])
+    HH --> End
+    
+    %% 樣式定義
+    classDef pmRole fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef memberRole fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef scoringModule fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    classDef walletModule fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef databaseOp fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef systemProcess fill:#fafafa,stroke:#424242,stroke-width:2px
+    classDef decision fill:#ffecb3,stroke:#f57f17,stroke-width:2px
+    
+    class A,B,C,FF,Y,Z,GG pmRole
+    class F,G,H,Q,R,S memberRole
+    class P,U,V,W,X,AA scoringModule
+    class BB,CC walletModule
+    class D,L,CC,EE,JJ,KK,HH databaseOp
+    class Start,Config,End systemProcess
+    class E,I,J,M,N,U,Y,DD,GG,II decision

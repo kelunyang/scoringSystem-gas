@@ -1,0 +1,677 @@
+/**
+ * 統一過濾器工具列樣式
+ * 支援 4 種主題變體和 RWD 響應式設計
+ * 使用 CSS 變數提升可維護性
+ */
+
+// ============================================================================
+// CSS 變數定義 (Design Tokens)
+// ============================================================================
+
+.admin-filter-container {
+  // 間距
+  --toolbar-padding: 20px;
+  --toolbar-padding-tablet: 15px;
+  --toolbar-padding-mobile: 12px;
+  --gap: 15px;
+  --gap-tablet: 10px;
+  --gap-mobile: 10px;
+  --gap-small: 10px;
+
+  // 圓角
+  --border-radius: 8px;
+
+  // 陰影
+  --box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --box-shadow-hover: 0 4px 8px rgba(0, 0, 0, 0.1);
+
+  // 過渡動畫
+  --transition-duration: 0.3s;
+  --transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
+
+  // 邊框
+  --border-color: rgba(0, 0, 0, 0.06);
+  --border-dashed-color: rgba(0, 0, 0, 0.1);
+
+  // 文字顏色
+  --text-color: #606266;
+  --text-color-light: rgba(255, 255, 255, 0.9);
+  --text-color-value: #409eff;
+
+  // 最小寬度
+  --label-min-width: 80px;
+  --label-min-width-tablet: 70px;
+
+  // 佈局
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+
+  // 主題變體 - Default (淺灰)
+  &.variant-default {
+    .filter-toolbar {
+      background: #f5f7fa;
+      border: 1px solid #e4e7ed;
+    }
+  }
+
+  // 主題變體 - Navy (深藍漸層)
+  &.variant-navy {
+    .filter-toolbar {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+
+      .filter-label {
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      // Element Plus 組件在深色背景上的調整
+      :deep(.el-input__wrapper) {
+        background-color: rgba(255, 255, 255, 0.15);
+      }
+
+      :deep(.el-select .el-input__wrapper) {
+        background-color: rgba(255, 255, 255, 0.15);
+      }
+    }
+  }
+
+  // 主題變體 - Maroon (酒紅漸層)
+  &.variant-maroon {
+    .filter-toolbar {
+      background: linear-gradient(135deg, #c94b4b 0%, #4b134f 100%);
+      color: white;
+
+      .filter-label {
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      :deep(.el-input__wrapper) {
+        background-color: rgba(255, 255, 255, 0.15);
+      }
+
+      :deep(.el-select .el-input__wrapper) {
+        background-color: rgba(255, 255, 255, 0.15);
+      }
+    }
+  }
+
+  // 主題變體 - Green (綠色漸層)
+  &.variant-green {
+    .filter-toolbar {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+
+      .filter-label {
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      :deep(.el-input__wrapper) {
+        background-color: rgba(255, 255, 255, 0.15);
+      }
+
+      :deep(.el-select .el-input__wrapper) {
+        background-color: rgba(255, 255, 255, 0.15);
+      }
+    }
+  }
+}
+
+// ============================================================================
+// Banner 區域
+// ============================================================================
+
+.filter-banner {
+  margin-bottom: -5px;
+}
+
+// ============================================================================
+// Mode Toggle 區域
+// ============================================================================
+
+.filter-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 15px 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+// ============================================================================
+// 過濾器工具列
+// ============================================================================
+
+.filter-toolbar {
+  padding: var(--toolbar-padding);
+  border-radius: var(--border-radius);
+  transition: all var(--transition-duration) ease;
+  box-shadow: var(--box-shadow);
+  position: relative; // 確保 loading 遮罩正確顯示
+}
+
+// 核心過濾器 (永遠可見)
+.filter-core {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+
+  &.layout-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+// 展開的過濾器 (可摺疊)
+.filter-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  margin-top: var(--gap);
+  padding-top: var(--gap);
+  border-top: 1px dashed var(--border-dashed-color);
+
+  &.layout-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+// ============================================================================
+// 過濾器項目
+// ============================================================================
+
+.filter-item {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-small);
+}
+
+.filter-label {
+  font-size: 14px;
+  color: var(--text-color);
+  white-space: nowrap;
+  min-width: var(--label-min-width);
+  font-weight: 500;
+}
+
+.filter-value-display {
+  font-size: 14px;
+  color: var(--text-color-value);
+  font-weight: 600;
+  min-width: 40px;
+  text-align: right;
+}
+
+// ============================================================================
+// 操作按鈕區
+// ============================================================================
+
+.filter-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--gap-small);
+  margin-top: var(--gap);
+  padding-top: var(--gap);
+  border-top: 1px solid var(--border-color);
+  flex-wrap: wrap;
+
+  // 桌面版：隱藏縮短文字，顯示完整文字
+  :deep(.btn-text-short) {
+    display: none;
+  }
+
+  // ============================================================================
+  // 漸層按鈕樣式 (Bubblegum Bright - 與 Drawer Actions 統一)
+  // ============================================================================
+
+  /* Primary 按鈕 - 土耳其藍漸層 */
+  :deep(.el-button--primary) {
+    background: linear-gradient(135deg, #4ECDC4 0%, #1A9B8E 100%);
+    border: none;
+    color: white;
+    font-weight: 600;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled):not(.is-loading) {
+      opacity: 0.9;
+      box-shadow: 0 4px 8px rgba(78, 205, 196, 0.4);
+    }
+
+    &:active:not(:disabled):not(.is-loading) {
+      opacity: 0.85;
+      box-shadow: 0 2px 4px rgba(78, 205, 196, 0.3);
+    }
+
+    &:disabled {
+      background: linear-gradient(135deg, #4ECDC4 0%, #1A9B8E 100%);
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    &.is-loading {
+      background: linear-gradient(135deg, #4ECDC4 0%, #1A9B8E 100%);
+      opacity: 0.8;
+    }
+  }
+
+  /* Danger 按鈕 - 熱粉紅漸層 */
+  :deep(.el-button--danger) {
+    background: linear-gradient(135deg, #FF6B9D 0%, #E91E63 100%);
+    border: none;
+    color: white;
+    font-weight: 600;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled):not(.is-loading) {
+      opacity: 0.9;
+      box-shadow: 0 4px 8px rgba(255, 107, 157, 0.4);
+    }
+
+    &:active:not(:disabled):not(.is-loading) {
+      opacity: 0.85;
+      box-shadow: 0 2px 4px rgba(255, 107, 157, 0.3);
+    }
+
+    &:disabled {
+      background: linear-gradient(135deg, #FF6B9D 0%, #E91E63 100%);
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    &.is-loading {
+      background: linear-gradient(135deg, #FF6B9D 0%, #E91E63 100%);
+      opacity: 0.8;
+    }
+  }
+
+  /* Warning 按鈕 - 珊瑚橙漸層 */
+  :deep(.el-button--warning) {
+    background: linear-gradient(135deg, #FFA07A 0%, #FF6347 100%);
+    border: none;
+    color: white;
+    font-weight: 600;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled):not(.is-loading) {
+      opacity: 0.9;
+      box-shadow: 0 4px 8px rgba(255, 160, 122, 0.4);
+    }
+
+    &:active:not(:disabled):not(.is-loading) {
+      opacity: 0.85;
+      box-shadow: 0 2px 4px rgba(255, 160, 122, 0.3);
+    }
+
+    &:disabled {
+      background: linear-gradient(135deg, #FFA07A 0%, #FF6347 100%);
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    &.is-loading {
+      background: linear-gradient(135deg, #FFA07A 0%, #FF6347 100%);
+      opacity: 0.8;
+    }
+  }
+
+  /* Info 按鈕 - 薄荷糖漸層 */
+  :deep(.el-button--info) {
+    background: linear-gradient(135deg, #95E1D3 0%, #44B9A5 100%);
+    border: none;
+    color: white;
+    font-weight: 600;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled):not(.is-loading) {
+      opacity: 0.9;
+      box-shadow: 0 4px 8px rgba(149, 225, 211, 0.4);
+    }
+
+    &:active:not(:disabled):not(.is-loading) {
+      opacity: 0.85;
+      box-shadow: 0 2px 4px rgba(149, 225, 211, 0.3);
+    }
+
+    &:disabled {
+      background: linear-gradient(135deg, #95E1D3 0%, #44B9A5 100%);
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    &.is-loading {
+      background: linear-gradient(135deg, #95E1D3 0%, #44B9A5 100%);
+      opacity: 0.8;
+    }
+  }
+
+  /* Success 按鈕 - 土耳其藍漸層 */
+  :deep(.el-button--success) {
+    background: linear-gradient(135deg, #4ECDC4 0%, #1A9B8E 100%);
+    border: none;
+    color: white;
+    font-weight: 600;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled):not(.is-loading) {
+      opacity: 0.9;
+      box-shadow: 0 4px 8px rgba(78, 205, 196, 0.4);
+    }
+
+    &:active:not(:disabled):not(.is-loading) {
+      opacity: 0.85;
+      box-shadow: 0 2px 4px rgba(78, 205, 196, 0.3);
+    }
+
+    &:disabled {
+      background: linear-gradient(135deg, #4ECDC4 0%, #1A9B8E 100%);
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    &.is-loading {
+      background: linear-gradient(135deg, #4ECDC4 0%, #1A9B8E 100%);
+      opacity: 0.8;
+    }
+  }
+
+  /* Default 按鈕 - 薰衣草藍糖果漸層 */
+  :deep(.el-button:not(.el-button--primary):not(.el-button--danger):not(.el-button--warning):not(.el-button--info):not(.el-button--success):not(.el-button--text)) {
+    background: linear-gradient(135deg, #C4B5FD 0%, #8B7CD8 100%);
+    border: none;
+    color: white;
+    font-weight: 500;
+    transition: all 0.15s ease;
+
+    &:hover:not(:disabled):not(.is-loading) {
+      opacity: 0.9;
+      box-shadow: 0 4px 8px rgba(196, 181, 253, 0.4);
+    }
+
+    &:active:not(:disabled):not(.is-loading) {
+      opacity: 0.85;
+      box-shadow: 0 2px 4px rgba(196, 181, 253, 0.3);
+    }
+
+    &:disabled {
+      background: linear-gradient(135deg, #C4B5FD 0%, #8B7CD8 100%);
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    &.is-loading {
+      background: linear-gradient(135deg, #C4B5FD 0%, #8B7CD8 100%);
+      opacity: 0.8;
+    }
+  }
+
+  /* 統一按鈕尺寸 */
+  :deep(.el-button) {
+    padding: 9px 18px;
+    font-size: 14px;
+    border-radius: 6px;
+    min-width: 90px;
+  }
+
+  :deep(.el-button--large) {
+    padding: 11px 22px;
+    font-size: 15px;
+    border-radius: 8px;
+    min-width: 110px;
+  }
+
+  :deep(.el-button--small) {
+    padding: 7px 14px;
+    font-size: 13px;
+    border-radius: 5px;
+    min-width: 70px;
+  }
+}
+
+// ============================================================================
+// 摺疊按鈕
+// ============================================================================
+
+.filter-toggle-btn {
+  position: relative;
+  transition: all 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--box-shadow-hover);
+  }
+
+  i.fas {
+    transition: transform var(--transition-duration) ease;
+    margin-right: 6px;
+  }
+
+  &:hover i.fas {
+    transform: rotate(180deg);
+  }
+
+  .filter-count-badge {
+    margin-left: 8px;
+  }
+}
+
+// ============================================================================
+// 匯出下拉選單
+// ============================================================================
+
+.export-dropdown {
+  .el-button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    i.arrow {
+      font-size: 12px;
+      transition: transform 0.3s ease;
+      margin-left: 4px;
+    }
+  }
+
+  &.is-active i.arrow {
+    transform: rotate(180deg);
+  }
+}
+
+// 下拉選單項目樣式
+:deep(.export-dropdown-menu) {
+  .el-dropdown-menu__item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    i {
+      width: 16px;
+      color: #409eff;
+    }
+
+    &:hover i {
+      color: #66b1ff;
+    }
+  }
+}
+
+// ============================================================================
+// 批次操作按鈕 (帶 badge)
+// ============================================================================
+
+.el-badge {
+  .el-button {
+    transition: all 0.2s ease;
+  }
+
+  &:hover .el-button {
+    transform: translateY(-2px);
+  }
+}
+
+// ============================================================================
+// 統計卡片
+// ============================================================================
+
+.filter-stats {
+  // 由 slot 內容決定樣式
+}
+
+// ============================================================================
+// 展開/摺疊動畫
+// ============================================================================
+
+.filter-expand-enter-active,
+.filter-expand-leave-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: top;
+  overflow: hidden;
+}
+
+.filter-expand-enter-from,
+.filter-expand-leave-to {
+  max-height: 0;
+  opacity: 0;
+  transform: scaleY(0.8);
+  margin-top: 0;
+  padding-top: 0;
+  border-top-width: 0;
+}
+
+.filter-expand-enter-to,
+.filter-expand-leave-from {
+  max-height: 1000px; /* 足夠大的值 */
+  opacity: 1;
+  transform: scaleY(1);
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top-width: 1px;
+}
+
+// ============================================================================
+// RWD: 平板 (768px - 1023px)
+// ============================================================================
+
+@media (max-width: 1023px) {
+  .admin-filter-container {
+    --label-min-width: var(--label-min-width-tablet);
+  }
+
+  .filter-toolbar {
+    padding: var(--toolbar-padding-tablet);
+  }
+
+  .filter-core,
+  .filter-expanded {
+    gap: var(--gap-tablet);
+
+    &.layout-row {
+      flex-direction: column;
+    }
+  }
+
+  .filter-item {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+
+    .filter-label {
+      margin-bottom: 8px;
+    }
+
+    // Element Plus 組件自適應寬度
+    :deep(.el-input),
+    :deep(.el-select),
+    :deep(.el-date-picker),
+    :deep(.el-slider) {
+      width: 100% !important;
+    }
+  }
+
+  .filter-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
+
+// ============================================================================
+// RWD: 手機 (< 768px)
+// ============================================================================
+
+@media (max-width: 767px) {
+  .filter-toolbar {
+    padding: var(--toolbar-padding-mobile);
+  }
+
+  .filter-core,
+  .filter-expanded {
+    gap: var(--gap-mobile);
+  }
+
+  .filter-item {
+    gap: 6px;
+
+    .filter-label {
+      font-size: 13px;
+      min-width: var(--label-min-width-tablet);
+    }
+  }
+
+  .filter-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+
+    // Icon-only 按鈕：收縮到內容大小（不強制 50% 寬度）
+    .el-button,
+    .el-badge {
+      flex: 0 0 auto;
+      max-width: none;
+      min-width: 0;
+    }
+
+    .el-button {
+      justify-content: center;
+    }
+
+    // el-badge 內的按鈕
+    .el-badge .el-button {
+      width: auto;
+      flex: none;
+      max-width: none;
+    }
+
+    // 手機版隱藏按鈕文字，只顯示圖示
+    :deep(.btn-text) {
+      display: none;
+    }
+
+    // 「更多」按鈕：桌面版顯示完整文字，手機版顯示縮短文字
+    :deep(.btn-text-full) {
+      display: none;
+    }
+
+    :deep(.btn-text-short) {
+      display: inline;
+    }
+  }
+
+  .filter-toggle-btn {
+    justify-content: center;
+    margin-left: 0;
+  }
+
+  // 批次按鈕 badge 在手機上更明顯
+  :deep(.el-badge__content) {
+    font-size: 14px;
+    padding: 4px 8px;
+  }
+
+  // 模式切換區在手機上垂直排列
+  .filter-mode-toggle {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

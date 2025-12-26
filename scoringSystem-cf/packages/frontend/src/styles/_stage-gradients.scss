@@ -1,0 +1,44 @@
+/**
+ * Stage 糖果漸層配色
+ * 邊緣融合版：左右兩端使用邊框純色，中間為糖果漸層
+ *
+ * 設計理念：
+ * - 漸層左右兩端使用邊框純色，與 border 視覺融合
+ * - 中間區域為糖果色漸層
+ * - 所有配色符合 WCAG AA 標準（對比度 >= 4.5:1）
+ *
+ * 來源：@repo/shared/theme/colors.config.ts
+ */
+
+:root {
+  // 階段漸層背景（邊緣融合：邊框色 → 糖果色 → 邊框色）
+  // 結構：[邊框色 0%] → [糖果亮色 15%] → [糖果深色 85%] → [邊框色 100%]
+  --stage-pending-gradient: linear-gradient(90deg, #f39c12 0%, #FFAA5A 15%, #D35400 85%, #f39c12 100%);
+  --stage-active-gradient: linear-gradient(90deg, #198754 0%, #4ECDC4 15%, #0E6655 85%, #198754 100%);
+  --stage-voting-gradient: linear-gradient(90deg, #c82333 0%, #FF6B9D 15%, #A31545 85%, #c82333 100%);
+  --stage-settling-gradient: linear-gradient(90deg, #c82333 0%, #FF6B9D 15%, #A31545 85%, #c82333 100%);
+  --stage-completed-gradient: linear-gradient(90deg, #5a6268 0%, #7DCEA0 15%, #1E8449 85%, #5a6268 100%);
+  --stage-archived-gradient: linear-gradient(90deg, #5a6268 0%, #ABB2B9 15%, #566573 85%, #5a6268 100%);
+
+  // 垂直漸層（Flat Design - 用於 Drawer Trigger 收合狀態）
+  // 結構：2 段漸層，簡潔的明暗過渡
+  // [主題色 0%] → [深色 100%]（向下漸深，暗示「點擊打開」）
+  --stage-pending-gradient-vertical: linear-gradient(180deg, #f39c12 0%, #D35400 100%);
+  --stage-active-gradient-vertical: linear-gradient(180deg, #198754 0%, #0E6655 100%);
+  --stage-voting-gradient-vertical: linear-gradient(180deg, #c82333 0%, #A31545 100%);
+  --stage-settling-gradient-vertical: linear-gradient(180deg, #c82333 0%, #A31545 100%);
+  --stage-completed-gradient-vertical: linear-gradient(180deg, #5a6268 0%, #1E8449 100%);
+  --stage-archived-gradient-vertical: linear-gradient(180deg, #5a6268 0%, #566573 100%);
+
+  // 垂直漸層反轉（用於 Drawer Handle 展開狀態）
+  // [深色 0%] → [主題色 100%]（向上漸亮，暗示「點擊收合」）
+  --stage-pending-gradient-vertical-reversed: linear-gradient(0deg, #f39c12 0%, #D35400 100%);
+  --stage-active-gradient-vertical-reversed: linear-gradient(0deg, #198754 0%, #0E6655 100%);
+  --stage-voting-gradient-vertical-reversed: linear-gradient(0deg, #c82333 0%, #A31545 100%);
+  --stage-settling-gradient-vertical-reversed: linear-gradient(0deg, #c82333 0%, #A31545 100%);
+  --stage-completed-gradient-vertical-reversed: linear-gradient(0deg, #5a6268 0%, #1E8449 100%);
+  --stage-archived-gradient-vertical-reversed: linear-gradient(0deg, #5a6268 0%, #566573 100%);
+
+  // 漸層文字顏色（統一白色）
+  --stage-gradient-text: #ffffff;
+}

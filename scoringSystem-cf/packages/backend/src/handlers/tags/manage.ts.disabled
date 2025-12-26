@@ -1,0 +1,348 @@
+/**
+ * Tag Management Handlers
+ * Migrated from GAS scripts/tags_api.js
+ *
+ * ⚠️ DISABLED: Tags system has been disabled
+ * This entire file is commented out and kept for reference only
+ */
+
+/* ENTIRE FILE DISABLED - Tags system has been disabled
+
+import { Env } from '../../types';
+import { successResponse, errorResponse } from '../../utils/response';
+import { generateId, ID_PREFIXES } from '../../utils/id-generator';
+import { parseJSON } from '../../utils/json';
+
+/**
+ * Helper: Check if user has global permission
+ */
+async function checkGlobalPermission(env: Env, userEmail: string, permission: string): Promise<boolean> {
+  try {
+    const result = await env.DB.prepare(`
+      SELECT gg.globalPermissions
+      FROM globalusergroups gug
+      JOIN globalgroups gg ON gug.globalGroupId = gg.globalGroupId
+      JOIN users u ON gug.userEmail = u.userEmail
+      WHERE u.userEmail = ?
+    `).bind(userEmail).all();
+
+    for (const row of result.results) {
+      const permissions = parseJSON(row.globalPermissions as string, []);
+      if (permissions.includes(permission)) {
+        return true;
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.warn('Check global permission error:', error);
+    return false;
+  }
+}
+
+/**
+ * Create a new tag
+ */
+export async function createTag(
+  env: Env,
+  userEmail: string,
+  tagData: {
+    tagName: string;
+    description?: string;
+  }
+): Promise<Response> {
+  try {
+    // Check if user is admin
+    const isAdmin = await checkGlobalPermission(env, userEmail, 'system_admin');
+    if (!isAdmin) {
+      return errorResponse('ACCESS_DENIED', 'Admin privileges required');
+    }
+
+    // Validate input
+    if (!tagData || !tagData.tagName) {
+      return errorResponse('INVALID_INPUT', 'Tag name is required');
+    }
+
+    const tagName = tagData.tagName.trim();
+    if (tagName.length < 2 || tagName.length > 50) {
+      return errorResponse('INVALID_INPUT', 'Tag name must be 2-50 characters');
+    }
+
+    // Check if tag name already exists
+    const existing = await env.DB.prepare(`
+      SELECT tagId FROM globaltags
+      WHERE LOWER(tagName) = LOWER(?) AND isActive = 1
+    `).bind(tagName).first();
+
+    if (existing) {
+      return errorResponse('TAG_EXISTS', 'Tag name already exists');
+    }
+
+    // Create tag (color is generated on frontend with randomcolor.js)
+    const tagId = generateId(ID_PREFIXES.TAG);
+
+    await env.DB.prepare(`
+      INSERT INTO globaltags (
+        tagId, tagName, description, isActive, createdBy
+      ) VALUES (?, ?, ?, ?, ?)
+    `).bind(
+      tagId,
+      tagName,
+      tagData.description || '',
+      1,
+      userEmail
+    ).run();
+
+    // Log to sys_logs
+    const logId = generateId('log');
+    await env.DB.prepare(`
+      INSERT INTO sys_logs (logId, level, functionName, userId, action, message, context, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      logId,
+      'INFO',
+      'createTag',
+      userEmail,
+      'tag_created',
+      `Tag "${tagName}" created`,
+      JSON.stringify({ tagId, tagName }),
+      Date.now()
+    ).run();
+
+    return successResponse({
+      tagId,
+      tagName,
+      description: tagData.description || ''
+    }, 'Tag created successfully');
+
+  } catch (error) {
+    console.error('Create tag error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to create tag');
+  }
+}
+
+/**
+ * Get all tags with optional filtering
+ */
+export async function getTags(
+  env: Env,
+  userEmail: string,
+  filters: {
+    isActive?: boolean;
+    search?: string;
+  } = {}
+): Promise<Response> {
+  try {
+    let query = 'SELECT tagId, tagName, description, isActive, createdBy FROM globaltags WHERE 1=1';
+    const params: any[] = [];
+
+    // Apply filters
+    if (filters.isActive !== undefined) {
+      query += ' AND isActive = ?';
+      params.push(filters.isActive ? 1 : 0);
+    }
+
+    if (filters.search) {
+      query += ' AND (LOWER(tagName) LIKE ? OR LOWER(description) LIKE ?)';
+      const searchTerm = `%${filters.search.toLowerCase()}%`;
+      params.push(searchTerm, searchTerm);
+    }
+
+    query += ' ORDER BY tagName ASC';
+
+    const result = await env.DB.prepare(query).bind(...params).all();
+
+    return successResponse(result.results);
+
+  } catch (error) {
+    console.error('Get tags error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get tags');
+  }
+}
+
+/**
+ * Update tag
+ */
+export async function updateTag(
+  env: Env,
+  userEmail: string,
+  tagId: string,
+  updates: {
+    tagName?: string;
+    description?: string;
+    isActive?: boolean;
+  }
+): Promise<Response> {
+  try {
+    // Check if user is admin
+    const isAdmin = await checkGlobalPermission(env, userEmail, 'system_admin');
+    if (!isAdmin) {
+      return errorResponse('ACCESS_DENIED', 'Admin privileges required');
+    }
+
+    // Validate tag ID
+    if (!tagId || !tagId.startsWith('tag_')) {
+      return errorResponse('INVALID_INPUT', 'Invalid tag ID format');
+    }
+
+    // Check if tag exists
+    const existing = await env.DB.prepare(`
+      SELECT tagId FROM globaltags WHERE tagId = ?
+    `).bind(tagId).first();
+
+    if (!existing) {
+      return errorResponse('TAG_NOT_FOUND', 'Tag not found');
+    }
+
+    // Build update query
+    const updateFields: string[] = [];
+    const params: any[] = [];
+
+    if (updates.tagName !== undefined) {
+      const tagName = updates.tagName.trim();
+      if (tagName.length < 2 || tagName.length > 50) {
+        return errorResponse('INVALID_INPUT', 'Tag name must be 2-50 characters');
+      }
+
+      // Check for duplicate names (excluding current tag)
+      const duplicate = await env.DB.prepare(`
+        SELECT tagId FROM globaltags
+        WHERE LOWER(tagName) = LOWER(?) AND tagId != ? AND isActive = 1
+      `).bind(tagName, tagId).first();
+
+      if (duplicate) {
+        return errorResponse('TAG_EXISTS', 'Tag name already exists');
+      }
+
+      updateFields.push('tagName = ?');
+      params.push(tagName);
+    }
+
+    // Note: tagColor is NOT updatable - it's set randomly on creation only
+
+    if (updates.description !== undefined) {
+      updateFields.push('description = ?');
+      params.push(updates.description);
+    }
+
+    if (updates.isActive !== undefined) {
+      updateFields.push('isActive = ?');
+      params.push(updates.isActive ? 1 : 0);
+    }
+
+    if (updateFields.length === 0) {
+      return errorResponse('INVALID_INPUT', 'No valid updates provided');
+    }
+
+    params.push(tagId);
+
+    await env.DB.prepare(`
+      UPDATE globaltags
+      SET ${updateFields.join(', ')}
+      WHERE tagId = ?
+    `).bind(...params).run();
+
+    // Log to sys_logs
+    const logId = generateId('log');
+    await env.DB.prepare(`
+      INSERT INTO sys_logs (logId, level, functionName, userId, action, message, context, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      logId,
+      'INFO',
+      'updateTag',
+      userEmail,
+      'tag_updated',
+      `Tag ${tagId} updated`,
+      JSON.stringify({ tagId, updates }),
+      Date.now()
+    ).run();
+
+    return successResponse(null, 'Tag updated successfully');
+
+  } catch (error) {
+    console.error('Update tag error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to update tag');
+  }
+}
+
+/**
+ * Delete tag (soft delete)
+ */
+export async function deleteTag(
+  env: Env,
+  userEmail: string,
+  tagId: string
+): Promise<Response> {
+  try {
+    // Check if user is admin
+    const isAdmin = await checkGlobalPermission(env, userEmail, 'system_admin');
+    if (!isAdmin) {
+      return errorResponse('ACCESS_DENIED', 'Admin privileges required');
+    }
+
+    // Validate tag ID
+    if (!tagId || !tagId.startsWith('tag_')) {
+      return errorResponse('INVALID_INPUT', 'Invalid tag ID format');
+    }
+
+    // Check if tag exists
+    const existing = await env.DB.prepare(`
+      SELECT tagId FROM globaltags WHERE tagId = ?
+    `).bind(tagId).first();
+
+    if (!existing) {
+      return errorResponse('TAG_NOT_FOUND', 'Tag not found');
+    }
+
+    // Get tag name for logging
+    const tag = await env.DB.prepare(`
+      SELECT tagName FROM globaltags WHERE tagId = ?
+    `).bind(tagId).first();
+
+    // Soft delete tag
+    await env.DB.prepare(`
+      UPDATE globaltags
+      SET isActive = 0
+      WHERE tagId = ?
+    `).bind(tagId).run();
+
+    // Deactivate all tag assignments
+    await env.DB.prepare(`
+      UPDATE projecttags
+      SET isActive = 0
+      WHERE tagId = ?
+    `).bind(tagId).run();
+
+    await env.DB.prepare(`
+      UPDATE usertags
+      SET isActive = 0
+      WHERE tagId = ?
+    `).bind(tagId).run();
+
+    // Log to sys_logs
+    const logId = generateId('log');
+    await env.DB.prepare(`
+      INSERT INTO sys_logs (logId, level, functionName, userId, action, message, context, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      logId,
+      'INFO',
+      'deleteTag',
+      userEmail,
+      'tag_deleted',
+      `Tag "${tag?.tagName}" deleted`,
+      JSON.stringify({ tagId, tagName: tag?.tagName }),
+      Date.now()
+    ).run();
+
+    return successResponse(null, 'Tag deleted successfully');
+
+  } catch (error) {
+    console.error('Delete tag error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to delete tag');
+  }
+}
+
+*/
+// END OF DISABLED CODE - Tags system has been disabled

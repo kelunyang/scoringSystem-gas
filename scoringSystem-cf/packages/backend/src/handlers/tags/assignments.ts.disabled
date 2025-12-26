@@ -1,0 +1,821 @@
+/**
+ * Tag Assignment Handlers
+ * Migrated from GAS scripts/tags_api.js
+ *
+ * ⚠️ DISABLED: Tags system has been disabled
+ * This entire file is commented out and kept for reference only
+ */
+
+/* ENTIRE FILE DISABLED - Tags system has been disabled
+
+import { Env } from '../../types';
+import { successResponse, errorResponse } from '../../utils/response';
+import { generateId } from '../../utils/id-generator';
+import { checkProjectPermission } from '../../middleware/permissions';
+import { parseJSON } from '../../utils/json';
+
+/**
+ * Assign tag to project
+ */
+export async function assignTagToProject(
+  env: Env,
+  userEmail: string,
+  projectId: string,
+  tagId: string
+): Promise<Response> {
+  try {
+    // Check if user can manage this project
+    const canManage = await checkProjectPermission(env, userEmail, projectId, 'manage');
+    if (!canManage) {
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to manage this project');
+    }
+
+    // Validate IDs
+    if (!projectId || !projectId.startsWith('proj_')) {
+      return errorResponse('INVALID_INPUT', 'Invalid project ID format');
+    }
+    if (!tagId || !tagId.startsWith('tag_')) {
+      return errorResponse('INVALID_INPUT', 'Invalid tag ID format');
+    }
+
+    // Check if project exists
+    const project = await env.DB.prepare(`
+      SELECT projectId FROM projects WHERE projectId = ?
+    `).bind(projectId).first();
+
+    if (!project) {
+      return errorResponse('PROJECT_NOT_FOUND', 'Project not found');
+    }
+
+    // Check if tag exists and is active
+    const tag = await env.DB.prepare(`
+      SELECT tagId, tagName, isActive FROM globaltags WHERE tagId = ?
+    `).bind(tagId).first();
+
+    if (!tag) {
+      return errorResponse('TAG_NOT_FOUND', 'Tag not found');
+    }
+
+    if (!tag.isActive) {
+      return errorResponse('TAG_INACTIVE', 'Cannot assign archived/inactive tag');
+    }
+
+    // Check if assignment already exists
+    const existing = await env.DB.prepare(`
+      SELECT assignmentId FROM projecttags
+      WHERE projectId = ? AND tagId = ? AND isActive = 1
+    `).bind(projectId, tagId).first();
+
+    if (existing) {
+      return errorResponse('ASSIGNMENT_EXISTS', 'Tag is already assigned to this project');
+    }
+
+    // Create assignment
+    const assignmentId = generateId('asmt');
+    const timestamp = Date.now();
+
+    await env.DB.prepare(`
+      INSERT INTO projecttags (
+        assignmentId, projectId, tagId, assignedBy, assignedAt, isActive
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(
+      assignmentId,
+      projectId,
+      tagId,
+      userEmail,
+      timestamp,
+      1
+    ).run();
+
+    return successResponse({
+      assignmentId,
+      projectId,
+      tagId,
+      tagName: tag.tagName
+    }, 'Tag assigned to project successfully');
+
+  } catch (error) {
+    console.error('Assign tag to project error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to assign tag to project');
+  }
+}
+
+/**
+ * Assign tag to user
+ */
+export async function assignTagToUser(
+  env: Env,
+  userEmail: string,
+  targetUserEmail: string,
+  tagId: string
+): Promise<Response> {
+  try {
+    // Check if user is admin
+    const isAdmin = await checkGlobalPermission(env, userEmail, 'system_admin');
+    if (!isAdmin) {
+      return errorResponse('ACCESS_DENIED', 'Admin privileges required');
+    }
+
+    // Validate tag ID
+    if (!tagId || !tagId.startsWith('tag_')) {
+      return errorResponse('INVALID_INPUT', 'Invalid tag ID format');
+    }
+
+    // Check if target user exists
+    const user = await env.DB.prepare(`
+      SELECT userId FROM users WHERE userEmail = ?
+    `).bind(targetUserEmail).first();
+
+    if (!user) {
+      return errorResponse('USER_NOT_FOUND', 'User not found');
+    }
+
+    // Check if tag exists and is active
+    const tag = await env.DB.prepare(`
+      SELECT tagId, tagName, isActive FROM globaltags WHERE tagId = ?
+    `).bind(tagId).first();
+
+    if (!tag) {
+      return errorResponse('TAG_NOT_FOUND', 'Tag not found');
+    }
+
+    if (!tag.isActive) {
+      return errorResponse('TAG_INACTIVE', 'Cannot assign archived/inactive tag');
+    }
+
+    // Check if assignment already exists
+    const existing = await env.DB.prepare(`
+      SELECT assignmentId FROM usertags
+      WHERE userEmail = ? AND tagId = ? AND isActive = 1
+    `).bind(targetUserEmail, tagId).first();
+
+    if (existing) {
+      return errorResponse('ASSIGNMENT_EXISTS', 'Tag is already assigned to this user');
+    }
+
+    // Create assignment
+    const assignmentId = generateId('asmt');
+    const timestamp = Date.now();
+
+    await env.DB.prepare(`
+      INSERT INTO usertags (
+        assignmentId, userEmail, tagId, assignedBy, assignedAt, isActive
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(
+      assignmentId,
+      targetUserEmail,
+      tagId,
+      userEmail,
+      timestamp,
+      1
+    ).run();
+
+    return successResponse({
+      assignmentId,
+      userEmail: targetUserEmail,
+      tagId,
+      tagName: tag.tagName
+    }, 'Tag assigned to user successfully');
+
+  } catch (error) {
+    console.error('Assign tag to user error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to assign tag to user');
+  }
+}
+
+/**
+ * Remove tag from project
+ */
+export async function removeTagFromProject(
+  env: Env,
+  userEmail: string,
+  projectId: string,
+  tagId: string
+): Promise<Response> {
+  try {
+    // Check if user can manage this project
+    const canManage = await checkProjectPermission(env, userEmail, projectId, 'manage');
+    if (!canManage) {
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to manage this project');
+    }
+
+    // Find assignment
+    const assignment = await env.DB.prepare(`
+      SELECT assignmentId FROM projecttags
+      WHERE projectId = ? AND tagId = ? AND isActive = 1
+    `).bind(projectId, tagId).first();
+
+    if (!assignment) {
+      return errorResponse('ASSIGNMENT_NOT_FOUND', 'Tag assignment not found');
+    }
+
+    // Deactivate assignment
+    await env.DB.prepare(`
+      UPDATE projecttags
+      SET isActive = 0
+      WHERE assignmentId = ?
+    `).bind(assignment.assignmentId).run();
+
+    return successResponse(null, 'Tag removed from project successfully');
+
+  } catch (error) {
+    console.error('Remove tag from project error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to remove tag from project');
+  }
+}
+
+/**
+ * Remove tag from user
+ */
+export async function removeTagFromUser(
+  env: Env,
+  userEmail: string,
+  targetUserEmail: string,
+  tagId: string
+): Promise<Response> {
+  try {
+    // Check if user is admin
+    const isAdmin = await checkGlobalPermission(env, userEmail, 'system_admin');
+    if (!isAdmin) {
+      return errorResponse('ACCESS_DENIED', 'Admin privileges required');
+    }
+
+    // Find assignment
+    const assignment = await env.DB.prepare(`
+      SELECT assignmentId FROM usertags
+      WHERE userEmail = ? AND tagId = ? AND isActive = 1
+    `).bind(targetUserEmail, tagId).first();
+
+    if (!assignment) {
+      return errorResponse('ASSIGNMENT_NOT_FOUND', 'Tag assignment not found');
+    }
+
+    // Deactivate assignment
+    await env.DB.prepare(`
+      UPDATE usertags
+      SET isActive = 0
+      WHERE assignmentId = ?
+    `).bind(assignment.assignmentId).run();
+
+    return successResponse(null, 'Tag removed from user successfully');
+
+  } catch (error) {
+    console.error('Remove tag from user error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to remove tag from user');
+  }
+}
+
+/**
+ * Get tags for a specific project
+ */
+export async function getProjectTags(
+  env: Env,
+  userEmail: string,
+  projectId: string
+): Promise<Response> {
+  try {
+    // Get project tag assignments with tag details
+    const result = await env.DB.prepare(`
+      SELECT
+        pt.assignmentId,
+        pt.assignedBy,
+        pt.assignedAt,
+        t.*
+      FROM projecttags pt
+      JOIN globaltags t ON pt.tagId = t.tagId
+      WHERE pt.projectId = ? AND pt.isActive = 1 AND t.isActive = 1
+      ORDER BY pt.assignedAt DESC
+    `).bind(projectId).all();
+
+    return successResponse(result.results);
+
+  } catch (error) {
+    console.error('Get project tags error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get project tags');
+  }
+}
+
+/**
+ * Get tags for a specific user
+ */
+export async function getUserTags(
+  env: Env,
+  userEmail: string,
+  targetUserEmail: string
+): Promise<Response> {
+  try {
+    // Get user tag assignments with tag details
+    const result = await env.DB.prepare(`
+      SELECT
+        ut.assignmentId,
+        ut.assignedBy,
+        ut.assignedAt,
+        t.*
+      FROM usertags ut
+      JOIN globaltags t ON ut.tagId = t.tagId
+      WHERE ut.userEmail = ? AND ut.isActive = 1 AND t.isActive = 1
+      ORDER BY ut.assignedAt DESC
+    `).bind(targetUserEmail).all();
+
+    return successResponse(result.results);
+
+  } catch (error) {
+    console.error('Get user tags error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get user tags');
+  }
+}
+
+/**
+ * Batch update user tags
+ */
+export async function batchUpdateUserTags(
+  env: Env,
+  userEmail: string,
+  targetUserEmail: string,
+  operations: Array<{ tagId: string; action: 'add' | 'remove' }>
+): Promise<Response> {
+  try {
+    // Check if user is admin
+    const isAdmin = await checkGlobalPermission(env, userEmail, 'system_admin');
+    if (!isAdmin) {
+      return errorResponse('ACCESS_DENIED', 'Admin privileges required');
+    }
+
+    if (!Array.isArray(operations) || operations.length === 0) {
+      return errorResponse('INVALID_INPUT', 'Operations must be a non-empty array');
+    }
+
+    // Check if target user exists
+    const user = await env.DB.prepare(`
+      SELECT userId FROM users WHERE userEmail = ?
+    `).bind(targetUserEmail).first();
+
+    if (!user) {
+      return errorResponse('USER_NOT_FOUND', 'User not found');
+    }
+
+    // Validate all tag IDs and get tag info in batch
+    const allTagIds = operations.map(op => op.tagId);
+    const tagPlaceholders = allTagIds.map(() => '?').join(',');
+    const tagsResult = await env.DB.prepare(`
+      SELECT tagId, tagName, isActive
+      FROM globaltags
+      WHERE tagId IN (${tagPlaceholders})
+    `).bind(...allTagIds).all();
+
+    const tagsMap = new Map(tagsResult.results?.map((t: any) => [t.tagId, t]) || []);
+
+    // Get existing assignments in batch
+    const existingResult = await env.DB.prepare(`
+      SELECT tagId
+      FROM usertags
+      WHERE userEmail = ? AND tagId IN (${tagPlaceholders}) AND isActive = 1
+    `).bind(targetUserEmail, ...allTagIds).all();
+
+    const existingTags = new Set(existingResult.results?.map((r: any) => r.tagId) || []);
+
+    // Prepare batch operations
+    const batchStatements = [];
+    const results = [];
+    const timestamp = Date.now();
+
+    for (const op of operations) {
+      const tag = tagsMap.get(op.tagId);
+
+      // Validate tag
+      if (!tag) {
+        results.push({
+          tagId: op.tagId,
+          action: op.action,
+          success: false,
+          error: 'Tag not found'
+        });
+        continue;
+      }
+
+      if (!tag.isActive) {
+        results.push({
+          tagId: op.tagId,
+          action: op.action,
+          success: false,
+          error: 'Tag is inactive'
+        });
+        continue;
+      }
+
+      if (op.action === 'add') {
+        if (existingTags.has(op.tagId)) {
+          results.push({
+            tagId: op.tagId,
+            action: 'add',
+            success: false,
+            error: 'Tag already assigned'
+          });
+          continue;
+        }
+
+        // Add INSERT statement
+        const assignmentId = generateId('asmt');
+        batchStatements.push(
+          env.DB.prepare(`
+            INSERT INTO usertags (
+              assignmentId, userEmail, tagId, assignedBy, assignedAt, isActive
+            ) VALUES (?, ?, ?, ?, ?, ?)
+          `).bind(assignmentId, targetUserEmail, op.tagId, userEmail, timestamp, 1)
+        );
+
+        results.push({
+          tagId: op.tagId,
+          action: 'add',
+          success: true
+        });
+
+      } else if (op.action === 'remove') {
+        if (!existingTags.has(op.tagId)) {
+          results.push({
+            tagId: op.tagId,
+            action: 'remove',
+            success: false,
+            error: 'Tag not assigned'
+          });
+          continue;
+        }
+
+        // Add UPDATE statement
+        batchStatements.push(
+          env.DB.prepare(`
+            UPDATE usertags
+            SET isActive = 0
+            WHERE userEmail = ? AND tagId = ? AND isActive = 1
+          `).bind(targetUserEmail, op.tagId)
+        );
+
+        results.push({
+          tagId: op.tagId,
+          action: 'remove',
+          success: true
+        });
+
+      } else {
+        results.push({
+          tagId: op.tagId,
+          action: op.action,
+          success: false,
+          error: 'Invalid action'
+        });
+      }
+    }
+
+    // Execute all operations in batch
+    if (batchStatements.length > 0) {
+      await env.DB.batch(batchStatements);
+    }
+
+    const successful = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+
+    return successResponse({
+      userEmail: targetUserEmail,
+      results,
+      summary: {
+        total: results.length,
+        successful,
+        failed
+      }
+    }, 'Batch tag operations completed');
+
+  } catch (error) {
+    console.error('Batch update user tags error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to batch update user tags');
+  }
+}
+
+/**
+ * Batch update project tags
+ */
+export async function batchUpdateProjectTags(
+  env: Env,
+  userEmail: string,
+  projectId: string,
+  operations: Array<{ tagId: string; action: 'add' | 'remove' }>
+): Promise<Response> {
+  try {
+    // Check if user can manage this project
+    const canManage = await checkProjectPermission(env, userEmail, projectId, 'manage');
+    if (!canManage) {
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to manage this project');
+    }
+
+    if (!Array.isArray(operations) || operations.length === 0) {
+      return errorResponse('INVALID_INPUT', 'Operations must be a non-empty array');
+    }
+
+    // Check if project exists
+    const project = await env.DB.prepare(`
+      SELECT projectId FROM projects WHERE projectId = ?
+    `).bind(projectId).first();
+
+    if (!project) {
+      return errorResponse('PROJECT_NOT_FOUND', 'Project not found');
+    }
+
+    // Validate all tag IDs and get tag info in batch
+    const allTagIds = operations.map(op => op.tagId);
+    const tagPlaceholders = allTagIds.map(() => '?').join(',');
+    const tagsResult = await env.DB.prepare(`
+      SELECT tagId, tagName, isActive
+      FROM globaltags
+      WHERE tagId IN (${tagPlaceholders})
+    `).bind(...allTagIds).all();
+
+    const tagsMap = new Map(tagsResult.results?.map((t: any) => [t.tagId, t]) || []);
+
+    // Get existing assignments in batch
+    const existingResult = await env.DB.prepare(`
+      SELECT tagId
+      FROM projecttags
+      WHERE projectId = ? AND tagId IN (${tagPlaceholders}) AND isActive = 1
+    `).bind(projectId, ...allTagIds).all();
+
+    const existingTags = new Set(existingResult.results?.map((r: any) => r.tagId) || []);
+
+    // Prepare batch operations
+    const batchStatements = [];
+    const results = [];
+    const timestamp = Date.now();
+
+    for (const op of operations) {
+      const tag = tagsMap.get(op.tagId);
+
+      // Validate tag
+      if (!tag) {
+        results.push({
+          tagId: op.tagId,
+          action: op.action,
+          success: false,
+          error: 'Tag not found'
+        });
+        continue;
+      }
+
+      if (!tag.isActive) {
+        results.push({
+          tagId: op.tagId,
+          action: op.action,
+          success: false,
+          error: 'Tag is inactive'
+        });
+        continue;
+      }
+
+      if (op.action === 'add') {
+        if (existingTags.has(op.tagId)) {
+          results.push({
+            tagId: op.tagId,
+            action: 'add',
+            success: false,
+            error: 'Tag already assigned'
+          });
+          continue;
+        }
+
+        // Add INSERT statement
+        const assignmentId = generateId('asmt');
+        batchStatements.push(
+          env.DB.prepare(`
+            INSERT INTO projecttags (
+              assignmentId, projectId, tagId, assignedBy, assignedAt, isActive
+            ) VALUES (?, ?, ?, ?, ?, ?)
+          `).bind(assignmentId, projectId, op.tagId, userEmail, timestamp, 1)
+        );
+
+        results.push({
+          tagId: op.tagId,
+          action: 'add',
+          success: true
+        });
+
+      } else if (op.action === 'remove') {
+        if (!existingTags.has(op.tagId)) {
+          results.push({
+            tagId: op.tagId,
+            action: 'remove',
+            success: false,
+            error: 'Tag not assigned'
+          });
+          continue;
+        }
+
+        // Add UPDATE statement
+        batchStatements.push(
+          env.DB.prepare(`
+            UPDATE projecttags
+            SET isActive = 0
+            WHERE projectId = ? AND tagId = ? AND isActive = 1
+          `).bind(projectId, op.tagId)
+        );
+
+        results.push({
+          tagId: op.tagId,
+          action: 'remove',
+          success: true
+        });
+
+      } else {
+        results.push({
+          tagId: op.tagId,
+          action: op.action,
+          success: false,
+          error: 'Invalid action'
+        });
+      }
+    }
+
+    // Execute all operations in batch
+    if (batchStatements.length > 0) {
+      await env.DB.batch(batchStatements);
+    }
+
+    const successful = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+
+    return successResponse({
+      projectId,
+      results,
+      summary: {
+        total: results.length,
+        successful,
+        failed
+      }
+    }, 'Batch project tag operations completed');
+
+  } catch (error) {
+    console.error('Batch update project tags error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to batch update project tags');
+  }
+}
+
+/**
+ * Helper: Check if user has global permission
+ */
+async function checkGlobalPermission(env: Env, userEmail: string, permission: string): Promise<boolean> {
+  try {
+    const result = await env.DB.prepare(`
+      SELECT gg.globalPermissions
+      FROM globalusergroups gug
+      JOIN globalgroups gg ON gug.globalGroupId = gg.globalGroupId
+      JOIN users u ON gug.userEmail = u.userEmail
+      WHERE u.userEmail = ?
+    `).bind(userEmail).all();
+
+    for (const row of result.results) {
+      const permissions = parseJSON(row.globalPermissions as string, []);
+      if (permissions.includes(permission)) {
+        return true;
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.warn('Check global permission error:', error);
+    return false;
+  }
+}
+
+/**
+ * Get all user tag assignments
+ * Returns a list of all users with their assigned tags
+ */
+export async function getAllUserTagAssignments(
+  env: Env,
+  userEmail: string
+): Promise<Response> {
+  try {
+    // Check if user has permission to view user tags (system_admin or manage_users)
+    const hasPermission = await checkGlobalPermission(env, userEmail, 'system_admin') ||
+                          await checkGlobalPermission(env, userEmail, 'manage_users');
+
+    if (!hasPermission) {
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view user tag assignments');
+    }
+
+    // Get all user tag assignments with tag details
+    const assignments = await env.DB.prepare(`
+      SELECT
+        ut.assignmentId,
+        ut.userEmail,
+        ut.tagId,
+        ut.assignedBy,
+        gt.tagName,
+        gt.description,
+        u.displayName
+      FROM usertags ut
+      INNER JOIN globaltags gt ON ut.tagId = gt.tagId
+      LEFT JOIN users u ON ut.userEmail = u.userEmail
+      WHERE ut.isActive = 1 AND gt.isActive = 1
+      ORDER BY u.displayName, gt.tagName
+    `).all();
+
+    // Group assignments by user
+    const userTagMap: Record<string, any> = {};
+
+    for (const row of assignments.results) {
+      const userEmail = row.userEmail as string;
+
+      if (!userTagMap[userEmail]) {
+        userTagMap[userEmail] = {
+          userEmail,
+          displayName: row.displayName,
+          tags: []
+        };
+      }
+
+      userTagMap[userEmail].tags.push({
+        assignmentId: row.assignmentId,
+        tagId: row.tagId,
+        tagName: row.tagName,
+        description: row.description,
+        assignedBy: row.assignedBy
+      });
+    }
+
+    const result = Object.values(userTagMap);
+
+    return successResponse(result, 'User tag assignments retrieved successfully');
+
+  } catch (error) {
+    console.error('Get all user tag assignments error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to retrieve user tag assignments');
+  }
+}
+
+/**
+ * Get all project tag assignments
+ * Returns a list of all projects with their assigned tags
+ */
+export async function getAllProjectTagAssignments(
+  env: Env,
+  userEmail: string
+): Promise<Response> {
+  try {
+    // Check if user has permission to view project tags
+    const hasPermission = await checkGlobalPermission(env, userEmail, 'system_admin');
+
+    if (!hasPermission) {
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view project tag assignments');
+    }
+
+    // Get all project tag assignments with tag details
+    const assignments = await env.DB.prepare(`
+      SELECT
+        pt.assignmentId,
+        pt.projectId,
+        pt.tagId,
+        pt.assignedBy,
+        gt.tagName,
+        gt.description as tagDescription,
+        p.projectName,
+        p.description as projectDescription
+      FROM projecttags pt
+      INNER JOIN globaltags gt ON pt.tagId = gt.tagId
+      LEFT JOIN projects p ON pt.projectId = p.projectId
+      WHERE pt.isActive = 1 AND gt.isActive = 1
+      ORDER BY p.projectName, gt.tagName
+    `).all();
+
+    // Group assignments by project
+    const projectTagMap: Record<string, any> = {};
+
+    for (const row of assignments.results) {
+      const projectId = row.projectId as string;
+
+      if (!projectTagMap[projectId]) {
+        projectTagMap[projectId] = {
+          projectId,
+          projectName: row.projectName,
+          projectDescription: row.projectDescription,
+          tags: []
+        };
+      }
+
+      projectTagMap[projectId].tags.push({
+        assignmentId: row.assignmentId,
+        tagId: row.tagId,
+        tagName: row.tagName,
+        description: row.tagDescription,
+        assignedBy: row.assignedBy
+      });
+    }
+
+    const result = Object.values(projectTagMap);
+
+    return successResponse(result, 'Project tag assignments retrieved successfully');
+
+  } catch (error) {
+    console.error('Get all project tag assignments error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to retrieve project tag assignments');
+  }
+}
+
+*/
+// END OF DISABLED CODE - Tags system has been disabled

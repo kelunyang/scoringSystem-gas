@@ -1,0 +1,307 @@
+/**
+ * 全局按钮样式 - 语义化配色方案
+ *
+ * 此文件定义了项目中所有按钮的统一样式，使用主题系统的 CSS 变量。
+ * 配色从 _theme-generated.scss 中的 CSS 变量读取。
+ *
+ * 按钮类型：
+ * - .btn-success: 成功操作（对应 Active 阶段绿色）
+ * - .btn-danger:  投票/危险操作（对应 Voting 阶段红色）
+ * - .btn-warning: 警告/奖金操作（对应 Pending 阶段橙色）
+ * - .btn-info:    信息/查看操作（对应 Completed 阶段灰色）
+ * - .btn-neutral: 中性操作（灰色，用于取消、返回）
+ *
+ * @version 1.0.0
+ * @updated 2025-12-10
+ */
+
+// ============================================================================
+// 基础按钮样式
+// ============================================================================
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  transition: all 0.2s ease-in-out;
+
+  // 防止按钮内容换行
+  & > i {
+    flex-shrink: 0;
+  }
+
+  // 禁用状态
+  &:disabled,
+  &.disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  // Loading 状态的旋转动画
+  .fa-spinner {
+    animation: spin 1s linear infinite;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// ============================================================================
+// 语义化按钮类型
+// ============================================================================
+
+// Success 按钮（成功/提交操作 - 绿色，对应 Active 阶段）
+.btn-success {
+  background-color: var(--btn-success-bg);
+  color: var(--btn-success-text);
+  border-color: var(--btn-success-bg);
+
+  &:hover:not(:disabled) {
+    background-color: var(--btn-success-hover);
+    border-color: var(--btn-success-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  }
+}
+
+// Danger 按钮（投票/危险操作 - 红色，对应 Voting 阶段）
+.btn-danger {
+  background-color: var(--btn-danger-bg);
+  color: var(--btn-danger-text);
+  border-color: var(--btn-danger-bg);
+
+  &:hover:not(:disabled) {
+    background-color: var(--btn-danger-hover);
+    border-color: var(--btn-danger-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  }
+}
+
+// Warning 按钮（警告/奖金操作 - 橙色，对应 Pending 阶段）
+.btn-warning {
+  background-color: var(--btn-warning-bg);
+  color: var(--btn-warning-text);
+  border-color: var(--btn-warning-bg);
+
+  &:hover:not(:disabled) {
+    background-color: var(--btn-warning-hover);
+    border-color: var(--btn-warning-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  }
+}
+
+// Info 按钮（信息/查看操作 - 深灰色，对应 Completed 阶段）
+.btn-info {
+  background-color: var(--btn-info-bg);
+  color: var(--btn-info-text);
+  border-color: var(--btn-info-bg);
+
+  &:hover:not(:disabled) {
+    background-color: var(--btn-info-hover);
+    border-color: var(--btn-info-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  }
+}
+
+// Neutral 按钮（中性操作 - 灰色，用于取消、返回）
+.btn-neutral {
+  background-color: var(--btn-neutral-bg);
+  color: var(--btn-neutral-text);
+  border-color: var(--btn-neutral-bg);
+
+  &:hover:not(:disabled) {
+    background-color: var(--btn-neutral-hover);
+    border-color: var(--btn-neutral-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  }
+}
+
+// ============================================================================
+// 向后兼容：旧按钮类名映射到新的语义类型
+// ============================================================================
+
+// .btn-primary → .btn-success (默认主要操作用绿色)
+.btn-primary {
+  @extend .btn-success;
+}
+
+// .btn-secondary → .btn-danger (次要操作用红色)
+.btn-secondary {
+  @extend .btn-danger;
+}
+
+// .btn-tertiary → .btn-success (第三按钮也用绿色)
+.btn-tertiary {
+  @extend .btn-success;
+}
+
+// .btn-quaternary → .btn-danger (第四按钮用红色)
+.btn-quaternary {
+  @extend .btn-danger;
+}
+
+// .btn-dark → .btn-info (深色按钮用灰色)
+.btn-dark {
+  @extend .btn-info;
+}
+
+// ============================================================================
+// 按钮尺寸变体
+// ============================================================================
+
+.btn-sm {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  border-radius: 0.3rem;
+}
+
+.btn-lg {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  border-radius: 0.5rem;
+}
+
+// ============================================================================
+// 按钮轮廓样式（Outline）
+// ============================================================================
+
+.btn-outline {
+  background-color: #fff;
+  color: #666;
+  border: 1px solid #ddd;
+
+  &:hover:not(:disabled) {
+    background-color: #f8f9fa;
+    border-color: #ccc;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: none;
+  }
+}
+
+// ============================================================================
+// 链接样式按钮
+// ============================================================================
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #007bff;
+  text-decoration: none;
+  padding: 0.25rem 0.5rem;
+
+  &:hover:not(:disabled) {
+    color: #0056b3;
+    text-decoration: underline;
+    background: none;
+    box-shadow: none;
+    transform: none;
+  }
+}
+
+// ============================================================================
+// 阶段控制区按钮样式（透明背景 + 继承文字颜色的边框）
+// ============================================================================
+
+.stage-controls .btn {
+  // 基础样式 - 强制继承 .stage-header-bar 的文字颜色
+  background: transparent !important;
+  border: 1px solid currentColor !important;
+  color: inherit !important;  // 强制继承父元素颜色，覆盖全局按钮样式
+  border-radius: 0 !important;
+  font-weight: 500;
+  padding: 6px 12px;
+  height: 32px;
+  line-height: 1.5;
+  transition: all 0.2s;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: none !important;  // 移除全局按钮的阴影
+  transform: none !important;   // 移除全局按钮的变换效果
+
+  &:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.1) !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
+  &:active:not(:disabled) {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  i {
+    font-size: 16px;
+    color: inherit !important;  // 图标也继承颜色
+  }
+}
+
+// Dropdown 按钮
+.stage-controls :deep(.el-dropdown) {
+  height: 32px;
+}
+
+.stage-controls :deep(.el-dropdown .btn) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
