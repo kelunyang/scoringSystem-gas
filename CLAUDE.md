@@ -275,8 +275,6 @@ pnpm migrate:remote   # Apply migrations to production D1
 
 ### 遠端部署 Remote Deployment
 
-> ⚠️ **注意**：前後端目前都有預存的 type errors，部署時需跳過 type-check
-
 #### 完整部署流程（前後端都要部署）
 
 ```bash
@@ -285,8 +283,8 @@ cd scoringSystem-cf/
 # 1. Backend 部署 (Cloudflare Workers)
 cd packages/backend && wrangler deploy
 
-# 2. Frontend 部署 (Cloudflare Pages) - 跳過 type-check
-cd packages/frontend && npx vite build && wrangler pages deploy dist --project-name=scoring-system-frontend
+# 2. Frontend 部署 (Cloudflare Pages)
+cd packages/frontend && pnpm build && wrangler pages deploy dist --project-name=scoring-system-frontend
 
 # 3. Database Migration (如有 schema 變更)
 pnpm migrate:remote
@@ -298,11 +296,26 @@ pnpm migrate:remote
 # 只部署 Backend
 cd scoringSystem-cf/packages/backend && wrangler deploy
 
-# 只部署 Frontend（跳過 vue-tsc type check）
-cd scoringSystem-cf/packages/frontend && npx vite build && wrangler pages deploy dist --project-name=scoring-system-frontend
+# 只部署 Frontend 到 Production
+cd scoringSystem-cf/packages/frontend && pnpm build && wrangler pages deploy dist --project-name=scoring-system-frontend --branch=production
 ```
 
-> **重要**：Frontend 使用 `npx vite build` 而非 `pnpm build`，因為 `pnpm build` 會先執行 `vue-tsc --noEmit` 類型檢查，會因預存的 type errors 而失敗。
+#### Cloudflare Pages Production 分支設定
+
+> **重要**: Cloudflare Pages 的 Production 分支設定為 `production`（不是 `main`）
+
+| 分支 | 環境 | 說明 |
+|------|------|------|
+| `production` | Production | 部署到 scoring.kelunyang.online |
+| `main` | Preview | 部署到 preview URL (如 xxx.scoring-system-frontend.pages.dev) |
+
+```bash
+# 部署到 Production（使用 --branch=production）
+wrangler pages deploy dist --project-name=scoring-system-frontend --branch=production
+
+# 部署到 Preview（測試用，不指定 branch）
+wrangler pages deploy dist --project-name=scoring-system-frontend
+```
 
 ### 部署結果 URLs
 

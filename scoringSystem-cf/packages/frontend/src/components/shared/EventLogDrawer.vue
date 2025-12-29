@@ -36,7 +36,7 @@ import type { Project } from '@/types'
 // Drawer Breadcrumb
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 
-interface Props {
+export interface Props {
   modelValue: boolean
   project: Project | null
   userMode?: boolean

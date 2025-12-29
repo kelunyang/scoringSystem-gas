@@ -57,7 +57,7 @@ export async function fetchWithAuth<T = any>(
   if (!response.ok) {
     // Try to parse error response
     try {
-      const errorData = await response.json()
+      const errorData = await response.json() as { error?: { message?: string } }
       throw new Error(errorData.error?.message || `API request failed with status ${response.status}`)
     } catch (e) {
       throw new Error(`API request failed with status ${response.status}`)

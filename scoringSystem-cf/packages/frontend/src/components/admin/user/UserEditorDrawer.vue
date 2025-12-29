@@ -300,44 +300,51 @@ const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 /**
  * User data structure
  */
-interface User {
+export interface User {
   userId: string
   userEmail: string
-  userName: string
+  userName?: string
+  displayName?: string
+  status?: string
   userAvatar?: string
-  isActive: boolean
+  isActive?: boolean
   globalGroups?: GlobalGroupMembership[]
   projectGroups?: ProjectGroupMembership[]
   createdTime?: number
   lastLoginTime?: number
+  avatarSeed?: string
+  avatarStyle?: string
+  avatarOptions?: Record<string, any>
 }
 
 /**
  * Global group membership
  */
-interface GlobalGroupMembership {
+export interface GlobalGroupMembership {
   groupId: string
   groupName: string
-  allowChange: boolean
+  allowChange?: boolean
   permissions?: string[]
+  globalPermissions?: string[]
 }
 
 /**
  * Project group membership
  */
-interface ProjectGroupMembership {
+export interface ProjectGroupMembership {
   projectId: string
   projectName: string
   groupId: string
   groupName: string
   role: string
-  isActive: boolean
+  isActive?: boolean
+  allowChange?: boolean
 }
 
 /**
  * Global group definition
  */
-interface GlobalGroup {
+export interface GlobalGroup {
   groupId: string
   groupName: string
   globalPermissions: string[]
@@ -382,8 +389,8 @@ export default {
     })
 
     // Editing user state
-    const editingUser = ref(null)
-    const originalUser = ref(null)
+    const editingUser = ref<User | null>(null)
+    const originalUser = ref<User | null>(null)
     const loadingUserData = ref(false)
     const savingEditingUser = ref(false)
 
@@ -400,9 +407,9 @@ export default {
 
     // Project groups management
     const loadingUserProjectGroups = ref(false)
-    const userProjectGroups = ref([])
-    const removingFromGroups = reactive(new Set())
-    const updatingGroupSettings = reactive(new Set())
+    const userProjectGroups = ref<ProjectGroupMembership[]>([])
+    const removingFromGroups = reactive(new Set<string>())
+    const updatingGroupSettings = reactive(new Set<string>())
 
     // User permissions
     const userGlobalPermissions = computed(() => {
@@ -479,7 +486,7 @@ export default {
     })
 
     // Methods
-    const handleDrawerClose = (done) => {
+    const handleDrawerClose = (done: () => void) => {
       if (hasUserChanges.value) {
         ElMessageBox.confirm('您有未保存的變更，確定要關閉嗎？', '確認', {
           confirmButtonText: '確定',
@@ -519,38 +526,38 @@ export default {
       editingUserAvatarChanged.value = true
     }
 
-    const handleRemoveFromGlobalGroup = (group) => {
+    const handleRemoveFromGlobalGroup = (group: GlobalGroupMembership) => {
       emit('remove-from-global-group', {
-        userId: editingUser.value.userId,
+        userId: editingUser.value?.userId,
         groupId: group.groupId
       })
     }
 
     const handleAddToGlobalGroup = () => {
       emit('add-to-global-group', {
-        userId: editingUser.value.userId,
+        userId: editingUser.value?.userId,
         groupId: selectedGlobalGroupToAdd.value
       })
       selectedGlobalGroupToAdd.value = ''
     }
 
-    const handleUpdateGroupAllowChange = (projectGroup) => {
+    const handleUpdateGroupAllowChange = (projectGroup: ProjectGroupMembership) => {
       emit('update-group-allow-change', projectGroup)
     }
 
-    const handleRemoveFromProjectGroup = (projectGroup) => {
+    const handleRemoveFromProjectGroup = (projectGroup: ProjectGroupMembership) => {
       emit('remove-from-project-group', projectGroup)
     }
 
-    const getGlobalGroupPermissionText = (group) => {
+    const getGlobalGroupPermissionText = (group: GlobalGroupMembership) => {
       if (!group.globalPermissions || group.globalPermissions.length === 0) {
         return '無權限'
       }
       return `${group.globalPermissions.length} 個權限`
     }
 
-    const getPermissionName = (code) => {
-      const permissionNames = {
+    const getPermissionName = (code: string) => {
+      const permissionNames: Record<string, string> = {
         'system_admin': '系統管理員',
         'manage_users': '管理使用者',
         'generate_invites': '生成邀請碼',
@@ -560,8 +567,8 @@ export default {
       return permissionNames[code] || code
     }
 
-    const getPermissionIcon = (code) => {
-      const permissionIcons = {
+    const getPermissionIcon = (code: string) => {
+      const permissionIcons: Record<string, string> = {
         'system_admin': 'fas fa-crown',
         'manage_users': 'fas fa-users-cog',
         'generate_invites': 'fas fa-envelope',

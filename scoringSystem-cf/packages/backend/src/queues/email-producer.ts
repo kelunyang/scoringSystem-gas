@@ -308,3 +308,37 @@ export async function queueAdminNotificationEmail(
   await env.EMAIL_QUEUE.send(message);
   console.log(`[Email Queue] Queued admin notification email for ${adminEmail}`);
 }
+
+/**
+ * 推送成果被教師強制撤回通知郵件到 Queue
+ */
+export async function queueSubmissionForceWithdrawnEmail(
+  env: Env,
+  targetEmail: string,
+  displayName: string,
+  projectName: string,
+  stageName: string,
+  groupName: string,
+  reason: string,
+  teacherEmail: string,
+  wasApproved: boolean
+): Promise<void> {
+  const message: EmailQueueMessage = {
+    type: 'submission_force_withdrawn',
+    triggeredBy: teacherEmail,
+    timestamp: Date.now(),
+    data: {
+      targetEmail,
+      displayName,
+      projectName,
+      stageName,
+      groupName,
+      reason,
+      teacherEmail,
+      wasApproved,
+    },
+  };
+
+  await env.EMAIL_QUEUE.send(message);
+  console.log(`[Email Queue] Queued submission force withdrawn email for ${targetEmail}`);
+}

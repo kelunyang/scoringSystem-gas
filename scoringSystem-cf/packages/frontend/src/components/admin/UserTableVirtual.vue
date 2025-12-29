@@ -63,13 +63,13 @@ import { isUserLocked, getLockStatusText } from '@/utils/userStatus'
 import UserRow from './UserRow.vue'
 import UserActivityExpansion from './UserActivityExpansion.vue'
 
-interface Props {
+export interface Props {
   users: User[]
   selectedEmails: string[]
   containerHeight?: string
 }
 
-interface Emits {
+export interface Emits {
   (e: 'toggle-selection', userEmail: string): void
   (e: 'select-all'): void
   (e: 'toggle-status', user: User): void
@@ -95,8 +95,8 @@ const getRowSize = (index: number) => {
 }
 
 const virtualizer = useVirtualizer({
-  count: computed(() => props.users.length),
-  getScrollElement: () => scrollContainer.value,
+  count: computed(() => props.users.length) as unknown as number,
+  getScrollElement: () => scrollContainer.value as Element | null,
   estimateSize: () => 60, // Estimated row height
   overscan: 5, // Render 5 extra rows above/below viewport
   measureElement:

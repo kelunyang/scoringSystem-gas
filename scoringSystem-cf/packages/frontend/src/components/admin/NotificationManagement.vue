@@ -573,11 +573,11 @@ const TYPE_CLASS_MAP = {
 // ================== Export Config ==================
 
 const exportConfig = computed(() => ({
-  data: filteredNotifications.value as Record<string, unknown>[],
+  data: filteredNotifications.value as unknown as Record<string, unknown>[],
   filename: '通知列表',
   headers: ['收件人', '類型', '標題', '內容', '專案', '已讀', '已發送郵件', '創建時間', '讀取時間', '郵件發送時間'],
   rowMapper: (n: Record<string, unknown>) => {
-    const notification = n as Notification
+    const notification = n as unknown as Notification
     return [
       notification.targetUserEmail,
       TYPE_TEXT_MAP[notification.type],
@@ -605,10 +605,10 @@ const loadNotifications = async (): Promise<void> => {
       const notificationArray = Array.isArray(notificationList) ? notificationList : []
 
       // Map project names without mutating the original objects
-      notifications.value = notificationArray.map(n => ({
+      notifications.value = notificationArray.map((n: any) => ({
         ...n,
         projectName: getProjectName(n.projectId)
-      }))
+      })) as Notification[]
     } else {
       throw new Error(response.error?.message || '無法載入通知資料')
     }
@@ -686,7 +686,7 @@ const sendSelectedEmails = async (): Promise<void> => {
       // Send batch request
       const response = await adminApi.notifications.sendBatch({
         notificationIds: batch.map(n => n.notificationId)
-      }) as BatchSendResponse
+      } as any) as unknown as BatchSendResponse
 
       if (response.success) {
         successCount += response.data.successCount || 0
@@ -750,7 +750,7 @@ const sendSingleEmail = async (notification: Notification): Promise<void> => {
   try {
     const response = await adminApi.notifications.sendSingle({
       notificationId: notification.notificationId
-    })
+    } as any)
 
     if (response.success) {
       // Update local state (create new array for shallowRef)

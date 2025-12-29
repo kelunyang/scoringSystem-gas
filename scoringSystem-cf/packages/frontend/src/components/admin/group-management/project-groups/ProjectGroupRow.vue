@@ -423,7 +423,7 @@ const isSelectedMember = (userEmail: string) => {
 
 // Get member's display role (pending role takes priority)
 const getMemberDisplayRole = (member: GroupMember): 'member' | 'leader' => {
-  return props.pendingRoleChanges?.get(member.userEmail) || member.role
+  return props.pendingRoleChanges?.get(member.userEmail) || member.role || 'member'
 }
 
 // Toggle member selection

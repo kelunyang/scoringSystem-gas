@@ -513,8 +513,8 @@ const selectedSubmissionVersionRankings = computed((): SubmissionWithRanking[] =
     return {
       submissionId: ranking.targetId,
       groupId: ranking.groupId || '',
-      groupName: ranking.groupName || submission?.groupName || `組別 ${ranking.groupId?.slice(-4)}`,
-      memberNames: ranking.memberNames || submission?.memberNames || [],
+      groupName: (ranking as any).groupName || submission?.groupName || `組別 ${ranking.groupId?.slice(-4)}`,
+      memberNames: (ranking as any).memberNames || submission?.memberNames || [],
       reportContent: submission?.reportContent || '',
       submitTime: submission?.submitTime || '',
       status: submission?.status || '',
@@ -600,7 +600,7 @@ const submissionSelectedMembers = computed((): Member[] => {
 })
 
 // 將教師排名的成果轉換為「組」資料（Settlement Mode）
-const rankedSubmissionsAsGroups = computed((): GroupData[] => {
+const rankedSubmissionsAsGroups = computed(() => {
   const globalMinRatio = 5  // 統一基準單位 (5%)
 
   return rankedSubmissions.value.map((submission, idx) => {
@@ -642,19 +642,19 @@ const rankedSubmissionsAsGroups = computed((): GroupData[] => {
 })
 
 // 預計算點數分配（Settlement Mode）
-const rankedSubmissionsAsGroupsWithPoints = computed((): GroupData[] => {
-  const groups = rankedSubmissionsAsGroups.value
+const rankedSubmissionsAsGroupsWithPoints = computed(() => {
+  const groups = rankedSubmissionsAsGroups.value as any[]
   if (groups.length === 0) return []
 
   const groupCount = groups.length
-  const rankWeights = calculateRankWeights(groupCount)
+  const rankWeights = calculateRankWeights(groupCount) as Record<number, number>
   const globalMinRatio = 5
 
   // Calculate total weight
   let totalWeight = 0
-  groups.forEach(group => {
-    group.members.forEach(member => {
-      const finalWeight = member.baseWeightUnits * rankWeights[group.rank]
+  groups.forEach((group: any) => {
+    group.members.forEach((member: any) => {
+      const finalWeight = member.baseWeightUnits * (rankWeights[group.rank] || 1)
       totalWeight += finalWeight
     })
   })
@@ -667,13 +667,13 @@ const rankedSubmissionsAsGroupsWithPoints = computed((): GroupData[] => {
   const pointsPerWeight = submissionReward.value / totalWeight
 
   // Assign points and weights to all members
-  return groups.map(group => ({
+  return groups.map((group: any) => ({
     ...group,
-    members: group.members.map(member => ({
+    members: group.members.map((member: any) => ({
       ...member,
-      rankMultiplier: rankWeights[group.rank],
-      finalWeight: member.baseWeightUnits * rankWeights[group.rank],
-      points: (member.baseWeightUnits * rankWeights[group.rank]) * pointsPerWeight
+      rankMultiplier: rankWeights[group.rank] || 1,
+      finalWeight: member.baseWeightUnits * (rankWeights[group.rank] || 1),
+      points: (member.baseWeightUnits * (rankWeights[group.rank] || 1)) * pointsPerWeight
     }))
   }))
 })
@@ -797,8 +797,8 @@ async function loadVersionHistory(autoEnterPreview: boolean = false): Promise<vo
         latestSubmissionRankings.value = latestVersion.rankings.map(ranking => ({
           submissionId: ranking.targetId,
           groupId: ranking.groupId || '',
-          groupName: ranking.groupName || '',
-          memberNames: ranking.memberNames || [],
+          groupName: (ranking as any).groupName || '',
+          memberNames: (ranking as any).memberNames || [],
           reportContent: '',
           submitTime: '',
           status: '',

@@ -801,3 +801,123 @@ ${loginLogsText}
   return { subject, htmlBody, textBody };
 }
 
+/**
+ * 構建成果被教師強制撤回通知郵件內容
+ */
+export function buildSubmissionForceWithdrawnEmailContent(
+  targetEmail: string,
+  displayName: string,
+  projectName: string,
+  stageName: string,
+  groupName: string,
+  reason: string,
+  teacherEmail: string,
+  wasApproved: boolean,
+  systemTitle: string
+): { subject: string; htmlBody: string; textBody: string } {
+  const subject = `[${systemTitle}] 作品被教師撤回通知`;
+
+  const approvedWarning = wasApproved
+    ? `<div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 15px; margin: 15px 0; color: #856404;">
+        <strong>⚠ 注意：</strong>此作品在撤回前已獲得核准，您的階段成績可能會受到影響。如有疑問，請聯繫授課教師。
+      </div>`
+    : '';
+
+  const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: "Microsoft JhengHei", "微軟正黑體", Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }
+    .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .header { background: #E74C3C; color: white; padding: 20px; text-align: center; }
+    .content { padding: 30px; }
+    .info-box { background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0; }
+    .reason-box { background: #ffebee; border-left: 4px solid #E74C3C; padding: 20px; margin: 20px 0; }
+    .footer { background: #f8f9fa; padding: 15px; text-align: center; color: #666; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>作品撤回通知</h2>
+      <p>您的組別作品已被教師強制撤回</p>
+    </div>
+
+    <div class="content">
+      <h3>${displayName}，您好：</h3>
+      <p>您所屬的組別在專案「<strong>${projectName}</strong>」中提交的作品已被教師強制撤回，詳細資訊如下：</p>
+
+      <div class="info-box">
+        <p><strong>📋 專案名稱：</strong>${projectName}</p>
+        <p><strong>📌 階段名稱：</strong>${stageName}</p>
+        <p><strong>👥 組別名稱：</strong>${groupName}</p>
+        <p><strong>👨‍🏫 操作教師：</strong>${teacherEmail}</p>
+        <p><strong>🕐 撤回時間：</strong>${new Date().toLocaleString('zh-TW')}</p>
+      </div>
+
+      <div class="reason-box">
+        <strong>📝 撤回原因：</strong>
+        <p style="margin: 10px 0 0 0; white-space: pre-wrap;">${reason}</p>
+      </div>
+
+      ${approvedWarning}
+
+      <h4>📌 後續步驟：</h4>
+      <ol>
+        <li>請詳閱撤回原因，了解作品被撤回的具體問題</li>
+        <li>與組員討論如何修正作品內容</li>
+        <li>在階段結束前重新提交符合要求的作品</li>
+        <li>如有任何疑問，請聯繫授課教師</li>
+      </ol>
+
+      <p style="color: #666; margin-top: 20px;">如果您對此撤回決定有疑義，請直接與授課教師聯繫討論。</p>
+    </div>
+
+    <div class="footer">
+      <p>這是系統自動發送的郵件，請勿直接回覆。</p>
+      <p>如有疑問，請聯繫您的授課教師。</p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  const approvedWarningText = wasApproved
+    ? '\n⚠ 注意：此作品在撤回前已獲得核准，您的階段成績可能會受到影響。如有疑問，請聯繫授課教師。\n'
+    : '';
+
+  const textBody = `
+作品撤回通知
+
+${displayName}，您好：
+
+您所屬的組別在專案「${projectName}」中提交的作品已被教師強制撤回。
+
+詳細資訊：
+- 專案名稱：${projectName}
+- 階段名稱：${stageName}
+- 組別名稱：${groupName}
+- 操作教師：${teacherEmail}
+- 撤回時間：${new Date().toLocaleString('zh-TW')}
+
+撤回原因：
+${reason}
+${approvedWarningText}
+後續步驟：
+1. 請詳閱撤回原因，了解作品被撤回的具體問題
+2. 與組員討論如何修正作品內容
+3. 在階段結束前重新提交符合要求的作品
+4. 如有任何疑問，請聯繫授課教師
+
+如果您對此撤回決定有疑義，請直接與授課教師聯繫討論。
+
+---
+這是系統自動發送的郵件，請勿直接回覆。
+如有疑問，請聯繫您的授課教師。
+  `.trim();
+
+  return { subject, htmlBody, textBody };
+}
+

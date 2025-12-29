@@ -169,17 +169,20 @@ const { filteredGroups } = useGroupFiltering(
 
 // Export configuration
 const exportConfig = computed(() => ({
-  data: filteredGroups.value,
+  data: filteredGroups.value as unknown as Record<string, unknown>[],
   filename: '全域群組列表',
   headers: ['群組ID', '群組名稱', '狀態', '成員數', '全域權限', '創建時間'],
-  rowMapper: (group: GlobalGroup) => [
-    group.groupId,
-    group.groupName,
-    group.isActive ? '活躍' : '停用',
-    (props.membersMap.get(group.groupId) || []).length,
-    (group.globalPermissions || []).join(', '),
-    group.createdTime ? new Date(group.createdTime).toLocaleString('zh-TW') : '-'
-  ]
+  rowMapper: (item: Record<string, unknown>) => {
+    const group = item as unknown as GlobalGroup
+    return [
+      group.groupId,
+      group.groupName,
+      group.isActive ? '活躍' : '停用',
+      (props.membersMap.get(group.groupId) || []).length,
+      Array.isArray(group.globalPermissions) ? group.globalPermissions.join(', ') : (group.globalPermissions || '-'),
+      group.createdTime ? new Date(group.createdTime).toLocaleString('zh-TW') : '-'
+    ] as (string | number)[]
+  }
 }))
 
 // Get available users for a group (excluding existing members)

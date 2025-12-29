@@ -51,7 +51,9 @@ export type ReverseTransactionRequest = z.infer<typeof ReverseTransactionRequest
  * Get project wallet ladder request schema
  */
 export const GetProjectWalletLadderRequestSchema = z.object({
-  projectId: z.string().min(1, 'Project ID is required')
+  projectId: z.string().min(1, 'Project ID is required'),
+  /** Points below this threshold are treated as 0 score (default: 0 = disabled) */
+  zeroScoreThreshold: z.number().min(0).optional().default(0)
 });
 
 export type GetProjectWalletLadderRequest = z.infer<typeof GetProjectWalletLadderRequestSchema>;
@@ -60,7 +62,9 @@ export type GetProjectWalletLadderRequest = z.infer<typeof GetProjectWalletLadde
  * Export wallet summary request schema
  */
 export const ExportWalletSummaryRequestSchema = z.object({
-  projectId: z.string().min(1, 'Project ID is required')
+  projectId: z.string().min(1, 'Project ID is required'),
+  /** Points below this threshold are treated as 0 score (default: 0 = disabled) */
+  zeroScoreThreshold: z.number().min(0).optional().default(0)
 });
 
 export type ExportWalletSummaryRequest = z.infer<typeof ExportWalletSummaryRequestSchema>;

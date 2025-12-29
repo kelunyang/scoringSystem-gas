@@ -128,7 +128,7 @@
               </el-statistic>
             </el-col>
             <el-col :xs="12" :sm="8" :md="4">
-              <el-statistic title="評論獎勵模式" :value="commentRewardModeText">
+              <el-statistic title="評論獎勵模式" :value="(commentRewardModeText as any)">
                 <template #prefix><i class="fas fa-comments"></i></template>
               </el-statistic>
             </el-col>
@@ -708,6 +708,11 @@
               :project-user-groups="projectData?.userGroups || []"
               :project-users="projectData?.users || []"
               :stage-proposals="stage.proposals || []"
+              :is-teacher="permissions.canManageStages.value"
+              :pinned-group-id="pinnedGroupId"
+              :project-id="projectId"
+              @pin-group="handlePinGroup"
+              @force-withdraw="(handleForceWithdraw as any)"
             />
 
             <!-- 階段評論模式：顯示評論區域 -->
@@ -743,8 +748,8 @@
         :vote-data="modalManager.currentModalVoteData.value"
         :user="props.user"
         :user-group-info="modalManager.currentModalUserGroupInfo.value"
-        :project-users="projectData?.users || []"
-        :project-user-groups="projectData?.userGroups || []"
+        :project-users="(projectData?.users || []) as any"
+        :project-user-groups="(projectData?.userGroups || []) as any"
         @vote="handleVoteSubmit"
         @resubmit="handleResubmitRanking"
       />
@@ -886,12 +891,21 @@
     <!-- Event Log Drawer -->
     <EventLogDrawer
       v-model="showEventLogDrawer"
-      :project="eventLogProject"
+      :project="(eventLogProject as any)"
       :user-mode="true"
     />
 
     <!-- Tutorial Drawer -->
     <TutorialDrawer page="projectDetail" />
+
+    <!-- Force Withdraw Submission Drawer -->
+    <ForceWithdrawSubmissionDrawer
+      v-model:visible="forceWithdrawDrawerVisible"
+      :submission="forceWithdrawSubmission"
+      :project-id="projectId"
+      :stage-name="forceWithdrawStageName"
+      @withdrawn="handleForceWithdrawComplete"
+    />
   </div>
 </template>
 
@@ -934,6 +948,7 @@ import StatNumberDisplay from './shared/StatNumberDisplay.vue'
 import EventLogDrawer from './shared/EventLogDrawer.vue'
 import StageDescriptionDrawer from './shared/StageDescriptionDrawer.vue'
 import TutorialDrawer from './TutorialDrawer.vue'
+import ForceWithdrawSubmissionDrawer from './ForceWithdrawSubmissionDrawer.vue'
 import CountdownButton from './shared/CountdownButton.vue'
 import { showSuccess, showWarning, handleError, getErrorMessage } from '@/utils/errorHandler'
 import dayjs from 'dayjs'
@@ -999,6 +1014,19 @@ const projectDescriptionDrawerOpen = ref(false)
 const showEventLogDrawer = ref(false)
 const stageDescriptionDrawerOpen = ref(false)
 const selectedStageForDescription = ref<ExtendedStage | null>(null)
+
+// ===== Force Withdraw Drawer 狀態 =====
+const forceWithdrawDrawerVisible = ref(false)
+const forceWithdrawSubmission = ref<{
+  submissionId: string
+  groupId: string
+  groupName: string
+  status: string
+  submittedTime?: number
+  createdTime?: number
+  authors?: string[]
+} | null>(null)
+const forceWithdrawStageName = ref('')
 
 const refreshButtonRef = ref<InstanceType<typeof CountdownButton> | null>(null)
 
@@ -1204,27 +1232,27 @@ const userRef = computed(() => props.user)
 // 角色切換管理
 const roleSwitch = useRoleSwitch(
   projectId.value,
-  projectData as Ref<ProjectDataWithGroups | null | undefined>,
-  userRef as Ref<UserDataWithPermissions | null | undefined>
+  projectData as unknown as Ref<ProjectDataWithGroups | null | undefined>,
+  userRef as unknown as Ref<UserDataWithPermissions | null | undefined>
 )
 
 // 權限管理（傳入當前選擇的角色）
 const permissions = useProjectPermissions(
-  projectData as Ref<ProjectDataWithGroups | null | undefined>,
-  userRef as Ref<UserDataWithPermissions | null | undefined>,
+  projectData as unknown as Ref<ProjectDataWithGroups | null | undefined>,
+  userRef as unknown as Ref<UserDataWithPermissions | null | undefined>,
   roleSwitch.currentRole
 )
 
 // 群組數據
 const groupData = useGroupData(
-  projectData as Ref<ProjectDataWithGroups | null | undefined>,
-  userRef as Ref<UserDataWithPermissions | null | undefined>
+  projectData as unknown as Ref<ProjectDataWithGroups | null | undefined>,
+  userRef as any
 )
 
 // 階段內容管理（必須在 watch 之前初始化）
 const stageContent = useStageContentManagement(
-  projectData as Ref<ProjectDataWithGroups | null | undefined>,
-  computed(() => props.user) as Ref<UserDataWithPermissions | null | undefined>
+  projectData as unknown as Ref<ProjectDataWithGroups | null | undefined>,
+  computed(() => props.user) as unknown as Ref<UserDataWithPermissions | null | undefined>
 )
 
 // Modal 管理
@@ -1243,6 +1271,9 @@ const stageInfoDrawer = useStageInfoDrawer(projectId, TOPBAR_HEIGHT)
 
 // ✅ 使用 ref 而非 computed，以保持 stage 對象引用穩定（避免 loadingReports 突變被丟棄）
 const stages = ref<ExtendedStage[]>([])
+
+// 鎖定組別狀態（教師專用，跨所有階段）
+const pinnedGroupId = ref<string | null>(null)
 
 // 監聽 stagesQuery.data 變化並更新 stages（保持對象引用）
 watch(
@@ -1343,7 +1374,7 @@ const projectTitle = computed(() => {
   return project?.projectName || project?.title || ''
 })
 
-// EventLog 专案数据
+// EventLog 專案資料
 const eventLogProject = computed(() => {
   if (!projectData.value?.project) return null
   return {
@@ -1550,14 +1581,14 @@ const ganttChartStages = computed(() => {
 })
 
 /**
- * 检查用户在指定阶段是否有合格的评论（用于显示评论投票按钮）
- * 使用 Backend 预计算的 canBeVoted 标志位，确保与 API 验证逻辑一致
+ * 檢查用戶在指定階段是否有合格的評論（用於顯示評論投票按鈕）
+ * 使用 Backend 預計算的 canBeVoted 標誌位，確保與 API 驗證邏輯一致
  *
- * canBeVoted 条件（由 Backend 计算）：
- * 1. 不是回复评论（isReply = 0）
+ * canBeVoted 條件（由 Backend 計算）：
+ * 1. 不是回覆評論（isReply = 0）
  * 2. 有 mentions（mentionedGroups OR mentionedUsers）
  * 3. 作者是 Group Leader/Member
- * 4. 至少有 1 个 helpful reaction
+ * 4. 至少有 1 個 helpful reaction
  */
 function userHasValidCommentInStage(stage: ExtendedStage) {
   const currentUserEmail = props.user?.userEmail
@@ -1565,7 +1596,7 @@ function userHasValidCommentInStage(stage: ExtendedStage) {
     return false
   }
 
-  // 使用 Backend 预计算的 canBeVoted 标志位
+  // 使用 Backend 預計算的 canBeVoted 標誌位
   return stage.comments.some((comment: any) => {
     return comment.canBeVoted === true && comment.authorEmail === currentUserEmail
   })
@@ -1639,7 +1670,8 @@ function getStatusIcon(status: string): string {
     'voting': 'fas fa-vote-yea',
     'settling': 'fas fa-calculator',
     'completed': 'fas fa-flag-checkered',
-    'archived': 'fas fa-lock'
+    'archived': 'fas fa-lock',
+    'paused': 'fas fa-pause-circle'
   }
   return iconMap[status] || 'fas fa-circle'
 }
@@ -1690,6 +1722,8 @@ function getStatusTooltip(stage: ExtendedStage): string {
       return '已完成'
     case 'archived':
       return '已封存'
+    case 'paused':
+      return '階段已暫停，所有操作暫時停止'
     default:
       return stage.status
   }
@@ -1849,7 +1883,8 @@ function getStageStatusText(stage?: ExtendedStage): string {
     'voting': '投票中',
     'settling': '結算中',
     'completed': '已完成',
-    'archived': '已封存'
+    'archived': '已封存',
+    'paused': '已暫停'
   }
 
   return statusTextMap[stage.status] || stage.status
@@ -2306,13 +2341,13 @@ function handleReportAction(stage: ExtendedStage) {
 /**
  * 打開投票結果 Modal
  *
- * 優化說明：移除冗余的 API 調用
+ * 優化說明：移除冗餘的 API 調用
  * - VoteResultModal 現在使用 TanStack Query (useRankingProposals hook)
- * - 數據由 Modal 內部自動載入和快取
- * - 不再需要預先載入數據
+ * - 資料由 Modal 內部自動載入和快取
+ * - 不再需要預先載入資料
  */
 function openVoteResultModal(stage: ExtendedStage) {
-  // 直接開啟 Modal，無需預載入數據
+  // 直接開啟 Modal，無需預載入資料
   // VoteResultModal 會通過 TanStack Query 自動載入
   modalManager.openVoteResultModal(stage, null)
 }
@@ -2320,9 +2355,9 @@ function openVoteResultModal(stage: ExtendedStage) {
 /**
  * 打開提交報告 Modal
  *
- * 優化說明：移除冗余的 API 調用，直接從緩存計算 activeGroupsCount
- * - stage.groups 已包含所有提交記錄（由 loadAllStageReports 加載）
- * - TanStack Query 自動管理 projectData 緩存（組員名單）
+ * 優化說明：移除冗餘的 API 調用，直接從快取計算 activeGroupsCount
+ * - stage.groups 已包含所有提交記錄（由 loadAllStageReports 載入）
+ * - TanStack Query 自動管理 projectData 快取（組員名單）
  * - activeGroupsCount 僅用於 UI 模擬，不影響實際提交邏輯
  */
 function openSubmitReportModal(stage: ExtendedStage) {
@@ -2331,15 +2366,15 @@ function openSubmitReportModal(stage: ExtendedStage) {
 }
 
 /**
- * 從 stage.groups 提取 participants 數據（用於 @mention 功能）
+ * 從 stage.groups 提取 participants 資料（用於 @mention 功能）
  *
  * 優化說明：
- * - stage.groups 已由 loadAllStageReports() 加載
- * - participationProposal 對象的 keys 即為參與者郵箱
- * - 無需 API 調用，直接從緩存提取
+ * - stage.groups 已由 loadAllStageReports() 載入
+ * - participationProposal 物件的 keys 即為參與者郵箱
+ * - 無需 API 調用，直接從快取提取
  *
- * @param {ExtendedStage} stage - 階段對象
- * @returns {Array} submissions 數據（僅包含 @mention 所需的最小字段）
+ * @param {ExtendedStage} stage - 階段物件
+ * @returns {Array} submissions 資料（僅包含 @mention 所需的最小欄位）
  */
 function extractStageParticipants(stage: ExtendedStage): any[] {
   if (!stage.groups || !Array.isArray(stage.groups)) {
@@ -2370,9 +2405,9 @@ function extractStageParticipants(stage: ExtendedStage): any[] {
  */
 async function openGroupSubmissionApprovalModal(stage: ExtendedStage) {
   try {
-    // ✅ Phase 2 优化：移除冗余的 refreshStageReports 调用
-    // Modal 内部的 loadAllVersions 和 loadVotingHistory 会加载更完整的数据
-    // stage.groups 数据已由 loadAllStageReports 预加载
+    // ✅ Phase 2 優化：移除冗餘的 refreshStageReports 調用
+    // Modal 內部的 loadAllVersions 和 loadVotingHistory 會載入更完整的資料
+    // stage.groups 資料已由 loadAllStageReports 預載入
 
     const currentGroup = groupData.getCurrentUserGroup()
     if (!currentGroup) {
@@ -2604,15 +2639,15 @@ async function handleGroupApprovalVoteSubmit(data: any) {
         )
       }
 
-      // ✅ 使用 TanStack Query 的精確緩存失效（替代全量刷新）
-      // queryClient 已在 setup() 阶段初始化，直接使用
+      // ✅ 使用 TanStack Query 的精確快取失效（替代全量刷新）
+      // queryClient 已在 setup() 階段初始化，直接使用
 
-      // 1. 失效當前階段的 submission 數據
+      // 1. 失效當前階段的 submission 資料
       await queryClient.invalidateQueries({
         queryKey: ['submissions', projectId.value, currentStageId]
       })
 
-      // 2. 失效當前階段的內容數據
+      // 2. 失效當前階段的內容資料
       await queryClient.invalidateQueries({
         queryKey: ['project', 'content', projectId.value, currentStageId]
       })
@@ -2624,7 +2659,7 @@ async function handleGroupApprovalVoteSubmit(data: any) {
         })
       }
 
-      // 4. 手動刷新當前階段的 groups 數據（UI 立即更新）
+      // 4. 手動刷新當前階段的 groups 資料（UI 立即更新）
       const currentStage = stages.value.find((s: any) => s.id === currentStageId)
       if (currentStage) {
         await stageContent.refreshStageReports(currentStage, projectId.value)
@@ -2677,6 +2712,60 @@ async function handleTeacherRankingSubmit(data: any) {
     showSuccess('教師排名已成功提交！')
     await loadProjectData()
   }
+}
+
+/**
+ * 處理鎖定/解鎖組別（教師專用）
+ * - 鎖定時：展開所有階段該組報告
+ * - 解鎖時：只清除 pinnedGroupId，不收起已展開的報告
+ */
+function handlePinGroup(groupId: string | null) {
+  pinnedGroupId.value = groupId
+
+  if (groupId) {
+    // 鎖定時：展開所有階段中該組的報告
+    stages.value.forEach(stage => {
+      stage.groups?.forEach(group => {
+        if (group.groupId === groupId) {
+          group.showReport = true
+        }
+      })
+    })
+  }
+  // 解鎖時：不做任何操作（報告保持展開）
+}
+
+/**
+ * 處理強制撤回報告事件
+ * 從 StageGroupSubmissions 接收 submission 資訊並打開 Drawer
+ */
+function handleForceWithdraw(submission: {
+  submissionId: string
+  groupId: string
+  groupName: string
+  status: string
+  submittedTime?: number
+  authors?: string[]
+}) {
+  // 找到該 submission 所屬的階段名稱
+  const stage = stages.value.find(s =>
+    s.groups?.some(g => g.submissionId === submission.submissionId)
+  )
+  forceWithdrawStageName.value = stage?.title || stage?.stageName || ''
+  forceWithdrawSubmission.value = submission
+  forceWithdrawDrawerVisible.value = true
+}
+
+/**
+ * 處理強制撤回完成事件
+ * 刷新相關階段的資料
+ */
+async function handleForceWithdrawComplete() {
+  // 刷新所有階段的資料
+  await Promise.all(
+    stages.value.map(stage => refreshStageContent(stage))
+  )
+  showSuccess('成果已強制撤回')
 }
 
 /**
@@ -3365,7 +3454,7 @@ function processUrlParams() {
 
   const drawerConfig = routeDrawer.processDrawerFromUrl(
     permissions.permissions.value, // Get PermissionFlags from useProjectPermissions return value
-    stages.value
+    stages.value as any
   )
 
   if (drawerConfig) {
@@ -3611,6 +3700,11 @@ onBeforeUnmount(() => {
   border-top: none;
 }
 
+.stage-section.status-paused {
+  border: 3px solid var(--stage-paused-bg, #e67e22);
+  border-top: none;
+}
+
 /* 第一行：階段狀態欄 */
 .stage-header-bar {
   width: 100%;
@@ -3652,6 +3746,11 @@ onBeforeUnmount(() => {
 
 .stage-header-bar.status-archived {
   background: var(--stage-archived-gradient);
+  color: var(--stage-gradient-text);
+}
+
+.stage-header-bar.status-paused {
+  background: var(--stage-paused-gradient, linear-gradient(90deg, #e67e22 0%, #F5B041 15%, #CA6F1E 85%, #e67e22 100%));
   color: var(--stage-gradient-text);
 }
 

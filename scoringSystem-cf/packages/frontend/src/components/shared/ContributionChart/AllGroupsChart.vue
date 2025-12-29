@@ -16,10 +16,11 @@ import type { Ref } from 'vue'
 import * as d3 from 'd3'
 import { useD3Chart } from '@/composables/useD3Chart'
 import { usePointCalculation } from '@/composables/usePointCalculation'
+import { useChargingAnimation, type ChargingUnit } from '@/composables/useChargingAnimation'
 import type { GroupClickData } from '@/types/components'
 import EmptyState from '@/components/shared/EmptyState.vue'
 
-interface Member {
+export interface Member {
   email: string
   displayName?: string
   points: number
@@ -27,7 +28,7 @@ interface Member {
   [key: string]: any
 }
 
-interface Group {
+export interface Group {
   groupId: string
   groupName: string
   rank: number
@@ -35,7 +36,7 @@ interface Group {
   members: Member[]
 }
 
-interface Props {
+export interface Props {
   selectedMembers: any[]
   simulatedRank: number
   simulatedGroupCount: number
@@ -45,6 +46,7 @@ interface Props {
   totalProjectGroups: number
   currentGroupLabel?: string
   groupByRank?: boolean  // 是否按 rank 分組顯示（預設 true 保持相容）
+  clickable?: boolean  // 是否啟用點擊互動（預設 false）
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -52,7 +54,8 @@ const props = withDefaults(defineProps<Props>(), {
   allGroups: () => [],
   currentGroupId: null,
   currentGroupLabel: '我們',
-  groupByRank: true
+  groupByRank: true,
+  clickable: false
 })
 
 const emit = defineEmits<{
@@ -61,24 +64,36 @@ const emit = defineEmits<{
 
 const { createTooltip, clearContainer, getContainerSize, debouncedRender } = useD3Chart()
 const { calculateAllGroupsScoring, getRankColor } = usePointCalculation()
+const charging = useChargingAnimation()
 
 const chartContainer: Ref<HTMLElement | null> = ref(null)
 const selectedGroupRank: Ref<number | null> = ref(null)
 
-// Watch for prop changes
+// 存儲充能層元素引用（按位置索引，每個方塊一個）
+let chargedElements: SVGRectElement[] = []
+
+// Watch for prop changes - reset charging animation on data change
 watch(() => props.selectedMembers, () => {
+  charging.reset()
+  chargedElements = []
   debouncedRender(() => renderChart())
 }, { deep: true })
 
 watch(() => props.simulatedRank, () => {
+  charging.reset()
+  chargedElements = []
   debouncedRender(() => renderChart())
 })
 
 watch(() => props.simulatedGroupCount, () => {
+  charging.reset()
+  chargedElements = []
   debouncedRender(() => renderChart())
 })
 
 watch(() => props.allGroups, () => {
+  charging.reset()
+  chargedElements = []
   debouncedRender(() => renderChart())
 }, { deep: true })
 
@@ -96,6 +111,8 @@ function truncateText(text: string, maxLength: number): string {
 onMounted(() => {
   nextTick(() => {
     renderChart()
+    // 設置視口觸發
+    charging.setupViewportTrigger(chartContainer)
   })
 })
 
@@ -131,7 +148,7 @@ function renderChart(): void {
           props.reportReward,
           props.simulatedGroupCount,
           props.allGroups as any,
-          props.currentGroupId || null
+          props.currentGroupId ?? null
         )
 
         if (allGroupsData.length === 0) {
@@ -213,7 +230,26 @@ function renderChart(): void {
       const startX = margin.left + (width - margin.left - margin.right - blocks.length * blockSize) / 2
       const startY = (height - blockHeight) / 2
 
-      // 繪製權重塊
+      // 清空充能元素引用
+      chargedElements = []
+
+      // 1. 繪製底座層（淡色，始終可見）
+      svg.selectAll('.weight-block-base')
+        .data(blocks)
+        .enter()
+        .append('rect')
+        .attr('class', 'weight-block-base')
+        .attr('data-rank', d => d.person.rank)
+        .attr('x', d => startX + d.globalPosition * blockSize)
+        .attr('y', startY)
+        .attr('width', blockSize - 1)
+        .attr('height', blockHeight)
+        .attr('fill', d => d.person.groupColor)
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 0.5)
+        .style('opacity', 0.5)
+
+      // 2. 繪製充能層（初始不可見，動畫時逐組點亮）
       const weightBlocks = svg.selectAll('.weight-block')
         .data(blocks)
         .enter()
@@ -227,19 +263,35 @@ function renderChart(): void {
         .attr('fill', d => d.person.groupColor)
         .attr('stroke', '#fff')
         .attr('stroke-width', 0.5)
-        .style('opacity', d => {
-          const baseOpacity = d.person.isCurrentGroup ? 1 : 0.8
-          return selectedGroupRank.value === d.person.rank ? baseOpacity * 0.7 : baseOpacity
+        .style('opacity', 0)  // 初始不可見，由充能動畫控制
+        .style('cursor', props.clickable ? 'pointer' : 'default')
+        .each(function() {
+          // 收集每個方塊的充能層元素（按位置順序）
+          chargedElements.push(this as SVGRectElement)
         })
-        .style('cursor', 'pointer')
         .on('mouseover', (event, d: any) => {
           // Highlight all blocks of the same rank
-          svg.selectAll('.weight-block')
+          const sameRankBlocks = svg.selectAll('.weight-block')
             .filter((block: any) => block.person.rank === d.person.rank)
-            .style('opacity', (block: any) => {
+
+          sameRankBlocks.style('opacity', (block: any) => {
               const baseOpacity = block.person.isCurrentGroup ? 1 : 0.8
               return selectedGroupRank.value === block.person.rank ? baseOpacity * 0.7 : Math.min(baseOpacity + 0.1, 1)
             })
+
+          // 可點擊時套用 grow 效果
+          if (props.clickable) {
+            sameRankBlocks
+              .transition()
+              .duration(150)
+              .attr('transform', function(this: Element) {
+                const rect = this as SVGRectElement
+                const y = parseFloat(rect.getAttribute('y') || '0')
+                const height = parseFloat(rect.getAttribute('height') || '0')
+                return `translate(0, ${-height * 0.1}) scale(1, 1.2)`
+              } as any)
+              .style('filter', 'brightness(1.1)')
+          }
 
           tooltip.style('opacity', 0.9)
             .html(`<strong>${d.person.displayName}</strong><br/>
@@ -248,19 +300,28 @@ function renderChart(): void {
                    </span><br/>
                    第${d.person.rank}名組${d.person.isCurrentGroup ? ' (我們組)' : ''}<br/>
                    權重: ${d.person.finalWeight.toFixed(1)}<br/>
-                   得分: ${d.person.points.toFixed(2)}點<br/>
-                   <span style="color: #409eff; font-size: 11px;">點擊查看組內詳情</span>`)
+                   得分: ${d.person.points.toFixed(2)}點${props.clickable ? '<br/><span style="color: #409eff; font-size: 11px;">點擊查看組內詳情</span>' : ''}`)
             .style('left', (event.pageX + 10) + 'px')
             .style('top', (event.pageY - 28) + 'px')
         })
         .on('mouseout', (event, d: any) => {
           // Restore original opacity for all blocks of the same rank
-          svg.selectAll('.weight-block')
+          const sameRankBlocks = svg.selectAll('.weight-block')
             .filter((block: any) => block.person.rank === d.person.rank)
-            .style('opacity', (block: any) => {
+
+          sameRankBlocks.style('opacity', (block: any) => {
               const baseOpacity = block.person.isCurrentGroup ? 1 : 0.8
               return selectedGroupRank.value === block.person.rank ? baseOpacity * 0.7 : baseOpacity
             })
+
+          // 可點擊時恢復原狀
+          if (props.clickable) {
+            sameRankBlocks
+              .transition()
+              .duration(150)
+              .attr('transform', '')
+              .style('filter', '')
+          }
 
           tooltip.style('opacity', 0)
         })
@@ -466,7 +527,44 @@ function renderChart(): void {
         .attr('font-weight', 'bold')
         .attr('fill', '#2c3e50')
         .text(`各組權重分配 | 總點數: ${Math.round(totalPoints)}點 | 總權重: ${Math.round(totalWeight)}`)
+
+      // 配置充能動畫（按組充能）
+      setupChargingAnimation(allPeople, startX, startY, blockSize, blockHeight)
     }
+
+/**
+ * 設置充能動畫
+ * 每個方塊作為一個充能單位，從左到右逐一點亮
+ */
+function setupChargingAnimation(
+  allPeople: Array<{ rank: number; finalWeight: number }>,
+  startX: number,
+  startY: number,
+  blockSize: number,
+  blockHeight: number
+) {
+  // 每個方塊作為一個充能單位
+  const chargingUnits: ChargingUnit[] = chargedElements.map((element, index) => ({
+    id: `block-${index}`,
+    elements: [element],
+    endX: startX + (index + 1) * blockSize
+  }))
+
+  // 獲取 SVG 元素
+  const svgElement = chartContainer.value?.querySelector('svg') as SVGSVGElement | null
+
+  // 配置充能動畫
+  if (chargingUnits.length > 0 && svgElement) {
+    charging.configure(
+      chargingUnits,
+      startY + blockHeight / 2,
+      blockHeight,
+      svgElement,
+      startX,
+      blockSize
+    )
+  }
+}
 </script>
 
 <style scoped>
@@ -500,5 +598,15 @@ function renderChart(): void {
   height: 120px;
   color: #999;
   font-size: 14px;
+}
+</style>
+
+<style>
+/* 充能彈跳動畫 - 全局樣式（SVG 元素需要） */
+@keyframes charging-bounce {
+  0%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-8px); }
+  50% { transform: translateY(-4px); }
+  70% { transform: translateY(-2px); }
 }
 </style>

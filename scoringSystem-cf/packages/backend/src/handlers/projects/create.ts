@@ -205,13 +205,8 @@ export async function cloneProject(
     `).bind(projectId).all();
 
     let stageCount = 0;
-    const currentTime = Date.now();
 
-    for (const [index, stage] of originalStages.results.entries()) {
-      const stageOffset = index * 7 * 24 * 60 * 60 * 1000; // 7 days apart
-      const newStartDate = currentTime + stageOffset + 7 * 24 * 60 * 60 * 1000;
-      const newEndDate = currentTime + stageOffset + 14 * 24 * 60 * 60 * 1000;
-
+    for (const stage of originalStages.results) {
       const newStageId = generateId(ID_PREFIXES.STAGE);
 
       await env.DB.prepare(`
@@ -226,8 +221,8 @@ export async function cloneProject(
         (stage as any).stageName,
         (stage as any).description || '',
         (stage as any).stageOrder,
-        newStartDate,
-        newEndDate,
+        (stage as any).startTime,
+        (stage as any).endTime,
         (stage as any).reportRewardPool || 0,
         (stage as any).commentRewardPool || 0,
         'pending',

@@ -59,6 +59,7 @@ export interface User {
   userEmail: string
   displayName: string
   disabled?: boolean
+  isUngrouped?: boolean
 }
 
 // ============================================================================

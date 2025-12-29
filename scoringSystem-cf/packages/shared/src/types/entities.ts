@@ -26,6 +26,8 @@ export interface User {
   // Extended properties (frontend-specific)
   totalPoints?: number; // Total points earned
   grade?: string; // User grade/level
+  emailVerified?: boolean; // Email verification status
+  role?: 'admin' | 'user' | 'pm' | 'reviewer'; // User role
 }
 
 /**
@@ -163,10 +165,11 @@ export interface Stage {
   description: string | null;
   startTime: number | null;
   endTime: number | null;
-  status: 'draft' | 'pending' | 'active' | 'voting' | 'completed' | 'archived' | 'closed';
+  status: 'draft' | 'pending' | 'active' | 'voting' | 'completed' | 'archived' | 'closed' | 'paused' | 'settling';
   manualStatus?: 'completed' | 'archived' | null; // Manual status override from stages_with_status VIEW
   autoStatus?: 'pending' | 'active' | 'voting'; // Auto-calculated status from stages_with_status VIEW
   forceVotingTime?: number | null; // Force voting timestamp (NULL if not forced) - overrides time-based status calculation
+  pausedTime?: number | null; // Pause timestamp (NULL if not paused) - overrides time-based status calculation
   settings: string; // JSON
   createdTime: number;
   lastModifiedTime: number | null;

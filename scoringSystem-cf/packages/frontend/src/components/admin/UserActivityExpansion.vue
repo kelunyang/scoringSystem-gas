@@ -19,7 +19,7 @@
           </div>
           <div class="info-item">
             <span class="label">錢包餘額:</span>
-            <span class="value balance">{{ formatBalance(user.walletBalance) }} 點</span>
+            <span class="value balance">{{ formatBalance(extendedUser.walletBalance) }} 點</span>
           </div>
         </div>
       </el-col>
@@ -30,20 +30,20 @@
           <h4>安全資訊</h4>
           <div class="info-item">
             <span class="label">登入失敗次數:</span>
-            <span class="value" :class="{ 'warning-text': user.failedLoginAttempts > 0 }">
-              {{ user.failedLoginAttempts || 0 }}
+            <span class="value" :class="{ 'warning-text': (extendedUser.failedLoginAttempts || 0) > 0 }">
+              {{ extendedUser.failedLoginAttempts || 0 }}
             </span>
           </div>
           <div class="info-item">
             <span class="label">惡意登入檢測:</span>
-            <el-tag :type="user.maliciousLoginDetected ? 'danger' : 'success'" size="small">
-              {{ user.maliciousLoginDetected ? '偵測到' : '正常' }}
+            <el-tag :type="extendedUser.maliciousLoginDetected ? 'danger' : 'success'" size="small">
+              {{ extendedUser.maliciousLoginDetected ? '偵測到' : '正常' }}
             </el-tag>
           </div>
           <div class="info-item">
             <span class="label">2FA 狀態:</span>
-            <el-tag :type="user.twoFactorEnabled ? 'success' : 'info'" size="small">
-              {{ user.twoFactorEnabled ? '已啟用' : '未啟用' }}
+            <el-tag :type="extendedUser.twoFactorEnabled ? 'success' : 'info'" size="small">
+              {{ extendedUser.twoFactorEnabled ? '已啟用' : '未啟用' }}
             </el-tag>
           </div>
           <div v-if="user.lockUntil && user.lockUntil > Date.now()" class="info-item">
@@ -97,7 +97,15 @@ import { computed } from 'vue'
 import type { User } from '@repo/shared'
 import { parseAvatarOptions } from '@/utils/avatar'
 
-interface Props {
+// Extended User type for admin display with additional properties
+export interface ExtendedUser extends User {
+  walletBalance?: number
+  failedLoginAttempts?: number
+  maliciousLoginDetected?: boolean
+  twoFactorEnabled?: boolean
+}
+
+export interface Props {
   user: User
   showTimeline?: boolean
 }
@@ -106,8 +114,11 @@ const props = withDefaults(defineProps<Props>(), {
   showTimeline: false
 })
 
+// Cast to ExtendedUser for accessing additional properties
+const extendedUser = computed(() => props.user as ExtendedUser)
+
 // Time formatting
-const formatTime = (timestamp: number | undefined): string => {
+const formatTime = (timestamp: number | null | undefined): string => {
   if (!timestamp) return '-'
   return new Date(timestamp).toLocaleString('zh-TW', {
     year: 'numeric',

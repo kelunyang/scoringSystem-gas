@@ -51,6 +51,7 @@
 
 <script>
 import { ref, computed, watch } from 'vue'
+import { renderMarkdown } from '@/utils/markdown'
 
 export default {
   name: 'MarkdownEditor',
@@ -69,52 +70,18 @@ export default {
     const content = ref(props.modelValue)
     const showPreview = ref(false)
     const textarea = ref(null)
-    
+
     watch(() => props.modelValue, (newVal) => {
       content.value = newVal
     })
-    
+
     const handleInput = () => {
       emit('update:modelValue', content.value)
     }
-    
+
     const renderedMarkdown = computed(() => {
-      return parseMarkdown(content.value)
+      return renderMarkdown(content.value)
     })
-    
-    const parseMarkdown = (text) => {
-      if (!text) return ''
-      
-      // 安全的markdown解析，只支援特定標籤
-      let html = text
-        // 底線 (必須在斜體之前處理)
-        .replace(/<u>(.*?)<\/u>/gim, '<u>$1</u>')
-        
-        // 粗體
-        .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
-        
-        // 斜體
-        .replace(/\*(.*?)\*/gim, '<em>$1</em>')
-        
-        // 連結
-        .replace(/\[([^\]]*)\]\(([^\)]*)\)/gim, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-        
-        // 圖片
-        .replace(/!\[([^\]]*)\]\(([^\)]*)\)/gim, '<img src="$2" alt="$1" style="max-width: 100%;">')
-        
-        // 無序列表
-        .replace(/^\* (.+)$/gim, '<li>$1</li>')
-        .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
-        
-        // 有序列表
-        .replace(/^\d+\. (.+)$/gim, '<li>$1</li>')
-        
-        // 段落
-        .replace(/\n\n/gim, '</p><p>')
-        .replace(/\n/gim, '<br>')
-      
-      return `<p>${html}</p>`
-    }
     
     const insertText = (before, after = '') => {
       const start = textarea.value.selectionStart
@@ -181,6 +148,95 @@ export default {
     }
     
     const handleKeydown = (e) => {
+      // Enter 鍵：自動延續列表
+      if (e.key === 'Enter' && !e.shiftKey) {
+        const cursorPos = textarea.value.selectionStart
+        const textBefore = content.value.substring(0, cursorPos)
+        const lines = textBefore.split('\n')
+        const currentLine = lines[lines.length - 1]
+
+        // 無序列表: "* " 或 "- "
+        const ulMatch = currentLine.match(/^(\s*)([-*])\s(.*)$/)
+        if (ulMatch) {
+          // 如果當前行只有列表符號沒有內容，則結束列表
+          if (ulMatch[3].trim() === '') {
+            e.preventDefault()
+            // 刪除空的列表項，插入換行
+            const lineStart = textBefore.lastIndexOf('\n') + 1
+            content.value = content.value.substring(0, lineStart) + content.value.substring(cursorPos)
+            setTimeout(() => {
+              textarea.value.selectionStart = textarea.value.selectionEnd = lineStart
+            }, 0)
+            handleInput()
+            return
+          }
+          e.preventDefault()
+          const indent = ulMatch[1]
+          const marker = ulMatch[2]
+          const insertion = `\n${indent}${marker} `
+          content.value = content.value.substring(0, cursorPos) + insertion + content.value.substring(cursorPos)
+          setTimeout(() => {
+            const newPos = cursorPos + insertion.length
+            textarea.value.selectionStart = textarea.value.selectionEnd = newPos
+          }, 0)
+          handleInput()
+          return
+        }
+
+        // 有序列表: "1. ", "2. " 等
+        const olMatch = currentLine.match(/^(\s*)(\d+)\.\s(.*)$/)
+        if (olMatch) {
+          // 如果當前行只有編號沒有內容，則結束列表
+          if (olMatch[3].trim() === '') {
+            e.preventDefault()
+            const lineStart = textBefore.lastIndexOf('\n') + 1
+            content.value = content.value.substring(0, lineStart) + content.value.substring(cursorPos)
+            setTimeout(() => {
+              textarea.value.selectionStart = textarea.value.selectionEnd = lineStart
+            }, 0)
+            handleInput()
+            return
+          }
+          e.preventDefault()
+          const indent = olMatch[1]
+          const nextNum = parseInt(olMatch[2]) + 1
+          const insertion = `\n${indent}${nextNum}. `
+          content.value = content.value.substring(0, cursorPos) + insertion + content.value.substring(cursorPos)
+          setTimeout(() => {
+            const newPos = cursorPos + insertion.length
+            textarea.value.selectionStart = textarea.value.selectionEnd = newPos
+          }, 0)
+          handleInput()
+          return
+        }
+
+        // 任務列表: "- [ ] " 或 "- [x] "
+        const taskMatch = currentLine.match(/^(\s*)([-*])\s\[[ x]\]\s(.*)$/)
+        if (taskMatch) {
+          if (taskMatch[3].trim() === '') {
+            e.preventDefault()
+            const lineStart = textBefore.lastIndexOf('\n') + 1
+            content.value = content.value.substring(0, lineStart) + content.value.substring(cursorPos)
+            setTimeout(() => {
+              textarea.value.selectionStart = textarea.value.selectionEnd = lineStart
+            }, 0)
+            handleInput()
+            return
+          }
+          e.preventDefault()
+          const indent = taskMatch[1]
+          const marker = taskMatch[2]
+          const insertion = `\n${indent}${marker} [ ] `
+          content.value = content.value.substring(0, cursorPos) + insertion + content.value.substring(cursorPos)
+          setTimeout(() => {
+            const newPos = cursorPos + insertion.length
+            textarea.value.selectionStart = textarea.value.selectionEnd = newPos
+          }, 0)
+          handleInput()
+          return
+        }
+      }
+
       // 快捷鍵
       if (e.ctrlKey || e.metaKey) {
         switch(e.key.toLowerCase()) {

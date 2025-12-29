@@ -42,21 +42,15 @@
               :value="provider.id"
             />
           </el-select>
-          <el-button
-            type="primary"
-            @click="queryAI"
-            :loading="loading"
-            :disabled="!selectedProviderId || items.length === 0"
-          >
-            <i class="fas fa-search"></i> 查詢 AI 建議
-          </el-button>
         </div>
         <div class="form-group" style="margin-top: 12px;">
-          <label>自定義提示（選填，最多 30 字）</label>
+          <label>自定義提示（選填，最多 100 字）</label>
           <el-input
             v-model="customPrompt"
+            type="textarea"
+            :rows="3"
             placeholder="例如：請特別注重創意性"
-            maxlength="30"
+            maxlength="100"
             show-word-limit
             :disabled="loading"
           />
@@ -131,6 +125,18 @@
           </el-collapse-item>
         </el-collapse>
 
+        <!-- 完整 Prompt（可折疊） -->
+        <el-collapse v-if="selectedQuery.fullPrompt" class="prompt-collapse">
+          <el-collapse-item name="fullPrompt">
+            <template #title>
+              <span class="prompt-title">
+                <i class="fas fa-terminal"></i> 完整 AI Prompt
+              </span>
+            </template>
+            <MarkdownViewer :content="formatPromptForDisplay(selectedQuery.fullPrompt)" />
+          </el-collapse-item>
+        </el-collapse>
+
         <ol class="ranking-preview-list">
           <li v-for="(id, index) in selectedQuery.ranking" :key="id" class="ranking-item">
             <span class="rank-badge">{{ index + 1 }}</span>
@@ -141,6 +147,15 @@
 
       <!-- 底部操作按鈕 -->
       <div class="drawer-actions">
+        <el-button
+          type="primary"
+          size="large"
+          @click="queryAI"
+          :loading="loading"
+          :disabled="!selectedProviderId || items.length === 0"
+        >
+          <i class="fas fa-search"></i> 查詢 AI 建議
+        </el-button>
         <el-button
           type="primary"
           size="large"
@@ -162,6 +177,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
+import MarkdownViewer from '@/components/MarkdownViewer.vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { getErrorMessage } from '@/utils/errorHandler'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
@@ -294,7 +310,7 @@ async function queryAI(): Promise<void> {
     const response = await httpResponse.json() as any
 
     if (response.success && response.data) {
-      // Add to history (include thinkingProcess and customPrompt if present)
+      // Add to history (include thinkingProcess, customPrompt, and fullPrompt if present)
       const queryResult: AIQueryHistoryItem = {
         queryId: response.data.queryId,
         providerId: response.data.providerId,
@@ -305,7 +321,8 @@ async function queryAI(): Promise<void> {
         createdAt: response.data.createdAt,
         itemCount: props.items.length,
         thinkingProcess: response.data.thinkingProcess,
-        customPrompt: response.data.customPrompt
+        customPrompt: response.data.customPrompt,
+        fullPrompt: response.data.fullPrompt
       }
 
       addQueryResult(queryResult)
@@ -354,6 +371,14 @@ function formatTime(timestamp: number): string {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+/**
+ * Format prompt for markdown display
+ * Wraps the entire prompt in a code block for monospace rendering
+ */
+function formatPromptForDisplay(prompt: string): string {
+  return '```\n' + prompt + '\n```'
 }
 
 /**
@@ -532,6 +557,25 @@ watch(() => props.visible, async (newVal) => {
     max-height: 300px;
     overflow-y: auto;
     font-family: inherit;
+  }
+}
+
+.prompt-collapse {
+  margin-bottom: 16px;
+
+  .prompt-title {
+    font-weight: 500;
+    color: var(--el-color-info);
+
+    i {
+      margin-right: 6px;
+    }
+  }
+
+  :deep(.markdown-viewer) {
+    margin-top: 0;
+    max-height: 400px;
+    overflow-y: auto;
   }
 }
 

@@ -107,16 +107,22 @@ export async function submitAIRankingSuggestion(
       );
     }
 
-    // Validate customPrompt length (max 30 chars)
-    if (customPrompt && customPrompt.length > 30) {
+    // Validate customPrompt length (max 100 chars)
+    if (customPrompt && customPrompt.length > 100) {
       return errorResponse(
         ERROR_CODES.VALIDATION_ERROR,
-        'Custom prompt must be 30 characters or less'
+        'Custom prompt must be 100 characters or less'
       );
     }
 
-    // Build prompts (pass customPrompt to system prompt builder)
-    const systemPrompt = await buildSystemPrompt(env.KV, rankingType, customPrompt);
+    // Fetch stage description for context
+    const stage = await env.DB.prepare(
+      `SELECT description FROM stages WHERE stageId = ?`
+    ).bind(stageId).first<{ description: string | null }>();
+    const stageDescription = stage?.description || '';
+
+    // Build prompts (pass customPrompt and stageDescription to system prompt builder)
+    const systemPrompt = await buildSystemPrompt(env.KV, rankingType, customPrompt, stageDescription);
     const userPrompt = buildUserPrompt(items, rankingType);
 
     // Call AI API
@@ -150,6 +156,7 @@ export async function submitAIRankingSuggestion(
 
     // Generate result
     const queryId = generateQueryId();
+    const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
     const result: AIRankingSuggestionResult = {
       queryId,
       providerId: provider.id,
@@ -161,7 +168,9 @@ export async function submitAIRankingSuggestion(
       // Include DeepSeek thinking process if available
       thinkingProcess: aiResponse.thinkingProcess,
       // Include custom prompt used in this query
-      customPrompt: customPrompt?.trim() || undefined
+      customPrompt: customPrompt?.trim() || undefined,
+      // Include full prompt for transparency
+      fullPrompt
     };
 
     // Audit log the AI query

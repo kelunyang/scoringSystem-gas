@@ -218,12 +218,23 @@ export interface SystemStats {
   databaseSize: number
 }
 
+/**
+ * Log Statistics Response
+ * Matches backend getLogStatistics() output format
+ */
 export interface LogStatistics {
+  /** Total number of logs in the system */
   totalLogs: number
-  errorCount: number
-  warningCount: number
-  infoCount: number
-  recentErrors: LogEntry[]
+  /** Timestamp of the newest log entry (null if no logs) */
+  newestLog: number | null
+  /**
+   * Database identifier
+   * @note Returns "D1 Database" in Cloudflare Workers environment
+   * @deprecated Legacy field name from GAS migration, kept for compatibility
+   */
+  spreadsheetName: string
+  /** Count of logs by level (info, warning, error, critical, etc.) */
+  levelCounts: Record<string, number>
 }
 
 export interface LogEntry {
@@ -530,6 +541,25 @@ export interface UpdatePropertyRequest {
   value: string
 }
 
+/**
+ * Batch update properties request
+ * Used by POST /admin/properties/update
+ */
+export interface UpdatePropertiesRequest {
+  properties: Record<string, string | number | boolean | undefined>
+}
+
+/**
+ * Properties update response
+ */
+export interface UpdatePropertiesResponse {
+  changes: Array<{
+    field: string
+    oldValue: unknown
+    newValue: unknown
+  }>
+}
+
 export interface ResetPropertyRequest {
   key: string
 }
@@ -559,7 +589,17 @@ export interface UpdateSmtpConfigRequest {
 }
 
 export interface TestSmtpConnectionRequest {
-  testEmail: string
+  /** Optional SMTP config to test (if not provided, uses stored config) */
+  config?: {
+    host: string
+    port: number
+    username: string
+    password: string
+    fromName?: string
+    fromEmail: string
+  }
+  /** Optional test email recipient */
+  testEmail?: string
 }
 
 export interface TestSmtpConnectionResponse {

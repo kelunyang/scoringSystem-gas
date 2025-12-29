@@ -13,10 +13,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import * as d3 from 'd3'
 import { useAvatar } from '@/composables/useAvatar'
+import { usePhysicsAnimation, type BodyConfig } from '@/composables/usePhysicsAnimation'
+import { useInViewport } from '@/composables/useInViewport'
 import EmptyState from '@/components/shared/EmptyState.vue'
 
 interface Voter {
@@ -55,6 +57,10 @@ const props = withDefaults(defineProps<Props>(), {
 const { getVoterAvatarUrl } = useAvatar()
 
 const chartContainer: Ref<HTMLElement | null> = ref(null)
+
+// 視域偵測（進入視域時才啟動動畫）
+const { hasEntered } = useInViewport(chartContainer, { once: true })
+
 const svg: Ref<any> = ref(null)
 const g: Ref<any> = ref(null)
 const yScale: Ref<any> = ref(null)
@@ -68,23 +74,80 @@ const hasOpposeVotes: ComputedRef<boolean> = computed(() => {
   return Object.values(props.voteData).some(v => v.oppose && v.oppose.length > 0)
 })
 
+// 物理動畫狀態（俄羅斯方塊墜落效果）
+const physics = usePhysicsAnimation({
+  gravity: { x: 0, y: 1 },  // 垂直重力（向下墜落）
+  restitution: 0.4,  // 較低彈性，快速穩定
+  friction: 0.3,
+  frictionAir: 0.05,
+  velocityThreshold: 0.3,
+  settleDelay: 100
+})
+
+// 追蹤動畫進度
+const animationPhase = ref<'idle' | 'animating' | 'settled'>('idle')
+const avatarElements = ref<Map<string, any>>(new Map())  // 存儲 D3 avatar 元素
+let animationFrameId: number | null = null
+let chartDimensions: {
+  margin: any
+  width: number
+  height: number
+  avatarSize: number
+  columnCenters: Map<string, { supportX: number; opposeX: number | null }>
+} | null = null
+
+// 版本順序（用於動畫排序：從舊到新）
+const versionOrderForAnimation = computed(() => {
+  return Object.keys(props.voteData)  // 原始順序：舊到新
+})
+
+// 資料變更時（僅當已進入視域後才重新渲染）
 watch(() => props.voteData, () => {
-  if (hasData.value) {
+  if (hasData.value && hasEntered.value) {
     nextTick(() => {
-      renderChart()
+      stopAnimation()
+      physics.cleanup()
+      avatarElements.value.clear()
+      animationPhase.value = 'idle'
+      // 延遲等待 DOM 更新穩定
+      setTimeout(() => {
+        if (chartContainer.value && chartContainer.value.offsetWidth > 0) {
+          renderChart()
+          setTimeout(() => {
+            startPhysicsAnimation()
+          }, 150)
+        }
+      }, 200)
     })
   }
 }, { deep: true })
 
-onMounted(() => {
-  if (hasData.value) {
+// 進入視域時才啟動渲染和動畫（只播一次）
+// 注意：當元素被 v-if 掛載時，可能立即觸發 hasEntered
+// 需要等待 DOM 穩定後再初始化，避免容器尺寸為 0
+watch(hasEntered, (entered) => {
+  if (entered && hasData.value && animationPhase.value === 'idle') {
     nextTick(() => {
-      renderChart()
+      // 延遲等待容器尺寸穩定（v-if 切換時需要更長時間）
+      setTimeout(() => {
+        // 確認容器有有效尺寸才渲染
+        if (chartContainer.value && chartContainer.value.offsetWidth > 0) {
+          renderChart()
+          // 再延遲後開始物理動畫
+          setTimeout(() => {
+            startPhysicsAnimation()
+          }, 150)
+        } else {
+          console.warn('[VoteTrendTsumTsumChart] Container not ready, skipping animation')
+        }
+      }, 200)
     })
   }
-})
+}, { immediate: true })
 
 onBeforeUnmount(() => {
+  stopAnimation()
+  physics.cleanup()
   cleanupTooltips()
 })
 
@@ -129,6 +192,15 @@ function renderChart(): void {
         .range([height, 0])
 
       const avatarSize = 32
+
+      // 初始化 chartDimensions（稍後存儲每個版本的柱子中心位置）
+      chartDimensions = {
+        margin,
+        width,
+        height,
+        avatarSize,
+        columnCenters: new Map()
+      }
 
       // 繪製Y軸
       const yAxis = d3.axisLeft(yScale.value)
@@ -190,12 +262,15 @@ function renderChart(): void {
           opposeX = null
         }
 
+        // 存儲柱子中心位置（供物理動畫使用）
+        chartDimensions!.columnCenters.set(versionKey, { supportX, opposeX })
+
         // 繪製支持柱
-        drawBar(support, supportX, avatarSize, 'support')
+        drawBar(support, supportX, avatarSize, 'support', versionKey)
 
         // 繪製反對柱（如果有）
         if (hasOppose && oppose) {
-          drawBar(oppose, opposeX ?? 0, avatarSize, 'oppose')
+          drawBar(oppose, opposeX ?? 0, avatarSize, 'oppose', versionKey)
         }
 
         // 版本標籤居中顯示（在版本band的中心）
@@ -223,11 +298,7 @@ function renderChart(): void {
           .attr('fill', '#909399')
           .text(voteCountText)
 
-        // 檢查是否需要煙火（僅在最新版本的支持柱頂部發射）
-        const isLatestVersion = (vIndex === versionKeys.length - 1)
-        if (isLatestVersion) {
-          checkAndLaunchFireworks(support, oppose || [], supportX, vIndex)
-        }
+        // 煙火效果將在動畫穩定後觸發（見 triggerFireworksForLatestVersion）
       })
 
       // 繪製共識線（如果需要）
@@ -268,60 +339,271 @@ function renderChart(): void {
         .text(props.chartTitle)
     }
 
-function drawBar(voters: Voter[], centerX: number, avatarSize: number, type: string): void {
-      const borderColor = type === 'support' ? '#67c23a' : '#800000'
+function drawBar(voters: Voter[], centerX: number, avatarSize: number, type: string, versionKey: string): void {
+  const borderColor = type === 'support' ? '#67c23a' : '#800000'
+  const avatarRadius = avatarSize / 2
 
-      voters.forEach((voter, index) => {
-        const y = yScale.value(index + 0.5) // 從下往上堆疊
+  voters.forEach((voter, index) => {
+    // 計算最終目標位置（堆疊後的位置）
+    const targetY = yScale.value(index + 0.5)
 
-        const avatarGroup = g.value.append('g')
-          .attr('class', 'vote-avatar-group')
-          .attr('transform', `translate(${centerX - avatarSize / 2}, ${y - avatarSize / 2})`)
-          .style('cursor', 'pointer')
+    // 初始位置：從圖表上方開始（螢幕外）
+    const startY = -(chartDimensions?.margin.top || 40) - (index * 20) - 50
 
-        // Avatar 圓形背景
-        avatarGroup.append('circle')
-          .attr('cx', avatarSize / 2)
-          .attr('cy', avatarSize / 2)
-          .attr('r', avatarSize / 2)
-          .attr('fill', '#fff')
-          .attr('stroke', borderColor)
-          .attr('stroke-width', 2)
+    const avatarGroup = g.value.append('g')
+      .attr('class', 'vote-avatar-group physics-avatar')
+      .attr('data-id', `${type}::${versionKey}::${index}`)
+      .attr('transform', `translate(${centerX - avatarRadius}, ${startY - avatarRadius})`)
+      .style('cursor', 'pointer')
+      .style('opacity', 0)
 
-        // Avatar 圖片
-        const avatarUrl = getVoterAvatarUrl(voter)
-        avatarGroup.append('image')
-          .attr('xlink:href', avatarUrl)
-          .attr('x', 2)
-          .attr('y', 2)
-          .attr('width', avatarSize - 4)
-          .attr('height', avatarSize - 4)
-          .attr('clip-path', 'circle(14px at 50% 50%)')
+    // Avatar 圓形背景
+    avatarGroup.append('circle')
+      .attr('cx', avatarRadius)
+      .attr('cy', avatarRadius)
+      .attr('r', avatarRadius)
+      .attr('fill', '#fff')
+      .attr('stroke', borderColor)
+      .attr('stroke-width', 2)
 
-        // Hover 效果
+    // Avatar 圖片
+    const avatarUrl = getVoterAvatarUrl(voter)
+    avatarGroup.append('image')
+      .attr('xlink:href', avatarUrl)
+      .attr('x', 2)
+      .attr('y', 2)
+      .attr('width', avatarSize - 4)
+      .attr('height', avatarSize - 4)
+      .attr('clip-path', `circle(${avatarRadius - 2}px at 50% 50%)`)
+
+    // 存儲元素引用和目標位置
+    // 使用 :: 作為分隔符，避免與 UUID 中的 - 衝突
+    const bodyId = `${type}::${versionKey}::${index}`
+    avatarElements.value.set(bodyId, {
+      element: avatarGroup,
+      targetX: centerX,
+      targetY,
+      stackIndex: index,
+      voter,
+      type
+    })
+
+    // Hover 效果（在動畫穩定後啟用）
+    avatarGroup
+      .on('mouseenter', (event: MouseEvent) => {
+        if (animationPhase.value !== 'settled') return
+        const currentTransform = avatarGroup.attr('transform')
         avatarGroup
-          .on('mouseenter', (event: any) => {
-            d3.select(event.currentTarget)
-              .transition().duration(200)
-              .attr('transform', `translate(${centerX - avatarSize / 2}, ${y - avatarSize / 2}) scale(1.15)`)
-
-            showTooltip(event, voter, type)
-          })
-          .on('mouseleave', (event: any) => {
-            d3.select(event.currentTarget)
-              .transition().duration(200)
-              .attr('transform', `translate(${centerX - avatarSize / 2}, ${y - avatarSize / 2}) scale(1)`)
-
-            hideTooltip()
-          })
+          .transition().duration(200)
+          .attr('transform', currentTransform + ' scale(1.15)')
+        showTooltip(event, voter, type)
       })
+      .on('mouseleave', () => {
+        if (animationPhase.value !== 'settled') return
+        // 使用存儲的目標位置而非物理引擎位置（因為 restoreStaticLayout 已移到目標位置）
+        avatarGroup
+          .transition().duration(200)
+          .attr('transform', `translate(${centerX - avatarRadius}, ${targetY - avatarRadius})`)
+        hideTooltip()
+      })
+  })
+}
+
+/**
+ * 初始化並啟動物理動畫
+ * 俄羅斯方塊式墜落效果：從舊版本到新版本依序墜落
+ */
+function startPhysicsAnimation(): void {
+  if (!chartDimensions || avatarElements.value.size === 0) return
+
+  animationPhase.value = 'animating'
+
+  // 初始化物理引擎
+  physics.initEngine()
+
+  const { height, avatarSize } = chartDimensions
+  const avatarRadius = avatarSize / 2
+
+  // 為每個柱子創建底部地板（不需要左右邊界牆，avatar 直接垂直墜落）
+  chartDimensions.columnCenters.forEach(({ supportX, opposeX }) => {
+    // 支持柱地板
+    physics.addWall(supportX, height + 5, avatarSize + 20, 10, 0.3)
+
+    // 反對柱地板（如果存在）
+    if (opposeX !== null) {
+      physics.addWall(opposeX, height + 5, avatarSize + 20, 10, 0.3)
+    }
+  })
+
+  // 收集所有物體配置，按版本順序組織
+  const bodiesByVersion: Map<string, BodyConfig[]> = new Map()
+
+  avatarElements.value.forEach((data, bodyId) => {
+    // 使用 :: 分隔符解析 bodyId（格式：type::versionKey::index）
+    const [, versionKey, indexStr] = bodyId.split('::')
+    const index = parseInt(indexStr)
+
+    if (!bodiesByVersion.has(versionKey)) {
+      bodiesByVersion.set(versionKey, [])
     }
 
-function checkAndLaunchFireworks(support: Voter[], oppose: Voter[], centerX: number, versionIndex: number): void {
-  // 完全依賴後端返回的 status，只有 approved 才放煙火
-  if (props.versionStatuses && props.versionStatuses[versionIndex] === 'approved') {
-    const topY = yScale.value(support.length) // 柱頂位置
-    launchFireworks(centerX, topY)
+    // 從上方不同高度開始墜落（錯開避免重疊）
+    const startY = -(chartDimensions!.margin.top) - 50 - index * 25
+
+    bodiesByVersion.get(versionKey)!.push({
+      id: bodyId,
+      x: data.targetX,
+      y: startY,
+      radius: avatarRadius,
+      // 給予初始向下速度，避免物理引擎誤判為已穩定而提前停止
+      velocity: { x: 0, y: 2 }
+      // 不設定 collisionFilter，讓頭像互相碰撞以產生俄羅斯方塊堆疊效果
+    })
+  })
+
+  // 依照版本順序（從舊到新）添加物體
+  const versions = versionOrderForAnimation.value
+  let delayAccumulator = 0
+  const versionDelay = 400  // 每個版本間隔 400ms（較長以看清墜落效果）
+
+  versions.forEach((versionKey, versionIndex) => {
+    const bodies = bodiesByVersion.get(versionKey) || []
+
+    setTimeout(() => {
+      // 添加該版本的所有物體（依序稍微錯開）
+      bodies.forEach((config, bodyIndex) => {
+        setTimeout(() => {
+          physics.addBody(config)
+
+          // 顯示對應的 D3 元素
+          const avatarData = avatarElements.value.get(config.id)
+          if (avatarData) {
+            avatarData.element
+              .transition()
+              .duration(100)
+              .style('opacity', 1)
+          }
+        }, bodyIndex * 80)  // 每個頭像間隔 80ms 墜落
+      })
+
+      // 最後一個版本添加完成後，設置穩定回調
+      if (versionIndex === versions.length - 1) {
+        // 延遲足夠時間讓所有物體都被添加
+        setTimeout(() => {
+          physics.onSettled(() => {
+            animationPhase.value = 'settled'
+            stopAnimation()
+
+            // 恢復靜態排版
+            restoreStaticLayout()
+
+            // 檢查是否需要觸發煙火
+            triggerFireworksForLatestVersion()
+          })
+        }, bodies.length * 80 + 100)
+      }
+    }, delayAccumulator)
+
+    delayAccumulator += versionDelay
+  })
+
+  // 啟動物理引擎
+  physics.start()
+
+  // 啟動動畫循環
+  startAnimationLoop()
+
+  // === 動態超時安全機制 ===
+  // 計算版本數和最大投票數
+  const versionCount = Object.keys(props.voteData).length
+  const maxVotesPerVersion = Math.max(
+    ...Object.values(props.voteData).map(v =>
+      (v.support?.length || 0) + (v.oppose?.length || 0)
+    ),
+    1  // 避免空陣列時 Math.max 返回 -Infinity
+  )
+
+  // 動態超時：基礎 2000ms + 每版本 600ms + 每票 200ms
+  const dynamicTimeout = 2000 + (versionCount * 600) + (maxVotesPerVersion * 200)
+
+  setTimeout(() => {
+    if (animationPhase.value === 'animating') {
+      console.warn(`[VoteTrendTsumTsumChart] Animation timeout after ${dynamicTimeout}ms, forcing settle`)
+      animationPhase.value = 'settled'
+      stopAnimation()
+      restoreStaticLayout()
+    }
+  }, dynamicTimeout)
+}
+
+/**
+ * 動畫循環：更新 D3 元素位置
+ */
+function startAnimationLoop(): void {
+  const updateFrame = () => {
+    if (animationPhase.value !== 'animating') return
+
+    const avatarRadius = (chartDimensions?.avatarSize || 32) / 2
+
+    // 更新每個 D3 元素的位置
+    avatarElements.value.forEach((data, bodyId) => {
+      const pos = physics.getPosition(bodyId)
+      if (pos) {
+        data.element.attr('transform', `translate(${pos.x - avatarRadius}, ${pos.y - avatarRadius})`)
+      }
+    })
+
+    animationFrameId = requestAnimationFrame(updateFrame)
+  }
+
+  animationFrameId = requestAnimationFrame(updateFrame)
+}
+
+/**
+ * 停止動畫循環
+ */
+function stopAnimation(): void {
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId)
+    animationFrameId = null
+  }
+}
+
+/**
+ * 恢復靜態排版：將所有 avatar 平滑移動到目標位置
+ */
+function restoreStaticLayout(): void {
+  if (!chartDimensions) return
+
+  const avatarRadius = chartDimensions.avatarSize / 2
+
+  avatarElements.value.forEach((data) => {
+    data.element
+      .transition()
+      .duration(300)
+      .ease(d3.easeCubicOut)
+      .attr('transform', `translate(${data.targetX - avatarRadius}, ${data.targetY - avatarRadius})`)
+  })
+}
+
+/**
+ * 最新版本通過時觸發煙火
+ */
+function triggerFireworksForLatestVersion(): void {
+  if (!chartDimensions) return
+
+  const versionKeys = Object.keys(props.voteData)
+  const latestVersionIndex = versionKeys.length - 1
+  const latestVersionKey = versionKeys[latestVersionIndex]
+
+  // 檢查最新版本是否通過（status === 'approved'）
+  if (props.versionStatuses && props.versionStatuses[latestVersionIndex] === 'approved') {
+    const columnCenter = chartDimensions.columnCenters.get(latestVersionKey)
+    if (columnCenter) {
+      const { support } = props.voteData[latestVersionKey]
+      const topY = yScale.value(support.length)
+      launchFireworks(columnCenter.supportX, topY)
+    }
   }
 }
 
@@ -516,6 +798,7 @@ function formatDateTime(timestamp: number | undefined): string {
 
 .chart-container {
   width: 100%;
+  isolation: isolate; /* 建立獨立 stacking context，隔離 z-index */
 }
 
 .no-data {

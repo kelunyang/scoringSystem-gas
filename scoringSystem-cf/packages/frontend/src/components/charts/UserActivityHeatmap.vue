@@ -115,7 +115,7 @@ import { formatDateRange as formatRange } from '@/utils/date'
 import { CHART_CONFIG } from '@/constants/chartConfig'
 import EmptyState from '@/components/shared/EmptyState.vue'
 
-interface Props {
+export interface Props {
   userEmail: string
   displayMode?: 'compact' | 'full'
   compactDays?: number
@@ -136,13 +136,13 @@ const props = withDefaults(defineProps<Props>(), {
   enableAnimation: true
 })
 
-interface DayClickPayload {
+export interface DayClickPayload {
   date: string
   stats: ActivityStats
   events: any[]
 }
 
-interface DateChangePayload {
+export interface DateChangePayload {
   startDate: string
   endDate: string
 }
@@ -412,15 +412,17 @@ function renderChart() {
     .append<SVGSVGElement>('svg')
     .attr('width', layout.totalWidth)
     .attr('height', layout.totalHeight)
-    .attr('class', 'heatmap-svg')
+    .attr('class', 'heatmap-svg') as any
 
   // Create tooltip
-  tooltip.value = markRaw(createTooltip(chartContainerRef.value))
+  tooltip.value = markRaw(createTooltip()) as any
 
   // Render chart elements
-  renderCalendarCells(d3, svg.value, datesToRender, dailyStats, layout, cellSize, cellPadding)
-  renderMonthLabels(d3, svg.value, datesToRender, layout, cellSize, cellPadding)
-  renderWeekdayLabels(d3, svg.value, datesToRender, layout, cellSize, cellPadding)
+  if (svg.value) {
+    renderCalendarCells(d3, svg.value, datesToRender, dailyStats, layout, cellSize, cellPadding)
+    renderMonthLabels(d3, svg.value, datesToRender, layout, cellSize, cellPadding)
+    renderWeekdayLabels(d3, svg.value, datesToRender, layout, cellSize, cellPadding)
+  }
 }
 
 /**

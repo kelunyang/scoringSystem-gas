@@ -76,7 +76,7 @@
             <span class="filter-label">顯示已停用：</span>
             <el-switch
               :model-value="showInactive"
-              @update:model-value="$emit('update:showInactive', $event)"
+              @update:model-value="(val: string | number | boolean) => emit('update:showInactive', Boolean(val))"
               inline-prompt
               active-text="顯示"
               inactive-text="隱藏"
@@ -270,17 +270,20 @@ const { filteredGroups } = useGroupFiltering(
 
 // Export configuration
 const exportConfig = computed(() => ({
-  data: filteredGroups.value,
+  data: filteredGroups.value as unknown as Record<string, unknown>[],
   filename: '專案群組列表',
   headers: ['群組ID', '群組名稱', '狀態', '組員數', '組長數', '允許成員變更'],
-  rowMapper: (group: ProjectGroup) => [
-    group.groupId,
-    group.groupName,
-    group.status === 'active' ? '活躍' : '停用',
-    group.memberCount || 0,
-    group.leaderCount || 0,
-    group.allowChange ? '是' : '否'
-  ]
+  rowMapper: (item: Record<string, unknown>) => {
+    const group = item as unknown as ProjectGroup
+    return [
+      group.groupId,
+      group.groupName,
+      group.status === 'active' ? '活躍' : '停用',
+      group.memberCount || 0,
+      group.leaderCount || 0,
+      group.allowChange ? '是' : '否'
+    ] as (string | number)[]
+  }
 }))
 
 // Get available users for a group (excluding existing members)

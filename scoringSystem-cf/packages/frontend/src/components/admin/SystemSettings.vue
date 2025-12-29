@@ -268,11 +268,13 @@ const loadPropertiesConfig = async (): Promise<void> => {
     if (response.success && response.data) {
       console.log('載入的配置資料:', response.data)
 
-      // 直接替換配置值（保持 Vue 3 響應式）
-      propertiesConfig.value = response.data
+      // 後端 getAllConfigValues() 返回 Record<string, any> 物件格式
+      // 例如: { SMTP_HOST: "smtp.gmail.com", SMTP_PORT: 587, ... }
+      // 直接使用，不需要轉換
+      propertiesConfig.value = response.data as unknown as PropertiesConfig
 
       // 深拷貝原始配置
-      originalPropertiesConfig.value = JSON.parse(JSON.stringify(response.data))
+      originalPropertiesConfig.value = JSON.parse(JSON.stringify(response.data)) as PropertiesConfig
 
       console.log('更新後的 propertiesConfig:', JSON.parse(JSON.stringify(propertiesConfig.value)))
       console.log('更新後的 originalPropertiesConfig:', JSON.parse(JSON.stringify(originalPropertiesConfig.value)))
@@ -319,10 +321,10 @@ const savePropertiesConfig = async (): Promise<void> => {
       ElMessage.success(`配置已儲存 (${changesCount} 個欄位已更新)`)
     } else {
       // 處理特定錯誤碼
-      if (response.errorCode === 'NO_CHANGES') {
+      if (response.error?.code === 'NO_CHANGES') {
         ElMessage.warning('沒有可更新的欄位')
       } else {
-        ElMessage.error(`儲存失敗: ${response.error || '未知錯誤'}`)
+        ElMessage.error(`儲存失敗: ${response.error?.message || '未知錯誤'}`)
       }
     }
   } catch (error) {
@@ -354,8 +356,7 @@ const confirmResetProperties = async (): Promise<void> => {
 const resetProperties = async (): Promise<void> => {
   resettingProperties.value = true
   try {
-
-    const response = await adminApi.properties.reset({})
+    const response = await adminApi.properties.reset()
 
     if (response.success) {
       await loadPropertiesConfig()
@@ -1025,6 +1026,33 @@ onBeforeUnmount(() => {
 
 :deep(.el-drawer__close-btn:hover) {
   color: #ecf0f1 !important;
+}
+
+/* AI Providers Drawer Styles */
+.drawer-navy :deep(.el-drawer__header) {
+  background: #2c3e50 !important;
+  color: white !important;
+  padding: 20px 30px !important;
+  margin-bottom: 0 !important;
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+}
+
+.drawer-header i {
+  font-size: 20px;
+}
+
+.drawer-content {
+  padding: 30px;
+  background: #f5f7fa;
+  min-height: calc(100% - 60px);
 }
 
 /* System Title Preview Styles */

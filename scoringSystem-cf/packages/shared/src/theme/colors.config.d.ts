@@ -82,6 +82,26 @@ export declare const STAGE_COLORS: {
             readonly end: "#1E8449";
         };
     };
+    readonly paused: {
+        readonly background: "#e67e22";
+        readonly text: "#ffffff";
+        readonly contrast: 4.6;
+        readonly description: "已暫停 - 深橙色（WCAG AA 合規）";
+        readonly gradient: {
+            readonly start: "#F5B041";
+            readonly end: "#CA6F1E";
+        };
+    };
+    readonly settling: {
+        readonly background: "#8e44ad";
+        readonly text: "#ffffff";
+        readonly contrast: 5.8;
+        readonly description: "結算中 - 紫色（WCAG AA 合規）";
+        readonly gradient: {
+            readonly start: "#BB8FCE";
+            readonly end: "#6C3483";
+        };
+    };
 };
 /**
  * 階段顯示狀態類型（用於 UI 顯示）

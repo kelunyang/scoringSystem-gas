@@ -76,6 +76,8 @@ interface UserGroupRow {
   groupId: string;
   groupName: string;
   role: 'leader' | 'member';
+  userEmail: string;
+  isActive: number;
 }
 
 interface StageRow {

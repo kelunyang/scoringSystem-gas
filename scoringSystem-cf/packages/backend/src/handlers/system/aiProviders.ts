@@ -9,11 +9,13 @@ import { successResponse, errorResponse, ERROR_CODES } from '../../utils/respons
 import {
   getAIProvidersPublic,
   getAIProviders,
+  getAIProviderById,
   addAIProvider,
   updateAIProvider,
   deleteAIProvider,
   getAIRankingPromptConfig,
   saveAIRankingPromptConfig,
+  testAIProviderConnection,
   DEFAULT_SUBMISSION_PROMPT,
   DEFAULT_COMMENT_PROMPT
 } from '../../utils/ai-provider';
@@ -264,6 +266,72 @@ export async function updateAIPromptConfig(
     return errorResponse(
       ERROR_CODES.INTERNAL_ERROR,
       'Failed to update AI prompt configuration'
+    );
+  }
+}
+
+/**
+ * Test AI provider connection
+ *
+ * @param env - Cloudflare Workers environment
+ * @param providerId - Provider ID to test
+ * @returns Test result with response time or error
+ */
+export async function testAIProviderHandler(
+  env: Env,
+  providerId: string
+): Promise<Response> {
+  try {
+    if (!providerId) {
+      return errorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        'Provider ID is required'
+      );
+    }
+
+    // Get provider with apiKey
+    const provider = await getAIProviderById(env.KV, providerId);
+
+    if (!provider) {
+      return errorResponse(
+        ERROR_CODES.NOT_FOUND,
+        'AI provider not found'
+      );
+    }
+
+    if (!provider.enabled) {
+      return errorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        'AI provider is disabled'
+      );
+    }
+
+    // Test connection
+    const result = await testAIProviderConnection(
+      provider.baseUrl,
+      provider.apiKey,
+      provider.model
+    );
+
+    if (result.success) {
+      return successResponse({
+        providerId: provider.id,
+        providerName: provider.name,
+        model: provider.model,
+        responseTimeMs: result.responseTimeMs,
+        message: result.message
+      });
+    } else {
+      return errorResponse(
+        'AI_CONNECTION_FAILED',
+        result.error || result.message
+      );
+    }
+  } catch (error) {
+    console.error('Test AI provider error:', error);
+    return errorResponse(
+      ERROR_CODES.INTERNAL_ERROR,
+      'Failed to test AI provider connection'
     );
   }
 }

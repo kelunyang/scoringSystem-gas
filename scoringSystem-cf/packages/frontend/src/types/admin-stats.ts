@@ -3,6 +3,8 @@
  * 用於 SystemSettings 和相關的統計數據管理
  */
 
+import type { LogStatistics } from '@repo/shared/types/admin'
+
 /**
  * 系統統計數據
  */
@@ -73,17 +75,10 @@ export interface InvitationCode {
 
 /**
  * 日誌統計數據
+ * @deprecated Use `LogStatistics` from `@repo/shared/types/admin` instead.
+ * This type is kept for backward compatibility only.
  */
-export interface LogStats {
-  /** 總日誌數 */
-  totalLogs: number
-  /** 最新日誌時間 */
-  newestLog: number | null
-  /** 試算表名稱 */
-  spreadsheetName: string
-  /** 各等級的日誌數量 */
-  levelCounts: Record<string, number>
-}
+export type LogStats = LogStatistics
 
 /**
  * 系統日誌項目
@@ -140,5 +135,5 @@ export interface AllStats {
   /** 邀請碼統計 */
   invitations: InvitationStats
   /** 日誌統計 */
-  logs: LogStats
+  logs: LogStatistics
 }

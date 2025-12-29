@@ -49,6 +49,9 @@ const JSON_INSTRUCTION = `
 /** Default AI API timeout in milliseconds */
 const DEFAULT_AI_TIMEOUT_MS = 60000; // 60 seconds
 
+/** Extended timeout for reasoner models (5 minutes) */
+const REASONER_TIMEOUT_MS = 300000; // 5 minutes
+
 /** Providers that don't support response_format: { type: 'json_object' } */
 const PROVIDERS_WITHOUT_JSON_MODE = ['gemini', 'google', 'generativelanguage'];
 
@@ -72,6 +75,102 @@ function supportsJsonMode(baseUrl: string): boolean {
  */
 function isDeepSeekProvider(baseUrl: string): boolean {
   return baseUrl.toLowerCase().includes('deepseek');
+}
+
+/**
+ * Check if model is a reasoner model (requires streaming and extended timeout)
+ * DeepSeek Reasoner models include deepseek-reasoner, deepseek-r1, etc.
+ *
+ * @param model - Model name
+ * @returns true if model is a reasoner model
+ */
+function isReasonerModel(model: string): boolean {
+  const lowerModel = model.toLowerCase();
+  return lowerModel.includes('reasoner') || lowerModel.includes('-r1');
+}
+
+/**
+ * Check if provider is Azure OpenAI (requires different auth header)
+ * Azure uses 'api-key' header instead of 'Authorization: Bearer'
+ *
+ * @param baseUrl - Provider's base URL
+ * @returns true if provider is Azure OpenAI
+ */
+function isAzureOpenAI(baseUrl: string): boolean {
+  const lower = baseUrl.toLowerCase();
+  return lower.includes('.openai.azure.com') ||
+         lower.includes('.cognitiveservices.azure.com');
+}
+
+/**
+ * Parse Azure OpenAI URL to extract host and api-version
+ * User provides full Azure URL like: https://xxx.cognitiveservices.azure.com/openai/responses?api-version=2025-04-01-preview
+ * We extract the host and api-version to construct the correct chat/completions endpoint
+ *
+ * @param baseUrl - User-provided Azure URL
+ * @returns Object with host and apiVersion
+ */
+function parseAzureUrl(baseUrl: string): { host: string; apiVersion: string } {
+  try {
+    const url = new URL(baseUrl);
+    const host = `${url.protocol}//${url.host}`;
+    const apiVersion = url.searchParams.get('api-version') || '2024-12-01-preview';
+    return { host, apiVersion };
+  } catch {
+    // If URL parsing fails, return as-is with default api-version
+    const hostPart = baseUrl.split('?')[0].replace(/\/+$/, '');
+    return { host: hostPart, apiVersion: '2024-12-01-preview' };
+  }
+}
+
+/**
+ * Build authentication headers based on provider type
+ *
+ * @param baseUrl - Provider's base URL
+ * @param apiKey - API key
+ * @returns Headers object with appropriate auth header
+ */
+function buildAuthHeaders(baseUrl: string, apiKey: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (isAzureOpenAI(baseUrl)) {
+    headers['api-key'] = apiKey;
+  } else {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  }
+
+  return headers;
+}
+
+/**
+ * Build API endpoint URL based on provider type
+ * Azure: parse user's full URL to extract host and api-version, then construct chat/completions endpoint
+ * Standard: append /chat/completions to baseUrl
+ *
+ * @param baseUrl - Provider's base URL (for Azure: full URL with api-version param)
+ * @param model - Model name (used as deployment name for Azure)
+ * @returns Full API endpoint URL
+ */
+function buildApiUrl(baseUrl: string, model?: string): string {
+  if (isAzureOpenAI(baseUrl)) {
+    // If user already included /chat/completions, use as-is (backwards compatibility)
+    if (baseUrl.includes('/chat/completions')) {
+      return baseUrl;
+    }
+
+    // Parse user's Azure URL to extract host and api-version
+    // User provides: https://xxx.cognitiveservices.azure.com/openai/responses?api-version=2025-04-01-preview
+    // We construct: https://xxx.cognitiveservices.azure.com/openai/deployments/{model}/chat/completions?api-version=2025-04-01-preview
+    const { host, apiVersion } = parseAzureUrl(baseUrl);
+    return `${host}/openai/deployments/${model}/chat/completions?api-version=${apiVersion}`;
+  }
+
+  // Standard OpenAI-compatible: append /chat/completions
+  return baseUrl.endsWith('/')
+    ? `${baseUrl}chat/completions`
+    : `${baseUrl}/chat/completions`;
 }
 
 /**
@@ -273,13 +372,15 @@ export async function saveAIRankingPromptConfig(
  *
  * @param kv - KVNamespace instance
  * @param rankingType - 'submission' or 'comment'
- * @param userCustomPrompt - Optional user-provided custom prompt (max 30 chars)
+ * @param userCustomPrompt - Optional user-provided custom prompt (max 100 chars)
+ * @param stageDescription - Optional stage description to provide context
  * @returns Complete system prompt with JSON instruction
  */
 export async function buildSystemPrompt(
   kv: KVNamespace,
   rankingType: 'submission' | 'comment',
-  userCustomPrompt?: string
+  userCustomPrompt?: string,
+  stageDescription?: string
 ): Promise<string> {
   const config = await getAIRankingPromptConfig(kv);
 
@@ -300,6 +401,11 @@ export async function buildSystemPrompt(
     (rankingType === 'submission' ? DEFAULT_SUBMISSION_PROMPT : DEFAULT_COMMENT_PROMPT);
 
   let finalPrompt = basePrompt;
+
+  // Append stage description if provided
+  if (stageDescription && stageDescription.trim()) {
+    finalPrompt += `\n\n本階段中，所有學生拿到的指示為：\n---\n${stageDescription.trim()}\n---`;
+  }
 
   // Append user's custom prompt if provided
   if (userCustomPrompt && userCustomPrompt.trim()) {
@@ -358,41 +464,55 @@ interface DeepSeekMessage {
 }
 
 /**
- * Call OpenAI-compatible API
+ * DeepSeek streaming delta with reasoning_content
+ */
+interface DeepSeekStreamDelta {
+  role?: string;
+  content?: string;
+  reasoning_content?: string;
+}
+
+/**
+ * SSE stream chunk structure
+ */
+interface SSEStreamChunk {
+  choices?: Array<{
+    delta?: DeepSeekStreamDelta;
+    finish_reason?: string | null;
+  }>;
+}
+
+/**
+ * Call OpenAI-compatible API with streaming for reasoner models
+ * Uses SSE to handle long-running reasoning tasks with keep-alive support
  *
  * @param baseUrl - API base URL
  * @param apiKey - API key
  * @param model - Model name
  * @param systemPrompt - System prompt
  * @param userPrompt - User prompt
- * @param timeoutMs - Timeout in milliseconds (default 60000)
+ * @param timeoutMs - Timeout in milliseconds
  * @returns Parsed AI ranking response
  */
-export async function callAIProvider(
+async function callAIProviderStreaming(
   baseUrl: string,
   apiKey: string,
   model: string,
   systemPrompt: string,
   userPrompt: string,
-  timeoutMs: number = DEFAULT_AI_TIMEOUT_MS
+  timeoutMs: number
 ): Promise<AIRankingJsonResponse> {
-  // Ensure baseUrl ends properly for chat completions endpoint
-  const url = baseUrl.endsWith('/')
-    ? `${baseUrl}chat/completions`
-    : `${baseUrl}/chat/completions`;
+  // Build URL (Azure vs Standard) - pass model for Azure deployment name
+  const url = buildApiUrl(baseUrl, model);
 
-  // Build request body with conditional response_format
-  const requestBody: OpenAIChatCompletionRequest = {
+  // Build request body for streaming (no response_format for reasoner)
+  const requestBody = {
     model,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }
     ],
-    temperature: 0.3,
-    // Only include response_format for providers that support it
-    ...(supportsJsonMode(baseUrl) && {
-      response_format: { type: 'json_object' }
-    })
+    stream: true
   };
 
   // Setup timeout using AbortController
@@ -402,10 +522,155 @@ export async function callAIProvider(
   try {
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
+      headers: buildAuthHeaders(baseUrl, apiKey),
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('AI API streaming error:', response.status, errorText);
+      throw new Error(`AI API error: ${response.status} - ${errorText}`);
+    }
+
+    if (!response.body) {
+      throw new Error('AI API returned no response body for streaming');
+    }
+
+    // Parse SSE stream
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    let reasoningContent = '';
+    let content = '';
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+
+      // Keep the last incomplete line in buffer
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+
+        // Skip empty lines and keep-alive comments
+        if (trimmedLine === '' || trimmedLine.startsWith(': keep-alive') || trimmedLine === ':') {
+          continue;
+        }
+
+        // End of stream
+        if (trimmedLine === 'data: [DONE]') {
+          break;
+        }
+
+        // Parse data line
+        if (trimmedLine.startsWith('data: ')) {
+          try {
+            const jsonStr = trimmedLine.slice(6);
+            const data = JSON.parse(jsonStr) as SSEStreamChunk;
+            const delta = data.choices?.[0]?.delta;
+
+            if (delta?.reasoning_content) {
+              reasoningContent += delta.reasoning_content;
+            }
+            if (delta?.content) {
+              content += delta.content;
+            }
+          } catch (parseError) {
+            // Skip malformed JSON chunks (can happen with partial data)
+            console.warn('Failed to parse SSE chunk:', trimmedLine);
+          }
+        }
+      }
+    }
+
+    // Parse the accumulated content as JSON
+    try {
+      const parsed = JSON.parse(content) as AIRankingJsonResponse;
+
+      // Validate response structure
+      if (!parsed.reason || !Array.isArray(parsed.ranking)) {
+        throw new Error('Invalid AI response structure');
+      }
+
+      // Include thinkingProcess from streaming
+      return {
+        ...parsed,
+        thinkingProcess: reasoningContent || parsed.thinkingProcess
+      };
+    } catch (parseError) {
+      console.error('Failed to parse AI streaming response:', content);
+      throw new Error(`Failed to parse AI response: ${parseError}`);
+    }
+  } catch (error) {
+    // Handle abort/timeout
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`AI API timeout after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Call OpenAI-compatible API
+ *
+ * @param baseUrl - API base URL
+ * @param apiKey - API key
+ * @param model - Model name
+ * @param systemPrompt - System prompt
+ * @param userPrompt - User prompt
+ * @param timeoutMs - Timeout in milliseconds (default 60000, or 300000 for reasoner models)
+ * @returns Parsed AI ranking response
+ */
+export async function callAIProvider(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  userPrompt: string,
+  timeoutMs?: number
+): Promise<AIRankingJsonResponse> {
+  // Use extended timeout for reasoner models
+  const effectiveTimeout = timeoutMs ?? (isReasonerModel(model) ? REASONER_TIMEOUT_MS : DEFAULT_AI_TIMEOUT_MS);
+
+  // Use streaming for reasoner models to handle long-running reasoning tasks
+  if (isReasonerModel(model)) {
+    return callAIProviderStreaming(baseUrl, apiKey, model, systemPrompt, userPrompt, effectiveTimeout);
+  }
+
+  // Build URL (Azure vs Standard) - pass model for Azure deployment name
+  const url = buildApiUrl(baseUrl, model);
+
+  // Build request body with conditional response_format
+  const requestBody: OpenAIChatCompletionRequest = {
+    model,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ],
+    // Azure reasoning models (o1, o3-mini, gpt-5-mini) don't support temperature
+    ...(!isAzureOpenAI(baseUrl) && { temperature: 0.3 }),
+    // Only include response_format for providers that support it (not Azure or Gemini)
+    ...(!isAzureOpenAI(baseUrl) && supportsJsonMode(baseUrl) && {
+      response_format: { type: 'json_object' }
+    })
+  };
+
+  // Setup timeout using AbortController
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), effectiveTimeout);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: buildAuthHeaders(baseUrl, apiKey),
       body: JSON.stringify(requestBody),
       signal: controller.signal
     });
@@ -452,7 +717,7 @@ export async function callAIProvider(
   } catch (error) {
     // Handle abort/timeout
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`AI API timeout after ${timeoutMs}ms`);
+      throw new Error(`AI API timeout after ${effectiveTimeout}ms`);
     }
     throw error;
   } finally {
@@ -469,4 +734,116 @@ export function generateQueryId(): string {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 8);
   return `${timestamp}_${random}`;
+}
+
+/** Test connection timeout in milliseconds */
+const TEST_CONNECTION_TIMEOUT_MS = 15000; // 15 seconds
+
+/**
+ * Test AI provider connection result
+ */
+export interface TestConnectionResult {
+  success: boolean;
+  responseTimeMs: number;
+  message: string;
+  error?: string;
+}
+
+/**
+ * Test AI provider connection with a simple prompt
+ * Uses shorter timeout since we just want to verify connectivity
+ *
+ * @param baseUrl - API base URL
+ * @param apiKey - API key
+ * @param model - Model name
+ * @returns Test result with response time or error
+ */
+export async function testAIProviderConnection(
+  baseUrl: string,
+  apiKey: string,
+  model: string
+): Promise<TestConnectionResult> {
+  const startTime = Date.now();
+  const url = buildApiUrl(baseUrl, model);
+
+  // Simple test prompt - just verify we can get any response
+  const requestBody: Record<string, unknown> = {
+    model,
+    messages: [
+      { role: 'system', content: 'You are a test assistant. Respond with exactly: OK' },
+      { role: 'user', content: 'Test' }
+    ]
+  };
+
+  // Azure reasoning models (o1, o3-mini, gpt-5-mini) don't support temperature
+  // They also require max_completion_tokens instead of max_tokens
+  if (isAzureOpenAI(baseUrl)) {
+    requestBody.max_completion_tokens = 10;
+  } else {
+    requestBody.max_tokens = 10;
+    requestBody.temperature = 0;
+  }
+
+  // Setup timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TEST_CONNECTION_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: buildAuthHeaders(baseUrl, apiKey),
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
+    });
+
+    const responseTimeMs = Date.now() - startTime;
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return {
+        success: false,
+        responseTimeMs,
+        message: 'Connection failed',
+        error: `HTTP ${response.status}: ${errorText.substring(0, 200)}`
+      };
+    }
+
+    // Just verify we got a valid JSON response
+    const data = await response.json() as { choices?: Array<unknown> };
+
+    if (!data.choices || data.choices.length === 0) {
+      return {
+        success: false,
+        responseTimeMs,
+        message: 'Invalid response',
+        error: 'API returned no choices'
+      };
+    }
+
+    return {
+      success: true,
+      responseTimeMs,
+      message: 'Connection successful'
+    };
+  } catch (error) {
+    const responseTimeMs = Date.now() - startTime;
+
+    if (error instanceof Error && error.name === 'AbortError') {
+      return {
+        success: false,
+        responseTimeMs,
+        message: 'Connection timeout',
+        error: `Request timed out after ${TEST_CONNECTION_TIMEOUT_MS}ms`
+      };
+    }
+
+    return {
+      success: false,
+      responseTimeMs,
+      message: 'Connection error',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }

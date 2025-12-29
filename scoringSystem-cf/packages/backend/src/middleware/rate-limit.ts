@@ -52,10 +52,12 @@ async function updateRateLimitCounter(
 
   const ttl = Math.ceil((resetTime - Date.now()) / 1000);
   if (ttl > 0) {
+    // Cloudflare KV requires minimum 60 second TTL
+    const effectiveTtl = Math.max(ttl, 60);
     await env.CONFIG.put(
       key,
       JSON.stringify({ count, resetTime }),
-      { expirationTtl: ttl }
+      { expirationTtl: effectiveTtl }
     );
   }
 }

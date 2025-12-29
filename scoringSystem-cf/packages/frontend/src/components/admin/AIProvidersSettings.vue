@@ -29,12 +29,12 @@
               />
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="140" fixed="right" align="center">
+          <el-table-column label="操作" width="120" fixed="right" align="center">
             <template #default="{ row }">
-              <el-button size="small" @click="editProvider(row)" circle>
+              <el-button size="small" @click="editProvider(row)" circle title="編輯">
                 <i class="fas fa-edit"></i>
               </el-button>
-              <el-button size="small" type="danger" @click="confirmDelete(row)" circle>
+              <el-button size="small" type="danger" @click="confirmDelete(row)" circle title="刪除">
                 <i class="fas fa-trash"></i>
               </el-button>
             </template>
@@ -100,42 +100,68 @@
       </div>
     </div>
 
-    <!-- Add/Edit Provider Dialog -->
-    <el-dialog
+    <!-- Add/Edit Provider Drawer -->
+    <el-drawer
       v-model="dialogVisible"
       :title="isEditing ? '編輯 AI 服務' : '新增 AI 服務'"
-      width="500px"
+      direction="btt"
+      size="100%"
+      class="drawer-navy"
       :close-on-click-modal="false"
     >
-      <el-form :model="form" :rules="formRules" ref="formRef" label-width="100px">
-        <el-form-item label="名稱" prop="name">
-          <el-input v-model="form.name" placeholder="例如：DeepSeek V3" />
-        </el-form-item>
-        <el-form-item label="Base URL" prop="baseUrl">
-          <el-input v-model="form.baseUrl" placeholder="https://api.deepseek.com" />
-        </el-form-item>
-        <el-form-item label="模型名稱" prop="model">
-          <el-input v-model="form.model" placeholder="deepseek-chat" />
-        </el-form-item>
-        <el-form-item label="API Key" prop="apiKey">
-          <el-input
-            v-model="form.apiKey"
-            type="password"
-            show-password
-            :placeholder="isEditing ? '留空則不更改' : '輸入 API Key'"
-          />
-        </el-form-item>
-        <el-form-item label="啟用">
-          <el-switch v-model="form.enabled" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveProvider" :loading="saving">
-          {{ isEditing ? '更新' : '新增' }}
-        </el-button>
+      <template #header>
+        <div class="drawer-header">
+          <i class="fas fa-robot"></i>
+          <span>{{ isEditing ? '編輯 AI 服務' : '新增 AI 服務' }}</span>
+        </div>
       </template>
-    </el-dialog>
+      <div class="drawer-content">
+        <el-form :model="form" :rules="formRules" ref="formRef" label-position="top">
+          <el-form-item label="名稱" prop="name">
+            <el-input v-model="form.name" placeholder="例如：DeepSeek V3" />
+          </el-form-item>
+          <el-form-item label="Base URL" prop="baseUrl">
+            <el-input v-model="form.baseUrl" placeholder="https://api.deepseek.com" />
+            <div class="form-hint">
+              <i class="fas fa-info-circle"></i>
+              <strong>一般 API:</strong> https://api.openai.com/v1 或 https://api.deepseek.com<br />
+              <i class="fas fa-cloud"></i>
+              <strong>Azure OpenAI:</strong> 貼上 Azure 給的完整 URL（包含 api-version），模型名稱填 Azure 部署名稱<br />
+              <span style="margin-left: 20px; font-size: 0.9em; color: #909399;">例如：https://xxx.cognitiveservices.azure.com/openai/responses?api-version=2025-04-01-preview</span>
+            </div>
+          </el-form-item>
+          <el-form-item label="模型名稱" prop="model">
+            <el-input v-model="form.model" placeholder="deepseek-chat" />
+          </el-form-item>
+          <el-form-item label="API Key" prop="apiKey">
+            <el-input
+              v-model="form.apiKey"
+              type="password"
+              show-password
+              :placeholder="isEditing ? '留空則不更改' : '輸入 API Key'"
+            />
+          </el-form-item>
+          <el-form-item label="啟用">
+            <el-switch v-model="form.enabled" />
+          </el-form-item>
+        </el-form>
+        <div class="drawer-actions">
+          <el-button
+            v-if="isEditing"
+            type="success"
+            @click="testCurrentProvider"
+            :loading="testingConnection"
+          >
+            <i class="fas fa-plug"></i> 測試連線
+          </el-button>
+          <div class="drawer-actions-spacer"></div>
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="saveProvider" :loading="saving">
+            {{ isEditing ? '更新' : '新增' }}
+          </el-button>
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -170,10 +196,12 @@ const savingPrompts = ref(false)
 const dialogVisible = ref(false)
 const isEditing = ref(false)
 const editingProviderId = ref<string | null>(null)
+const testingConnection = ref(false)
 const formRef = ref<FormInstance>()
 
 interface ProviderRow extends AIProviderPublic {
   updating?: boolean
+  testing?: boolean
 }
 
 const providers = ref<ProviderRow[]>([])
@@ -431,6 +459,43 @@ async function deleteProvider(provider: ProviderRow): Promise<void> {
 }
 
 /**
+ * Test current provider connection (used in drawer)
+ */
+async function testCurrentProvider(): Promise<void> {
+  if (!editingProviderId.value) {
+    ElMessage.warning('請先儲存 AI 服務後再測試連線')
+    return
+  }
+
+  testingConnection.value = true
+  try {
+    const httpResponse = await rpcClient.api.system['ai-providers'].test.$post({
+      json: { providerId: editingProviderId.value }
+    })
+    const response = await httpResponse.json() as any
+
+    if (response.success && response.data) {
+      ElMessage.success({
+        message: `${form.name} 連線成功 (${response.data.responseTimeMs}ms)`,
+        duration: 5000
+      })
+    } else {
+      ElMessage.error({
+        message: `${form.name} 連線失敗: ${response.error?.message || '未知錯誤'}`,
+        duration: 8000
+      })
+    }
+  } catch (error) {
+    ElMessage.error({
+      message: `測試失敗: ${getErrorMessage(error)}`,
+      duration: 8000
+    })
+  } finally {
+    testingConnection.value = false
+  }
+}
+
+/**
  * Save AI prompt configuration
  */
 async function savePromptConfig(): Promise<void> {
@@ -580,5 +645,45 @@ onMounted(() => {
       color: var(--el-color-primary);
     }
   }
+}
+
+/* Drawer Navy Theme Styles */
+.drawer-navy :deep(.el-drawer__header) {
+  background: #2c3e50 !important;
+  color: white !important;
+  padding: 20px 30px !important;
+  margin-bottom: 0 !important;
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+
+  i {
+    font-size: 20px;
+  }
+}
+
+.drawer-content {
+  padding: 30px;
+  background: #f5f7fa;
+  min-height: calc(100% - 60px);
+}
+
+.drawer-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid var(--el-border-color-light);
+}
+
+.drawer-actions-spacer {
+  flex: 1;
 }
 </style>

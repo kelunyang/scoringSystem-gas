@@ -153,3 +153,19 @@ export const ConfirmParticipationRequestSchema = z.object({
 });
 
 export type ConfirmParticipationRequest = z.infer<typeof ConfirmParticipationRequestSchema>;
+
+/**
+ * Force withdraw submission request schema (Teacher only)
+ *
+ * Allows teachers to force-withdraw any submission, including approved ones.
+ * The reason is stored in eventlogs (not in submissions table) and sent via email.
+ */
+export const ForceWithdrawSubmissionRequestSchema = z.object({
+  projectId: z.string().min(1, 'Project ID is required'),
+  submissionId: z.string().min(1, 'Submission ID is required'),
+  reason: z.string()
+    .min(10, '撤回原因至少需要 10 個字元')
+    .max(500, '撤回原因不能超過 500 字元')
+});
+
+export type ForceWithdrawSubmissionRequest = z.infer<typeof ForceWithdrawSubmissionRequestSchema>;

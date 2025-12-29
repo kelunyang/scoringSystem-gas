@@ -181,14 +181,13 @@
         <span v-html="parseCommentContent(comment.content)"></span>
       </div>
       
-      <!-- 提及的群組/用戶顯示 -->
-      <div v-if="comment.mentionedGroups.length > 0 || comment.mentionedUsers.length > 0" class="mentions">
-        <span v-for="group in comment.mentionedGroups" :key="group" class="mentioned-group">
-          @{{ group }}
-        </span>
-        <span v-for="user in comment.mentionedUsers" :key="user" class="mentioned-user">
-          @{{ user }}
-        </span>
+      <!-- 被提及的用戶（使用 AvatarGroup 頭像顯示） -->
+      <div v-if="comment.replyUsers && comment.replyUsers.length > 0" class="mentions">
+        <span class="mentions-label">被提及：</span>
+        <AvatarGroup
+          :group-members="comment.replyUsers"
+          size="28px"
+        />
       </div>
       
       <!-- 回復區域 -->
@@ -214,6 +213,7 @@
 import { computed } from 'vue'
 import { ElBadge, ElMessage } from 'element-plus'
 import EmptyState from '@/components/shared/EmptyState.vue'
+import AvatarGroup from '@/components/common/AvatarGroup.vue'
 import { useProjectRole } from '@/composables/useProjectRole'
 import { getNumericPermissionLevel } from '@/composables/useProjectPermissions'
 import { rpcClient } from '@/utils/rpc-client'
@@ -222,7 +222,8 @@ import { generateAvatarUrl } from '@/utils/walletHelpers'
 export default {
   name: 'StageComments',
   components: {
-    EmptyState
+    EmptyState,
+    AvatarGroup
   },
   props: {
     stageId: {
@@ -429,7 +430,8 @@ export default {
           // Reaction 相關數據
           reactions: comment.reactions || [],  // [{type, count, users[]}]
           userReaction: comment.userReaction || null,  // 'helpful' | 'disagreed' | null
-          reactionUsers: comment.reactionUsers || []  // 可以投 reaction 的用戶列表
+          reactionUsers: comment.reactionUsers || [],  // 可以投 reaction 的用戶列表
+          replyUsers: comment.replyUsers || []  // 可以回覆的用戶列表
         }
       }).sort((a, b) => {
         // 按時間排序，最新的在前
@@ -547,10 +549,9 @@ export default {
         return true
       }
 
-      // If not author, check if mentioned (@) - only check direct user mentions
-      const isMentionedDirectly = comment.rawMentionedUsers?.includes(this.currentUserEmail)
-
-      return isMentionedDirectly
+      // Check if user is in replyUsers list (mentionedUsers + expanded mentionedGroups)
+      // Note: replyUsers is now an array of objects with userEmail property
+      return comment.replyUsers?.some(u => u.userEmail === this.currentUserEmail) || false
     },
     
     getReplyButtonText(comment) {
@@ -1206,8 +1207,15 @@ export default {
   padding: 0 20px 15px 20px;
   margin-top: 10px;
   display: flex;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.mentions-label {
+  font-size: 12px;
+  color: #7f8c8d;
+  font-weight: 500;
 }
 
 .replies {

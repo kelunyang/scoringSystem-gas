@@ -444,11 +444,11 @@ export function useAuth() {
   // Computed: User ID (shortcut)
   const userId = computed(() => user.value?.userId ?? '')
 
-  // Computed: User name (shortcut)
-  const userName = computed(() => user.value?.userName ?? '')
+  // Computed: User name (shortcut) - uses email as identifier
+  const userName = computed(() => user.value?.userEmail ?? '')
 
   // Computed: User display name (shortcut)
-  const userDisplayName = computed(() => user.value?.displayName ?? user.value?.userName ?? '')
+  const userDisplayName = computed(() => user.value?.displayName ?? user.value?.userEmail ?? '')
 
   // Method: Logout
   const logout = async () => {

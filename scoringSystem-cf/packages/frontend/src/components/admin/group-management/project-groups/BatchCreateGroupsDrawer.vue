@@ -59,7 +59,7 @@
 import { ref, computed } from 'vue'
 import type { WritableComputedRef } from 'vue'
 
-interface Props {
+export interface Props {
   visible?: boolean
   creating?: boolean
 }

@@ -234,7 +234,7 @@ app.post(
 /**
  * Get project wallet ladder (GAS-compatible endpoint)
  * User-based ladder with permission masking for visualization
- * Body: { sessionId, projectId }
+ * Body: { sessionId, projectId, zeroScoreThreshold? }
  */
 app.post(
   '/project-ladder',
@@ -242,7 +242,7 @@ app.post(
   async (c) => {
     const user = c.get('user');
     const body = c.req.valid('json');
-    const { projectId } = body;
+    const { projectId, zeroScoreThreshold = 0 } = body;
 
     // Need at least view permission
     // Note: getProjectWalletLadder has built-in permission masking for students
@@ -260,7 +260,8 @@ app.post(
     const response = await getProjectWalletLadder(
       c.env,
       user.userEmail,
-      projectId
+      projectId,
+      zeroScoreThreshold
     );
 
     return response;
@@ -270,7 +271,7 @@ app.post(
 
 /**
  * Export project wallet summary
- * Body: { sessionId, projectId }
+ * Body: { sessionId, projectId, zeroScoreThreshold? }
  */
 app.post(
   '/export',
@@ -278,7 +279,7 @@ app.post(
   async (c) => {
     const user = c.get('user');
     const body = c.req.valid('json');
-    const { projectId } = body;
+    const { projectId, zeroScoreThreshold = 0 } = body;
 
     // Need manage permission to export
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, projectId, 'manage');
@@ -293,7 +294,8 @@ app.post(
     const response = await exportProjectWalletSummary(
       c.env,
       user.userEmail,
-      projectId
+      projectId,
+      zeroScoreThreshold
     );
 
     return response;

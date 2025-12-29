@@ -191,6 +191,7 @@
             :total-project-groups="candidateGroups.length"
             :current-group-label="''"
             :group-by-rank="false"
+            :clickable="true"
             @group-click="handleGroupClick"
           />
           <div class="chart-hint">
@@ -288,25 +289,25 @@ import type { GroupClickData } from '@/types/components'
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 
 // TypeScript interfaces
-interface RankingData {
+export interface RankingData {
   groupId: string
   rank: number
 }
 
-interface VoteData {
+export interface VoteData {
   groupId: string
   proposerEmail: string
   proposerDisplayName: string
   rankingData?: RankingData[]
 }
 
-interface TeacherVote {
+export interface TeacherVote {
   teacherEmail: string
   teacherDisplayName?: string
   rankingData?: RankingData[]
 }
 
-interface CandidateGroup {
+export interface CandidateGroup {
   groupId: string
   groupName: string
   finalRank: number | null
@@ -319,13 +320,13 @@ interface CandidateGroup {
   winningVotes: number
 }
 
-interface VoterInfo {
+export interface VoterInfo {
   groupId: string
   proposerEmail: string
   proposerDisplayName: string
 }
 
-interface SelectedGroupMember {
+export interface SelectedGroupMember {
   email: string
   displayName: string
   points: number
@@ -335,7 +336,7 @@ interface SelectedGroupMember {
   avatarOptions?: string
 }
 
-interface SelectedGroup {
+export interface SelectedGroup {
   groupId: string
   groupName: string
   finalRank: number
@@ -343,7 +344,7 @@ interface SelectedGroup {
   members: SelectedGroupMember[]
 }
 
-interface GroupInfo {
+export interface GroupInfo {
   groupId: string
   groupName: string
   finalRank?: number
@@ -353,12 +354,12 @@ interface GroupInfo {
   totalScore?: number
 }
 
-interface SettlementRanking {
+export interface SettlementRanking {
   finalRank: number
   allocatedPoints: number
 }
 
-interface Transaction {
+export interface Transaction {
   userEmail: string
   displayName?: string
   amount: number
@@ -368,7 +369,7 @@ interface Transaction {
   avatarOptions?: string
 }
 
-interface AllGroupsChartDataItem {
+export interface AllGroupsChartDataItem {
   rank: number
   groupId: string
   groupName: string
@@ -388,7 +389,7 @@ interface AllGroupsChartDataItem {
 }
 
 // Props
-interface Props {
+export interface Props {
   visible: boolean
   projectId: string
   stageId: string

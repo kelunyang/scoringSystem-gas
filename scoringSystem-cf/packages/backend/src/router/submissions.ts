@@ -12,6 +12,7 @@ import type { Env } from '../types';
  * - POST /submissions/versions - Get submission versions
  * - POST /submissions/versions/restore - Restore previous version
  * - POST /submissions/versions/compare - Compare two versions
+ * - POST /submissions/force-withdraw - Force withdraw submission (teacher only)
  */
 
 import { Hono } from 'hono';
@@ -27,7 +28,8 @@ import {
   deleteSubmission,
   getParticipationConfirmations,
   getGroupStageVotingHistory,
-  voteParticipationProposal
+  voteParticipationProposal,
+  forceWithdrawSubmission
 } from '../handlers/submissions/manage';
 import {
   getSubmissionVersions,
@@ -42,7 +44,8 @@ import {
   RestoreSubmissionVersionRequestSchema,
   GetParticipationStatusRequestSchema,
   GetVotingHistoryRequestSchema,
-  ConfirmParticipationRequestSchema
+  ConfirmParticipationRequestSchema,
+  ForceWithdrawSubmissionRequestSchema
 } from '@repo/shared/schemas/submissions';
 
 
@@ -353,6 +356,38 @@ app.post(
       body.projectId,
       body.stageId,
       body.agree
+    );
+
+    return response;
+  }
+);
+
+/**
+ * Force withdraw submission (teacher only)
+ * Body: { projectId, submissionId, reason }
+ *
+ * SECURITY: Only teachers can force withdraw submissions.
+ * - Can withdraw any submission including approved ones
+ * - Reason is sent via email to all group members
+ * - withdrawnBy is set to 'teacher' literal (not teacher's email)
+ * - Full details stored in eventlogs.metadata
+ */
+app.post(
+  '/force-withdraw',
+  zValidator('json', ForceWithdrawSubmissionRequestSchema),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+
+    // Permission check is done inside handler (checkProjectRole)
+    // Handler verifies user is a teacher for this project
+
+    const response = await forceWithdrawSubmission(
+      c.env,
+      user.userEmail,
+      body.projectId,
+      body.submissionId,
+      body.reason
     );
 
     return response;

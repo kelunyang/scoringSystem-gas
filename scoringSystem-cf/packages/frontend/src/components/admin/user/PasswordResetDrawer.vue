@@ -89,14 +89,14 @@ const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 // ===== Drawer Alerts =====
 const { addAlert, clearAlerts } = useDrawerAlerts()
 
-interface User {
+export interface User {
   userId?: string
   userEmail: string
   displayName?: string
   status?: string
 }
 
-interface Props {
+export interface Props {
   visible: boolean
   user?: User | null
 }

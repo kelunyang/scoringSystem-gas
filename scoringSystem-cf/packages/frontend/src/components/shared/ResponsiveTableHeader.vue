@@ -57,7 +57,7 @@ import { useMediaQuery } from '@/composables/useMediaQuery'
  * ```
  */
 
-interface Props {
+export interface Props {
   /** 豎屏時操作行的 colspan */
   actionsColspan: number
 }

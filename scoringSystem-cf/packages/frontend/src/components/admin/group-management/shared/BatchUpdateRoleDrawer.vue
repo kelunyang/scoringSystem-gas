@@ -150,7 +150,7 @@
 import { ref, computed, watch } from 'vue'
 import { getAvatarUrl, generateInitialsAvatar } from '@/utils/avatar'
 
-interface MemberWithChange {
+export interface MemberWithChange {
   userEmail: string
   displayName?: string
   membershipId?: string
@@ -163,14 +163,14 @@ interface MemberWithChange {
   avatarOptions?: string | Record<string, any>
 }
 
-interface Props {
+export interface Props {
   visible: boolean
   members: MemberWithChange[]
   groupName: string
   loading?: boolean
 }
 
-interface Emits {
+export interface Emits {
   (e: 'update:visible', value: boolean): void
   (e: 'confirm', updates: Array<{ userEmail: string; newRole: 'member' | 'leader' }>): void
   (e: 'cancel'): void

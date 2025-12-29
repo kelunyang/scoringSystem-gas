@@ -13,6 +13,7 @@
     "jsxImportSource": "vue",
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
+    "noEmit": true,
     "baseUrl": ".",
     "paths": {
       "@/*": [
@@ -28,7 +29,8 @@
     "types": [
       "vite/client",
       "element-plus/global",
-      "node"
+      "node",
+      "@cloudflare/workers-types"
     ],
     "outDir": "dist",
     "declaration": true,
@@ -58,6 +60,7 @@
   "exclude": [
     "node_modules",
     "dist",
-    "bak"
+    "bak",
+    "**/__tests__/**"
   ]
 }

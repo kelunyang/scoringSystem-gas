@@ -6,7 +6,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { sanitizeHtml } from '@/utils/sanitize'
+import { renderMarkdown } from '@/utils/markdown'
 
 interface Props {
   content?: string
@@ -16,42 +16,8 @@ const props = withDefaults(defineProps<Props>(), {
   content: ''
 })
 
-const parseMarkdown = (text: string): string => {
-  if (!text) return ''
-
-  let html = text
-    // Headers
-    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-
-    // Bold
-    .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
-    .replace(/__(.*?)__/gim, '<strong>$1</strong>')
-
-    // Italic
-    .replace(/\*(.*)\*/gim, '<em>$1</em>')
-    .replace(/_(.*?)_/gim, '<em>$1</em>')
-
-    // Code blocks
-    .replace(/```([\s\S]*?)```/gim, '<pre><code>$1</code></pre>')
-    .replace(/`([^`]*)`/gim, '<code>$1</code>')
-
-    // Links
-    .replace(/\[([^\]]*)\]\(([^\)]*)\)/gim, '<a href="$2" target="_blank">$1</a>')
-
-    // Line breaks
-    .replace(/\n\n/gim, '</p><p>')
-    .replace(/\n/gim, '<br>')
-
-  return `<p>${html}</p>`
-}
-
 const renderedMarkdown = computed(() => {
-  // 簡單的 Markdown 渲染器 (不使用外部庫)
-  const rawHtml = parseMarkdown(props.content)
-  // 使用 DOMPurify 防止 XSS 攻擊
-  return sanitizeHtml(rawHtml)
+  return renderMarkdown(props.content)
 })
 </script>
 
@@ -135,5 +101,67 @@ const renderedMarkdown = computed(() => {
 .markdown-content :deep(em) {
   font-style: italic;
   color: #7f8c8d;
+}
+
+/* GFM: Tables */
+.markdown-content :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 15px 0;
+}
+
+.markdown-content :deep(th),
+.markdown-content :deep(td) {
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.markdown-content :deep(th) {
+  background: #f5f5f5;
+  font-weight: 600;
+}
+
+.markdown-content :deep(tr:nth-child(even)) {
+  background: #fafafa;
+}
+
+/* GFM: Strikethrough */
+.markdown-content :deep(del),
+.markdown-content :deep(s) {
+  text-decoration: line-through;
+  color: #999;
+}
+
+/* GFM: Task lists */
+.markdown-content :deep(ul.contains-task-list) {
+  list-style: none;
+  padding-left: 0;
+}
+
+.markdown-content :deep(li.task-list-item) {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.markdown-content :deep(input[type="checkbox"]) {
+  margin-top: 4px;
+}
+
+/* GFM: Blockquote */
+.markdown-content :deep(blockquote) {
+  border-left: 4px solid #ddd;
+  margin: 15px 0;
+  padding: 10px 20px;
+  background: #f9f9f9;
+  color: #666;
+}
+
+/* GFM: Horizontal rule */
+.markdown-content :deep(hr) {
+  border: none;
+  border-top: 1px solid #ddd;
+  margin: 20px 0;
 }
 </style>

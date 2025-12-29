@@ -24,15 +24,21 @@
 
     <div class="form-group">
       <label for="registerEmail">電子郵件</label>
-      <input
-        id="registerEmail"
-        v-model="email"
-        type="email"
-        class="form-input"
-        placeholder="請輸入電子郵件"
-        :disabled="loading"
-        @keyup.enter="handleSubmit"
-      />
+      <el-tooltip
+        :visible="hasUppercase"
+        content="你輸入了大寫，請注意大小寫"
+        placement="top"
+      >
+        <el-input
+          id="registerEmail"
+          v-model="email"
+          type="email"
+          placeholder="請輸入電子郵件"
+          :disabled="loading"
+          :class="{ 'uppercase-warning': hasUppercase }"
+          @keyup.enter="handleSubmit"
+        />
+      </el-tooltip>
     </div>
 
     <!-- Turnstile CAPTCHA -->
@@ -86,6 +92,9 @@ const emit = defineEmits<{
 // Form data
 const invitationCode = ref('');
 const email = ref('');
+
+// Uppercase detection for warning
+const hasUppercase = computed(() => /[A-Z]/.test(email.value));
 
 // Debounce timer for real-time validation
 let debounceTimer: number | null = null;
@@ -202,23 +211,23 @@ function handleSubmit() {
   text-align: center;
 }
 
-.form-input {
-  width: 100%;
-  padding: 12px 16px;
-  border: 1px solid #dcdfe6;
-  border-radius: 6px;
-  font-size: 14px;
-  transition: border-color 0.3s;
+/* Uppercase warning style */
+.uppercase-warning :deep(.el-input__wrapper) {
+  border-color: #800020 !important;
+  border-width: 2px !important;
+  background-color: #fff5f5 !important;
+  animation: breathing 1.5s ease-in-out infinite !important;
 }
 
-.form-input:focus {
-  outline: none;
-  border-color: #9B59B6;
-}
-
-.form-input:disabled {
-  background-color: #f5f7fa;
-  cursor: not-allowed;
+@keyframes breathing {
+  0%, 100% {
+    box-shadow: 0 0 8px 2px rgba(128, 0, 32, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 16px 6px rgba(128, 0, 32, 0.5);
+    transform: scale(1.02);
+  }
 }
 
 .form-actions {

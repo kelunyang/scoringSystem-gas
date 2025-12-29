@@ -189,8 +189,8 @@ app.route('/api/auth', authRouter);
 // NOTE: Registered BEFORE /users to ensure /api/admin/users/* matches before /users/*
 app.route('/api/admin', adminRouter);
 
-// System management routes (COMPLETED)
-app.route('/system', systemRouter);
+// System management routes (COMPLETED) - Using /api prefix to match frontend RPC client
+app.route('/api/system', systemRouter);
 
 // User management routes (COMPLETED)
 app.route('/users', usersRouter);
@@ -219,8 +219,8 @@ app.route('/comments', commentsRouter);
 // Scoring routes (COMPLETED)
 app.route('/scoring', scoringRouter);
 
-// Rankings routes (COMPLETED)
-app.route('/rankings', rankingsRouter);
+// Rankings routes (COMPLETED) - Using /api prefix to match frontend RPC client
+app.route('/api/rankings', rankingsRouter);
 
 // DISABLED: Tag management routes - tags system has been disabled
 // app.route('/tags', tagsRouter);

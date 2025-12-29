@@ -121,7 +121,7 @@ const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 // ===== Drawer Alerts =====
 const { addAlert, clearAlerts } = useDrawerAlerts()
 
-interface StageForm {
+export interface StageForm {
   stageId: string | null
   stageName: string
   startTime: string | number
@@ -132,18 +132,18 @@ interface StageForm {
   commentRewardPool: number
 }
 
-interface Stage {
+export interface Stage {
   stageId: string
   stageName: string
   [key: string]: any
 }
 
-interface ErrorInfo {
+export interface ErrorInfo {
   title?: string
   message: string
 }
 
-interface Props {
+export interface Props {
   visible?: boolean
   form?: StageForm
   editingStage?: Stage | null

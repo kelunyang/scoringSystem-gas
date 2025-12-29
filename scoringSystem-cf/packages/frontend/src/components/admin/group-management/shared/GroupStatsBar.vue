@@ -20,7 +20,7 @@ defineOptions({
   name: 'GroupStatsBar'
 })
 
-interface GroupStats {
+export interface GroupStats {
   totalGroups: number
   activeGroups: number
   inactiveGroups: number

@@ -112,7 +112,7 @@ import { useMediaQuery } from '@/composables/useMediaQuery'
  * ```
  */
 
-interface Props {
+export interface Props {
   /** 是否展开 */
   isExpanded: boolean
   /** 是否选中（可选，用于 GlobalGroup/ProjectGroup） */

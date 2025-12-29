@@ -6,6 +6,9 @@
 // Export all entity types
 export * from './types/entities';
 
+// Export API response types
+export * from './types/api-responses';
+
 // Export AI types
 export * from './types/ai';
 

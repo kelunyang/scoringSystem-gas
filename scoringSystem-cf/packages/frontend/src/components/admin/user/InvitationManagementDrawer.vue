@@ -256,7 +256,7 @@
                     inactive-text="停用"
                     active-color="#67c23a"
                     inactive-color="#909399"
-                    @change="handleToggleInviteStatus(row)"
+                    @change="() => handleToggleInviteStatus(row)"
                   />
                 </el-tooltip>
               </template>
@@ -623,7 +623,7 @@
               placeholder="請輸入 RESEND"
               clearable
               class="confirmation-code-input"
-              @input="resendConfirmationText = String($event).toUpperCase()"
+              @input="(val: string | number) => { resendConfirmationText = String(val).toUpperCase() }"
               @keyup.enter="handleConfirmResend"
             />
             <div class="help-text" :class="{ 'text-success': isResendConfirmationValid }">
@@ -687,6 +687,7 @@ interface Invitation {
   createdBy: string
   createdTime: number
   expiryTime: number
+  defaultGlobalGroups?: string[]
 }
 
 interface GlobalGroup {
@@ -840,7 +841,7 @@ const activeFilterCount = computed(() => {
 
 // Export configuration for AdminFilterToolbar
 const exportConfig = computed(() => ({
-  data: filteredInvitations.value,
+  data: filteredInvitations.value as unknown as Record<string, unknown>[],
   filename: '邀請碼列表',
   headers: ['受邀者Email', '狀態', '創建者', '創建時間', '有效期至'],
   rowMapper: (item: Record<string, unknown>): (string | number)[] => {
@@ -1316,12 +1317,12 @@ const tableRowClassName = ({ row }: { row: Invitation }): string => {
   return row.status === 'deactivated' ? 'deactivated-row' : ''
 }
 
-const getInvitationTagType = (invitation: Invitation): '' | 'success' | 'info' | 'warning' | 'danger' => {
+const getInvitationTagType = (invitation: Invitation): 'primary' | 'success' | 'info' | 'warning' | 'danger' => {
   const now = Date.now()
   if (invitation.status === 'deactivated') return 'danger'
   if (invitation.status === 'used') return 'success'
   if (invitation.expiryTime <= now) return 'info'
-  if (invitation.status === 'active') return ''
+  if (invitation.status === 'active') return 'primary'
   return 'info'
 }
 

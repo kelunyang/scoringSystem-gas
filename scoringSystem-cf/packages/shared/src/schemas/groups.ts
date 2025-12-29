@@ -193,7 +193,7 @@ export const UpdateMemberRoleRequestSchema = z.object({
   projectId: z.string().min(1, 'Project ID is required'),
   groupId: z.string().min(1, 'Group ID is required'),
   userEmail: z.string().email('Invalid email format'),
-  newRole: z.enum(['member', 'leader'], { errorMap: () => ({ message: 'Role must be either "member" or "leader"' }) })
+  newRole: z.enum(['member', 'leader'], { message: 'Role must be either "member" or "leader"' })
 });
 
 export type UpdateMemberRoleRequest = z.infer<typeof UpdateMemberRoleRequestSchema>;
@@ -203,7 +203,7 @@ export type UpdateMemberRoleRequest = z.infer<typeof UpdateMemberRoleRequestSche
  */
 export const RoleUpdateDataSchema = z.object({
   userEmail: z.string().email('Invalid email format'),
-  newRole: z.enum(['member', 'leader'], { errorMap: () => ({ message: 'Role must be either "member" or "leader"' }) })
+  newRole: z.enum(['member', 'leader'], { message: 'Role must be either "member" or "leader"' })
 });
 
 export type RoleUpdateData = z.infer<typeof RoleUpdateDataSchema>;

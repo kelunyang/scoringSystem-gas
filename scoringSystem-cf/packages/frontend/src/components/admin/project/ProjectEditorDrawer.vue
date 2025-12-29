@@ -90,7 +90,7 @@
                   :marks="{ 0: '0%', 0.3: '30%', 0.5: '50%', 0.7: '70%', 1: '100%' }"
                   :show-tooltip="true"
                   :format-tooltip="(val: number) => `${Math.round(val * 100)}%`"
-                  @change="(val: number) => handleStudentWeightChange(val)"
+                  @change="(val) => handleStudentWeightChange(val as number)"
                 />
               </div>
 
@@ -110,7 +110,7 @@
                   :marks="{ 0: '0%', 0.3: '30%', 0.5: '50%', 0.7: '70%', 1: '100%' }"
                   :show-tooltip="true"
                   :format-tooltip="(val: number) => `${Math.round(val * 100)}%`"
-                  @change="(val: number) => handleTeacherWeightChange(val)"
+                  @change="(val) => handleTeacherWeightChange(val as number)"
                 />
               </div>
 
@@ -213,7 +213,7 @@ const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 // ===== Drawer Alerts =====
 const { addAlert, removeAlert, clearAlerts } = useDrawerAlerts()
 
-interface ProjectForm {
+export interface ProjectForm {
   projectId: string | null
   projectName: string
   description: string
@@ -226,7 +226,7 @@ interface ProjectForm {
   commentRewardPercentile: number
 }
 
-interface Props {
+export interface Props {
   visible?: boolean
   form?: ProjectForm
   updating?: boolean

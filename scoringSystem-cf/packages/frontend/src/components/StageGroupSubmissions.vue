@@ -13,7 +13,10 @@
     <div v-for="group in stage.groups" :key="group.id">
       <div
         class="group-item"
-        :class="{ 'report-expanded': group.showReport }"
+        :class="{
+          'report-expanded': group.showReport,
+          'not-pinned': props.pinnedGroupId && group.groupId !== props.pinnedGroupId
+        }"
       >
         <!-- Post-it 標籤：顯示本組標識、組名和繳交時間 -->
         <el-tooltip :content="group.groupName || '未命名組別'" placement="top">
@@ -30,6 +33,36 @@
             <span class="post-it-time" v-if="group.submitTime">
               {{ formatSubmissionTime(group.submitTime) }}
             </span>
+            <!-- 教師功能下拉選單 - 僅教師/管理員可見 -->
+            <el-dropdown
+              v-if="props.isTeacher"
+              trigger="click"
+              @command="(cmd: string) => handleTeacherCommand(cmd, group)"
+              @click.stop
+            >
+              <button class="teacher-menu-btn" @click.stop>
+                <i class="fas fa-chalkboard-teacher"></i>
+                教師功能
+              </button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="pin">
+                    <i class="fas fa-check" v-if="group.groupId === props.pinnedGroupId" style="margin-right: 6px; color: #67c23a;"></i>
+                    <i class="fas fa-thumbtack" style="margin-right: 6px;"></i>
+                    釘選這組的各階段報告
+                  </el-dropdown-item>
+                  <!-- 強制撤回只在 active 階段可用 -->
+                  <el-dropdown-item
+                    v-if="stage.status === 'active'"
+                    command="force-withdraw"
+                    divided
+                  >
+                    <i class="fas fa-ban" style="margin-right: 6px; color: #f56c6c;"></i>
+                    強制撤回本階段報告
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </el-tooltip>
 
@@ -148,9 +181,6 @@
 
       <!-- 展開的報告內容 -->
       <div v-if="group.showReport" class="group-report-content">
-        <div class="report-members">
-          成員：{{ Array.isArray(group.memberNames) ? group.memberNames.join('、') : group.memberNames }}
-        </div>
         <MarkdownViewer :content="group.reportContent" />
       </div>
     </div>
@@ -178,9 +208,25 @@ interface Props {
   projectUserGroups: any[]
   projectUsers: any[]
   stageProposals: any[]
+  isTeacher?: boolean
+  pinnedGroupId?: string | null
+  projectId: string
 }
 
 const props = defineProps<Props>()
+
+/**
+ * Submission info for force withdraw
+ */
+interface ForceWithdrawSubmission {
+  submissionId: string
+  groupId: string
+  groupName: string
+  status: string
+  submittedTime?: number
+  createdTime?: number
+  authors?: string | string[]
+}
 
 /**
  * Events
@@ -188,6 +234,8 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
   'toggle-report': [group: Group]
   'refresh-rankings': [stageId: string]
+  'pin-group': [groupId: string | null]
+  'force-withdraw': [submission: ForceWithdrawSubmission]
 }>()
 
 /**
@@ -213,6 +261,57 @@ function toggleGroupReport(group: Group) {
   // 直接修改屬性，確保響應式更新
   group.showReport = !group.showReport
   emit('toggle-report', group)
+}
+
+/**
+ * 切換鎖定組別（僅教師可用）
+ */
+function togglePinGroup(groupId: string) {
+  if (props.pinnedGroupId === groupId) {
+    emit('pin-group', null)  // 取消鎖定
+  } else {
+    emit('pin-group', groupId)  // 設定鎖定
+  }
+}
+
+/**
+ * 處理教師功能選單命令
+ */
+function handleTeacherCommand(command: string, group: Group) {
+  switch (command) {
+    case 'pin':
+      togglePinGroup(group.groupId)
+      break
+    case 'force-withdraw':
+      // 檢查該組是否有 submission
+      if (!group.submissionId) {
+        // 如果沒有 submissionId，可能需要從其他地方獲取
+        console.warn('No submissionId found for group:', group.groupId)
+        return
+      }
+      // 從 participationProposal 取得作者列表
+      let authors: string[] = []
+      if (group.participationProposal) {
+        try {
+          const proposal = typeof group.participationProposal === 'string'
+            ? JSON.parse(group.participationProposal)
+            : group.participationProposal
+          authors = Object.keys(proposal)
+        } catch (e) {
+          console.warn('Failed to parse participationProposal:', e)
+        }
+      }
+      // 發射事件，讓父組件處理 Drawer 顯示
+      emit('force-withdraw', {
+        submissionId: group.submissionId,
+        groupId: group.groupId,
+        groupName: group.groupName || '未命名組別',
+        status: group.status || 'unknown',
+        submittedTime: group.submitTime,
+        authors: authors.length > 0 ? authors : undefined
+      })
+      break
+  }
 }
 
 /**
@@ -616,6 +715,42 @@ function truncateGroupName(name: string | undefined, maxLength: number = 5): str
   opacity: 0.9;
 }
 
+/* 教師功能下拉按鈕 - 類似「本組」標籤風格，放右邊 */
+.teacher-menu-btn {
+  background: #f39c12;  /* 糖果黃 */
+  color: #000000;       /* 黑字 */
+  border: none;
+  padding: 6px 10px;
+  font-weight: 700;
+  font-size: 12px;
+  border-radius: 0 4px 4px 0;  /* 只有右側圓角 */
+  cursor: pointer;
+  margin-left: auto;  /* 推到最右邊 */
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.teacher-menu-btn:hover {
+  background: #e67e22;  /* hover 變深 */
+}
+
+.teacher-menu-btn i {
+  font-size: 11px;
+}
+
+/* 非鎖定組別淡化 */
+.group-item.not-pinned {
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
+}
+
+.group-item.not-pinned:hover {
+  opacity: 0.8;  /* hover 時稍微提高可見度 */
+}
+
 .group-name-post-it:hover {
   background: #34495e;
   transform: translateY(-2px);
@@ -782,6 +917,14 @@ function truncateGroupName(name: string | undefined, maxLength: number = 5): str
     padding: 0;
   }
 
+  /* 教師功能按鈕 - 小螢幕調整 */
+  .group-name-post-it .teacher-menu-btn {
+    margin-left: auto;
+    margin-right: 0;
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
   /* 統計 + Avatar 並排 - 需為標題列留空間 */
   .group-stats {
     flex-direction: row;           /* 改為橫向排列 */
@@ -804,11 +947,13 @@ function truncateGroupName(name: string | undefined, maxLength: number = 5): str
     font-size: 11px;
   }
 
-  /* Avatar 區域 - 與統計並排 */
+  /* Avatar 區域 - 直屏模式移至第二行 */
   .stat-participants {
-    padding: 0;
-    border-top: none;
-    margin-left: auto;             /* 推到右側 */
+    flex: 0 0 100%;                /* 不伸縮，基準寬度100%，強制換行 */
+    margin-left: 0;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #e1e8ed;
   }
 
   .stat-participants .stat-content {

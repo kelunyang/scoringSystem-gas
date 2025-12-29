@@ -128,7 +128,7 @@
 import { ref, computed, watch } from 'vue'
 import type { ProjectGroup } from '@/types/group-management'
 
-interface Props {
+export interface Props {
   visible: boolean
   group: ProjectGroup | null
   loading?: boolean

@@ -336,9 +336,9 @@
               >
                 <UserActivityDetail
                   :userEmail="user.userEmail"
-                  :date="selectedDate"
+                  :date="selectedDate?.toISOString().split('T')[0] || ''"
                   :events="selectedDayEvents"
-                  :canViewDetails="canViewUserDetails(user)"
+                  :canViewDetails="Boolean(canViewUserDetails(user))"
                 />
               </div>
             </ExpandableTableRow>
@@ -374,7 +374,7 @@
     <!-- Password Reset Drawer (Single user only - batch disabled for security) -->
     <PasswordResetDrawer
       v-model:visible="showPasswordResetDrawer"
-      :user="selectedUser"
+      :user="(selectedUser as any)"
       @confirm="handlePasswordResetConfirm"
     />
 
@@ -592,8 +592,8 @@
     <!-- User Edit Drawer -->
     <UserEditorDrawer
       v-model:visible="showEditUserDrawer"
-      :user="editingUser"
-      :global-groups="globalGroups"
+      :user="(editingUser as any)"
+      :global-groups="globalGroups as any[]"
       :avatar-styles="avatarStyles"
       :background-colors="backgroundColors"
       :clothes-colors="clothesColors"
@@ -619,6 +619,64 @@ import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import { rpcClient } from '@/utils/rpc-client'
 import { adminApi } from '@/api/admin'
 import { getAvatarUrl, parseAvatarOptions, generateDicebearUrl } from '@/utils/avatar'
+import type { User, GlobalGroup } from '@repo/shared'
+
+// Extended User type for admin display
+// Note: lockReason, lockCount, lockUntil are already in User interface
+interface ExtendedUser extends User {
+  walletBalance?: number
+  failedLoginAttempts?: number
+  maliciousLoginDetected?: boolean
+  twoFactorEnabled?: boolean
+  globalGroups?: GlobalGroupMembership[]
+  projectGroups?: ProjectGroupMembership[]
+  tags?: Array<{ tagId: string; tagName: string }>
+}
+
+// Global group membership
+interface GlobalGroupMembership {
+  groupId: string
+  groupName: string
+  permissions?: string[]
+  globalPermissions?: string[]
+  allowChange?: boolean
+}
+
+// Project group membership
+interface ProjectGroupMembership {
+  projectId: string
+  projectName: string
+  groupId: string
+  groupName: string
+  role: string
+  isActive?: boolean
+  allowChange?: boolean
+}
+
+// Invitation type (matching backend response)
+interface Invitation {
+  invitationId?: string
+  code: string
+  createdBy: string
+  createdTime: number
+  createdAt?: number
+  usedAt?: number
+  usedBy?: string
+  expiryTime: number
+  expiresAt?: number
+  isActive: boolean
+  maxUses?: number
+  currentUses?: number
+  status: 'active' | 'used' | 'expired' | 'deactivated'
+  targetEmail?: string
+}
+
+// Batch invitation result type
+interface BatchInviteResult {
+  results: Array<{ email: string; invitationCode: string }>
+  totalGenerated: number
+  errors: string[]
+}
 import EmptyState from '@/components/shared/EmptyState.vue'
 import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
 import ResponsiveTableHeader from '@/components/shared/ResponsiveTableHeader.vue'
@@ -674,7 +732,7 @@ export default {
     // Register action function with parent SystemAdmin
     const registerAction = inject<(fn: (() => void) | null) => void>('registerAction', () => {})
 
-    const users = ref([])
+    const users = ref<ExtendedUser[]>([])
     // 過濾器持久化
     const { filters, resetFilters, isLoaded } = useFilterPersistence('userManagement', {
       searchText: '',
@@ -717,20 +775,20 @@ export default {
     const showPasswordResetDrawer = ref(false)
 
     // DISABLED: const showTagManagementModal = ref(false) - tags system disabled
-    const selectedUser = ref(null)
+    const selectedUser = ref<ExtendedUser | null>(null)
     const generating = ref(false)
-    const generatedInvite = ref(null)
+    const generatedInvite = ref<BatchInviteResult | null>(null)
     const loading = ref(false)
     const invitationsLoading = ref(false)
     const processingStatus = ref('')
-    
+
     // Invitation management - 必須在 computed 之前定義
-    const invitations = ref([])
+    const invitations = ref<Invitation[]>([])
     const inviteSearchText = ref('')
     const inviteStatusFilter = ref('')
     const showDeactivatedInvitations = ref(false)
-    const inviteCollapse = ref([]) // Control collapse state
-    const resendingInvites = ref(new Set()) // Track which invitations are being resent
+    const inviteCollapse = ref<string[]>([]) // Control collapse state
+    const resendingInvites = ref<Set<string>>(new Set()) // Track which invitations are being resent
     
     // DISABLED: Tag management - tags system disabled
     // const allTags = ref([])
@@ -739,18 +797,18 @@ export default {
     
     // User editing
     const showEditUserDrawer = ref(false)
-    const editingUser = ref(null)
-    const originalUser = ref(null)
+    const editingUser = ref<ExtendedUser | null>(null)
+    const originalUser = ref<ExtendedUser | null>(null)
     // DISABLED: const selectedTagsToAdd = ref([]) - tags system disabled
-    const selectedGroupsToAdd = ref([])
-    const userGlobalGroups = ref([])
+    const selectedGroupsToAdd = ref<string[]>([])
+    const userGlobalGroups = ref<GlobalGroupMembership[]>([])
     const saving = ref(false)
     const loadingUserData = ref(false)
 
     // User activity statistics (for expansion) - using useExpandable composable
-    const selectedDate = ref(null)
-    const selectedDayEvents = ref([])
-    const selectedUserEmail = ref(null)
+    const selectedDate = ref<Date | null>(null)
+    const selectedDayEvents = ref<any[]>([])
+    const selectedUserEmail = ref<string | null>(null)
 
     // Use expandable composable for user expansion management
     const {
@@ -768,7 +826,7 @@ export default {
     const regeneratingEditingUserAvatar = ref(false)
     const editingUserAvatarError = ref(false)
     const editingUserAvatarChanged = ref(false)
-    const editingUserAvatarOptions = ref({
+    const editingUserAvatarOptions = ref<Record<string, string>>({
       backgroundColor: 'b6e3f4',
       clothesColor: '3c4858',
       skinColor: 'ae5d29'
@@ -776,29 +834,29 @@ export default {
     const savingEditingUser = ref(false)
 
     // ✨ Avatar error handling state
-    const verifiedConfigs = ref([])
+    const verifiedConfigs = ref<any[]>([])
     const retryCount = ref(0)
     const isRetrying = ref(false)
     const isInFallbackMode = ref(false)
     const maxRetries = 3
-    
+
     // Global groups management
-    const globalGroups = ref([])
+    const globalGroups = ref<GlobalGroup[]>([])
     const selectedGlobalGroupToAdd = ref('')
-    
+
     // Project groups management
-    const userProjectGroups = ref([])
+    const userProjectGroups = ref<ProjectGroupMembership[]>([])
     const loadingUserProjectGroups = ref(false)
-    const updatingGroupSettings = ref(new Set())
-    const removingFromGroups = ref(new Set())
+    const updatingGroupSettings = ref<Set<string>>(new Set())
+    const removingFromGroups = ref<Set<string>>(new Set())
 
     // Batch operations management
-    const selectedUserEmails = ref(new Set())
+    const selectedUserEmails = ref<Set<string>>(new Set())
     const batchUpdatingStatus = ref(false)
 
     // Unlock user management
     const showUnlockDrawer = ref(false)
-    const unlockingUser = ref(null)
+    const unlockingUser = ref<ExtendedUser | null>(null)
     const unlockReason = ref('')
     const unlockConfirmText = ref('')
     const resetLockCount = ref(false)
@@ -890,7 +948,7 @@ export default {
       targetEmails: '',
       validDays: 7,
       // DISABLED: defaultTags: [], // Array of tag IDs to assign to new users - tags system disabled
-      defaultGlobalGroups: [] // Array of global group IDs to assign to new users
+      defaultGlobalGroups: [] as string[] // Array of global group IDs to assign to new users
     })
 
     // 使用 computed 來計算統計數據
@@ -900,7 +958,7 @@ export default {
         const result = {
           totalUsers: usersArray.length,
           activeUsers: usersArray.filter(u => u.status === 'active').length,
-          inactiveUsers: usersArray.filter(u => u.status === 'inactive').length
+          inactiveUsers: usersArray.filter(u => u.status === 'disabled').length
         }
         console.log('Stats computed:', result)
         return result
@@ -1208,13 +1266,13 @@ export default {
       return false
     })
 
-    const formatTime = (timestamp) => {
+    const formatTime = (timestamp: number | null | undefined): string | null => {
       if (!timestamp) return null
       return new Date(timestamp).toLocaleString('zh-TW')
     }
 
     // Check if user is locked
-    const isUserLocked = (user) => {
+    const isUserLocked = (user: ExtendedUser | null): boolean => {
       if (!user) return false
       const now = Date.now()
       // Check temporary lock
@@ -1225,7 +1283,7 @@ export default {
     }
 
     // Get lock status text for display
-    const getLockStatusText = (user) => {
+    const getLockStatusText = (user: ExtendedUser | null): string => {
       if (!user) return ''
       const now = Date.now()
       if (user.lockUntil && user.lockUntil > now) {
@@ -1239,7 +1297,7 @@ export default {
     }
 
     // Get avatar URL for user list display
-    const getUserAvatarUrl = (user) => {
+    const getUserAvatarUrl = (user: ExtendedUser | null): string => {
       if (!user) return ''
 
       const seed = user.avatarSeed || `${user.userEmail}_${Date.now()}`
@@ -1250,18 +1308,18 @@ export default {
     }
 
     // Generate initials for avatar fallback
-    const getUserInitials = (user) => {
+    const getUserInitials = (user: ExtendedUser | null): string => {
       if (!user) return 'U'
       const name = user.displayName || user.userEmail || 'User'
       return name
         .split(' ')
-        .map(word => word.charAt(0).toUpperCase())
+        .map((word: string) => word.charAt(0).toUpperCase())
         .join('')
         .substring(0, 2)
     }
 
     // 安全地獲取 stats 值
-    const getStatValue = (key) => {
+    const getStatValue = (key: 'totalUsers' | 'activeUsers' | 'inactiveUsers'): number => {
       try {
         const statsObj = stats.value
         if (statsObj && typeof statsObj === 'object' && key in statsObj) {
@@ -1293,7 +1351,7 @@ export default {
 
         const response = await adminApi.users.list({
           search: searchText.value || undefined,
-          status: statusFilter.value || undefined,
+          status: (statusFilter.value || undefined) as any,
           groupIds: groupFilter.value.length > 0 ? groupFilter.value : undefined,
           sortBy: 'registrationTime',
           sortOrder: 'desc'
@@ -1302,7 +1360,7 @@ export default {
         console.log('API Response:', response)
 
         if (response.success && response.data) {
-          users.value = response.data
+          users.value = response.data as unknown as ExtendedUser[]
           console.log('Users loaded:', users.value.length, 'users')
           ElMessage.success('使用者列表資料下載完成')
         } else {
@@ -1330,15 +1388,15 @@ export default {
       router.push({ name: 'admin-users-invitation' })
     }
 
-    const toggleUserStatus = async (user) => {
+    const toggleUserStatus = async (user: ExtendedUser) => {
       try {
-        const newStatus = user.status === 'active' ? 'inactive' : 'active'
-        
+        const newStatus = user.status === 'active' ? 'disabled' : 'active'
+
         // 使用管理員專用API更新用戶狀態
         const response = await adminApi.users.updateStatus({
-          userEmail: user.userEmail,
+          targetEmail: user.userEmail,
           status: newStatus
-        })
+        } as any)
         
         if (response.success) {
           user.status = newStatus
@@ -1353,19 +1411,19 @@ export default {
     }
 
     // <i class="fas fa-check-circle text-success"></i> Open password reset drawer for single user
-    const resetPassword = (user) => {
+    const resetPassword = (user: ExtendedUser) => {
       selectedUser.value = user
       showPasswordResetDrawer.value = true
     }
 
     // Password reset handler (single user only - batch mode disabled for security)
     // Backend auto-generates random password and emails it to user
-    const handlePasswordResetConfirm = async ({ userEmail }) => {
+    const handlePasswordResetConfirm = async ({ userEmail }: { userEmail: string }) => {
       try {
         // Vue 3 Best Practice: adminApi automatically handles authentication
         const response = await adminApi.users.resetPassword({
-          userEmail
-        })
+          targetEmail: userEmail
+        } as any)
 
         if (response.success) {
           ElMessage.success('密碼重設成功，新密碼已發送至使用者信箱')
@@ -1392,7 +1450,7 @@ export default {
     }
     */
 
-    const toggleDefaultGlobalGroup = (groupId) => {
+    const toggleDefaultGlobalGroup = (groupId: string) => {
       const index = inviteForm.defaultGlobalGroups.indexOf(groupId)
       if (index === -1) {
         inviteForm.defaultGlobalGroups.push(groupId)
@@ -1400,7 +1458,7 @@ export default {
         inviteForm.defaultGlobalGroups.splice(index, 1)
       }
     }
-    
+
     // DISABLED: 新增方法：根據ID獲取標籤 - tags system disabled
     /*
     const getTagById = (tagId) => {
@@ -1409,7 +1467,7 @@ export default {
     */
 
     // 新增方法：根據ID獲取全域群組
-    const getGlobalGroupById = (groupId) => {
+    const getGlobalGroupById = (groupId: string) => {
       return globalGroups.value.find(group => group.groupId === groupId)
     }
 
@@ -1424,7 +1482,7 @@ export default {
     */
 
     // 新增方法：移除預設全域群組
-    const removeDefaultGlobalGroup = (groupId) => {
+    const removeDefaultGlobalGroup = (groupId: string) => {
       const index = inviteForm.defaultGlobalGroups.indexOf(groupId)
       if (index !== -1) {
         inviteForm.defaultGlobalGroups.splice(index, 1)
@@ -1442,7 +1500,7 @@ export default {
     }
     */
 
-    const removeSelectedGroup = (groupId) => {
+    const removeSelectedGroup = (groupId: string) => {
       const index = selectedGroupsToAdd.value.indexOf(groupId)
       if (index !== -1) {
         selectedGroupsToAdd.value.splice(index, 1)
@@ -1473,12 +1531,12 @@ export default {
     }
     */
 
-    const removeUserFromGroup = async (membership) => {
+    const removeUserFromGroup = async (membership: GlobalGroupMembership) => {
       const groupName = getGlobalGroupById(membership.groupId)?.groupName || membership.groupId
       try {
         const response = await adminApi.globalGroups.removeUser({
           groupId: membership.groupId,
-          userEmail: editingUser.value.userEmail
+          userEmail: editingUser.value!.userEmail
         })
 
         if (response.success) {
@@ -1494,11 +1552,11 @@ export default {
       }
     }
 
-    const loadUserGlobalGroups = async (userEmail) => {
+    const loadUserGlobalGroups = async (userEmail: string) => {
       try {
         const response = await adminApi.users.globalGroups({
-          userEmail: userEmail
-        })
+          targetEmail: userEmail
+        } as any)
 
         if (response.success && response.data) {
           userGlobalGroups.value = response.data
@@ -1543,8 +1601,8 @@ export default {
         // Vue 3 Best Practice: rpcClient automatically handles authentication
 
         // 批次處理Email，每批最多50個
-        const results = []
-        const errors = []
+        const results: Array<{ email: string; invitationCode: string; expiryTime?: number }> = []
+        const errors: string[] = []
         const BATCH_SIZE = 50
         
         // 將emailList分批處理
@@ -1580,15 +1638,16 @@ export default {
               
               if (response.success && response.data) {
                 // 處理批次結果
-                response.data.results.forEach(result => {
+                const data = response.data as any
+                data.results.forEach((result: { email: string; invitationCode: string; expiryTime?: number }) => {
                   results.push(result)
                   console.log(`✅ ${result.email}: 邀請碼生成成功`)
                 })
 
-                if (response.data.errors) {
-                  response.data.errors.forEach(error => {
-                    errors.push(error)
-                    console.log(`❌ ${error}`)
+                if (data.errors) {
+                  data.errors.forEach((err: string) => {
+                    errors.push(err)
+                    console.log(`❌ ${err}`)
                   })
                 }
               } else {
@@ -1600,7 +1659,7 @@ export default {
             } catch (error) {
               batch.forEach(email => {
                 errors.push(`${email}: 網路請求失敗`)
-                console.log(`❌ ${email}: 網路請求失敗 - ${error.message}`)
+                console.log(`❌ ${email}: 網路請求失敗 - ${(error as Error).message}`)
               })
             }
           } else {
@@ -1636,7 +1695,7 @@ export default {
                 }
               } catch (error) {
                 errors.push(`${email}: 請求失敗`)
-                console.log(`❌ ${email}: 請求失敗 - ${error.message}`)
+                console.log(`❌ ${email}: 請求失敗 - ${(error as Error).message}`)
               }
             }
           }
@@ -1676,17 +1735,19 @@ export default {
     }
 
     const copyInviteCode = () => {
-      navigator.clipboard.writeText(generatedInvite.value.invitationCode)
-      ElMessage.success('邀請碼已複製到剪貼板')
+      if (generatedInvite.value && generatedInvite.value.results.length > 0) {
+        navigator.clipboard.writeText(generatedInvite.value.results[0].invitationCode)
+        ElMessage.success('邀請碼已複製到剪貼板')
+      }
     }
 
-    const copySpecificCode = (code) => {
+    const copySpecificCode = (code: string) => {
       navigator.clipboard.writeText(code)
       ElMessage.success('邀請碼已複製到剪貼板')
     }
 
     const copyAllCodes = () => {
-      if (generatedInvite.value.results) {
+      if (generatedInvite.value && generatedInvite.value.results) {
         const allCodes = generatedInvite.value.results
           .map(result => `${result.email} > ${result.invitationCode}`)
           .join('\n')
@@ -1722,15 +1783,15 @@ export default {
       }
     }
 
-    const copyInvitationCode = (code) => {
+    const copyInvitationCode = (code: string) => {
       navigator.clipboard.writeText(code)
       ElMessage.success('邀請碼已複製到剪貼板')
     }
 
-    const resendInvitationEmail = async (invitation) => {
+    const resendInvitationEmail = async (invitation: Invitation) => {
       try {
         // Add to resending set
-        resendingInvites.value.add(invitation.invitationId)
+        resendingInvites.value.add(invitation.invitationId!)
 
         const httpResponse = await rpcClient.invitations['resend-email'].$post({
           json: {
@@ -1760,15 +1821,15 @@ export default {
         ElMessage.error('重送邀請信失敗，請重試')
       } finally {
         // Remove from resending set
-        resendingInvites.value.delete(invitation.invitationId)
+        resendingInvites.value.delete(invitation.invitationId!)
       }
     }
 
-    const deactivateInvitation = async (invitation) => {
+    const deactivateInvitation = async (invitation: Invitation) => {
       try {
         const httpResponse = await rpcClient.invitations.deactivate.$post({
           json: {
-            invitationId: invitation.invitationId
+            invitationId: invitation.invitationId!
           }
         })
         const response = await httpResponse.json()
@@ -1792,7 +1853,7 @@ export default {
     // ========================================
 
     // Toggle user selection
-    const toggleUserSelection = (userEmail) => {
+    const toggleUserSelection = (userEmail: string) => {
       if (selectedUserEmails.value.has(userEmail)) {
         selectedUserEmails.value.delete(userEmail)
       } else {
@@ -1823,11 +1884,11 @@ export default {
 
     // Batch deactivate users
     const batchDeactivateUsers = async () => {
-      await batchUpdateStatus('inactive')
+      await batchUpdateStatus('disabled')
     }
 
     // Batch update status
-    const batchUpdateStatus = async (status) => {
+    const batchUpdateStatus = async (status: 'active' | 'disabled') => {
       const userEmails = Array.from(selectedUserEmails.value)
 
       try {
@@ -1850,14 +1911,18 @@ export default {
 
       try {
         const response = await adminApi.users.batchUpdateStatus({
-          userEmails, status
-        })
+          targetEmails: userEmails,
+          status
+        } as any)
 
         if (response.success && response.data) {
-          const { successCount, failureCount, results } = response.data
+          const data = response.data as { successCount: number; failureCount: number; results: Array<{ success: boolean; userEmail: string }> }
+          const successCount = data.successCount
+          const failureCount = data.failureCount
+          const batchResults = data.results
 
           // Update local user status
-          results.forEach(result => {
+          batchResults.forEach((result) => {
             if (result.success) {
               const user = users.value.find(u => u.userEmail === result.userEmail)
               if (user) user.status = status
@@ -1868,10 +1933,7 @@ export default {
           if (failureCount === 0) {
             ElMessage.success(`成功更新 ${successCount} 位使用者狀態`)
           } else {
-            ElMessage.warning(
-              `成功: ${successCount}, 失敗: ${failureCount}`,
-              { duration: 5000 }
-            )
+            ElMessage.warning(`成功: ${successCount}, 失敗: ${failureCount}`)
           }
 
           // Clear selection
@@ -1897,7 +1959,7 @@ export default {
     // ========================================
 
     // Open unlock drawer
-    const openUnlockDrawer = (user) => {
+    const openUnlockDrawer = (user: ExtendedUser) => {
       unlockingUser.value = user
       unlockReason.value = ''
       unlockConfirmText.value = ''
@@ -1930,10 +1992,10 @@ export default {
 
       try {
         const response = await adminApi.users.unlock({
-          userEmail: unlockingUser.value.userEmail,
+          targetEmail: unlockingUser.value.userEmail,
           unlockReason: unlockReason.value,
           resetLockCount: resetLockCount.value
-        })
+        } as any)
 
         if (response.success) {
           ElMessage.success(`帳戶已解鎖：${unlockingUser.value.userEmail}`)
@@ -1961,7 +2023,7 @@ export default {
     }
 
     // Drawer close handler
-    const handleUnlockDrawerClose = (done) => {
+    const handleUnlockDrawerClose = (done: () => void) => {
       if (unlocking.value) {
         ElMessage.warning('操作進行中，請稍候')
         return
@@ -1969,7 +2031,7 @@ export default {
       done()
     }
 
-    const getInvitationStatusClass = (invitation) => {
+    const getInvitationStatusClass = (invitation: Invitation): string => {
       const now = Date.now()
       if (invitation.expiryTime <= now) {
         return 'expired'
@@ -1983,7 +2045,7 @@ export default {
       return 'inactive'
     }
 
-    const getInvitationStatusText = (invitation) => {
+    const getInvitationStatusText = (invitation: Invitation): string => {
       const now = Date.now()
       if (invitation.expiryTime <= now) {
         return '已過期'
@@ -2102,7 +2164,7 @@ export default {
     */
 
     // Navigate to user's login logs
-    const viewLoginLogs = (user) => {
+    const viewLoginLogs = (user: ExtendedUser) => {
       router.push({
         name: 'admin-logs-login-user',
         params: { userId: user.userEmail }
@@ -2110,22 +2172,22 @@ export default {
     }
 
     // User editing methods
-    const editUser = async (user) => {
+    const editUser = async (user: ExtendedUser) => {
       loadingUserData.value = true
       showEditUserDrawer.value = true
 
       try {
         // Fetch fresh user data from backend to ensure we have the latest information
-        let userData = user
+        let userData: ExtendedUser = user
         try {
           const response = await adminApi.users.list({
             search: user.userEmail,
             limit: 1
           })
 
-          if (response.success && response.data && response.data.length > 0) {
+          if (response.success && response.data && (response.data as any).length > 0) {
             // Use fresh data from backend
-            userData = response.data[0]
+            userData = (response.data as any)[0] as ExtendedUser
             console.log('Using fresh user data from backend for editing')
 
             // Update the user in the users list with fresh data
@@ -2143,12 +2205,12 @@ export default {
         // Deep clone user data for editing
         editingUser.value = JSON.parse(JSON.stringify(userData))
         originalUser.value = JSON.parse(JSON.stringify(userData))
-        
+
         // Ensure tags and globalGroups are always arrays
-        if (!editingUser.value.tags) {
+        if (editingUser.value && !editingUser.value.tags) {
           editingUser.value.tags = []
         }
-        if (!editingUser.value.globalGroups) {
+        if (editingUser.value && !editingUser.value.globalGroups) {
           editingUser.value.globalGroups = []
         }
 
@@ -2165,15 +2227,15 @@ export default {
       
         // Ensure avatar settings are properly preserved and initialized
         // Don't override existing avatar data, only set defaults if missing
-        if (!editingUser.value.avatarSeed) {
+        if (editingUser.value && !editingUser.value.avatarSeed) {
           editingUser.value.avatarSeed = user.avatarSeed || `${user.userEmail}_${Date.now()}`
         }
-        if (!editingUser.value.avatarStyle) {
+        if (editingUser.value && !editingUser.value.avatarStyle) {
           editingUser.value.avatarStyle = user.avatarStyle || 'avataaars'
         }
         
         // Parse avatarOptions if it's a string, but preserve existing data
-        let avatarOptions = {}
+        let avatarOptions: Record<string, any> = {}
         if (user.avatarOptions) {
           if (typeof user.avatarOptions === 'string') {
             try {
@@ -2187,7 +2249,7 @@ export default {
               }
             }
           } else {
-            avatarOptions = { ...user.avatarOptions }
+            avatarOptions = { ...(user.avatarOptions as Record<string, any>) }
           }
         } else {
           // Default avatar options only if none exist
@@ -2197,26 +2259,36 @@ export default {
             skinColor: 'ae5d29'
           }
         }
-        
+
         // Ensure both editing and original user have the same avatar data
-        editingUser.value.avatarOptions = avatarOptions
-        if (!originalUser.value.avatarOptions) {
-          originalUser.value.avatarOptions = { ...avatarOptions }
+        if (editingUser.value) {
+          editingUser.value.avatarOptions = JSON.stringify(avatarOptions)
+        }
+        if (originalUser.value && !originalUser.value.avatarOptions) {
+          originalUser.value.avatarOptions = JSON.stringify(avatarOptions)
         }
         currentAvatarOptions.value = { ...avatarOptions }
-        editingUserAvatarOptions.value = { ...avatarOptions }
+        editingUserAvatarOptions.value = {
+          backgroundColor: avatarOptions.backgroundColor || 'b6e3f4',
+          clothesColor: avatarOptions.clothesColor || '3c4858',
+          skinColor: avatarOptions.skinColor || 'ae5d29'
+        }
         avatarError.value = false
         editingUserAvatarError.value = false
         editingUserAvatarChanged.value = false
-        
+
         // Load user's global groups
         try {
           await loadUserGlobalGroups(user.userEmail)
-          editingUser.value.globalGroups = userGlobalGroups.value || []
+          if (editingUser.value) {
+            editingUser.value.globalGroups = userGlobalGroups.value || []
+          }
           // 權限狀態會通過 computed 自動更新
         } catch (error) {
           console.error('Failed to load user global groups:', error)
-          editingUser.value.globalGroups = []
+          if (editingUser.value) {
+            editingUser.value.globalGroups = []
+          }
           // 權限狀態會通過 computed 自動更新
         }
       } catch (error) {
@@ -2242,7 +2314,7 @@ export default {
       }
     }
 
-    const handleDrawerClose = (done) => {
+    const handleDrawerClose = (done: () => void) => {
       if (saving.value) {
         return false
       }
@@ -2285,7 +2357,7 @@ export default {
     }
     */
 
-    const generateDicebearUrl = (seed, style, options = {}) => {
+    const generateDicebearUrl = (seed: string, style: string, options: Record<string, string> = {}) => {
       const baseUrl = `https://api.dicebear.com/7.x/${style}/svg`
       const params = new URLSearchParams({
         seed: seed,
@@ -2295,12 +2367,12 @@ export default {
       return `${baseUrl}?${params.toString()}`
     }
 
-    const generateInitialsAvatar = (user) => {
+    const generateInitialsAvatar = (user: ExtendedUser | null) => {
       if (!user) return ''
       const name = user.displayName || 'U'
       const initials = name
         .split(' ')
-        .map(word => word.charAt(0))
+        .map((word: string) => word.charAt(0))
         .join('')
         .substring(0, 2)
         .toUpperCase()
@@ -2308,12 +2380,12 @@ export default {
       return `https://api.dicebear.com/7.x/initials/svg?seed=${initials}&size=120&backgroundColor=b6e3f4`
     }
 
-    const generateInitials = (user) => {
+    const generateInitials = (user: ExtendedUser | null) => {
       if (!user) return 'U'
       const name = user.displayName || 'User'
       return name
         .split(' ')
-        .map(word => word.charAt(0).toUpperCase())
+        .map((word: string) => word.charAt(0).toUpperCase())
         .join('')
         .substring(0, 2)
     }
@@ -2346,21 +2418,20 @@ export default {
       // Reset avatar options when style changes
       currentAvatarOptions.value = {}
       if (editingUser.value) {
-        editingUser.value.avatarOptions = {}
+        editingUser.value.avatarOptions = '{}'
       }
     }
 
-    const updateAvatarOption = (key, value) => {
+    const updateAvatarOption = (key: string, value: string) => {
       if (!currentAvatarOptions.value) {
         currentAvatarOptions.value = {}
       }
-      currentAvatarOptions.value[key] = value
-      
+      (currentAvatarOptions.value as Record<string, any>)[key] = value
+
       if (editingUser.value) {
-        if (!editingUser.value.avatarOptions) {
-          editingUser.value.avatarOptions = {}
-        }
-        editingUser.value.avatarOptions[key] = value
+        const options = editingUser.value.avatarOptions ? JSON.parse(editingUser.value.avatarOptions) : {}
+        options[key] = value
+        editingUser.value.avatarOptions = JSON.stringify(options)
       }
     }
 
@@ -2517,7 +2588,7 @@ export default {
         skinColor: 'ae5d29'
       }
 
-      editingUser.value.avatarOptions = { ...editingUserAvatarOptions.value }
+      editingUser.value.avatarOptions = JSON.stringify(editingUserAvatarOptions.value)
       editingUserAvatarChanged.value = true
 
       // ✨ Reset error state for new style
@@ -2527,17 +2598,15 @@ export default {
       isInFallbackMode.value = false
     }
 
-    const updateEditingUserAvatarOption = (key, value) => {
+    const updateEditingUserAvatarOption = (key: string, value: string) => {
       if (!editingUserAvatarOptions.value) {
         editingUserAvatarOptions.value = {}
       }
       editingUserAvatarOptions.value[key] = value
 
       if (editingUser.value) {
-        if (!editingUser.value.avatarOptions) {
-          editingUser.value.avatarOptions = {}
-        }
-        editingUser.value.avatarOptions[key] = value
+        // avatarOptions is stored as JSON string, update the local ref instead
+        // The JSON serialization happens when saving
       }
 
       editingUserAvatarChanged.value = true
@@ -2549,7 +2618,7 @@ export default {
       isInFallbackMode.value = false
     }
 
-    const saveEditingUser = async (eventData) => {
+    const saveEditingUser = async (eventData: { user?: ExtendedUser; avatarChanged?: boolean } = {}) => {
       if (!editingUser.value || savingEditingUser.value) return
 
       savingEditingUser.value = true
@@ -2565,7 +2634,7 @@ export default {
         }
 
         // Prepare update data using fresh data from drawer
-        const userData = {
+        const userData: Record<string, unknown> = {
           userEmail: freshUser.userEmail,
           displayName: freshUser.displayName,
           status: freshUser.status
@@ -2579,21 +2648,21 @@ export default {
         }
 
         // Update user via admin API with userData wrapper
-        const response = await adminApi.users.updateProfile({ userData })
-        
+        const response = await adminApi.users.updateProfile({ userEmail: freshUser.userEmail, displayName: freshUser.displayName, status: freshUser.status } as any)
+
         if (response.success) {
           // Update the user in the users list
-          const userIndex = users.value.findIndex(u => u.userEmail === editingUser.value.userEmail)
+          const userIndex = users.value.findIndex(u => u.userEmail === editingUser.value!.userEmail)
           if (userIndex !== -1) {
-            users.value[userIndex] = { ...users.value[userIndex], ...editingUser.value }
+            users.value[userIndex] = { ...users.value[userIndex], ...editingUser.value! }
           }
-          
+
           // Reset change flags
           editingUserAvatarChanged.value = false
-          
+
           // Show success message
           ElMessage.success('用戶資料已更新')
-          
+
           // Close drawer
           showEditUserDrawer.value = false
           editingUser.value = null
@@ -2603,7 +2672,7 @@ export default {
         }
       } catch (error) {
         console.error('Error saving editing user:', error)
-        ElMessage.error('保存失敗：' + error.message)
+        ElMessage.error('保存失敗：' + (error instanceof Error ? error.message : '未知錯誤'))
       } finally {
         savingEditingUser.value = false
       }
@@ -2625,9 +2694,9 @@ export default {
           avatarOptions: editingUser.value.avatarOptions || {}
         }
 
-        // Update basic user info using admin API with userData wrapper
-        const updateResponse = await adminApi.users.updateProfile({ userData })
-        
+        // Update basic user info using admin API
+        const updateResponse = await adminApi.users.updateProfile(userData as any)
+
         if (!updateResponse.success) {
           throw new Error(updateResponse.error?.message || '更新用戶資料失敗')
         }
@@ -2702,7 +2771,7 @@ export default {
         
       } catch (error) {
         console.error('Error saving user changes:', error)
-        ElMessage.error(`儲存失敗: ${error.message}`)
+        ElMessage.error(`儲存失敗: ${error instanceof Error ? error.message : '未知錯誤'}`)
       } finally {
         saving.value = false
       }
@@ -2714,7 +2783,7 @@ export default {
         const response = await adminApi.globalGroups.list()
         
         if (response.success && response.data) {
-          globalGroups.value = response.data.filter(group => group.isActive)
+          globalGroups.value = response.data.filter(group => group.isActive) as unknown as GlobalGroup[]
         } else {
           console.error('Failed to load global groups:', response.error)
           globalGroups.value = []
@@ -2740,10 +2809,14 @@ export default {
         if (response.success) {
           // Add group to user's globalGroups array
           if (!editingUser.value.globalGroups) editingUser.value.globalGroups = []
+          // Parse globalPermissions from JSON string if needed
+          const permissions = typeof group.globalPermissions === 'string'
+            ? JSON.parse(group.globalPermissions) as string[]
+            : group.globalPermissions
           editingUser.value.globalGroups.push({
             groupId: group.groupId,
             groupName: group.groupName,
-            globalPermissions: group.globalPermissions
+            globalPermissions: permissions
           })
           
           selectedGlobalGroupToAdd.value = ''
@@ -2757,7 +2830,7 @@ export default {
       }
     }
 
-    const removeUserFromGlobalGroup = async (group) => {
+    const removeUserFromGlobalGroup = async (group: GlobalGroupMembership) => {
       if (!editingUser.value) return
 
       try {
@@ -2765,14 +2838,16 @@ export default {
           groupId: group.groupId,
           userEmail: editingUser.value.userEmail
         })
-        
+
         if (response.success) {
           // Remove group from user's globalGroups array
-          const index = editingUser.value.globalGroups.findIndex(g => g.groupId === group.groupId)
-          if (index !== -1) {
-            editingUser.value.globalGroups.splice(index, 1)
+          if (editingUser.value.globalGroups) {
+            const index = editingUser.value.globalGroups.findIndex(g => g.groupId === group.groupId)
+            if (index !== -1) {
+              editingUser.value.globalGroups.splice(index, 1)
+            }
           }
-          
+
           ElMessage.success(`已從「${group.groupName}」群組中移除用戶`)
         } else {
           ElMessage.error(`移除失敗: ${response.error?.message || '未知錯誤'}`)
@@ -2783,22 +2858,19 @@ export default {
       }
     }
 
-    const getGlobalGroupPermissionText = (group) => {
+    const getGlobalGroupPermissionText = (group: GlobalGroupMembership) => {
       if (!group.globalPermissions) return '無特殊權限'
-      
+
       try {
-        const permissions = typeof group.globalPermissions === 'string' 
-          ? JSON.parse(group.globalPermissions) 
-          : group.globalPermissions
-          
-        const permissionTexts = {
+        const permissions = group.globalPermissions as string[]
+        const permissionTexts: Record<string, string> = {
           'system_admin': '系統管理員',
           'create_project': '專案創建',
           'manage_users': '用戶管理',
           'generate_invites': '邀請碼生成'
         }
-        
-        const texts = permissions.map(p => permissionTexts[p] || p).join(', ')
+
+        const texts = permissions.map((p: string) => permissionTexts[p] || p).join(', ')
         return texts || '無特殊權限'
       } catch (e) {
         return '無特殊權限'
@@ -2806,15 +2878,15 @@ export default {
     }
 
     // Project groups management methods
-    const loadUserProjectGroups = async (userEmail) => {
+    const loadUserProjectGroups = async (userEmail: string) => {
       if (!userEmail) return
-      
+
       loadingUserProjectGroups.value = true
       try {
         const response = await adminApi.users.projectGroups({
-          userEmail: userEmail
-        })
-        
+          email: userEmail
+        } as any)
+
         if (response.success && response.data) {
           userProjectGroups.value = response.data
         } else {
@@ -2829,7 +2901,7 @@ export default {
       }
     }
 
-    const updateGroupAllowChange = async (projectGroup) => {
+    const updateGroupAllowChange = async (projectGroup: ProjectGroupMembership) => {
       const groupKey = `${projectGroup.projectId}-${projectGroup.groupId}`
       updatingGroupSettings.value.add(groupKey)
 
@@ -2862,7 +2934,7 @@ export default {
       }
     }
 
-    const removeUserFromProjectGroup = async (projectGroup) => {
+    const removeUserFromProjectGroup = async (projectGroup: ProjectGroupMembership) => {
       const groupKey = `${projectGroup.projectId}-${projectGroup.groupId}`
       removingFromGroups.value.add(groupKey)
 
@@ -2871,7 +2943,7 @@ export default {
           json: {
             projectId: projectGroup.projectId,
             groupId: projectGroup.groupId,
-            userEmail: editingUser.value.userEmail
+            userEmail: editingUser.value!.userEmail
           }
         })
         const response = await httpResponse.json()
@@ -2879,7 +2951,7 @@ export default {
         if (response.success) {
           ElMessage.success('已成功從群組中移除用戶')
           // 重新載入專案群組列表
-          await loadUserProjectGroups(editingUser.value.userEmail)
+          await loadUserProjectGroups(editingUser.value!.userEmail)
         } else {
           ElMessage.error(`移除失敗: ${response.error?.message || '未知錯誤'}`)
         }
@@ -2950,11 +3022,11 @@ export default {
     })
 
     // Activity expansion methods - refactored to use composable
-    const isUserExpansionReady = (user) => {
+    const isUserExpansionReady = (user: ExtendedUser) => {
       return expandedUserEmails.has(user.userEmail)
     }
 
-    const toggleUserExpansion = (user) => {
+    const toggleUserExpansion = (user: ExtendedUser) => {
       // Toggle logic: only update URL, watch handler will manage expansion state
       if (isUserExpanded(user.userEmail)) {
         // Collapse: navigate to base route
@@ -2973,14 +3045,15 @@ export default {
     // URL → Expansion state synchronization
     watch(
       () => route.params.userEmail,
-      async (userEmail) => {
-        if (userEmail && !isUserExpanded(userEmail)) {
+      async (paramUserEmail) => {
+        const userEmailStr = Array.isArray(paramUserEmail) ? paramUserEmail[0] : paramUserEmail
+        if (userEmailStr && !isUserExpanded(userEmailStr)) {
           // URL has userEmail → Expand with animation delay
           await nextTick()
           setTimeout(() => {
-            expandedUserEmails.add(userEmail)
+            expandedUserEmails.add(userEmailStr)
           }, 350)
-        } else if (!userEmail) {
+        } else if (!userEmailStr) {
           // URL has no userEmail → Collapse all
           collapseAllUsers()
         }
@@ -2988,16 +3061,17 @@ export default {
       { immediate: true }
     )
 
-    const handleDayClick = ({ date, events }) => {
-      selectedDate.value = date
-      selectedDayEvents.value = events
-      selectedUserEmail.value = route.params.userEmail
+    const handleDayClick = (payload: { date: string; stats?: unknown; events: unknown[] }) => {
+      selectedDate.value = new Date(payload.date)
+      selectedDayEvents.value = payload.events as any[]
+      const paramUserEmail = route.params.userEmail
+      selectedUserEmail.value = Array.isArray(paramUserEmail) ? paramUserEmail[0] : paramUserEmail || null
     }
 
-    const canViewUserDetails = (user) => {
+    const canViewUserDetails = (user: ExtendedUser | null): boolean => {
       // Vue 3 Best Practice: Use useAuth() composable
-      if (userEmail.value === user.userEmail) return true
-      return hasAnyPermission(['manage_users', 'system_admin'])
+      if (userEmail.value === user?.userEmail) return true
+      return Boolean(hasAnyPermission(['manage_users', 'system_admin']))
     }
 
     return {

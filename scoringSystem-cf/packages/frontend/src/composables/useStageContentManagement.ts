@@ -716,6 +716,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
           memberNames: groupInfo.memberNames || [],
           participationProposal: submission.participationProposal || {},  // ✅ 保留此字段，確保有預設值
           submissionStatus: getSubmissionStatus(submission),
+          status: submission.status,  // ✅ 從 submissions_with_status VIEW 獲取的狀態
           reportContent: submission.contentMarkdown || submission.content || '',
           showReport: false,
           settlementRank: submission.settlementRank || '-',
@@ -762,6 +763,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
             memberNames: groupInfo.memberNames || [],
             participationProposal: submission.participationProposal || {},
             submissionStatus: getSubmissionStatus(submission),
+            status: submission.status,  // ✅ 從 submissions_with_status VIEW 獲取的狀態
             reportContent: submission.contentMarkdown || submission.content || '',
             showReport: false,
             settlementRank: submission.settlementRank || '-',

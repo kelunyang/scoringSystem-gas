@@ -22,8 +22,13 @@ import {
   getStage,
   updateStage,
   listProjectStages,
-  cloneStage
+  cloneStage,
+  cloneStageToProjects
 } from '../handlers/stages/manage';
+import {
+  pauseStage,
+  resumeStage
+} from '../handlers/stages/pause';
 import {
   getStageConfig,
   updateStageConfig,
@@ -35,11 +40,14 @@ import {
   UpdateStageRequestSchema,
   ListStagesRequestSchema,
   CloneStageRequestSchema,
+  CloneStageToProjectsRequestSchema,
   CheckVotingLockRequestSchema,
   ForceStageTransitionRequestSchema,
   GetStageConfigRequestSchema,
   UpdateStageConfigRequestSchema,
-  ResetStageConfigRequestSchema
+  ResetStageConfigRequestSchema,
+  PauseStageRequestSchema,
+  ResumeStageRequestSchema
 } from '@repo/shared/schemas/stages';
 
 
@@ -204,6 +212,67 @@ app.post(
       body.projectId,
       body.stageId,
       body.newStageName,
+      body.startTime,
+      body.endTime
+    );
+
+    return response;
+  }
+);
+
+/**
+ * Clone stage to multiple projects
+ * Body: { sourceProjectId, stageId, newStageName, targetProjectIds, startTime?, endTime? }
+ */
+app.post(
+  '/clone-to-projects',
+  zValidator('json', CloneStageToProjectsRequestSchema),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+
+    // Check permission: need 'manage' permission on source project
+    const hasSourcePermission = await checkProjectPermission(
+      c.env, user.userEmail, body.sourceProjectId, 'manage'
+    );
+    if (!hasSourcePermission) {
+      return c.json({
+        success: false,
+        error: 'Insufficient permissions on source project',
+        errorCode: 'ACCESS_DENIED'
+      }, 403);
+    }
+
+    // Check permission: need 'manage' permission on all target projects
+    for (const targetProjectId of body.targetProjectIds) {
+      const hasTargetPermission = await checkProjectPermission(
+        c.env, user.userEmail, targetProjectId, 'manage'
+      );
+      if (!hasTargetPermission) {
+        // Get project name for error message
+        const project = await c.env.DB.prepare(
+          'SELECT projectName FROM projects WHERE projectId = ?'
+        ).bind(targetProjectId).first();
+
+        return c.json({
+          success: false,
+          error: `Insufficient permissions on target project: ${project?.projectName || targetProjectId}`,
+          errorCode: 'ACCESS_DENIED',
+          data: {
+            failedProjectId: targetProjectId,
+            failedProjectName: project?.projectName || null
+          }
+        }, 403);
+      }
+    }
+
+    const response = await cloneStageToProjects(
+      c.env,
+      user.userEmail,
+      body.sourceProjectId,
+      body.stageId,
+      body.newStageName,
+      body.targetProjectIds,
       body.startTime,
       body.endTime
     );
@@ -452,6 +521,73 @@ app.post(
     }
 
     const response = await resetStageConfig(
+      c.env,
+      user.userEmail,
+      body.projectId,
+      body.stageId
+    );
+
+    return response;
+  }
+);
+
+/**
+ * Pause a stage
+ * Body: { projectId, stageId, reason }
+ * Only stages in 'active' or 'voting' status can be paused
+ */
+app.post(
+  '/pause',
+  zValidator('json', PauseStageRequestSchema),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+
+    // Check permission: need 'manage' permission
+    const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
+    if (!hasPermission) {
+      return c.json({
+        success: false,
+        error: 'Insufficient permissions to pause stage',
+        errorCode: 'ACCESS_DENIED'
+      }, 403);
+    }
+
+    const response = await pauseStage(
+      c.env,
+      user.userEmail,
+      body.projectId,
+      body.stageId,
+      body.reason
+    );
+
+    return response;
+  }
+);
+
+/**
+ * Resume a paused stage
+ * Body: { projectId, stageId }
+ * Only stages in 'paused' status can be resumed
+ */
+app.post(
+  '/resume',
+  zValidator('json', ResumeStageRequestSchema),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+
+    // Check permission: need 'manage' permission
+    const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
+    if (!hasPermission) {
+      return c.json({
+        success: false,
+        error: 'Insufficient permissions to resume stage',
+        errorCode: 'ACCESS_DENIED'
+      }, 403);
+    }
+
+    const response = await resumeStage(
       c.env,
       user.userEmail,
       body.projectId,

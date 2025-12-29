@@ -171,7 +171,7 @@ const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 // ===== Drawer Alerts =====
 const { addAlert, clearAlerts } = useDrawerAlerts()
 
-interface Stage {
+export interface Stage {
   stageId: string
   stageName?: string
   status?: string
@@ -179,19 +179,19 @@ interface Stage {
   [key: string]: any
 }
 
-interface Project {
+export interface Project {
   projectId: string
   [key: string]: any
 }
 
-interface Participant {
+export interface Participant {
   displayName?: string
   userEmail: string
   transactionCount: number
   totalAmount: number
 }
 
-interface ReversePreviewData {
+export interface ReversePreviewData {
   totalReward: number
   transactionCount: number
   uniqueUserCount: number
@@ -201,14 +201,14 @@ interface ReversePreviewData {
   settlementId?: string
 }
 
-interface ReverseSuccessData {
+export interface ReverseSuccessData {
   reversalId: string
   transactionCount: number
   stageId: string
   projectId: string
 }
 
-interface Props {
+export interface Props {
   modelValue?: boolean
   stage?: Stage | null
   project?: Project | null

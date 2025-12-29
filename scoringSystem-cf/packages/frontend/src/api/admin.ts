@@ -87,6 +87,8 @@ import type {
   // System Properties
   SystemProperty,
   UpdatePropertyRequest,
+  UpdatePropertiesRequest,
+  UpdatePropertiesResponse,
   ResetPropertyRequest,
 
   // SMTP
@@ -524,21 +526,21 @@ export const adminApi = {
       ),
 
     /**
-     * Update system property
+     * Update system properties (batch update)
      */
-    update: (params: UpdatePropertyRequest, signal?: AbortSignal) =>
-      fetchWithAuth<ApiResponse<void>>(
+    update: (params: UpdatePropertiesRequest, signal?: AbortSignal) =>
+      fetchWithAuth<ApiResponse<UpdatePropertiesResponse>>(
         '/api/admin/properties/update',
         { method: 'POST', body: params, signal }
       ),
 
     /**
-     * Reset system property to default
+     * Reset all system properties to defaults
      */
-    reset: (params: ResetPropertyRequest, signal?: AbortSignal) =>
+    reset: (signal?: AbortSignal) =>
       fetchWithAuth<ApiResponse<void>>(
         '/api/admin/properties/reset',
-        { method: 'POST', body: params, signal }
+        { method: 'POST', body: {}, signal }
       ),
   },
 

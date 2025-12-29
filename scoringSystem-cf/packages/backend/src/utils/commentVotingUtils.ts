@@ -140,6 +140,121 @@ export async function calculateReactionUsers(
 }
 
 /**
+ * 回覆用戶資訊結構
+ * 用於前端 AvatarGroup 組件顯示
+ */
+export interface ReplyUserInfo {
+  userEmail: string;
+  displayName: string;
+  avatarSeed: string | null;
+  avatarStyle: string | null;
+  avatarOptions: string | null;
+  role: 'member';  // mentions 沒有 leader 概念，全部是 member
+}
+
+/**
+ * 計算可以回覆此評論的用戶列表（返回完整用戶資訊）
+ * 與 calculateReactionUsers 不同：
+ * - 不過濾教師（教師也可以被 mention）
+ * - 不排除作者（作者可以回覆自己）
+ * - 返回完整用戶對象（包含頭像資訊），供前端 AvatarGroup 使用
+ *
+ * @param db - D1 Database instance
+ * @param projectId - Project ID
+ * @param mentionedGroups - 被提及的群組 ID 列表（JSON string）
+ * @param mentionedUsers - 被提及的使用者 email 列表（JSON string）
+ * @returns 用戶資訊列表（已去重，包含頭像資訊）
+ */
+export async function calculateReplyUsers(
+  db: D1Database,
+  projectId: string,
+  mentionedGroups: string | null,
+  mentionedUsers: string | null
+): Promise<ReplyUserInfo[]> {
+  const replyUsersMap = new Map<string, ReplyUserInfo>();
+
+  // 1. 處理 mentionedUsers（查詢完整用戶資訊）
+  if (mentionedUsers) {
+    try {
+      const users = JSON.parse(mentionedUsers);
+      if (Array.isArray(users) && users.length > 0) {
+        const placeholders = users.map(() => '?').join(',');
+        const userInfos = await db.prepare(`
+          SELECT userEmail, displayName, avatarSeed, avatarStyle, avatarOptions
+          FROM users
+          WHERE userEmail IN (${placeholders})
+        `).bind(...users).all<{
+          userEmail: string;
+          displayName: string | null;
+          avatarSeed: string | null;
+          avatarStyle: string | null;
+          avatarOptions: string | null;
+        }>();
+
+        for (const u of userInfos.results || []) {
+          replyUsersMap.set(u.userEmail, {
+            userEmail: u.userEmail,
+            displayName: u.displayName || u.userEmail.split('@')[0],
+            avatarSeed: u.avatarSeed,
+            avatarStyle: u.avatarStyle,
+            avatarOptions: u.avatarOptions,
+            role: 'member'
+          });
+        }
+      }
+    } catch (e) {
+      // JSON parse error, skip
+      console.warn('[calculateReplyUsers] Failed to parse mentionedUsers:', e);
+    }
+  }
+
+  // 2. 處理 mentionedGroups（展開為成員列表，查詢完整用戶資訊）
+  if (mentionedGroups) {
+    try {
+      const groups = JSON.parse(mentionedGroups);
+
+      if (Array.isArray(groups) && groups.length > 0) {
+        // 批次查詢所有群組的成員（JOIN users 表獲取頭像資訊）
+        const placeholders = groups.map(() => '?').join(',');
+        const members = await db.prepare(`
+          SELECT DISTINCT u.userEmail, u.displayName, u.avatarSeed, u.avatarStyle, u.avatarOptions
+          FROM usergroups ug
+          JOIN users u ON u.userEmail = ug.userEmail
+          WHERE ug.projectId = ?
+            AND ug.groupId IN (${placeholders})
+            AND ug.isActive = 1
+        `).bind(projectId, ...groups).all<{
+          userEmail: string;
+          displayName: string | null;
+          avatarSeed: string | null;
+          avatarStyle: string | null;
+          avatarOptions: string | null;
+        }>();
+
+        for (const m of members.results || []) {
+          // 只加入尚未存在的用戶（避免重複）
+          if (!replyUsersMap.has(m.userEmail)) {
+            replyUsersMap.set(m.userEmail, {
+              userEmail: m.userEmail,
+              displayName: m.displayName || m.userEmail.split('@')[0],
+              avatarSeed: m.avatarSeed,
+              avatarStyle: m.avatarStyle,
+              avatarOptions: m.avatarOptions,
+              role: 'member'
+            });
+          }
+        }
+      }
+    } catch (e) {
+      // JSON parse error, skip
+      console.warn('[calculateReplyUsers] Failed to parse mentionedGroups:', e);
+    }
+  }
+
+  return Array.from(replyUsersMap.values());
+}
+
+/**
  * 檢查使用者是否可以對評論給予反應
  * 規則：必須是被 mention 的學生（非老師），且不是作者本人
  */

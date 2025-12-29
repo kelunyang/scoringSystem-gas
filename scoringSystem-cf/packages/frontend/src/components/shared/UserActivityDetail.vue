@@ -43,7 +43,7 @@
           <div v-else-if="event.eventType === 'login_failed'" class="event-detail error">
             <div class="event-info">
               <i class="fas fa-exclamation-triangle"></i>
-              失敗原因: {{ getFailureReasonText(event.reason || event.action) }}
+              失敗原因: {{ getFailureReasonText(event.reason || event.action || 'unknown') }}
             </div>
             <div class="event-info">
               <i class="fas fa-map-marker-alt"></i>
@@ -87,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, shallowRef, onUnmounted } from 'vue'
+import { ref, computed, watch, shallowRef, onUnmounted, type ComputedRef } from 'vue'
 import { ElMessage } from 'element-plus'
 import { rpcClient } from '@/utils/rpc-client'
 import { formatDateChinese, formatTime as formatTimestamp } from '@/utils/date'
@@ -108,7 +108,7 @@ const hljsPromise = import('highlight.js/lib/core').then(async (module) => {
 /**
  * Event interface
  */
-interface Event {
+export interface Event {
   timestamp: number
   eventType?: string
   action?: string
@@ -126,7 +126,7 @@ interface Event {
 /**
  * Props interface
  */
-interface Props {
+export interface Props {
   userEmail: string
   date: string
   events?: Event[]

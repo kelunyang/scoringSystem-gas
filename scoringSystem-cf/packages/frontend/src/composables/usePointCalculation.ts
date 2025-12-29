@@ -102,8 +102,8 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
     targetRank = 1,
     totalStagePoints = 100,
     groupCount = 4,
-    allGroups = [],
-    currentGroupId = null
+    allGroups: any[] = [],
+    currentGroupId: string | null = null
   ) {
     // ===== 輸入驗證 =====
     if (!selectedMembers || selectedMembers.length === 0) {
@@ -263,7 +263,7 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
     totalStagePoints = 100,
     groupCount = 4,
     allGroups: any[] = [],
-    currentGroupId = null
+    currentGroupId: string | null | undefined = null
   ) {
     // 計算排名權重
     const rankWeights = calculateRankWeights(groupCount)

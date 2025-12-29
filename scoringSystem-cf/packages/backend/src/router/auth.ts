@@ -237,7 +237,7 @@ authRouter.post('/current-user', async (c) => {
       );
 
       // Parse the validation response to add newToken field
-      const responseData = await validationResponse.json();
+      const responseData = await validationResponse.json() as Record<string, unknown>;
 
       // Return response with new token in both body and header
       return c.json({

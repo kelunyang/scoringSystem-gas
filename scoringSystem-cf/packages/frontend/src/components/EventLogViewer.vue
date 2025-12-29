@@ -248,7 +248,7 @@ import { ElMessage } from 'element-plus'
 // @ts-ignore - icons-vue package type issue
 import { Refresh } from '@element-plus/icons-vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
-import { marked } from 'marked'
+import { renderMarkdown } from '@/utils/markdown'
 import { rpcClient } from '@/utils/rpc-client'
 import { getErrorMessage } from '@/utils/errorHandler'
 import type { EventLog } from '@/types'
@@ -449,16 +449,19 @@ const expandedFilterCount = computed(() => {
 
 // Export configuration
 const exportConfig = computed(() => ({
-  data: displayedLogs.value,
+  data: displayedLogs.value as unknown as Record<string, unknown>[],
   filename: '事件日誌',
   headers: ['時間', '用戶', '資源類型', '階段', '操作'],
-  rowMapper: (log: EventLog) => [
-    new Date(log.timestamp).toLocaleString('zh-TW'),
-    log.userEmail || 'system',
-    getResourceTypeLabel(log.resourceType || '-'),
-    log.stageName || '-',
-    log.action || '-'
-  ]
+  rowMapper: (item: Record<string, unknown>) => {
+    const log = item as unknown as EventLog
+    return [
+      new Date(log.timestamp).toLocaleString('zh-TW'),
+      log.userEmail || 'system',
+      getResourceTypeLabel(log.resourceType || '-'),
+      log.stageName || '-',
+      log.action || '-'
+    ] as (string | number)[]
+  }
 }))
 
 // 方法
@@ -682,11 +685,6 @@ const getResourceTypeLabel = (type: string): string => {
     'settlement': '结算'
   }
   return labels[type] || type
-}
-
-const renderMarkdown = (content: string | undefined): string => {
-  if (!content) return ''
-  return marked(content) as string
 }
 
 const exportToCsv = async () => {

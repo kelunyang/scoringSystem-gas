@@ -200,9 +200,9 @@
         <template #stats>
           <!-- 🆕 后端模式：显示 API 返回的总数 -->
           <el-statistic
-            v-if="standardLogsSearchMode === 'backend' && totalCount > 0"
+            v-if="standardLogsSearchMode === 'backend' && (totalCount ?? 0) > 0"
             title="搜尋結果"
-            :value="totalCount"
+            :value="totalCount ?? 0"
             suffix="筆記錄"
           >
             <template #prefix>
@@ -227,7 +227,7 @@
       </AdminFilterToolbar>
 
       <!-- 🆕 搜索模式提示 -->
-      <div v-if="standardLogsSearchMode === 'backend' && totalCount > 0" class="search-result-info" style="margin-top: 10px;">
+      <div v-if="standardLogsSearchMode === 'backend' && (totalCount ?? 0) > 0" class="search-result-info" style="margin-top: 10px;">
         <el-alert type="success" :closable="false">
           <template #title>
             <i class="fas fa-database"></i>
@@ -310,11 +310,11 @@
               </td>
               <td>{{ log.displayName }}</td>
               <td>
-                <el-tag :type="getActionType(log.action)" size="small">
-                  {{ getActionLabel(log.action) }}
+                <el-tag :type="getActionType(log.action ?? '')" size="small">
+                  {{ getActionLabel(log.action ?? '') }}
                 </el-tag>
               </td>
-              <td>{{ getEntityTypeLabel(log.entityType) }}</td>
+              <td>{{ getEntityTypeLabel(log.entityType ?? '') }}</td>
               <td>{{ log.functionName }}</td>
               <td>
                 <div class="log-message">
@@ -909,7 +909,7 @@ import { adminApi } from '@/api/admin'
 import { getErrorMessage } from '@/utils/errorHandler'
 import { sanitizeHtml } from '@/utils/sanitize'
 import { useDebounceFn } from '@vueuse/core'
-import type { LogEntry, LogFilterOptions, SystemLogsRequest, EmailLog } from '@repo/shared/types/admin'
+import type { LogEntry, LogFilterOptions, SystemLogsRequest, EmailLog, LogStatistics } from '@repo/shared/types/admin'
 import { EmailStatus } from '@repo/shared/types/admin'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
@@ -949,7 +949,7 @@ const logModeOptions = [
 // 基礎 reactive 變數
 const loading = ref(false)
 const allLogs = ref<LogEntry[]>([])
-const logStats = ref<LogStats | null>(null)
+const logStats = ref<LogStatistics | null>(null)
 const displayLimit = ref(DEFAULT_DISPLAY_LIMIT)
 const searchAbortController = ref<AbortController | null>(null)
 const searchKeyword = ref('') // Debounced 值
@@ -1406,7 +1406,7 @@ const searchEmailLogsBackend = async () => {
         // ✅ 后端 API 已支持所有这些过滤器
         recipient: emailLogsRecipient.value || undefined,
         trigger: emailLogsTriggerFilter.value || undefined,
-        status: emailLogsStatusFilter.value || undefined,
+        status: (emailLogsStatusFilter.value || undefined) as EmailStatus | undefined,
         startDate: emailLogsDateRange.value?.[0] ? parseInt(emailLogsDateRange.value[0]) : undefined,
         endDate: emailLogsDateRange.value?.[1] ? parseInt(emailLogsDateRange.value[1]) : undefined,
         limit: 1000,  // 后端搜索可以返回更多
@@ -1417,12 +1417,12 @@ const searchEmailLogsBackend = async () => {
     console.log('🔍 [Backend Search] Email logs API response:', {
       success: response.success,
       logsCount: response.data?.logs?.length,
-      total: response.data?.total
+      totalCount: response.data?.totalCount
     })
 
     if (response.success) {
       allEmailLogs.value = response.data?.logs || []
-      totalEmailLogsCount.value = response.data?.total || allEmailLogs.value.length
+      totalEmailLogsCount.value = response.data?.totalCount || allEmailLogs.value.length
 
       ElMessage.success(`后端搜索完成：找到 ${totalEmailLogsCount.value} 条匹配记录`)
     } else {
@@ -1462,18 +1462,8 @@ watchEffect(() => {
   }
 })
 
-// Type definitions
-interface LogStats {
-  totalLogs?: number
-  levelCounts?: {
-    info?: number
-    warning?: number
-    error?: number
-    critical?: number
-  }
-}
-
-// EmailLog 已從 @repo/shared/types/admin 導入
+// LogStatistics type is now imported from @repo/shared/types/admin
+// EmailLog is also imported from @repo/shared/types/admin
 
 // 基礎變數與 Computed Properties 已移至 line 811-865
 
@@ -1852,18 +1842,22 @@ const displayedLogs = computed(() => {
 })
 
 // Export configuration
+// Note: Type assertions needed because AdminFilterToolbar uses generic ExportableData type
 const exportConfig = computed(() => ({
-  data: displayedLogs.value,
+  data: displayedLogs.value as unknown as Record<string, unknown>[],
   filename: '系統日誌',
   headers: ['時間', '級別', '用戶', '操作', '實體類型', '訊息'],
-  rowMapper: (log: LogEntry) => [
-    new Date(log.timestamp).toLocaleString('zh-TW'),
-    log.level,
-    log.userId || 'system',
-    getActionLabel(log.action || ''),
-    getEntityTypeLabel(log.entityType || ''),
-    log.message
-  ]
+  rowMapper: (item: Record<string, unknown>) => {
+    const log = item as unknown as LogEntry
+    return [
+      new Date(log.createdAt).toLocaleString('zh-TW'),
+      log.level,
+      log.userId || 'system',
+      getActionLabel(log.action || ''),
+      getEntityTypeLabel(log.entityType || ''),
+      log.message ?? ''
+    ]
+  }
 }))
 
 const loadLogStats = async () => {
@@ -1972,7 +1966,7 @@ const handleToggleExpansion = async (log: LogEntry) => {
 
   // 展開新行
   expandedLogId.value = log.logId
-  entityDialogTitle.value = `${getEntityTypeLabel(log.entityType)} - ${log.entityId}`
+  entityDialogTitle.value = `${getEntityTypeLabel(log.entityType ?? '')} - ${log.entityId}`
 
   // 更新 URL 參數
   await router.replace({

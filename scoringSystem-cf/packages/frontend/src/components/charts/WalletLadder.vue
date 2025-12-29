@@ -7,7 +7,7 @@
           <i class="fas fa-eye"></i> 完整權限：顯示所有參與者 ({{ ladderData.walletData.length }} 人)
         </span>
         <span v-else class="limited-access-badge">
-          <i class="fas fa-eye-slash"></i> 限制檢視：僅顯示第一名和您組內成員的排名
+          <i class="fas fa-user-secret"></i> 隱私保護：非組內成員以問號頭像顯示，點數仍可見
         </span>
       </div>
     </div>
@@ -93,6 +93,14 @@
               <span class="stat-label">最高餘額</span>
               <span class="stat-value">{{ ladderStats.maxBalance }} 點</span>
             </div>
+            <div v-if="ladderStats.zeroScoreThreshold > 0" class="stat-item stat-threshold">
+              <span class="stat-label">0分閾值</span>
+              <span class="stat-value">{{ ladderStats.zeroScoreThreshold }} 點</span>
+            </div>
+            <div v-if="ladderStats.zeroScoreThreshold > 0" class="stat-item">
+              <span class="stat-label">有效最低餘額</span>
+              <span class="stat-value">{{ ladderStats.effectiveMinBalance }} 點</span>
+            </div>
             <div class="stat-item">
               <span class="stat-label">最低分數</span>
               <span class="stat-value">{{ ladderStats.scoreMin }} 分</span>
@@ -126,10 +134,19 @@
           <div class="example-box">
             <p><strong>假設你的錢包餘額為：</strong></p>
             <div class="example-calculations">
+              <!-- 如果有閾值，先顯示低於閾值的例子 -->
+              <div
+                v-if="ladderStats.zeroScoreThreshold > 0"
+                class="example-item example-below-threshold"
+              >
+                <div class="example-balance">餘額 = <strong>{{ Math.round(ladderStats.zeroScoreThreshold * 0.5) }}</strong> 點</div>
+                <div class="example-arrow">→</div>
+                <div class="example-score example-zero">預估分數 = <strong>0</strong> 分 <small>(低於閾值)</small></div>
+              </div>
               <div
                 v-for="balance in [
-                  ladderStats.minBalance,
-                  Math.round((ladderStats.minBalance + ladderStats.maxBalance) / 2),
+                  ladderStats.effectiveMinBalance,
+                  Math.round((ladderStats.effectiveMinBalance + ladderStats.maxBalance) / 2),
                   ladderStats.maxBalance
                 ]"
                 :key="balance"
@@ -190,6 +207,11 @@ const props = defineProps({
   queriedUserEmail: {
     type: String,
     default: null
+  },
+  /** Points below this threshold are treated as 0 score (default: 0 = disabled) */
+  zeroScoreThreshold: {
+    type: Number,
+    default: 0
   }
 })
 
@@ -225,9 +247,19 @@ const ladderStats = computed(() => {
   const scoreMin = props.ladderData.scoreRangeMin || props.scoreRangeMin
   const scoreMax = props.ladderData.scoreRangeMax || props.scoreRangeMax
 
+  // Calculate effectiveMinBalance considering the threshold
+  // Only balances >= threshold are used for affine transformation
+  const threshold = props.zeroScoreThreshold
+  const balancesAboveThreshold = balances.filter((b: number) => b >= threshold)
+  const effectiveMinBalance = balancesAboveThreshold.length > 0
+    ? Math.min(...balancesAboveThreshold)
+    : threshold
+
   return {
     minBalance,
     maxBalance,
+    effectiveMinBalance,
+    zeroScoreThreshold: threshold,
     scoreMin,
     scoreMax,
     totalParticipants: data.length
@@ -261,13 +293,17 @@ const queriedUserData = computed(() => {
   const stats = ladderStats.value
   if (!stats) return null
 
-  const { scoreMin, scoreMax, minBalance, maxBalance } = stats
+  const { scoreMin, scoreMax, effectiveMinBalance, maxBalance, zeroScoreThreshold } = stats
   let predictedScore: number
 
-  if (maxBalance === minBalance) {
+  // 低於閾值者得 0 分
+  if (userData.currentBalance < zeroScoreThreshold) {
+    predictedScore = 0
+  } else if (maxBalance === effectiveMinBalance) {
     predictedScore = scoreMax
   } else {
-    predictedScore = scoreMin + (userData.currentBalance - minBalance) / (maxBalance - minBalance) * (scoreMax - scoreMin)
+    // 使用 effectiveMinBalance 進行仿射變換
+    predictedScore = scoreMin + (userData.currentBalance - effectiveMinBalance) / (maxBalance - effectiveMinBalance) * (scoreMax - scoreMin)
     predictedScore = Math.round(predictedScore * 10) / 10
   }
 
@@ -276,7 +312,8 @@ const queriedUserData = computed(() => {
     displayName: userData.displayName,
     balance: userData.currentBalance,
     rank: userIndex + 1, // 排名從 1 開始
-    predictedScore
+    predictedScore,
+    isBelowThreshold: userData.currentBalance < zeroScoreThreshold
   }
 })
 
@@ -359,13 +396,18 @@ function createLadderChart(container: any) {
   const minWealth = props.ladderData?.globalMinBalance ?? (window as any).d3.min(sortedData, (d: any) => d.currentBalance) ?? 0
   const maxWealth = props.ladderData?.globalMaxBalance ?? (window as any).d3.max(sortedData, (d: any) => d.currentBalance) ?? 100
 
+  // Get threshold for death zone
+  const threshold = props.zeroScoreThreshold
+
   // 建立比例尺
   const xScale = (window as any).d3.scaleLinear()
     .domain([0, maxWealth * 1.1])
     .range([0, width])
 
+  // Y軸：當啟用閾值時，從0開始以顯示死亡區
+  const yMin = threshold > 0 ? 0 : minWealth
   const yScale = (window as any).d3.scaleLinear()
-    .domain([minWealth, maxWealth])
+    .domain([yMin, maxWealth])
     .range([height, 0])
 
   // 繪製 X 軸
@@ -394,17 +436,91 @@ function createLadderChart(container: any) {
   g.append('line')
     .attr('class', 'ladder-line')
     .attr('x1', 0)
-    .attr('y1', yScale(minWealth))
+    .attr('y1', yScale(yMin))
     .attr('x2', 0)
     .attr('y2', yScale(maxWealth))
     .style('stroke', '#2196F3')
     .style('stroke-width', 3)
     .style('stroke-dasharray', '5,5')
 
+  // 死亡區（當啟用閾值時）
+  if (threshold > 0) {
+    const deathZoneY = yScale(threshold)
+    const deathZoneHeight = height - deathZoneY
+
+    // 死亡區背景 #EEE
+    g.append('rect')
+      .attr('class', 'death-zone-bg')
+      .attr('x', 0)
+      .attr('y', deathZoneY)
+      .attr('width', width)
+      .attr('height', deathZoneHeight)
+      .attr('fill', '#EEE')
+
+    // 骷髏頭 pattern
+    const patternSize = 40
+    const defs = svg.select('defs').empty() ? svg.append('defs') : svg.select('defs')
+
+    defs.append('pattern')
+      .attr('id', 'skull-pattern')
+      .attr('width', patternSize)
+      .attr('height', patternSize)
+      .attr('patternUnits', 'userSpaceOnUse')
+      .append('text')
+      .attr('x', patternSize / 2)
+      .attr('y', patternSize / 2)
+      .attr('text-anchor', 'middle')
+      .attr('dominant-baseline', 'central')
+      .style('font-family', '"Font Awesome 6 Free"')
+      .style('font-weight', '900')
+      .style('font-size', '20px')
+      .style('fill', '#ddd')
+      .text('\uf54c')  // fa-skull Unicode
+
+    // 覆蓋骷髏頭 pattern
+    g.append('rect')
+      .attr('class', 'death-zone-pattern')
+      .attr('x', 0)
+      .attr('y', deathZoneY)
+      .attr('width', width)
+      .attr('height', deathZoneHeight)
+      .attr('fill', 'url(#skull-pattern)')
+
+    // 死亡區分隔線（紅色虛線）
+    g.append('line')
+      .attr('class', 'death-zone-line')
+      .attr('x1', 0)
+      .attr('x2', width)
+      .attr('y1', deathZoneY)
+      .attr('y2', deathZoneY)
+      .style('stroke', '#dc3545')
+      .style('stroke-width', 2)
+      .style('stroke-dasharray', '5,5')
+
+    // 0分標籤（左側）
+    g.append('text')
+      .attr('class', 'zero-score-label')
+      .attr('x', -15)
+      .attr('y', height + 5)
+      .attr('text-anchor', 'end')
+      .style('fill', '#dc3545')
+      .style('font-weight', 'bold')
+      .style('font-size', '12px')
+      .text('0分')
+  }
+
   // 標記百分制分數範圍
   if (sortedData.length > 0) {
     const scoreMin = props.ladderData.scoreRangeMin || props.scoreRangeMin
     const scoreMax = props.ladderData.scoreRangeMax || props.scoreRangeMax
+
+    // 計算 effectiveMinBalance：及格者中的最低餘額
+    const balancesAboveThreshold = sortedData
+      .map((d: any) => d.currentBalance)
+      .filter((b: number) => b >= threshold)
+    const effectiveMinBalance = balancesAboveThreshold.length > 0
+      ? Math.min(...balancesAboveThreshold)
+      : threshold
 
     // 最高分標記
     g.append('circle')
@@ -425,11 +541,12 @@ function createLadderChart(container: any) {
       .style('font-weight', 'bold')
       .text(`${scoreMax}分`)
 
-    // 最低分標記
+    // 最低分標記 - 當有閾值時，顯示在及格者最低餘額位置
+    const effectiveMinForMarker = threshold > 0 ? effectiveMinBalance : minWealth
     g.append('circle')
       .attr('class', 'extreme-marker')
       .attr('cx', 0)
-      .attr('cy', yScale(minWealth))
+      .attr('cy', yScale(effectiveMinForMarker))
       .attr('r', 8)
       .style('fill', '#FF9800')
       .style('stroke', 'white')
@@ -438,7 +555,7 @@ function createLadderChart(container: any) {
     g.append('text')
       .attr('class', 'extreme-label')
       .attr('x', -15)
-      .attr('y', yScale(minWealth) + 5)
+      .attr('y', yScale(effectiveMinForMarker) + 5)
       .attr('text-anchor', 'end')
       .style('fill', '#FF9800')
       .style('font-weight', 'bold')
@@ -525,44 +642,78 @@ function createLadderChart(container: any) {
       .delay(i * 50 + 200)
       .attr('opacity', 1)
 
-    // 頭像圓
-    const avatarUrl = generateAvatarUrl(person)
+    // 檢查是否為遮罩用戶
+    const isMaskedUser = person.isMasked === true
 
-    // 創建頭像圖片 pattern
-    const defs = svg.select('defs').empty() ? svg.append('defs') : svg.select('defs')
-    const patternId = `avatar-${i}`
+    if (isMaskedUser) {
+      // 遮罩用戶：顯示灰色圓形 + 問號圖示
+      avatarGroup.append('circle')
+        .attr('r', 0)
+        .attr('fill', '#9ca3af')
+        .attr('stroke', '#6b7280')
+        .attr('stroke-width', 2)
+        .style('cursor', 'pointer')
+        .transition()
+        .duration(300)
+        .delay(i * 50 + 200)
+        .attr('r', avatarSize / 2)
 
-    const pattern = defs.append('pattern')
-      .attr('id', patternId)
-      .attr('width', 1)
-      .attr('height', 1)
-      .attr('patternContentUnits', 'objectBoundingBox')
+      // 問號文字
+      avatarGroup.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'central')
+        .attr('y', 1)
+        .style('font-size', '18px')
+        .style('font-weight', 'bold')
+        .style('fill', 'white')
+        .style('font-family', 'FontAwesome, "Font Awesome 6 Free", sans-serif')
+        .style('opacity', 0)
+        .text('?')
+        .transition()
+        .duration(300)
+        .delay(i * 50 + 250)
+        .style('opacity', 1)
+    } else {
+      // 正常用戶：顯示頭像
+      const avatarUrl = generateAvatarUrl(person)
 
-    pattern.append('image')
-      .attr('href', avatarUrl)
-      .attr('width', 1)
-      .attr('height', 1)
-      .attr('preserveAspectRatio', 'xMidYMid slice')
+      // 創建頭像圖片 pattern
+      const defs = svg.select('defs').empty() ? svg.append('defs') : svg.select('defs')
+      const patternId = `avatar-${i}`
 
-    avatarGroup.append('circle')
-      .attr('r', 0)
-      .attr('fill', `url(#${patternId})`)
-      .attr('stroke', (isCurrentUser || isQueriedUser) ? '#F44336' : 'white')
-      .attr('stroke-width', (isCurrentUser || isQueriedUser) ? 3 : 2)
-      .style('cursor', 'pointer')
-      .transition()
-      .duration(300)
-      .delay(i * 50 + 200)
-      .attr('r', avatarSize / 2)
+      const pattern = defs.append('pattern')
+        .attr('id', patternId)
+        .attr('width', 1)
+        .attr('height', 1)
+        .attr('patternContentUnits', 'objectBoundingBox')
+
+      pattern.append('image')
+        .attr('href', avatarUrl)
+        .attr('width', 1)
+        .attr('height', 1)
+        .attr('preserveAspectRatio', 'xMidYMid slice')
+
+      avatarGroup.append('circle')
+        .attr('r', 0)
+        .attr('fill', `url(#${patternId})`)
+        .attr('stroke', (isCurrentUser || isQueriedUser) ? '#F44336' : 'white')
+        .attr('stroke-width', (isCurrentUser || isQueriedUser) ? 3 : 2)
+        .style('cursor', 'pointer')
+        .transition()
+        .duration(300)
+        .delay(i * 50 + 200)
+        .attr('r', avatarSize / 2)
+    }
 
     // 姓名標籤
     g.append('text')
-      .attr('class', 'person-label')
+      .attr('class', isMaskedUser ? 'person-label masked-label' : 'person-label')
       .attr('x', x + avatarSize / 2 + 8)
       .attr('y', y + 4)
       .style('opacity', 0)
       .style('font-size', '13px')
-      .style('fill', '#333')
+      .style('fill', isMaskedUser ? '#9ca3af' : '#333')
+      .style('font-style', isMaskedUser ? 'italic' : 'normal')
       .text(person.displayName || person.userEmail)
       .transition()
       .duration(300)
@@ -586,11 +737,26 @@ function createLadderChart(container: any) {
     // 計算並顯示預估百分制分數
     const scoreRangeMin = props.ladderData.scoreRangeMin || props.scoreRangeMin
     const scoreRangeMax = props.ladderData.scoreRangeMax || props.scoreRangeMax
-    let estimatedScore = scoreRangeMax
+    // threshold 已在函數開頭宣告
+    let estimatedScore: number
 
-    if (maxWealth !== minWealth) {
-      // 仿射變換公式
-      estimatedScore = scoreRangeMin + (person.currentBalance - minWealth) / (maxWealth - minWealth) * (scoreRangeMax - scoreRangeMin)
+    // 計算 effectiveMinWealth（考慮閾值）
+    const balancesAboveThreshold = sortedData
+      .map((d: any) => d.currentBalance)
+      .filter((b: number) => b >= threshold)
+    const effectiveMinWealth = balancesAboveThreshold.length > 0
+      ? Math.min(...balancesAboveThreshold)
+      : threshold
+
+    // 低於閾值者得 0 分
+    const isBelowThreshold = person.currentBalance < threshold
+    if (isBelowThreshold) {
+      estimatedScore = 0
+    } else if (maxWealth === effectiveMinWealth) {
+      estimatedScore = scoreRangeMax
+    } else {
+      // 仿射變換公式（使用 effectiveMinWealth）
+      estimatedScore = scoreRangeMin + (person.currentBalance - effectiveMinWealth) / (maxWealth - effectiveMinWealth) * (scoreRangeMax - scoreRangeMin)
       estimatedScore = Math.round(estimatedScore * 10) / 10 // 保留一位小數
     }
 
@@ -601,9 +767,9 @@ function createLadderChart(container: any) {
       .attr('y', y + 32)
       .style('opacity', 0)
       .style('font-size', '10px')
-      .style('fill', '#4CAF50')
+      .style('fill', isBelowThreshold ? '#dc3545' : '#4CAF50')
       .style('font-weight', 'bold')
-      .text(`預估為${estimatedScore}分`)
+      .text(isBelowThreshold ? '低於閾值 = 0分' : `預估為${estimatedScore}分`)
       .transition()
       .duration(300)
       .delay(i * 50 + 350)
@@ -696,18 +862,23 @@ const affineFormulaLatex = computed(() => {
 })
 
 /**
- * 計算示例分數
+ * 計算示例分數（考慮閾值）
  */
 function calculateExampleScore(balance: any) {
   if (!ladderStats.value) return null
 
-  const { scoreMin, scoreMax, minBalance, maxBalance } = ladderStats.value
+  const { scoreMin, scoreMax, effectiveMinBalance, maxBalance, zeroScoreThreshold } = ladderStats.value
 
-  if (maxBalance === minBalance) {
+  // 低於閾值者得 0 分
+  if (balance < zeroScoreThreshold) {
+    return 0
+  }
+
+  if (maxBalance === effectiveMinBalance) {
     return scoreMax
   }
 
-  const score = scoreMin + (balance - minBalance) / (maxBalance - minBalance) * (scoreMax - scoreMin)
+  const score = scoreMin + (balance - effectiveMinBalance) / (maxBalance - effectiveMinBalance) * (scoreMax - scoreMin)
   return Math.round(score * 10) / 10
 }
 
@@ -716,6 +887,12 @@ watch(() => props.ladderData, async () => {
   await nextTick()
   renderChart()
 }, { deep: true })
+
+// Watch for threshold changes to re-render chart
+watch(() => props.zeroScoreThreshold, async () => {
+  await nextTick()
+  renderChart()
+})
 
 // Initial render
 onMounted(async () => {
@@ -937,6 +1114,38 @@ onUnmounted(() => {
   font-size: 16px;
   font-weight: 700;
   color: #2c3e50;
+}
+
+/* 閾值相關樣式 */
+.stat-threshold {
+  border-color: #dc3545;
+  background: #fff5f5;
+}
+
+.stat-threshold .stat-label {
+  color: #dc3545;
+}
+
+.stat-threshold .stat-value {
+  color: #dc3545;
+}
+
+.example-below-threshold {
+  border-color: #dc3545;
+  background: #fff5f5;
+}
+
+.example-zero {
+  color: #dc3545 !important;
+}
+
+.example-zero strong {
+  color: #dc3545 !important;
+}
+
+.example-zero small {
+  color: #dc3545;
+  font-size: 12px;
 }
 
 /* 用戶預估分數區塊 */

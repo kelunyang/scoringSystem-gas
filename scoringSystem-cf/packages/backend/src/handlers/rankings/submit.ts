@@ -53,6 +53,9 @@ export async function submitGroupRanking(
     }
 
     // Check if stage is in appropriate status for ranking
+    if (stage.status === 'paused') {
+      return errorResponse('STAGE_PAUSED', '階段已暫停，無法提交排名');
+    }
     if (stage.status !== 'active' && stage.status !== 'voting') {
       return errorResponse('STAGE_NOT_ACTIVE', 'Cannot submit rankings for inactive stages');
     }

@@ -22,7 +22,8 @@ export enum EmailTrigger {
   ADMIN_NOTIFICATION = 'admin_notification',
   SYSTEM_ANNOUNCEMENT = 'system_announcement',
   MANUAL_ADMIN = 'manual_admin',
-  RESEND = 'resend'
+  RESEND = 'resend',
+  SUBMISSION_FORCE_WITHDRAWN = 'submission_force_withdrawn'
 }
 
 /**

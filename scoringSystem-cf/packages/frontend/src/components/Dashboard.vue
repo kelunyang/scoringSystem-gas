@@ -126,8 +126,17 @@
               <!-- Checkbox for batch selection -->
               <el-checkbox
                 v-if="member.role !== 'leader' && member.userEmail !== user?.userEmail && selectedGroupForManagement?.allowChange !== false"
-                v-model="selectedMembersToRemove"
-                :value="member.userEmail"
+                :model-value="selectedMembersToRemove.includes(member.userEmail)"
+                @update:model-value="(val: string | number | boolean) => {
+                  if (val) {
+                    if (!selectedMembersToRemove.includes(member.userEmail)) {
+                      selectedMembersToRemove.push(member.userEmail)
+                    }
+                  } else {
+                    const idx = selectedMembersToRemove.indexOf(member.userEmail)
+                    if (idx > -1) selectedMembersToRemove.splice(idx, 1)
+                  }
+                }"
                 class="member-checkbox"
               />
 
@@ -522,15 +531,15 @@ const projectsWithPermissions = computed(() => {
 
     if (!cachedProject) {
       // Calculate permissions and create extended project object
-      const permissions = calculateProjectPermissions(project, globalPermissions)
-      cachedProject = { ...project, permissions }
+      const permissions = calculateProjectPermissions(project, globalPermissions) as PermissionFlags
+      cachedProject = { ...project, permissions } as ProjectWithPermissions
 
       // Add to new cache
       newCache.set(cacheKey, cachedProject)
       cacheUpdated = true
     }
 
-    return cachedProject  // <i class="fas fa-check-circle text-success"></i> Return stable object reference
+    return cachedProject  // Return stable object reference
   })
 
   // Only update cache Map once if there were changes
@@ -735,7 +744,7 @@ const handleSaveChanges = async () => {
     if (selectedMembersToAdd.value.length > 0) {
       // Build member objects for confirmation drawer with avatar info
       membersToAddForConfirmation.value = selectedMembersToAdd.value.map(email => {
-        const user = availableUsersForGroup.value.find(u => u.userEmail === email)
+        const user = availableUsersForGroup.value.find(u => u.userEmail === email) as any
         return {
           userEmail: email,
           displayName: user?.displayName || email,
@@ -743,7 +752,7 @@ const handleSaveChanges = async () => {
           avatarSeed: user?.avatarSeed,
           avatarStyle: user?.avatarStyle,
           avatarOptions: user?.avatarOptions
-        }
+        } as Member
       })
       showAddMemberDrawer.value = true
       savingChanges.value = false // Reset flag since we're going to drawer
@@ -786,7 +795,7 @@ const handleAddMembers = () => {
 
   // Build member objects for confirmation drawer with avatar info
   membersToAddForConfirmation.value = selectedMembersToAdd.value.map(email => {
-    const user = availableUsersForGroup.value.find(u => u.userEmail === email)
+    const user = availableUsersForGroup.value.find(u => u.userEmail === email) as any
     return {
       userEmail: email,
       displayName: user?.displayName || email,
@@ -794,7 +803,7 @@ const handleAddMembers = () => {
       avatarSeed: user?.avatarSeed,
       avatarStyle: user?.avatarStyle,
       avatarOptions: user?.avatarOptions
-    }
+    } as Member
   })
   showAddMemberDrawer.value = true
 }

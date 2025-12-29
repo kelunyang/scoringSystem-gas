@@ -23,6 +23,7 @@ import {
   CreateAIProviderRequestSchema,
   UpdateAIProviderRequestSchema,
   DeleteAIProviderRequestSchema,
+  TestAIProviderRequestSchema,
   UpdateAIPromptConfigRequestSchema
 } from '@repo/shared/schemas/system';
 import {
@@ -30,6 +31,7 @@ import {
   createAIProvider,
   updateAIProviderHandler,
   deleteAIProviderHandler,
+  testAIProviderHandler,
   getAIPromptConfig,
   updateAIPromptConfig
 } from '../handlers/system/aiProviders';
@@ -297,6 +299,22 @@ systemRouter.post(
   async (c) => {
     const body = c.req.valid('json');
     return await deleteAIProviderHandler(c.env, body.providerId);
+  }
+);
+
+/**
+ * POST /system/ai-providers/test
+ * Test an AI provider connection
+ *
+ * Permission: system_admin
+ */
+systemRouter.post(
+  '/ai-providers/test',
+  zValidator('json', TestAIProviderRequestSchema),
+  requireAIProviderAdmin,
+  async (c) => {
+    const body = c.req.valid('json');
+    return await testAIProviderHandler(c.env, body.providerId);
   }
 );
 

@@ -36,8 +36,8 @@
 
     <!-- Role -->
     <div class="row-cell role-cell">
-      <el-tag :type="getRoleTagType(user.role)" size="small">
-        {{ getRoleText(user.role) }}
+      <el-tag :type="getRoleTagType(user.role || 'user')" size="small">
+        {{ getRoleText(user.role || 'user') }}
       </el-tag>
     </div>
 
@@ -99,14 +99,14 @@ import { Lock, Unlock, View } from '@element-plus/icons-vue'
 import type { User } from '@repo/shared'
 import { getAvatarUrl, generateInitialsAvatar } from '@/utils/avatar'
 
-interface Props {
+export interface Props {
   user: User
   isSelected: boolean
   isLocked: boolean
   lockStatusText: string
 }
 
-interface Emits {
+export interface Emits {
   (e: 'toggle-selection', userEmail: string): void
   (e: 'toggle-status', user: User): void
   (e: 'reset-password', userEmail: string): void
@@ -133,8 +133,9 @@ const userInitials = computed(() => {
     .slice(0, 2)
 })
 
-const handleAvatarError = () => {
+const handleAvatarError = (_evt?: Event): boolean => {
   avatarError.value = true
+  return true
 }
 
 // Role formatting
@@ -159,11 +160,11 @@ const getRoleTagType = (role: string): 'success' | 'warning' | 'info' | 'danger'
 }
 
 // Event handlers
-const handleToggleSelection = () => {
+const handleToggleSelection = (_value?: boolean | string | number) => {
   emit('toggle-selection', props.user.userEmail)
 }
 
-const handleToggleStatus = () => {
+const handleToggleStatus = (_value?: string | number | boolean) => {
   emit('toggle-status', props.user)
 }
 

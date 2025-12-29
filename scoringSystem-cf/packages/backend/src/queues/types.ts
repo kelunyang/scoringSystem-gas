@@ -171,6 +171,23 @@ export const EmailQueueMessageSchema = z.discriminatedUnion('type', [
       })).optional(),
     }),
   }),
+
+  // 成果被教師強制撤回通知
+  z.object({
+    type: z.literal('submission_force_withdrawn'),
+    triggeredBy: z.string(),
+    timestamp: z.number(),
+    data: z.object({
+      targetEmail: z.string().email(),
+      displayName: z.string(),
+      projectName: z.string(),
+      stageName: z.string(),
+      groupName: z.string(),
+      reason: z.string(),
+      teacherEmail: z.string(),
+      wasApproved: z.boolean(),
+    }),
+  }),
 ]);
 
 export type EmailQueueMessage = z.infer<typeof EmailQueueMessageSchema>;

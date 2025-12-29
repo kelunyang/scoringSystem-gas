@@ -31,7 +31,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 
-interface Props {
+export interface Props {
   /**
    * Font Awesome icon class names (without 'fas' prefix)
    * @default ['fa-face-dizzy', 'fa-face-sad-tear', 'fa-face-meh', 'fa-face-tired', 'fa-face-frown']

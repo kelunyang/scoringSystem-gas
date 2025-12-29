@@ -203,13 +203,14 @@ CREATE TABLE IF NOT EXISTS projectviewers (
 );
 
 -- Stages table
--- Status architecture (refactored 2025-12-08, updated 2025-12-20):
+-- Status architecture (refactored 2025-12-08, updated 2025-12-29):
 --   - Pure timestamp-driven status calculation (VIEW-based)
 --   - settlingTime: Settlement lock timestamp (CAS mechanism)
 --   - settledTime: Settlement completion timestamp
 --   - archivedTime: Archive timestamp
 --   - forceVotingTime: Force stage into voting status (overrides time-based calculation)
---   - Status priority: archived > settling > completed > voting > active > pending
+--   - pausedTime: Pause timestamp (NULL if not paused)
+--   - Status priority: archived > settling > completed > paused > voting > active > pending
 CREATE TABLE IF NOT EXISTS stages (
   stageId TEXT PRIMARY KEY,
   projectId TEXT NOT NULL,
@@ -220,6 +221,7 @@ CREATE TABLE IF NOT EXISTS stages (
   endTime INTEGER,
   status TEXT DEFAULT 'pending',  -- DEPRECATED: Use stages_with_status VIEW instead
   forceVotingTime INTEGER,        -- Force voting timestamp (NULL if not forced)
+  pausedTime INTEGER,             -- Pause timestamp (NULL if not paused)
   description TEXT,
   config TEXT,
   createdTime INTEGER NOT NULL,
@@ -739,10 +741,11 @@ CREATE INDEX IF NOT EXISTS idx_usergroups_project_group_active
 -- ============================================
 
 -- 1. stages_with_status VIEW
--- Pure timestamp-driven status calculation (refactored 2025-12-20)
--- Status priority: archived > settling > completed > voting > active > pending
+-- Pure timestamp-driven status calculation (refactored 2025-12-29)
+-- Status priority: archived > settling > completed > paused > voting > active > pending
 -- Time-based statuses: pending (before startTime) → active (startTime-endTime) → voting (after endTime)
 -- Force voting: If forceVotingTime IS NOT NULL AND > 0, status = 'voting' (overrides time calculation)
+-- Pause: If pausedTime IS NOT NULL, status = 'paused' (blocks all operations)
 -- Note: This VIEW overrides the 'status' column to provide real-time calculated status
 CREATE VIEW IF NOT EXISTS stages_with_status AS
 SELECT
@@ -757,12 +760,14 @@ SELECT
     WHEN s.archivedTime IS NOT NULL THEN 'archived'
     WHEN s.settlingTime IS NOT NULL THEN 'settling'
     WHEN s.settledTime IS NOT NULL THEN 'completed'
+    WHEN s.pausedTime IS NOT NULL THEN 'paused'
     WHEN s.forceVotingTime IS NOT NULL AND s.forceVotingTime > 0 THEN 'voting'
     WHEN (strftime('%s', 'now') * 1000) >= s.endTime THEN 'voting'
     WHEN (strftime('%s', 'now') * 1000) >= s.startTime THEN 'active'
     ELSE 'pending'
   END AS status,  -- Pure timestamp-driven calculation
   s.forceVotingTime,
+  s.pausedTime,
   s.settlingTime,
   s.settledTime,
   s.archivedTime,
@@ -941,9 +946,12 @@ FROM invitation_codes ic;
 -- Total: 64 indexes (60 original + 4 idempotency indexes)
 -- Total: 2 triggers (scoring configuration validation)
 -- Total: 5 VIEWs (status auto-calculation architecture)
--- Last updated: 2025-12-15 (simplified submissions status to 3 states)
+-- Last updated: 2025-12-29 (added stage pause feature)
 --
 -- Recent Changes:
+--   2025-12-29: Added pausedTime column to stages table,
+--               updated stages_with_status VIEW with paused status priority,
+--               status priority: archived > settling > completed > paused > voting > active > pending
 --   2025-12-15: Simplified submissions table - removed 'superseded' status (merged into 'withdrawn'),
 --               only 3 statuses now: withdrawn > approved > submitted,
 --               withdrawnBy field indicates reason (userEmail or 'system'),

@@ -22,11 +22,11 @@ import { computed, type ComputedRef, type Ref } from 'vue'
 import { useQuery, useQueries, type UseQueryReturnType } from '@tanstack/vue-query'
 import { adminApi } from '@/api/admin'
 import { rpcClient } from '@/utils/rpc-client'
+import type { LogStatistics } from '@repo/shared/types/admin'
 import type {
   SystemStats,
   InvitationStats,
-  InvitationCode,
-  LogStats
+  InvitationCode
 } from '@/types/admin-stats'
 
 /**
@@ -38,7 +38,7 @@ export interface UseSystemStatsReturn {
   /** 邀請碼統計數據 */
   invitationStats: Ref<InvitationStats | undefined>
   /** 日誌統計數據 */
-  logStats: Ref<LogStats | undefined>
+  logStats: Ref<LogStatistics | undefined>
   /** 是否正在載入任何數據 */
   isLoading: ComputedRef<boolean>
   /** 是否正在載入系統統計 */
@@ -185,7 +185,7 @@ export function useSystemStats(
         throw new Error(response.error?.message || '無法載入日誌統計數據')
       }
 
-      return response.data as LogStats
+      return response.data
     },
     enabled,
     staleTime,
@@ -193,7 +193,7 @@ export function useSystemStats(
     refetchInterval,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000)
-  }) as UseQueryReturnType<LogStats | undefined, Error>
+  }) as UseQueryReturnType<LogStatistics | undefined, Error>
 
   // ============================================================================
   // Computed Properties

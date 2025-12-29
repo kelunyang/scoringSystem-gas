@@ -635,6 +635,186 @@ export async function cloneStage(
 }
 
 /**
+ * Clone a stage to multiple target projects atomically
+ * Uses D1 batch() for atomic transaction - all succeed or all fail
+ *
+ * @param env - Environment bindings
+ * @param userEmail - User's email performing the operation
+ * @param sourceProjectId - Source project ID
+ * @param stageId - Source stage ID to clone
+ * @param newStageName - Name for the cloned stages
+ * @param targetProjectIds - Array of target project IDs
+ * @param startTime - Optional start time for cloned stages
+ * @param endTime - Optional end time for cloned stages
+ */
+export async function cloneStageToProjects(
+  env: Env,
+  userEmail: string,
+  sourceProjectId: string,
+  stageId: string,
+  newStageName: string,
+  targetProjectIds: string[],
+  startTime?: number,
+  endTime?: number
+): Promise<Response> {
+  try {
+    // 1. Validate source stage exists
+    const originalStage = await env.DB.prepare(`
+      SELECT * FROM stages WHERE stageId = ? AND projectId = ?
+    `).bind(stageId, sourceProjectId).first();
+
+    if (!originalStage) {
+      return errorResponse('STAGE_NOT_FOUND', 'Original stage not found');
+    }
+
+    // 2. Validate all target projects exist
+    const projectPlaceholders = targetProjectIds.map(() => '?').join(',');
+    const projectsResult = await env.DB.prepare(`
+      SELECT projectId, projectName FROM projects
+      WHERE projectId IN (${projectPlaceholders})
+    `).bind(...targetProjectIds).all();
+
+    const existingProjectIds = new Set(projectsResult.results.map((p: any) => p.projectId));
+    const projectNameMap = new Map(
+      projectsResult.results.map((p: any) => [p.projectId, p.projectName])
+    );
+
+    // Check if all target projects exist
+    for (const targetId of targetProjectIds) {
+      if (!existingProjectIds.has(targetId)) {
+        return errorResponse('PROJECT_NOT_FOUND', `Target project not found: ${targetId}`);
+      }
+    }
+
+    // 3. Get max stageOrder for each target project using batch query
+    const stageOrderQueries = targetProjectIds.map(projectId =>
+      env.DB.prepare(`
+        SELECT ? as projectId, COALESCE(MAX(stageOrder), 0) as maxOrder
+        FROM stages WHERE projectId = ?
+      `).bind(projectId, projectId)
+    );
+    const stageOrderResults = await env.DB.batch(stageOrderQueries);
+
+    // Build map of projectId -> nextOrder
+    const nextOrderMap = new Map<string, number>();
+    stageOrderResults.forEach((result, index) => {
+      const row = result.results?.[0] as { projectId: string; maxOrder: number } | undefined;
+      const maxOrder = row?.maxOrder || 0;
+      nextOrderMap.set(targetProjectIds[index], maxOrder + 1);
+    });
+
+    // 4. Prepare batch statements for atomic execution
+    const timestamp = Date.now();
+    const clonedStages: Array<{
+      projectId: string;
+      stageId: string;
+      stageName: string;
+      stageOrder: number;
+    }> = [];
+
+    const batchStatements: ReturnType<typeof env.DB.prepare>[] = [];
+
+    // Calculate dates
+    let newStartTime = startTime || Date.now();
+    let newEndTime = endTime;
+    if (!newEndTime) {
+      const originalDuration = (originalStage.endTime as number) - (originalStage.startTime as number);
+      newEndTime = newStartTime + originalDuration;
+    }
+
+    for (const projectId of targetProjectIds) {
+      const newStageId = generateStageId();
+      const nextOrder = nextOrderMap.get(projectId)!;
+
+      clonedStages.push({
+        projectId,
+        stageId: newStageId,
+        stageName: newStageName,
+        stageOrder: nextOrder
+      });
+
+      // INSERT stage statement
+      batchStatements.push(
+        env.DB.prepare(`
+          INSERT INTO stages (
+            stageId, projectId, stageName, stageOrder, stageType,
+            status, startTime, endTime,
+            reportRewardPool, commentRewardPool, config,
+            description, createdTime
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          newStageId,
+          projectId,
+          newStageName,
+          nextOrder,
+          originalStage.stageType,
+          'pending',
+          newStartTime,
+          newEndTime,
+          originalStage.reportRewardPool,
+          originalStage.commentRewardPool,
+          originalStage.config,
+          originalStage.description,
+          timestamp
+        )
+      );
+
+      // UPDATE project totalStages statement
+      batchStatements.push(
+        env.DB.prepare(`
+          UPDATE projects
+          SET totalStages = ?, lastModified = ?
+          WHERE projectId = ?
+        `).bind(nextOrder, timestamp, projectId)
+      );
+    }
+
+    // 5. Execute atomic batch - D1 batch() is transactional
+    // If any statement fails, all are rolled back
+    try {
+      await env.DB.batch(batchStatements);
+    } catch (batchError) {
+      console.error('Batch clone failed:', batchError);
+      return errorResponse('BATCH_CLONE_FAILED',
+        'Failed to clone stage to all projects. No changes were made.',
+        { reason: batchError instanceof Error ? batchError.message : 'Unknown error' }
+      );
+    }
+
+    // 6. Log operations (non-critical, don't fail if logging fails)
+    for (const cloned of clonedStages) {
+      try {
+        await logProjectOperation(env, userEmail, cloned.projectId, 'stage_cloned', 'stage', cloned.stageId, {
+          stageOrder: cloned.stageOrder,
+          sourceProjectId,
+          sourceStageId: stageId
+        }, {
+          relatedEntities: {
+            originalStage: stageId,
+            sourceProject: sourceProjectId
+          }
+        });
+      } catch (logError) {
+        console.error(`Failed to log clone operation for ${cloned.projectId}:`, logError);
+      }
+    }
+
+    // 7. Return success response with project names
+    return successResponse({
+      clonedStages: clonedStages.map(s => ({
+        ...s,
+        projectName: projectNameMap.get(s.projectId) || 'Unknown'
+      })),
+      totalCloned: clonedStages.length
+    }, `Stage successfully cloned to ${clonedStages.length} project(s)`);
+
+  } catch (error) {
+    console.error('Clone stage to projects error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to clone stage to projects');
+  }
+}
+
+/**
  * Delete (archive) a stage
  */
 export async function deleteStage(

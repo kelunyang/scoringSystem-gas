@@ -58,7 +58,7 @@ export async function getInvitationEmailStatus(
 
     let hasPermission = false;
     for (const row of globalGroupsResult.results) {
-      const permissions = parseJSON(row.globalPermissions as string, []) || [];
+      const permissions = parseJSON<string[]>(row.globalPermissions as string, []) || [];
       if (permissions.includes('system_admin') || permissions.includes('generate_invites')) {
         hasPermission = true;
         break;
@@ -113,7 +113,7 @@ export async function getInvitationEmailStatus(
     const logsMap = new Map<string, any[]>();
 
     for (const log of allLogsResult.results || []) {
-      const context = parseJSON(log.emailContext as string, {});
+      const context = parseJSON<{ invitationCode?: string }>(log.emailContext as string, {});
       const invitationCode = context.invitationCode;
 
       if (invitationCode && invitationCodes.includes(invitationCode)) {

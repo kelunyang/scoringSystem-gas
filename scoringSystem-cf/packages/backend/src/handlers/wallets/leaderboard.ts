@@ -61,11 +61,14 @@ export async function getWalletLeaderboard(
  * Permission-based data masking:
  * - Teachers/Admins (Level 0-1): See all users' data
  * - Students (Level 3): See only highest, lowest, and their own data (with masked names)
+ *
+ * @param zeroScoreThreshold - Points below this threshold are treated as 0 score (default: 0 = disabled)
  */
 export async function getProjectWalletLadder(
   env: Env,
   userEmail: string,
-  projectId: string
+  projectId: string,
+  zeroScoreThreshold: number = 0
 ): Promise<Response> {
   try {
     // Get project score range settings
@@ -103,12 +106,21 @@ export async function getProjectWalletLadder(
     const globalMinBalance = allBalances.length > 0 ? Math.min(...allBalances) : 0;
     const globalMaxBalance = allBalances.length > 0 ? Math.max(...allBalances) : 0;
 
+    // Calculate effectiveMinBalance considering the threshold
+    // Only balances >= threshold are considered for the affine transformation
+    const balancesAboveThreshold = allBalances.filter(b => b >= zeroScoreThreshold);
+    const effectiveMinBalance = balancesAboveThreshold.length > 0
+      ? Math.min(...balancesAboveThreshold)
+      : zeroScoreThreshold;
+
     if (!userBalances.results || userBalances.results.length === 0) {
       return successResponse({
         hasFullAccess,
         walletData: [],
         globalMinBalance: 0,
         globalMaxBalance: 0,
+        effectiveMinBalance: zeroScoreThreshold,
+        zeroScoreThreshold,
         currentUserEmail: userEmail,
         scoreRangeMin,
         scoreRangeMax
@@ -127,10 +139,12 @@ export async function getProjectWalletLadder(
         displayName: user.displayName as string,
         avatarSeed: user.avatarSeed as string,
         avatarStyle: (user.avatarStyle as string) || 'avataaars',
-        avatarOptions: parseJSON(user.avatarOptions as string, {}) || {}
+        avatarOptions: parseJSON(user.avatarOptions as string, {}) || {},
+        isMasked: false
       }));
     } else {
-      // Group Leader/Member (Level 3-4): Return top user + all group members (deduplicated)
+      // Group Leader/Member (Level 3-4): Return ALL users with masked names for non-group members
+      // This allows students to see the full ladder while protecting privacy
       if (userBalances.results.length === 0) {
         walletData = [];
       } else {
@@ -161,28 +175,17 @@ export async function getProjectWalletLadder(
           ORDER BY currentBalance DESC
         `).bind(projectId, projectId).all();
 
-        // Use Map for deduplication (key = userEmail)
-        const uniqueUsers = new Map();
+        // Return ALL users, but mask non-group members' names
+        // Counter for masked users to give them unique identifiers
+        let maskedCounter = 1;
 
-        // Add top user (highest balance)
-        if (usersWithGroups.results.length > 0) {
-          const topUser = usersWithGroups.results[0];
-          uniqueUsers.set(topUser.userEmail as string, {
-            userEmail: topUser.userEmail as string,
-            currentBalance: (topUser.currentBalance as number) || 0,
-            userId: topUser.userId as string,
-            username: topUser.userEmail as string,
-            displayName: topUser.displayName as string,
-            avatarSeed: topUser.avatarSeed as string,
-            avatarStyle: (topUser.avatarStyle as string) || 'avataaars',
-            avatarOptions: parseJSON(topUser.avatarOptions as string, {}) || {}
-          });
-        }
+        walletData = usersWithGroups.results.map(user => {
+          const isOwnGroup = user.groupId === userGroupId;
+          const isSelf = user.userEmail === userEmail;
 
-        // Add all group members
-        usersWithGroups.results.forEach(user => {
-          if (user.groupId === userGroupId) {
-            uniqueUsers.set(user.userEmail as string, {
+          if (isOwnGroup || isSelf) {
+            // Same group or self: show real data
+            return {
               userEmail: user.userEmail as string,
               currentBalance: (user.currentBalance as number) || 0,
               userId: user.userId as string,
@@ -190,13 +193,25 @@ export async function getProjectWalletLadder(
               displayName: user.displayName as string,
               avatarSeed: user.avatarSeed as string,
               avatarStyle: (user.avatarStyle as string) || 'avataaars',
-              avatarOptions: parseJSON(user.avatarOptions as string, {}) || {}
-            });
+              avatarOptions: parseJSON(user.avatarOptions as string, {}) || {},
+              isMasked: false
+            };
+          } else {
+            // Non-group member: mask name and avatar, keep balance visible
+            const maskedId = maskedCounter++;
+            return {
+              userEmail: `masked_${maskedId}`,
+              currentBalance: (user.currentBalance as number) || 0,
+              userId: `masked_${maskedId}`,
+              username: `masked_${maskedId}`,
+              displayName: `你不可以知道名字的人${maskedId}`,
+              avatarSeed: null,
+              avatarStyle: 'avataaars',
+              avatarOptions: {},
+              isMasked: true
+            };
           }
         });
-
-        // Convert Map to array
-        walletData = Array.from(uniqueUsers.values());
       }
     }
 
@@ -205,6 +220,8 @@ export async function getProjectWalletLadder(
       walletData,
       globalMinBalance,
       globalMaxBalance,
+      effectiveMinBalance,
+      zeroScoreThreshold,
       currentUserEmail: userEmail,
       scoreRangeMin,
       scoreRangeMax
@@ -263,11 +280,14 @@ export async function getGroupWealthStats(
 
 /**
  * Export project wallet summary (all users and transactions)
+ *
+ * @param zeroScoreThreshold - Points below this threshold are treated as 0 score (default: 0 = disabled)
  */
 export async function exportProjectWalletSummary(
   env: Env,
   userEmail: string,
-  projectId: string
+  projectId: string,
+  zeroScoreThreshold: number = 0
 ): Promise<Response> {
   try {
     // Get all user balances
@@ -297,32 +317,38 @@ export async function exportProjectWalletSummary(
     const scoreRangeMax = (project?.scoreRangeMax as number) || 95;
 
     // Calculate min and max points for affine transformation
+    // maxPoints: highest balance among all users
+    // effectiveMinPoints: lowest balance among users >= threshold (for affine transformation)
     let maxPoints = 0;
-    let minPoints = Number.MAX_VALUE;
+    const allBalances = userBalances.results.map(u => (u.balance as number) || 0);
 
     userBalances.results.forEach(user => {
       const balance = (user.balance as number) || 0;
       if (balance > maxPoints) maxPoints = balance;
-      if (balance < minPoints) minPoints = balance;
     });
 
-    // Handle edge case: all users have same points
-    if (maxPoints === minPoints) {
-      minPoints = 0;
-    }
+    // Calculate effectiveMinPoints: only consider balances >= threshold
+    const balancesAboveThreshold = allBalances.filter(b => b >= zeroScoreThreshold);
+    const effectiveMinPoints = balancesAboveThreshold.length > 0
+      ? Math.min(...balancesAboveThreshold)
+      : zeroScoreThreshold;
 
-    // Calculate grades using affine transformation
+    // Calculate grades using affine transformation with threshold
     const usersWithGrades = userBalances.results.map(user => {
       const totalPoints = (user.balance as number) || 0;
       let grade: number;
 
-      if (maxPoints === minPoints) {
-        // All users have same points, give max score
+      // Users below threshold get 0 score
+      if (totalPoints < zeroScoreThreshold) {
+        grade = 0;
+      } else if (maxPoints === effectiveMinPoints) {
+        // All users above threshold have same points, give max score
         grade = scoreRangeMax;
       } else {
         // Affine transformation: map points to grade range
+        // Uses effectiveMinPoints instead of global min
         grade = scoreRangeMin +
-          (totalPoints - minPoints) / (maxPoints - minPoints) *
+          (totalPoints - effectiveMinPoints) / (maxPoints - effectiveMinPoints) *
           (scoreRangeMax - scoreRangeMin);
       }
 
@@ -336,6 +362,7 @@ export async function exportProjectWalletSummary(
       };
     });
 
+    const globalMinPoints = allBalances.length > 0 ? Math.min(...allBalances) : 0;
     const summary = {
       project: {
         projectId: project?.projectId,
@@ -351,7 +378,9 @@ export async function exportProjectWalletSummary(
       totalUsers: usersWithGrades.length,
       statistics: {
         maxPoints: maxPoints,
-        minPoints: minPoints === Number.MAX_VALUE ? 0 : minPoints,
+        minPoints: globalMinPoints,
+        effectiveMinPoints: effectiveMinPoints,
+        zeroScoreThreshold: zeroScoreThreshold,
         avgPoints: usersWithGrades.reduce((sum, user) => sum + user.totalPoints, 0) / usersWithGrades.length
       }
     };

@@ -83,17 +83,17 @@ export type SystemLogsResponse = z.infer<typeof SystemLogsResponseSchema>;
 
 /**
  * Log statistics schema
+ * Matches backend getLogStatistics() output format
  */
 export const LogStatisticsSchema = z.object({
-  total: z.number(),
-  byLevel: z.object({
-    info: z.number(),
-    warn: z.number(),
-    error: z.number(),
-    debug: z.number()
-  }),
-  byAction: z.record(z.string(), z.number()),
-  recent: z.array(SystemLogEntrySchema).optional()
+  /** Total number of logs in the system */
+  totalLogs: z.number(),
+  /** Timestamp of the newest log entry (null if no logs) */
+  newestLog: z.number().nullable(),
+  /** Database identifier (legacy field from GAS migration) */
+  spreadsheetName: z.string(),
+  /** Count of logs by level (info, warning, error, critical, etc.) */
+  levelCounts: z.record(z.string(), z.number())
 });
 
 export type LogStatistics = z.infer<typeof LogStatisticsSchema>;
@@ -181,6 +181,15 @@ export const DeleteAIProviderRequestSchema = z.object({
 });
 
 export type DeleteAIProviderRequest = z.infer<typeof DeleteAIProviderRequestSchema>;
+
+/**
+ * Test AI provider connection request schema
+ */
+export const TestAIProviderRequestSchema = z.object({
+  providerId: z.string().min(1, 'Provider ID is required')
+});
+
+export type TestAIProviderRequest = z.infer<typeof TestAIProviderRequestSchema>;
 
 /**
  * AI prompt configuration schema

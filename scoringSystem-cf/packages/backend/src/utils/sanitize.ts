@@ -6,7 +6,7 @@
  * does not have DOM/window objects (V8 isolate environment)
  */
 
-import sanitizeHtml from 'sanitize-html';
+import sanitizeHtml, { type IOptions } from 'sanitize-html';
 
 /**
  * Sanitize HTML content to prevent XSS attacks
@@ -24,7 +24,7 @@ export function sanitizeHtmlContent(html: string, allowMarkdown: boolean = true)
     return '';
   }
 
-  const config = allowMarkdown
+  const config: IOptions = allowMarkdown
     ? {
         // Allow basic Markdown-compatible HTML tags
         allowedTags: [
@@ -43,7 +43,7 @@ export function sanitizeHtmlContent(html: string, allowMarkdown: boolean = true)
         // Allow only safe URL protocols
         allowedSchemes: ['http', 'https', 'mailto', 'tel'],
         // Remove scripts and dangerous attributes
-        disallowedTagsMode: 'discard',
+        disallowedTagsMode: 'discard' as const,
         // Enforce valid URLs
         allowProtocolRelative: false
       }

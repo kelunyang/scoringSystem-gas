@@ -26,6 +26,8 @@ export type NotificationType =
   | 'stage_voting'
   | 'stage_completed'
   | 'stage_settled'
+  | 'stage_paused'
+  | 'stage_resumed'
   // D 類：認證與安全
   | 'user_registered'
   | 'password_reset'

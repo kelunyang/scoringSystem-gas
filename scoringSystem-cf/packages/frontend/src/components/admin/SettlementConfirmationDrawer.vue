@@ -109,7 +109,7 @@ import { ref, computed, watch } from 'vue'
 import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 
-interface Stage {
+export interface Stage {
   stageId: string
   stageName: string
   reportRewardPool?: number
@@ -117,7 +117,7 @@ interface Stage {
   [key: string]: any
 }
 
-interface Props {
+export interface Props {
   modelValue: boolean
   stage: Stage | null
   projectId: string

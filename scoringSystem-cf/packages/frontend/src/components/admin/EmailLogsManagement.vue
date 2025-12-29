@@ -564,18 +564,21 @@ const filteredLogs = computed<EmailLog[]>(() => {
 
 // Export configuration
 const exportConfig = computed(() => ({
-  data: filteredLogs.value,
+  data: filteredLogs.value as unknown as Record<string, unknown>[],
   filename: '郵件紀錄',
   headers: ['收件人', '主旨', '觸發來源', '發送狀態', '發送時間', '重試次數', '錯誤訊息'],
-  rowMapper: (log: EmailLog) => [
-    log.recipient,
-    log.subject,
-    getTriggerText(log.trigger),
-    log.status === 'sent' ? '已發送' : '失敗',
-    new Date(log.timestamp).toLocaleString('zh-TW'),
-    log.retryCount,
-    log.error || '-'
-  ]
+  rowMapper: (item: Record<string, unknown>) => {
+    const log = item as unknown as EmailLog
+    return [
+      log.recipient,
+      log.subject,
+      getTriggerText(log.trigger),
+      log.status === 'sent' ? '已發送' : '失敗',
+      new Date(log.timestamp).toLocaleString('zh-TW'),
+      log.retryCount,
+      log.error || '-'
+    ] as (string | number)[]
+  }
 }))
 
 const displayedLogs = computed<EmailLog[]>(() => {
@@ -730,8 +733,9 @@ const resendSelectedEmails = async (): Promise<void> => {
       })
 
       if (response.success && response.data) {
-        successCount += response.data.successCount || 0
-        failedCount += response.data.failedCount || 0
+        const data = response.data as { successCount?: number; failedCount?: number }
+        successCount += data.successCount || 0
+        failedCount += data.failedCount || 0
       } else {
         failedCount += batch.length
       }

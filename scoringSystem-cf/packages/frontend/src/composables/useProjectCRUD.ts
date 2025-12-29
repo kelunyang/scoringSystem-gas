@@ -1,5 +1,5 @@
 import { ref, type Ref } from 'vue'
-import { rpcClient } from '@/utils/rpc-client'
+import { rpcClient, getSessionToken } from '@/utils/rpc-client'
 import { ElMessage } from 'element-plus'
 import type { Project, ApiResponse } from '@/types'
 
@@ -71,7 +71,7 @@ export function useProjectCRUD() {
     }
 
     // Vue 3 Best Practice: rpcClient automatically handles authentication
-    if (!sessionId) {
+    if (!getSessionToken()) {
       ElMessage.error('Session 已過期，請重新登入')
       return false
     }
@@ -122,7 +122,7 @@ export function useProjectCRUD() {
     }
 
     // Vue 3 Best Practice: rpcClient automatically handles authentication
-    if (!sessionId) {
+    if (!getSessionToken()) {
       ElMessage.error('Session 已過期，請重新登入')
       return false
     }
@@ -180,7 +180,7 @@ export function useProjectCRUD() {
    */
   const archiveProject = async (projectId: string, onSuccess?: () => Promise<void> | void): Promise<boolean> => {
     // Vue 3 Best Practice: rpcClient automatically handles authentication
-    if (!sessionId) {
+    if (!getSessionToken()) {
       ElMessage.error('Session 已過期，請重新登入')
       return false
     }
@@ -224,7 +224,7 @@ export function useProjectCRUD() {
    */
   const unarchiveProject = async (projectId: string, onSuccess?: () => Promise<void> | void): Promise<boolean> => {
     // Vue 3 Best Practice: rpcClient automatically handles authentication
-    if (!sessionId) {
+    if (!getSessionToken()) {
       ElMessage.error('Session 已過期，請重新登入')
       return false
     }
@@ -269,7 +269,7 @@ export function useProjectCRUD() {
    */
   const updateProjectStatus = async (projectId: string, newStatus: 'active' | 'archived' | 'deleted', onSuccess?: () => Promise<void> | void): Promise<boolean> => {
     // Vue 3 Best Practice: rpcClient automatically handles authentication
-    if (!sessionId) {
+    if (!getSessionToken()) {
       ElMessage.error('Session 已過期，請重新登入')
       return false
     }

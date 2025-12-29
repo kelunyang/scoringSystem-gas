@@ -85,6 +85,25 @@
       loading-text="載入天梯數據中..."
       :condition="!!selectedProjectId"
     >
+      <!-- 閾值輸入區域 -->
+      <div class="threshold-input-section">
+        <label class="threshold-label">
+          <i class="fas fa-filter"></i>
+          低於 N 點視為 0 分：
+        </label>
+        <el-input-number
+          v-model="zeroScoreThreshold"
+          :min="0"
+          :step="10"
+          :precision="0"
+          placeholder="0 = 不啟用"
+          class="threshold-input"
+        />
+        <span class="threshold-hint">
+          {{ zeroScoreThreshold > 0 ? `餘額低於 ${zeroScoreThreshold} 點的使用者將獲得 0 分` : '已停用（所有使用者參與百分制計算）' }}
+        </span>
+      </div>
+
       <WalletLadder
         v-if="ladderData"
         :ladder-data="ladderData"
@@ -92,6 +111,7 @@
         :score-range-max="ladderData.scoreRangeMax || 95"
         :current-user-email="user?.userEmail"
         :queried-user-email="selectedUserEmail || undefined"
+        :zero-score-threshold="zeroScoreThreshold"
       />
       <EmptyState
         v-else-if="!loadingLadder"
@@ -391,6 +411,8 @@ interface StageGrowthData {
 
 // ===== Wallet Ladder Drawer State =====
 const walletLadderOpen = ref(false)
+/** Points below this threshold are treated as 0 score (default: 0 = disabled) */
+const zeroScoreThreshold = ref(0)
 
 // ===== Stage Growth Drawer State =====
 const stageGrowthOpen = ref(false)
@@ -797,10 +819,11 @@ async function handleExportProjectGrades() {
   try {
     exportingGrades.value = true
 
-    // 呼叫後端 API
+    // 呼叫後端 API（傳入 zeroScoreThreshold 以統一成績計算邏輯）
     const httpResponse = await rpcClient.wallets.export.$post({
       json: {
-        projectId: selectedProjectId.value
+        projectId: selectedProjectId.value,
+        zeroScoreThreshold: zeroScoreThreshold.value
       }
     })
     const response = await httpResponse.json()
@@ -1495,6 +1518,55 @@ onUnmounted(() => {
 @media screen and (orientation: portrait) and (max-width: 768px) {
   .top-bar :deep(.user-controls) {
     display: none !important;
+  }
+}
+
+/* Threshold Input Section */
+.threshold-input-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 20px;
+  background: linear-gradient(135deg, #fff5f8 0%, #fff 100%);
+  border: 1px solid #E84393;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.threshold-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+}
+
+.threshold-label i {
+  color: #E84393;
+}
+
+.threshold-input {
+  width: 140px;
+}
+
+.threshold-hint {
+  font-size: 13px;
+  color: #666;
+  flex: 1;
+  min-width: 200px;
+}
+
+@media (max-width: 768px) {
+  .threshold-input-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .threshold-hint {
+    min-width: auto;
   }
 }
 </style>

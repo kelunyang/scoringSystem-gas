@@ -52,8 +52,8 @@ export default {
     // 獲取 Turnstile 配置
     const loadTurnstileConfig = async () => {
       try {
-        console.log('TurnstileWidget: Loading config from /system/turnstile-config')
-        const response = await rpcClient.system['turnstile-config'].$post()
+        console.log('TurnstileWidget: Loading config from /api/system/turnstile-config')
+        const response = await rpcClient.api.system['turnstile-config'].$post()
         const config = await response.json()
         console.log('TurnstileWidget: Config loaded:', config)
 

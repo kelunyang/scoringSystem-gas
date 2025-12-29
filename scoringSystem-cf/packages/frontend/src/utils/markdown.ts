@@ -1,51 +1,42 @@
 /**
  * @fileoverview Markdown 解析工具
  *
- * 提供簡單的 Markdown 到 HTML 轉換功能
- * 支援常見的 Markdown 語法：
- * - Headers (h1, h2, h3)
- * - Bold & Italic
- * - Links
+ * 使用 marked 進行 Markdown 到 HTML 轉換
+ * 支援 GitHub Flavored Markdown (GFM)：
+ * - Headers, Bold, Italic, Strikethrough
+ * - Links (包含自動連結 URL)
  * - Code blocks & inline code
- * - Line breaks
+ * - Tables, Task lists
+ * - 並使用 DOMPurify 進行 XSS 防護
  */
+
+import { marked } from 'marked'
+import { sanitizeHtml } from './sanitize'
+
+// 設定 marked 使用 GFM
+marked.setOptions({
+  gfm: true,       // GitHub Flavored Markdown
+  breaks: true     // 換行轉 <br>
+})
 
 /**
- * 將 Markdown 文本轉換為 HTML
+ * 將 Markdown 文本轉換為安全的 HTML
  * @param text - Markdown 文本
- * @returns HTML 字符串
+ * @returns 經過 sanitize 的 HTML 字符串
  */
-export function parseMarkdown(text: string | null | undefined): string {
+export function renderMarkdown(text: string | null | undefined): string {
   if (!text) return ''
 
-  let html = text
-    // Headers (必須在 Bold/Italic 之前處理，避免衝突)
-    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+  const html = marked(text) as string
+  return sanitizeHtml(html)
+}
 
-    // Bold (使用非貪婪匹配 *? 避免跨行問題)
-    .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
-    .replace(/__(.*?)__/gim, '<strong>$1</strong>')
-
-    // Italic (使用非貪婪匹配)
-    .replace(/\*(.*?)\*/gim, '<em>$1</em>')
-    .replace(/_(.*?)_/gim, '<em>$1</em>')
-
-    // Code blocks (必須在 inline code 之前處理)
-    .replace(/```([\s\S]*?)```/gim, '<pre><code>$1</code></pre>')
-
-    // Inline code
-    .replace(/`([^`]+)`/gim, '<code>$1</code>')
-
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2" target="_blank">$1</a>')
-
-    // Line breaks
-    .replace(/\n\n/gim, '</p><p>')
-    .replace(/\n/gim, '<br>')
-
-  return `<p>${html}</p>`
+/**
+ * 將 Markdown 文本轉換為 HTML（舊版相容，建議使用 renderMarkdown）
+ * @deprecated 請使用 renderMarkdown
+ */
+export function parseMarkdown(text: string | null | undefined): string {
+  return renderMarkdown(text)
 }
 
 /**

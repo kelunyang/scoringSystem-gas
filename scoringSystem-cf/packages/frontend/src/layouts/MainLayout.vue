@@ -67,9 +67,10 @@
             <i class="fas fa-cog"></i>
             <span v-if="!sidebarCollapsed">系統管理</span>
           </div>
+
         </nav>
 
-        <!-- Spacer pushes user controls to bottom -->
+        <!-- Spacer pushes content to bottom -->
         <div class="sidebar-spacer"></div>
 
         <!-- Personal Settings Links (Portrait Mode Only) -->
@@ -161,6 +162,13 @@
           <div class="sidebar-control-item">
             <NotificationCenter variant="sidebar" />
           </div>
+        </div>
+
+        <!-- Watermark Footer (底部) -->
+        <div class="sidebar-watermark-2025">
+          <span>Kelunyang@2025</span>
+          <a href="mailto:kelunyang@outlook.com" target="_blank"><i class="fa-solid fa-envelope"></i></a>
+          <a href="https://github.com/kelunyang/scoringSystem-gas" target="_blank"><i class="fa-brands fa-github"></i></a>
         </div>
       </div>
 
@@ -790,6 +798,7 @@ onBeforeUnmount(() => {
 
 .sidebar {
   width: 200px;
+  height: 100%;
   background: linear-gradient(180deg, #2f4050 0%, #283848 100%); /* 微妙漸層 - 方案 B+ */
   color: white;
   display: flex;
@@ -1172,5 +1181,67 @@ onBeforeUnmount(() => {
   50% {
     box-shadow: 0 0 15px rgba(255, 215, 0, 0.9);
   }
+}
+
+/* ===== Sidebar Watermark 2025 ===== */
+.sidebar-watermark-2025 {
+  text-align: center;
+  padding: 12px 20px;
+  color: #bdc3c7;
+  font-size: 11px;
+}
+
+.sidebar-watermark-2025 a {
+  color: #bdc3c7;
+  margin-left: 8px;
+  text-decoration: none;
+}
+
+.sidebar-watermark-2025 a:hover {
+  color: #4ECDC4;
+}
+
+.sidebar.collapsed .sidebar-watermark-2025 span {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-watermark-2025 {
+  padding: 8px;
+}
+
+.sidebar.collapsed .sidebar-watermark-2025 a {
+  margin: 0 4px;
+}
+
+/* ===== Sidebar Footer (legacy) ===== */
+.sidebar-footer {
+  text-align: center;
+  padding: 12px;
+  color: #bdc3c7;
+  font-size: 11px;
+}
+
+.sidebar-footer a {
+  color: #bdc3c7;
+  margin-left: 8px;
+  text-decoration: none;
+  transition: color 0.3s;
+}
+
+.sidebar-footer a:hover {
+  color: #4ECDC4;
+}
+
+.sidebar.collapsed .sidebar-footer span {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-footer {
+  padding: 8px;
+}
+
+.sidebar.collapsed .sidebar-footer a {
+  margin-left: 0;
+  margin: 0 4px;
 }
 </style>

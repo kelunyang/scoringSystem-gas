@@ -150,6 +150,7 @@
             :total-project-groups="settlementReportRankingsData.length"
             :current-group-label="''"
             :group-by-rank="false"
+            :clickable="true"
             @group-click="(data: GroupClickData) => { handleSettlementGroupClick(data); }"
           />
           <div class="chart-hint">
@@ -259,6 +260,7 @@
               :total-project-groups="settlementCommentRankingsData.length"
               :current-group-label="''"
               :group-by-rank="false"
+              :clickable="true"
               @group-click="(data: GroupClickData) => { handleSettlementCommentClick(data); }"
             />
             <div class="chart-hint">
@@ -323,15 +325,15 @@ import type { GroupClickData } from '@/types/components'
 
 // ========== Type Definitions ==========
 
-type SettlementStatus = 'idle' | 'validating' | 'settling' | 'completed'
+export type SettlementStatus = 'idle' | 'validating' | 'settling' | 'completed'
 
-interface Stage {
+export interface Stage {
   stageId: string
   stageName: string
   projectId?: string
 }
 
-interface SettlementProgress {
+export interface SettlementProgress {
   projectId: string
   stageId: string
   stageName: string
@@ -343,7 +345,7 @@ interface SettlementProgress {
   commentRewardPool: number
 }
 
-interface SettlementDetails {
+export interface SettlementDetails {
   teacherVoteCount?: number
   studentVoteCount?: number
   groupCount?: number
@@ -361,12 +363,12 @@ interface SettlementDetails {
   [key: string]: any // Allow additional properties
 }
 
-interface ValidationCheck {
+export interface ValidationCheck {
   passed: boolean
   details: any
 }
 
-interface Validation {
+export interface Validation {
   valid: boolean
   message?: string
   checks: {
@@ -378,7 +380,7 @@ interface Validation {
   }
 }
 
-interface Transaction {
+export interface Transaction {
   userEmail: string
   displayName: string
   amount: number
@@ -390,7 +392,7 @@ interface Transaction {
   avatarOptions?: any
 }
 
-interface Member {
+export interface Member {
   email: string
   displayName: string
   points: number
@@ -400,7 +402,7 @@ interface Member {
   avatarOptions?: any
 }
 
-interface GroupData {
+export interface GroupData {
   groupId: string
   groupName: string
   status?: string
@@ -410,13 +412,13 @@ interface GroupData {
   rank: number
 }
 
-interface SelectedGroup {
+export interface SelectedGroup {
   groupId: string
   groupName: string
   rank: number
 }
 
-interface RankingDisplay {
+export interface RankingDisplay {
   rank: number
   groupId: string
   groupName: string
@@ -426,7 +428,7 @@ interface RankingDisplay {
 
 // ========== Props & Emits ==========
 
-interface Props {
+export interface Props {
   modelValue: boolean
   stage: Stage | null
   projectId: string

@@ -91,12 +91,12 @@ interface GroupForm {
   globalPermissions: string[]
 }
 
-interface PermissionOption {
+export interface PermissionOption {
   key: string
   label: string
 }
 
-interface Props {
+export interface Props {
   visible?: boolean
   form: GroupForm
   availablePermissions?: PermissionOption[]

@@ -7,7 +7,7 @@
  */
 
 export type StageStatus = 'pending' | 'active' | 'voting' | 'settling' | 'completed' | 'archived'
-export type StageStatusType = 'info' | 'success' | 'warning' | 'primary' | 'secondary'
+export type StageStatusType = 'info' | 'success' | 'warning' | 'primary' | 'danger'
 
 export interface Stage {
   stageId: string
@@ -69,7 +69,7 @@ export function getStageStatusType(status: StageStatus | null | undefined): Stag
     case 'voting': return 'warning'
     case 'settling': return 'warning'
     case 'completed': return 'primary'
-    case 'archived': return 'secondary'
+    case 'archived': return 'info'
     default: return 'info'
   }
 }

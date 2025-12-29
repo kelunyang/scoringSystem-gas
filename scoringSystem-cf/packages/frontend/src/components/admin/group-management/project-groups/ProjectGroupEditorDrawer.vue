@@ -68,14 +68,14 @@
 import { computed } from 'vue'
 import type { WritableComputedRef } from 'vue'
 
-interface GroupForm {
+export interface GroupForm {
   groupId?: string
   groupName: string
   description: string
   allowChange: boolean
 }
 
-interface Props {
+export interface Props {
   visible?: boolean
   form: GroupForm
   saving?: boolean

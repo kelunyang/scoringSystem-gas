@@ -16,6 +16,7 @@ import {
   buildSecurityReportEmailContent,
   buildAdminNotificationEmailContent,
   buildSecurityAlertEmailContent,
+  buildSubmissionForceWithdrawnEmailContent,
 } from './email-templates';
 import { sendEmail, EmailTrigger } from '../services/email-service';
 import { generateId } from '../utils/id-generator';
@@ -577,6 +578,56 @@ export default {
             }
 
             console.log(`[Email Consumer] Sent security alert email to ${adminEmail} for ${targetUser}`);
+            break;
+          }
+
+          case 'submission_force_withdrawn': {
+            const { targetEmail, displayName, projectName, stageName, groupName, reason, teacherEmail, wasApproved } = parsedMessage.data;
+
+            // Idempotency check
+            const alreadyProcessed = await checkIdempotency(env, 'submission_force_withdrawn', targetEmail, messageId);
+            if (alreadyProcessed) {
+              console.log(`[Email Consumer] ⏭️ Skipping duplicate submission_force_withdrawn for ${targetEmail}`);
+              break;
+            }
+
+            // Build email content using template
+            const emailContent = buildSubmissionForceWithdrawnEmailContent(
+              targetEmail,
+              displayName,
+              projectName,
+              stageName,
+              groupName,
+              reason,
+              teacherEmail,
+              wasApproved,
+              systemTitle
+            );
+
+            const result = await sendEmail(env, {
+              trigger: EmailTrigger.SUBMISSION_FORCE_WITHDRAWN,
+              triggeredBy: teacherEmail,
+              triggerSource: 'auto',
+              recipient: targetEmail,
+              subject: emailContent.subject,
+              htmlBody: emailContent.htmlBody,
+              textBody: emailContent.textBody,
+              emailContext: {
+                projectName,
+                stageName,
+                groupName,
+                teacherEmail,
+                wasApproved,
+                queueMessageType: 'submission_force_withdrawn',
+              },
+            });
+
+            // Record idempotency
+            if (result.emailId) {
+              await recordIdempotency(env, 'submission_force_withdrawn', targetEmail, messageId, result.emailId, result.logId);
+            }
+
+            console.log(`[Email Consumer] Sent submission force withdrawn email to ${targetEmail}`);
             break;
           }
 

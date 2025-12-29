@@ -234,7 +234,8 @@ const currentMode = computed({
 
     // SystemLogs modes
     if (routeName.includes('logs')) {
-      return route.meta.logMode || route.query.mode || 'standard'
+      const queryMode = route.query.mode
+      return route.meta.logMode || (Array.isArray(queryMode) ? queryMode[0] : queryMode) || 'standard'
     }
 
     return ''

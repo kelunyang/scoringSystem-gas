@@ -99,6 +99,8 @@ export interface AIRankingSuggestionResult {
   thinkingProcess?: string;
   /** Custom prompt used in this query */
   customPrompt?: string;
+  /** Full prompt sent to AI (system + user prompt) */
+  fullPrompt?: string;
 }
 
 /**
@@ -125,6 +127,8 @@ export interface AIQueryHistoryItem {
   thinkingProcess?: string;
   /** Custom prompt used in this query */
   customPrompt?: string;
+  /** Full prompt sent to AI (system + user prompt) */
+  fullPrompt?: string;
 }
 
 /**

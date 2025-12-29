@@ -84,6 +84,26 @@ export const STAGE_COLORS = {
       start: '#7DCEA0',
       end: '#1E8449'
     }
+  },
+  paused: {
+    background: '#e67e22',
+    text: '#ffffff',
+    contrast: 4.6,
+    description: '已暫停 - 深橙色（WCAG AA 合規）',
+    gradient: {
+      start: '#F5B041',
+      end: '#CA6F1E'
+    }
+  },
+  settling: {
+    background: '#8e44ad',
+    text: '#ffffff',
+    contrast: 5.8,
+    description: '結算中 - 紫色（WCAG AA 合規）',
+    gradient: {
+      start: '#BB8FCE',
+      end: '#6C3483'
+    }
   }
 } as const
 

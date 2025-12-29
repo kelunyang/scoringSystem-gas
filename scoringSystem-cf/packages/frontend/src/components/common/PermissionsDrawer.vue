@@ -156,7 +156,8 @@ const {
 )
 
 // Local selected role (synced with currentRole)
-const selectedRole = ref(currentRole.value)
+// Using string type for el-segmented compatibility (convert null to empty string)
+const selectedRole = ref<string>(currentRole.value ?? '')
 
 // Watch currentRole changes
 watch(currentRole, (newRole) => {

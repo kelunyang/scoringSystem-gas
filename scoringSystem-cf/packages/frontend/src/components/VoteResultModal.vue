@@ -41,11 +41,11 @@
           versionIdKey="proposalId"
           createdTimeKey="createdTime"
           displayNameKey="proposerDisplayName"
-          :formatTitleFn="(version, index) =>
+          :formatTitleFn="(version: any, index: number) =>
             index === proposalVersions.length - 1 ? '最終版本' : formatVersionStepTime(version.createdTime)"
           @version-change="onVersionChange"
         >
-          <template #description="{ version, index }">
+          <template #description="{ version, index }: { version: any; index: number }">
             <div class="version-step-description">
               <div class="submitter-line">
                 提交者：{{ version.proposerDisplayName }}
@@ -53,8 +53,8 @@
               <div class="vote-stats-line">
                 支持: {{ version.supportCount || 0 }} | 反對: {{ version.opposeCount || 0 }}
               </div>
-              <div v-if="getVersionStatusText(version)" class="status-line">
-                {{ getVersionStatusText(version) }}
+              <div v-if="getVersionStatusText(version as any)" class="status-line">
+                {{ getVersionStatusText(version as any) }}
               </div>
             </div>
           </template>
@@ -74,12 +74,12 @@
         <div v-if="!hasActiveProposal || !isViewingOldVersion" class="ranking-list-container">
           <DraggableRankingList
             :items="displayRankings"
-            :disabled="hasExistingProposal && !isResubmitting"
+            :disabled="!!(hasExistingProposal && !isResubmitting)"
             itemKey="groupId"
             itemLabel="groupName"
             @update:items="handleRankingUpdate"
           >
-            <template #default="{ item }">
+            <template #default="{ item }: { item: any }">
               <div class="group-info">
                 <div class="group-header">
                   <div class="group-name">{{ item.groupName }}</div>
@@ -102,7 +102,7 @@
         <RankingComparison
           v-if="isViewingOldVersion && hasActiveProposal"
           leftTitle="最新版本"
-          :rightTitle="formatVersionStepTime(currentProposal.createdTime)"
+          :rightTitle="formatVersionStepTime(currentProposal?.createdTime || 0)"
           :leftItems="latestProposalRankings"
           :rightItems="displayRankings"
           itemKey="groupId"
@@ -157,7 +157,7 @@
         </div>
 
         <VoteMajorityTsumTsumChart
-          :voteData="tsumTsumVoteData"
+          :voteData="(tsumTsumVoteData as any)"
           :versionLabels="versionLabels"
           :versionStatuses="versionStatuses"
           :versionVotingResults="versionVotingResults"
@@ -174,7 +174,7 @@
         <div class="votes-list">
           <!-- 已投票成員 -->
           <div
-            v-for="vote in currentProposal.votes || []"
+            v-for="vote in currentProposal?.votes || []"
             :key="vote.voteId"
             class="vote-item"
             :class="{ agree: vote.agree === 1, disagree: vote.agree === -1 }"
@@ -731,7 +731,7 @@ const userGroupInfo = computed(() => rankingProposals.userGroupInfo.value || pro
 // ============= Computed Properties =============
 
 const hasExistingProposal = computed(() => {
-  return proposalVersions.value.some(p => p.status !== 'withdrawn') && selectedVersionId.value
+  return !!(proposalVersions.value.some(p => p.status !== 'withdrawn') && selectedVersionId.value)
 })
 
 const isLatestVersion = computed(() => {
@@ -824,23 +824,23 @@ const isTied = computed(() => {
 })
 
 const showResetButton = computed(() => {
-  return isGroupLeader.value &&
+  return !!(isGroupLeader.value &&
          hasExistingProposal.value &&
          isLatestVersion.value &&
          allMembersVoted.value &&
          isTied.value &&
          resetCount.value < 1 &&
-         currentProposal.value?.status === 'pending'
+         currentProposal.value?.status === 'pending')
 })
 
 const showTieReminderForMembers = computed(() => {
-  return !isGroupLeader.value &&
+  return !!((!isGroupLeader.value) &&
          hasExistingProposal.value &&
          isLatestVersion.value &&
          allMembersVoted.value &&
          isTied.value &&
          resetCount.value < 1 &&
-         currentProposal.value?.status === 'pending'
+         currentProposal.value?.status === 'pending')
 })
 
 interface GroupMember {
@@ -1498,29 +1498,31 @@ interface VoteRecord {
 function getVoterAvatarUrl(vote: VoteRecord) {
   if (!vote.voterAvatarSeed) return ''
   return generateMemberAvatarUrl({
+    email: vote.voterEmail || '',
     avatarSeed: vote.voterAvatarSeed,
     avatarStyle: vote.voterAvatarStyle || 'bottts',
     avatarOptions: vote.voterAvatarOptions
-  })
+  } as any)
 }
 
 function getVoterInitials(vote: VoteRecord) {
   const name = vote.voterDisplayName || vote.voterEmail || ''
-  return generateMemberInitials({ displayName: name })
+  return generateMemberInitials({ email: '', displayName: name } as any)
 }
 
 function getMemberAvatarUrl(member: GroupMember) {
   if (!member.avatarSeed) return ''
   return generateMemberAvatarUrl({
+    email: member.userEmail,
     avatarSeed: member.avatarSeed,
     avatarStyle: member.avatarStyle || 'bottts',
     avatarOptions: member.avatarOptions
-  })
+  } as any)
 }
 
 function getMemberInitials(member: GroupMember) {
   const name = member.displayName || member.userEmail
-  return generateMemberInitials({ displayName: name })
+  return generateMemberInitials({ email: member.userEmail, displayName: name } as any)
 }
 
 // Expose submittedGroups alias for template compatibility

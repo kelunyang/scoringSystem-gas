@@ -33,6 +33,8 @@
     "highlight.js": "^11.11.1",
     "hono": "^4.10.7",
     "katex": "^0.16.25",
+    "marked": "^17.0.1",
+    "matter-js": "^0.20.0",
     "papaparse": "^5.5.3",
     "randomcolor": "^0.6.2",
     "vue": "^3.4.15",
@@ -40,10 +42,12 @@
     "vue-use-active-scroll": "^1.1.3"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251128.0",
     "@playwright/test": "^1.57.0",
     "@types/d3": "^7.4.3",
     "@types/dompurify": "^3.2.0",
     "@types/marked": "^5.0.2",
+    "@types/matter-js": "^0.20.2",
     "@types/node": "^20.10.6",
     "@types/papaparse": "^5.5.1",
     "@vitejs/plugin-vue": "^4.5.2",

@@ -549,6 +549,7 @@ app.post(
     } else {
       console.log('[Backend Router] ✅ Validation PASSED');
     }
+    return;
   }),
   async (c) => {
     const user = c.get('user');
@@ -1500,11 +1501,21 @@ app.post(
 app.post('/robots/status', async (c) => {
   try {
     const user = c.get('user');
-    let robotStatus;
+    interface RobotPatrolStatus {
+      enabled: boolean;
+      lastRun: number | null;
+      lastRunDetails: unknown;
+      lastError: string | null;
+      status: string;
+    }
+    interface RobotStatus {
+      notificationPatrol: RobotPatrolStatus;
+    }
+    let robotStatus: RobotStatus | undefined;
 
     // Try to get from KV cache first
     if (c.env.CONFIG) {
-      const cachedStatus = await c.env.CONFIG.get('robot_status_notification_patrol', 'json');
+      const cachedStatus = await c.env.CONFIG.get('robot_status_notification_patrol', 'json') as RobotPatrolStatus | null;
       if (cachedStatus) {
         robotStatus = {
           notificationPatrol: cachedStatus
@@ -1816,11 +1827,11 @@ app.post(
         try {
           await WorkerMailer.connect({
             credentials: {
-              username: c.env.SMTP_USERNAME,
-              password: c.env.SMTP_PASSWORD,
+              username: c.env.SMTP_USERNAME ?? '',
+              password: c.env.SMTP_PASSWORD ?? '',
             },
             authType: 'plain',
-            host: c.env.SMTP_HOST,
+            host: c.env.SMTP_HOST ?? '',
             port: parseInt(c.env.SMTP_PORT || '587'),
             secure: parseInt(c.env.SMTP_PORT || '587') === 465,
           });
@@ -1870,7 +1881,7 @@ app.post(
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: result.error.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')
+          message: result.error.issues.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')
         }
       }, 400);
     }
@@ -1904,7 +1915,7 @@ app.post(
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: result.error.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')
+          message: result.error.issues.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')
         }
       }, 400);
     }
@@ -1929,7 +1940,7 @@ app.post(
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: result.error.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')
+          message: result.error.issues.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')
         }
       }, 400);
     }

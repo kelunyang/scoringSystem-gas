@@ -88,7 +88,7 @@ export function useExpandable<T = any>(
       loadingIds.add(id)
       try {
         const content = await loadFn()
-        contentMap.set(id, content)
+        ;(contentMap as Map<string, T>).set(id, content)
       } catch (error) {
         console.error(`Failed to load content for ${id}:`, error)
         // 載入失敗時收起
@@ -125,14 +125,14 @@ export function useExpandable<T = any>(
    * 獲取快取內容
    */
   const getContent = (id: string): T | undefined => {
-    return contentMap.get(id)
+    return (contentMap as Map<string, T>).get(id)
   }
 
   /**
    * 設置內容（手動快取）
    */
   const setContent = (id: string, content: T): void => {
-    contentMap.set(id, content)
+    ;(contentMap as Map<string, T>).set(id, content)
   }
 
   return {

@@ -8,8 +8,9 @@ import { successResponse, errorResponse } from '@utils/response';
 import { parseJSON, stringifyJSON } from '@utils/json';
 import { generateId } from '@utils/id-generator';
 import { logProjectOperation, logApiAction } from '@utils/logging';
-import { checkIsAdminTeacherOrObserver, checkIsTeacherOrObserver } from '@utils/permissions';
+import { checkIsAdminTeacherOrObserver, checkIsTeacherOrObserver, getProjectRole } from '@utils/permissions';
 import { queueBatchNotifications } from '../../queues/notification-producer';
+import { queueSubmissionForceWithdrawnEmail } from '../../queues/email-producer';
 import { getGroupMemberEmails } from '@utils/notifications';
 
 /**
@@ -60,6 +61,9 @@ export async function submitDeliverable(
       return errorResponse('STAGE_NOT_FOUND', 'Stage not found');
     }
 
+    if (stage.status === 'paused') {
+      return errorResponse('STAGE_PAUSED', '階段已暫停，無法提交成果');
+    }
     if (stage.status !== 'active') {
       return errorResponse('STAGE_NOT_ACTIVE', 'Stage is not currently active');
     }
@@ -810,9 +814,9 @@ export async function getParticipationConfirmations(
     }
 
     // Parse participation proposal with error handling
-    let proposedParticipation = {};
+    let proposedParticipation: Record<string, number | null> = {};
     try {
-      proposedParticipation = parseJSON(submission.participationProposal as string, {});
+      proposedParticipation = parseJSON<Record<string, number>>(submission.participationProposal as string, {});
       console.log('✅ [getParticipationConfirmations] Parsed participation proposal:', proposedParticipation);
     } catch (parseError) {
       console.error('⚠️ [getParticipationConfirmations] Failed to parse participation proposal:', parseError);
@@ -998,7 +1002,7 @@ export async function getGroupStageVotingHistory(
       // Calculate totalMembers from this submission's participationProposal
       let totalMembers = 0;
       try {
-        const proposedParticipation = parseJSON(submission.participationProposal as string, {});
+        const proposedParticipation = parseJSON<Record<string, number>>(submission.participationProposal as string, {});
         const participants = Object.keys(proposedParticipation).filter(
           email => typeof proposedParticipation[email] === 'number' && proposedParticipation[email] > 0
         );
@@ -1401,3 +1405,237 @@ export async function voteParticipationProposal(
  * Helper: Log operation
  */
 // Logging is now handled by centralized utils/logging module
+
+/**
+ * Force withdraw a submission (Teacher only)
+ *
+ * Teachers can force-withdraw any submission, including approved ones.
+ * Unlike student withdrawal:
+ * - No participant check required
+ * - No voting check required
+ * - Approved submissions CAN be withdrawn
+ * - Any version can be withdrawn (not just latest)
+ *
+ * The reason is stored in eventlogs (not submissions table) and sent via notification.
+ * withdrawnBy is set to 'teacher' (literal) to distinguish from user/system withdrawals.
+ */
+export async function forceWithdrawSubmission(
+  env: Env,
+  teacherEmail: string,
+  projectId: string,
+  submissionId: string,
+  reason: string
+): Promise<Response> {
+  try {
+    // 1. Permission check: Only teachers can force withdraw
+    const role = await getProjectRole(env.DB, teacherEmail, projectId);
+    if (role !== 'teacher') {
+      return errorResponse('ACCESS_DENIED', 'Only teachers can force withdraw submissions');
+    }
+
+    // 2. Get submission details from VIEW
+    const submission = await env.DB.prepare(`
+      SELECT
+        s.submissionId, s.groupId, s.stageId, s.status,
+        s.submitterEmail, s.submitTime, s.withdrawnTime, s.approvedTime,
+        g.groupName,
+        st.stageName
+      FROM submissions_with_status s
+      LEFT JOIN groups g ON s.groupId = g.groupId
+      LEFT JOIN stages st ON s.stageId = st.stageId AND s.projectId = st.projectId
+      WHERE s.submissionId = ? AND s.projectId = ?
+    `).bind(submissionId, projectId).first();
+
+    if (!submission) {
+      return errorResponse('SUBMISSION_NOT_FOUND', 'Submission not found');
+    }
+
+    // 3. Validate state
+    if (submission.withdrawnTime) {
+      return errorResponse('ALREADY_WITHDRAWN', 'Submission is already withdrawn');
+    }
+
+    // Check stage status - only allow force withdraw in voting stage
+    const stage = await env.DB.prepare(`
+      SELECT settledTime, status FROM stages_with_status
+      WHERE stageId = ? AND projectId = ?
+    `).bind(submission.stageId, projectId).first();
+
+    if (stage && stage.settledTime) {
+      return errorResponse('STAGE_ALREADY_SETTLED', 'Cannot withdraw submissions after stage settlement');
+    }
+
+    // Only allow force withdraw in active stage
+    if (!stage || stage.status !== 'active') {
+      return errorResponse('INVALID_STAGE_STATUS', '強制撤回只能在進行中階段（active）執行');
+    }
+
+    // Note: Unlike student withdrawal, we DO NOT check:
+    // - approvedTime (teachers CAN withdraw approved submissions)
+    // - participant validation
+    // - voting status
+
+    // 4. Deduplication
+    const now = Date.now();
+    const timeBucket = Math.floor(now / 60000);
+    const dedupKey = `force_withdraw:${submissionId}:${teacherEmail}:${timeBucket}`;
+
+    // Get teacher's userId for logging
+    const teacherUser = await env.DB.prepare(`
+      SELECT userId FROM users WHERE userEmail = ?
+    `).bind(teacherEmail).first();
+    const teacherUserId = teacherUser?.userId as string | undefined;
+
+    const wasApproved = submission.approvedTime !== null;
+
+    const isNewAction = await logApiAction(env, {
+      dedupKey,
+      action: 'submission_force_withdraw',
+      userId: teacherUserId,
+      projectId,
+      entityType: 'submission',
+      entityId: submissionId,
+      message: `Teacher ${teacherEmail} force withdrawing submission ${submissionId}`,
+      context: {
+        submissionId,
+        groupId: submission.groupId,
+        stageId: submission.stageId,
+        reason,
+        wasApproved
+      },
+      relatedEntities: {
+        stage: submission.stageId as string,
+        group: submission.groupId as string
+      }
+    });
+
+    if (!isNewAction) {
+      // Duplicate force-withdrawal attempt
+      return successResponse({
+        deduped: true,
+        submissionId,
+        status: 'withdrawn',
+        groupId: submission.groupId,
+        stageId: submission.stageId
+      }, 'Submission already withdrawn (duplicate prevented)');
+    }
+
+    // 5. Atomic update - set withdrawnBy to 'teacher' literal
+    const result = await env.DB.prepare(`
+      UPDATE submissions
+      SET withdrawnTime = ?,
+          withdrawnBy = 'teacher',
+          updatedAt = ?
+      WHERE submissionId = ? AND projectId = ?
+        AND withdrawnTime IS NULL
+    `).bind(now, now, submissionId, projectId).run();
+
+    if (!result.meta.changes || result.meta.changes === 0) {
+      return errorResponse('UPDATE_FAILED', 'Failed to withdraw submission. It may have been withdrawn by another process.');
+    }
+
+    // 6. Log operation to eventlogs (with full details including teacherEmail and reason)
+    await logProjectOperation(
+      env,
+      teacherEmail,
+      projectId,
+      'submission_force_withdrawn',
+      'submission',
+      submissionId,
+      {
+        teacherEmail,
+        reason,
+        wasApproved,
+        groupId: submission.groupId,
+        stageId: submission.stageId,
+        groupName: submission.groupName,
+        stageName: submission.stageName,
+        originalSubmitTime: submission.submitTime,
+        originalSubmitterEmail: submission.submitterEmail
+      },
+      {
+        level: 'warning',
+        relatedEntities: {
+          stage: submission.stageId as string,
+          group: submission.groupId as string
+        }
+      }
+    );
+
+    // 7. Send notifications to ALL group members (not just participants)
+    try {
+      const groupMembers = await getGroupMemberEmails(env, projectId, submission.groupId as string);
+      const stageName = (submission.stageName as string) || '未命名階段';
+
+      await queueBatchNotifications(env, groupMembers.map(email => ({
+        targetUserEmail: email,
+        type: 'submission_force_withdrawn',
+        title: '作品被教師撤回',
+        content: `您的組在「${stageName}」階段的作品已被教師強制撤回。\n\n撤回原因：${reason}\n\n如有疑問，請聯繫授課教師。`,
+        projectId,
+        stageId: submission.stageId as string,
+        submissionId,
+        groupId: submission.groupId as string,
+        metadata: {
+          teacherEmail,
+          reason,
+          wasApproved
+        }
+      })));
+    } catch (notificationError) {
+      console.error('[forceWithdrawSubmission] Failed to send notifications:', notificationError);
+      // Don't fail the operation if notifications fail
+    }
+
+    // 8. Send emails to ALL group members
+    try {
+      // Get project name
+      const project = await env.DB.prepare(`
+        SELECT projectName FROM projects WHERE projectId = ?
+      `).bind(projectId).first();
+      const projectName = (project?.projectName as string) || '未命名專案';
+
+      // Get group members with display names
+      const membersResult = await env.DB.prepare(`
+        SELECT ug.userEmail, u.displayName
+        FROM usergroups ug
+        JOIN users u ON ug.userEmail = u.userEmail
+        WHERE ug.groupId = ? AND ug.projectId = ?
+      `).bind(submission.groupId, projectId).all();
+
+      const stageName = (submission.stageName as string) || '未命名階段';
+      const groupName = (submission.groupName as string) || '未命名組別';
+
+      // Queue email for each group member
+      for (const member of (membersResult.results || [])) {
+        await queueSubmissionForceWithdrawnEmail(
+          env,
+          member.userEmail as string,
+          (member.displayName as string) || (member.userEmail as string),
+          projectName,
+          stageName,
+          groupName,
+          reason,
+          teacherEmail,
+          wasApproved
+        );
+      }
+    } catch (emailError) {
+      console.error('[forceWithdrawSubmission] Failed to send emails:', emailError);
+      // Don't fail the operation if emails fail
+    }
+
+    return successResponse({
+      submissionId,
+      status: 'withdrawn',
+      groupId: submission.groupId,
+      stageId: submission.stageId,
+      wasApproved,
+      withdrawnAt: now
+    }, 'Submission force withdrawn successfully');
+
+  } catch (error) {
+    console.error('Force withdraw submission error:', error);
+    return errorResponse('SYSTEM_ERROR', `Failed to force withdraw submission: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}

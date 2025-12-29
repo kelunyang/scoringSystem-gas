@@ -303,7 +303,7 @@ export function useGroupMembers() {
       const response = await httpResponse.json() as ApiResponse<{ successCount: number; addedMembers?: Array<{ userEmail: string }> }>
 
       if (response.success) {
-        const data = response.data || {}
+        const data = response.data ?? { successCount: 0 }
         const successCount = data.successCount || data.addedMembers?.length || selectedUsersToAdd.value.length
 
         ElMessage.success(`成功新增 ${successCount} 個成員`)

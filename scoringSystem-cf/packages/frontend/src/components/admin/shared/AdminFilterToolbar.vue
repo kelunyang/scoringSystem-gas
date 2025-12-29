@@ -120,7 +120,7 @@ import { exportToCsv, exportToJson } from '@/utils/exportUtils'
 // 更精確的 TypeScript 型別定義
 type ExportableData = Record<string, unknown>
 
-interface Props {
+export interface Props {
   // 視覺樣式
   variant?: 'default' | 'navy' | 'maroon' | 'green'
 

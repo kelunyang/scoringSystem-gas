@@ -38,14 +38,18 @@ export function sanitizeHtml(html: string | null | undefined): string {
       'blockquote', 'pre', 'code',
       'a', 'img',
       'table', 'thead', 'tbody', 'tr', 'th', 'td',
-      'hr'
+      'hr',
+      // GFM 額外支援
+      'input' // for task lists
     ],
 
     // Allow safe attributes
     ALLOWED_ATTR: [
       'href', 'src', 'alt', 'title', 'width', 'height',
       'class', 'id', 'style',
-      'target', 'rel'
+      'target', 'rel',
+      // GFM task list 需要
+      'type', 'checked', 'disabled'
     ],
 
     // Additional security options
@@ -54,18 +58,25 @@ export function sanitizeHtml(html: string | null | undefined): string {
     SAFE_FOR_TEMPLATES: true,  // Extra safety for template engines
 
     // Force target="_blank" for external links (security best practice)
-    ADD_ATTR: ['target']
-  })
+    ADD_ATTR: ['target'],
 
-  // Custom hook to enforce rel="noopener noreferrer" on external links
-  DOMPurify.addHook('afterSanitizeAttributes', (node: any) => {
-    // Set all links to open in new tab with security attributes
-    if (node.tagName === 'A') {
-      node.setAttribute('target', '_blank')
-      node.setAttribute('rel', 'noopener noreferrer')
+    // Custom hook to enforce rel="noopener noreferrer" on external links
+    CUSTOM_ELEMENT_HANDLING: {
+      tagNameCheck: null,
+      attributeNameCheck: null,
+      allowCustomizedBuiltInElements: false
     }
   })
 }
+
+// 設定 DOMPurify hook（只需執行一次）
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  // Set all links to open in new tab with security attributes
+  if (node.tagName === 'A') {
+    node.setAttribute('target', '_blank')
+    node.setAttribute('rel', 'noopener noreferrer')
+  }
+})
 
 /**
  * Sanitize plain text (escape HTML entities)

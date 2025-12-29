@@ -61,7 +61,7 @@ export function useBreadcrumb(): BreadcrumbReturn {
    */
   const fetchSystemTitle = async (): Promise<void> => {
     try {
-      const response = await rpcClient.system.info.$get()
+      const response = await rpcClient.api.system.info.$get()
       const data = await response.json() as any
       if (data.success && data.data) {
         if (data.data.systemTitle) {

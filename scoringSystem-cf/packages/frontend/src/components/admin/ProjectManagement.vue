@@ -80,9 +80,9 @@
             </template>
           </el-statistic>
 
-          <el-statistic title="已完成" :value="stats.completedProjects" class="stat-completed">
+          <el-statistic title="已刪除" :value="stats.deletedProjects" class="stat-deleted">
             <template #prefix>
-              <i class="fas fa-check-circle"></i>
+              <i class="fas fa-trash"></i>
             </template>
           </el-statistic>
 
@@ -287,7 +287,7 @@
                     />
                     <el-switch
                       :model-value="showGanttChart.get(project.projectId) || false"
-                      @update:model-value="(val) => toggleGanttChart(project.projectId, val)"
+                      @update:model-value="(val) => toggleGanttChart(project.projectId, Boolean(val))"
                       active-text="開啟階段甘特圖"
                       inactive-text="關閉階段甘特圖"
                       style="margin-right: 16px;"
@@ -320,7 +320,7 @@
                   />
                   <el-switch
                     :model-value="showGanttChart.get(project.projectId) || false"
-                    @update:model-value="(val) => toggleGanttChart(project.projectId, val)"
+                    @update:model-value="(val) => toggleGanttChart(project.projectId, Boolean(val))"
                     active-text="檢視甘特圖"
                     inactive-text=""
                   />
@@ -440,6 +440,26 @@
                             強制投票
                           </el-button>
                           <el-button
+                            v-if="stage.status === 'active' || stage.status === 'voting'"
+                            type="warning"
+                            size="small"
+                            title="暫停階段"
+                            @click="openPauseStageDrawer(stage, project)"
+                          >
+                            <i class="fas fa-pause"></i>
+                            暫停階段
+                          </el-button>
+                          <el-button
+                            v-if="stage.status === 'paused'"
+                            type="success"
+                            size="small"
+                            title="恢復階段"
+                            @click="openResumeStageDrawer(stage, project)"
+                          >
+                            <i class="fas fa-play"></i>
+                            恢復階段
+                          </el-button>
+                          <el-button
                             v-if="stage.status === 'voting'"
                             type="success"
                             size="small"
@@ -537,6 +557,24 @@
                               @click="openForceVotingDrawer(stage)"
                             >
                               <i class="fas fa-vote-yea"></i>
+                            </el-button>
+                          </el-tooltip>
+                          <el-tooltip v-if="stage.status === 'active' || stage.status === 'voting'" content="暫停階段" placement="top">
+                            <el-button
+                              type="warning"
+                              size="small"
+                              @click="openPauseStageDrawer(stage, project)"
+                            >
+                              <i class="fas fa-pause"></i>
+                            </el-button>
+                          </el-tooltip>
+                          <el-tooltip v-if="stage.status === 'paused'" content="恢復階段" placement="top">
+                            <el-button
+                              type="success"
+                              size="small"
+                              @click="openResumeStageDrawer(stage, project)"
+                            >
+                              <i class="fas fa-play"></i>
                             </el-button>
                           </el-tooltip>
                           <el-tooltip v-if="stage.status === 'voting'" content="結算獎金" placement="top">
@@ -871,8 +909,8 @@
     <VotingAnalysisModal
       :visible="showVotingAnalysisModal"
       @update:visible="showVotingAnalysisModal = $event"
-      :project-id="selectedStageForAnalysis?.projectId"
-      :stage-id="selectedStageForAnalysis?.stageId"
+      :project-id="selectedStageForAnalysis?.projectId || ''"
+      :stage-id="selectedStageForAnalysis?.stageId || ''"
       :stage-title="selectedStageForAnalysis?.stageName"
       :is-settled="selectedStageForAnalysis?.status === 'completed'"
     />
@@ -881,8 +919,9 @@
     <CommentVotingAnalysisModal
       :visible="showCommentAnalysisModal"
       @update:visible="showCommentAnalysisModal = $event"
-      :project-id="selectedStageForAnalysis?.projectId"
-      :stage-id="selectedStageForAnalysis?.stageId"
+      :project-id="selectedStageForAnalysis?.projectId || ''"
+      :stage-id="selectedStageForAnalysis?.stageId || ''"
+      :max-comment-selections="10"
       :stage-title="selectedStageForAnalysis?.stageName"
       :is-settled="selectedStageForAnalysis?.status === 'completed'"
     />
@@ -892,7 +931,7 @@
       v-model="showSettlementDrawer"
       :stage="selectedStageForSettlement"
       :project-id="selectedStageForSettlement?.projectId || ''"
-      @settlement-complete="handleSettlementComplete"
+      @settlement-complete="(data: any) => handleSettlementComplete(data)"
       @settlement-error="handleSettlementError"
       @drawer-closed="handleDrawerClosed"
     />
@@ -903,7 +942,7 @@
       :stage="selectedStageForConfirm"
       :project-id="selectedStageForConfirm?.projectId || ''"
       :settling="settlingStages.has(selectedStageForConfirm?.stageId)"
-      @settlement-confirmed="handleSettlementConfirmed"
+      @settlement-confirmed="(stage: any, projectId: string) => handleSettlementConfirmed(stage, projectId)"
     />
 
     <!-- Reverse Settlement Drawer -->
@@ -1009,6 +1048,36 @@
           </div>
         </div>
 
+        <!-- 複製目標選擇 -->
+        <div class="form-section">
+          <h4><i class="fas fa-copy"></i> 複製目標專案</h4>
+          <div class="form-group">
+            <label>選擇目標專案 *</label>
+            <el-select
+              v-model="cloneStageForm.targetProjectIds"
+              multiple
+              filterable
+              placeholder="搜尋並選擇專案..."
+              style="width: 100%"
+            >
+              <el-option
+                v-for="project in manageableProjects"
+                :key="project.projectId"
+                :label="project.projectName"
+                :value="project.projectId"
+              >
+                <span>{{ project.projectName }}</span>
+                <span v-if="project.isCurrent" style="color: var(--el-color-info); margin-left: 8px; font-size: 12px;">
+                  （目前專案）
+                </span>
+              </el-option>
+            </el-select>
+            <div class="field-hint">
+              已選擇 {{ cloneStageForm.targetProjectIds.length }} 個專案（預設為目前專案，可新增其他專案）
+            </div>
+          </div>
+        </div>
+
         <!-- 確認輸入 -->
         <div class="form-section">
           <h4><i class="fas fa-shield-alt"></i> 安全確認</h4>
@@ -1048,6 +1117,24 @@
       :project-id="selectedForceVotingStage?.projectId"
       :stage-id="selectedForceVotingStage?.stageId"
       @confirmed="handleForceVotingConfirmed"
+    />
+
+    <!-- Pause Stage Drawer -->
+    <PauseStageDrawer
+      v-model:visible="showPauseStageDrawer"
+      :project-id="pauseStageData?.project?.projectId"
+      :stage-id="pauseStageData?.stage?.stageId"
+      :stage-name="pauseStageData?.stage?.stageName"
+      @confirmed="handlePauseStageConfirmed"
+    />
+
+    <!-- Resume Stage Drawer -->
+    <ResumeStageDrawer
+      v-model:visible="showResumeStageDrawer"
+      :project-id="resumeStageData?.project?.projectId"
+      :stage-id="resumeStageData?.stage?.stageId"
+      :stage-name="resumeStageData?.stage?.stageName"
+      @confirmed="handleResumeStageConfirmed"
     />
 
     <!-- Archive Project Drawer -->
@@ -1146,11 +1233,51 @@
   </div>
 </template>
 
-<script>
+<script lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, inject, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { getStageStatusText, getStageStatusType } from '@/utils/stageStatus'
+import type { Project, Stage, User } from '@repo/shared'
+
+// Extended Project type with additional frontend-specific properties
+interface ExtendedProject extends Project {
+  createdBy?: string
+  createdTime?: number
+  lastModified?: number
+  groupCount?: number
+  memberCount?: number
+  scoreRangeMin?: number
+  scoreRangeMax?: number
+  studentRankingWeight?: number
+  teacherRankingWeight?: number
+  maxCommentSelections?: number
+  commentRewardPercentile?: number
+}
+
+// Viewer type for project viewer management
+interface ProjectViewer {
+  viewerId: string
+  userId: string
+  displayName: string
+  userEmail: string
+  role: string
+  assignedAt?: number
+  assignedBy?: string
+}
+
+// Settlement details type
+interface SettlementDetails {
+  settlementId: string
+  stageId: string
+  projectId: string
+  settledBy: string
+  settledAt: number
+  transactionCount?: number
+  totalAmount?: number
+  [key: string]: unknown
+}
+
 import MarkdownEditor from '../MarkdownEditor.vue'
 import VotingAnalysisModal from '../VotingAnalysisModal.vue'
 import CommentVotingAnalysisModal from '../CommentVotingAnalysisModal.vue'
@@ -1168,6 +1295,8 @@ import ViewerManagementDrawer from './project/ViewerManagementDrawer.vue'
 import ProjectEditorDrawer from './project/ProjectEditorDrawer.vue'
 import StageEditorDrawer from './project/StageEditorDrawer.vue'
 import ForceVotingDrawer from './ForceVotingDrawer.vue'
+import PauseStageDrawer from './PauseStageDrawer.vue'
+import ResumeStageDrawer from './ResumeStageDrawer.vue'
 // DISABLED: import { getTagColor } from '@/utils/tagColor' - tags system disabled
 import { usePermissions } from '@/composables/usePermissions'
 import { useExpandable } from '@/composables/useExpandable'
@@ -1198,6 +1327,8 @@ export default {
     ProjectEditorDrawer,
     StageEditorDrawer,
     ForceVotingDrawer,
+    PauseStageDrawer,
+    ResumeStageDrawer,
     AdminFilterToolbar,
     EmptyState
   },
@@ -1206,10 +1337,10 @@ export default {
     const route = useRoute()
 
     // Register refresh function with parent SystemAdmin
-    const registerRefresh = inject('registerRefresh', () => {})
+    const registerRefresh = inject<(fn: (() => void) | null) => void>('registerRefresh', () => {})
 
     // Register action function with parent SystemAdmin
-    const registerAction = inject('registerAction', () => {})
+    const registerAction = inject<(fn: (() => void) | null) => void>('registerAction', () => {})
 
     // Permission checks
     const { hasPermission, hasAnyPermission } = usePermissions()
@@ -1224,7 +1355,8 @@ export default {
     const projectsQuery = useAdminProjects()
 
     // Create a computed ref for backwards compatibility with existing code
-    const projects = computed(() => projectsQuery?.data?.value || [])
+    // Cast to ExtendedProject[] for type compatibility with function parameters
+    const projects = computed(() => (projectsQuery?.data?.value || []) as ExtendedProject[])
 
     // Filter persistence
     const { filters, resetFilters } = useFilterPersistence('projectManagement', {
@@ -1258,13 +1390,13 @@ export default {
     const showEventLogDrawer = ref(false)
     const showViewerDrawer = ref(false)
     const loadingViewers = ref(false)
-    const projectViewers = ref([])
+    const projectViewers = ref<ProjectViewer[]>([])
     const showStageEditor = ref(false)
     const showEditStageModal = ref(false)
     const showVotingAnalysisModal = ref(false)
     const showCommentAnalysisModal = ref(false)
-    const selectedProject = ref(null)
-    const selectedStageForAnalysis = ref(null)
+    const selectedProject = ref<ExtendedProject | null>(null)
+    const selectedStageForAnalysis = ref<Stage | null>(null)
     const creating = ref(false)
     const updating = ref(false)
     // Use query loading state instead of manual loading ref
@@ -1274,16 +1406,20 @@ export default {
     const archivingProjects = ref(new Set())  // Track which projects are being archived
     const archivingStages = ref(new Set())    // Track which stages are being archived
     const settlingStages = ref(new Set())
+    const showPauseStageDrawer = ref(false)   // Pause stage drawer visibility
+    const pauseStageData = ref<{ stage: any; project: any } | null>(null) // Data for pause stage drawer
+    const showResumeStageDrawer = ref(false)  // Resume stage drawer visibility
+    const resumeStageData = ref<{ stage: any; project: any } | null>(null) // Data for resume stage drawer
     const showSettlementDrawer = ref(false)  // Settlement progress drawer visibility
-    const selectedStageForSettlement = ref(null) // Selected stage for settlement
+    const selectedStageForSettlement = ref<Stage | null>(null) // Selected stage for settlement
     const showSettlementConfirmDrawer = ref(false) // Settlement confirmation drawer visibility
-    const selectedStageForConfirm = ref(null) // Selected stage for confirmation
+    const selectedStageForConfirm = ref<Stage | null>(null) // Selected stage for confirmation
     const showArchivedStages = ref(false)     // Toggle to show/hide archived stages
-    const showGanttChart = ref(new Map())     // Track gantt chart open/close state for each project
-    const ganttCenterTime = ref(new Map())    // Store centerTime for each project's gantt chart
-    const projectStages = ref([])
-    const draggedStage = ref(null)
-    const editingStage = ref(null)
+    const showGanttChart = ref(new Map<string, boolean>())     // Track gantt chart open/close state for each project
+    const ganttCenterTime = ref(new Map<string, number>())    // Store centerTime for each project's gantt chart
+    const projectStages = ref<Stage[]>([])
+    const draggedStage = ref<Stage | null>(null)
+    const editingStage = ref<Stage | null>(null)
 
     // DISABLED: Tag management - tags system disabled
     // const showTagModal = ref(false)
@@ -1343,7 +1479,7 @@ export default {
     })
 
     // Stage form error state
-    const stageFormError = ref(null)
+    const stageFormError = ref<{ title: string; message: string } | null>(null)
 
     // Voting lock state (prevents time editing when voting has started)
     const isVotingLocked = ref(false)
@@ -1353,14 +1489,18 @@ export default {
     const loadingStageDetails = ref(false)
     const savingStageDetails = ref(false)
     const savingStageOrder = ref(false)
-    const activeCollapse = ref([])
-    const selectedStage = ref(null)
+    const activeCollapse = ref<string[]>([])
+    const selectedStage = ref<Stage | null>(null)
     const cloningProject = ref(false)
     const cloningStage = ref(false)
 
     // Clone Project Drawer State
     const showCloneProjectDrawer = ref(false)
-    const cloneProjectForm = reactive({
+    const cloneProjectForm = reactive<{
+      sourceProject: ExtendedProject | null
+      newProjectName: string
+      confirmText: string
+    }>({
       sourceProject: null,
       newProjectName: '',
       confirmText: ''
@@ -1368,27 +1508,37 @@ export default {
 
     // Clone Stage Drawer State
     const showCloneStageDrawer = ref(false)
-    const cloneStageForm = reactive({
+    const cloneStageForm = reactive<{
+      sourceStage: any
+      newStageName: string
+      confirmText: string
+      targetProjectIds: string[]
+    }>({
       sourceStage: null,
       newStageName: '',
-      confirmText: ''
+      confirmText: '',
+      targetProjectIds: []
     })
 
     // Force Voting Drawer State
     const showForceVotingDrawer = ref(false)
-    const selectedForceVotingStage = ref(null)
+    const selectedForceVotingStage = ref<Stage | null>(null)
 
     // Archive Project Drawer State
     const showArchiveProjectDrawer = ref(false)
-    const archiveProjectForm = reactive({
+    const archiveProjectForm = reactive<{
+      sourceProject: ExtendedProject | null
+      confirmText: string
+    }>({
       sourceProject: null,
       confirmText: ''
     })
 
     // Reverse Settlement Drawer State
     const showReverseSettlementDrawer = ref(false)
-    const selectedStageForReverse = ref(null)
-    const selectedProjectForReverse = ref(null)
+    const reversingSettlement = ref(false)  // Loading state for reverse settlement
+    const selectedStageForReverse = ref<Stage | null>(null)
+    const selectedProjectForReverse = ref<ExtendedProject | null>(null)
 
     // Project expansion state - using useExpandable composable with URL sync
     const {
@@ -1400,7 +1550,10 @@ export default {
     } = useExpandable({ singleMode: true })
 
     // Keep currentProjectId for backwards compatibility (used in other watchers)
-    const currentProjectId = computed(() => route.params.projectId || '')
+    const currentProjectId = computed(() => {
+      const id = route.params.projectId
+      return Array.isArray(id) ? id[0] : id || ''
+    })
 
     // REMOVED: expandedTransactions (dead code - never used)
 
@@ -1413,17 +1566,17 @@ export default {
       email: '',
       role: 'teacher'
     })
-    const selectedProjectForMember = ref(null)
+    const selectedProjectForMember = ref<ExtendedProject | null>(null)
 
     // Viewer management state
     const newViewer = reactive({
       searchText: '',
       role: 'teacher'
     })
-    const searchResults = ref([])
-    const selectedUsers = ref([])
+    const searchResults = ref<User[]>([])
+    const selectedUsers = ref<User[]>([])
     const searchingUsers = ref(false)
-    const selectedViewers = ref([])
+    const selectedViewers = ref<ProjectViewer[]>([])
     const batchRole = ref('')
     const viewerSearchText = ref('')
     const viewerSortField = ref('displayName')
@@ -1432,7 +1585,8 @@ export default {
     const stats = computed(() => ({
       totalProjects: projects.value.length,
       activeProjects: projects.value.filter(p => p.status === 'active').length,
-      completedProjects: projects.value.filter(p => p.status === 'completed').length,
+      // Note: Projects don't have 'completed' status - only stages do. Using 'deleted' count instead
+      deletedProjects: projects.value.filter(p => p.status === 'deleted').length,
       archivedProjects: projects.value.filter(p => p.status === 'archived').length
     }))
 
@@ -1462,15 +1616,15 @@ export default {
         filtered = filtered.filter(project => project.createdBy === userEmail.value)
       }
 
-      return filtered.sort((a, b) => b.lastModified - a.lastModified)
+      return filtered.sort((a, b) => (b.lastModified || 0) - (a.lastModified || 0))
     })
 
     // Export configuration
     const exportConfig = computed(() => ({
-      data: filteredProjects.value,
+      data: filteredProjects.value as unknown as Record<string, unknown>[],
       filename: '專案列表',
       headers: ['專案名稱', '專案ID', '最低分', '最高分', '學生權重', '教師權重', '可排名數', '狀態'],
-      rowMapper: (project) => [
+      rowMapper: (project: any) => [
         project.projectName,
         project.projectId,
         project.scoreRangeMin ?? 0,
@@ -1501,12 +1655,24 @@ export default {
     // Clone stage form validation
     const isCloneStageFormValid = computed(() => {
       return cloneStageForm.newStageName.trim() !== '' &&
-             cloneStageForm.confirmText.toUpperCase() === 'CLONE'
+             cloneStageForm.confirmText.toUpperCase() === 'CLONE' &&
+             cloneStageForm.targetProjectIds.length > 0
     })
 
     // Archive form validation
     const isArchiveFormValid = computed(() => {
       return archiveProjectForm.confirmText.toUpperCase() === 'ARCHIVE'
+    })
+
+    // Projects where user has manage permission (for clone target selection)
+    // Since projects.value already contains only accessible projects for admin users,
+    // we can use them directly
+    const manageableProjects = computed(() => {
+      return projects.value.map(project => ({
+        projectId: project.projectId,
+        projectName: project.projectName,
+        isCurrent: project.projectId === cloneStageForm.sourceStage?.projectId
+      }))
     })
 
     // DISABLED: Tag management computed - tags system disabled
@@ -1550,8 +1716,8 @@ export default {
       // Apply sorting
       if (viewerSortField.value) {
         filtered.sort((a, b) => {
-          let aVal = a[viewerSortField.value]
-          let bVal = b[viewerSortField.value]
+          let aVal = (a as any)[viewerSortField.value]
+          let bVal = (b as any)[viewerSortField.value]
 
           // Handle special cases
           if (viewerSortField.value === 'displayName') {
@@ -1579,7 +1745,7 @@ export default {
       return filtered
     })
 
-    const formatTime = (timestamp) => {
+    const formatTime = (timestamp: number | null | undefined): string => {
       if (!timestamp) return '-'
       return new Date(timestamp).toLocaleString('zh-TW')
     }
@@ -1587,7 +1753,7 @@ export default {
     /**
      * 格式化权重百分比
      */
-    const formatWeight = (weight) => {
+    const formatWeight = (weight: number | null | undefined): string => {
       if (weight === null || weight === undefined) return '-'
       return `${Math.round(weight * 100)}%`
     }
@@ -1598,7 +1764,7 @@ export default {
      * - 固定TOP N模式（percentile === 0 或 null）：显示"TOP N"
      * - 无数据：显示"系統預設"
      */
-    const formatCommentRanking = (project) => {
+    const formatCommentRanking = (project: any): string => {
       const percentile = project.commentRewardPercentile
       const maxSelections = project.maxCommentSelections
 
@@ -1617,31 +1783,31 @@ export default {
       return `TOP ${maxSelections || 3}`
     }
 
-    const truncateText = (text, maxLength) => {
+    const truncateText = (text: string | null | undefined, maxLength: number): string => {
       if (!text) return '-'
       return text.length > maxLength ? text.substring(0, maxLength) + '...' : text
     }
 
-    const getProgressPercentage = (project) => {
+    const getProgressPercentage = (project: any): number => {
       if (project.totalStages === 0) return 0
       return Math.round((project.currentStage / project.totalStages) * 100)
     }
 
-    const getStageCompletionPercentage = (project) => {
+    const getStageCompletionPercentage = (project: any): number => {
       // 根據實際完成的階段計算進度
       if (!project.stages || project.stages.length === 0) {
         // 如果沒有階段資料，使用原有的 currentStage/totalStages 邏輯作為備用
         if (project.totalStages === 0) return 0
         return Math.round((project.currentStage / project.totalStages) * 100)
       }
-      
-      const completedStages = project.stages.filter(stage => stage.status === 'completed').length
+
+      const completedStages = project.stages.filter((stage: Stage) => stage.status === 'completed').length
       const totalStages = project.stages.length
-      
+
       return Math.round((completedStages / totalStages) * 100)
     }
 
-    const getStatusIcon = (status) => {
+    const getStatusIcon = (status: string): string => {
       switch (status) {
         case 'active': return 'fas fa-play-circle'
         case 'completed': return 'fas fa-check-circle'
@@ -1650,7 +1816,7 @@ export default {
       }
     }
 
-    const getStatusText = (status) => {
+    const getStatusText = (status: string): string => {
       switch (status) {
         case 'active': return '進行中'
         case 'completed': return '已完成'
@@ -1938,7 +2104,7 @@ export default {
       }
     }
 
-    const editProject = (project) => {
+    const editProject = (project: any) => {
       editForm.projectId = project.projectId
       editForm.projectName = project.projectName
       editForm.description = project.description || ''
@@ -1951,7 +2117,7 @@ export default {
      * Save scoring configuration for a project
      * Always sends all scoring config fields (loaded from system defaults or project config)
      */
-    const saveScoringConfig = async (projectId, formData) => {
+    const saveScoringConfig = async (projectId: string, formData: any) => {
       // Build scoring config update object with all fields
       const scoringConfig = {
         maxCommentSelections: formData.maxCommentSelections,
@@ -1978,7 +2144,7 @@ export default {
     }
 
     // Unified save function for both create and update
-    const saveProject = async (formData) => {
+    const saveProject = async (formData: any) => {
       // Validate the emitted form data from the child component
       if (!formData.projectName.trim()) {
         ElMessage.warning('請輸入專案名稱')
@@ -2135,19 +2301,19 @@ export default {
       }
     }
 
-    const viewProject = async (project) => {
+    const viewProject = async (project: any) => {
       try {
         // Vue 3 Best Practice: rpcClient automatically handles authentication
         const httpResponse = await rpcClient.projects.get.$post({
           json: {
             projectId: project.projectId
-        
+
           }
         })
         const response = await httpResponse.json()
-        
+
         if (response.success && response.data) {
-          selectedProject.value = response.data
+          selectedProject.value = response.data as ExtendedProject
           showViewModal.value = true
         } else {
           console.error('Failed to load project details:', response.error)
@@ -2162,7 +2328,7 @@ export default {
     }
 
     // Open archive project drawer
-    const openArchiveProjectDrawer = (project) => {
+    const openArchiveProjectDrawer = (project: any) => {
       archiveProjectForm.sourceProject = project
       archiveProjectForm.confirmText = ''
       showArchiveProjectDrawer.value = true
@@ -2187,7 +2353,7 @@ export default {
       }
     }
 
-    const archiveProject = async (project) => {
+    const archiveProject = async (project: any) => {
       try {
         // Add to archiving set
         archivingProjects.value.add(project.projectId)
@@ -2219,7 +2385,7 @@ export default {
       }
     }
 
-    const unarchiveProject = async (project) => {
+    const unarchiveProject = async (project: any) => {
       try {
         // Add to archiving set (reuse the same tracking set)
         archivingProjects.value.add(project.projectId)
@@ -2252,7 +2418,7 @@ export default {
     }
 
     // Navigate to Wallet Page
-    const navigateToWallet = (project) => {
+    const navigateToWallet = (project: any) => {
       router.push({
         name: 'wallets',
         params: { projectId: project.projectId }
@@ -2261,13 +2427,13 @@ export default {
     }
 
     // Event Log Functions
-    const openEventLogViewer = (project) => {
+    const openEventLogViewer = (project: any) => {
       selectedProject.value = project
       showEventLogDrawer.value = true
     }
 
     // Viewer Management Functions
-    const handleViewerCommand = (command, project) => {
+    const handleViewerCommand = (command: string, project: Project | ExtendedProject) => {
       if (command === 'settings') {
         openViewerManagement(project)
       } else if (command === 'groups') {
@@ -2275,20 +2441,20 @@ export default {
       }
     }
 
-    const navigateToProjectGroups = (project) => {
+    const navigateToProjectGroups = (project: any) => {
       router.push({
         name: 'admin-groups-project-detail',
         params: { projectId: project.projectId }
       })
     }
 
-    const openViewerManagement = async (project) => {
+    const openViewerManagement = async (project: any) => {
       selectedProject.value = project
       showViewerDrawer.value = true
       await loadProjectViewers(project.projectId)
     }
 
-    const loadProjectViewers = async (projectId) => {
+    const loadProjectViewers = async (projectId: string) => {
       console.log('🔍 [loadProjectViewers] Starting for projectId:', projectId)
       loadingViewers.value = true
       try {
@@ -2299,7 +2465,7 @@ export default {
         console.log('🔍 [loadProjectViewers] API response:', response)
 
         if (response.success && response.data) {
-          projectViewers.value = response.data
+          projectViewers.value = response.data as ProjectViewer[]
           console.log('✅ [loadProjectViewers] Loaded viewers:', projectViewers.value)
         } else {
           console.error('❌ [loadProjectViewers] Failed to load:', response.error)
@@ -2316,7 +2482,7 @@ export default {
       }
     }
 
-    const searchUsers = async (payload) => {
+    const searchUsers = async (payload: any) => {
       // Accept payload from child component event
       const searchText = payload?.searchText || payload || ''
 
@@ -2331,8 +2497,8 @@ export default {
         // 按行分割搜尋文字，支援多行輸入
         const searchQueries = searchText
           .split('\n')
-          .map(line => line.trim())
-          .filter(line => line.length > 0)
+          .map((line: string) => line.trim())
+          .filter((line: string) => line.length > 0)
 
         if (searchQueries.length === 0) {
           ElMessage.warning('請輸入搜尋內容')
@@ -2399,16 +2565,17 @@ export default {
       }
     }
 
-    const toggleUserSelection = (userEmail) => {
-      const index = selectedUsers.value.indexOf(userEmail)
+    const toggleUserSelection = (userEmail: string) => {
+      const index = selectedUsers.value.findIndex((u: User) => u.userEmail === userEmail)
       if (index > -1) {
         selectedUsers.value.splice(index, 1)
       } else {
-        selectedUsers.value.push(userEmail)
+        const user = searchResults.value.find((u: User) => u.userEmail === userEmail)
+        if (user) selectedUsers.value.push(user)
       }
     }
 
-    const addSelectedViewers = async (payload) => {
+    const addSelectedViewers = async (payload: any) => {
       // Accept payload from child component event
       // Users is now an array of { userEmail, role } objects
       const users = payload?.users || []
@@ -2430,7 +2597,7 @@ export default {
         const httpResponse = await rpcClient.projects.viewers['add-batch'].$post({
           json: {
             projectId: selectedProject.value.projectId,
-            viewers: users.map(u => ({
+            viewers: users.map((u: any) => ({
               userEmail: u.userEmail,
               role: u.role
             }))
@@ -2474,7 +2641,7 @@ export default {
       }
     }
 
-    const updateViewerRole = async ({ userEmail, newRole }) => {
+    const updateViewerRole = async ({ userEmail, newRole }: { userEmail: string; newRole: string }) => {
       if (!selectedProject.value) {
         ElMessage.error('未選擇專案')
         return
@@ -2503,7 +2670,7 @@ export default {
       }
     }
 
-    const removeViewer = async (userEmail) => {
+    const removeViewer = async (userEmail: string) => {
       if (!selectedProject.value) {
         ElMessage.error('未選擇專案')
         return
@@ -2531,12 +2698,13 @@ export default {
       }
     }
 
-    const toggleViewerSelection = (userEmail) => {
-      const index = selectedViewers.value.indexOf(userEmail)
+    const toggleViewerSelection = (userEmail: string) => {
+      const index = selectedViewers.value.findIndex((v: ProjectViewer) => v.userEmail === userEmail)
       if (index > -1) {
         selectedViewers.value.splice(index, 1)
       } else {
-        selectedViewers.value.push(userEmail)
+        const viewer = projectViewers.value.find((v: ProjectViewer) => v.userEmail === userEmail)
+        if (viewer) selectedViewers.value.push(viewer)
       }
     }
 
@@ -2544,12 +2712,12 @@ export default {
       if (selectedViewers.value.length === filteredViewers.value.length) {
         selectedViewers.value = []
       } else {
-        selectedViewers.value = filteredViewers.value.map(v => v.userEmail)
+        selectedViewers.value = [...filteredViewers.value]
       }
     }
 
     // Viewer sorting functions
-    const sortViewers = (field) => {
+    const sortViewers = (field: string) => {
       if (viewerSortField.value === field) {
         // Toggle sort order if clicking the same field
         viewerSortOrder.value = viewerSortOrder.value === 'asc' ? 'desc' : 'asc'
@@ -2560,7 +2728,7 @@ export default {
       }
     }
 
-    const getSortIcon = (field) => {
+    const getSortIcon = (field: string) => {
       if (viewerSortField.value !== field) {
         return 'fa-sort' // No sort icon
       }
@@ -2682,13 +2850,13 @@ export default {
       }
     }
 
-    const getDisplayName = (email) => {
+    const getDisplayName = (email: string) => {
       // Extract name part from email for display
       return email.split('@')[0]
     }
 
     // Project Expansion Functions - refactored to use composable
-    const toggleProjectExpansion = (project) => {
+    const toggleProjectExpansion = (project: any) => {
       const projectId = project.projectId
 
       if (isProjectExpanded(projectId)) {
@@ -2705,7 +2873,7 @@ export default {
     }
 
     // Define loadProjectStagesForExpansion before watch (to avoid "before initialization" error)
-    const loadProjectStagesForExpansion = async (projectId) => {
+    const loadProjectStagesForExpansion = async (projectId: string) => {
       // Note: Loading state is now managed by watch() handler
       try {
         // Vue 3 Best Practice: rpcClient automatically handles authentication
@@ -2720,8 +2888,8 @@ export default {
         if (response.success && response.data && response.data.stages) {
           // Inject projectId into each stage for later use
           const sortedStages = response.data.stages
-            .map(stage => ({ ...stage, projectId }))
-            .sort((a, b) => a.stageOrder - b.stageOrder)
+            .map((stage: Stage) => ({ ...stage, projectId }))
+            .sort((a: Stage, b: Stage) => a.stageOrder - b.stageOrder)
           projectStagesMap.set(projectId, sortedStages)
         } else {
           console.error('Failed to load stages:', response.error)
@@ -2737,7 +2905,8 @@ export default {
     // URL → Expansion state synchronization
     watch(
       () => route.params.projectId,
-      async (projectId) => {
+      async (paramId) => {
+        const projectId = Array.isArray(paramId) ? paramId[0] : paramId
         if (projectId && !isProjectExpanded(projectId)) {
           // URL has projectId → Expand and load stages with loading state
           loadingProjectStages.add(projectId)
@@ -2756,7 +2925,7 @@ export default {
     )
 
     // Project Members Functions
-    const loadProjectMembers = async (projectId) => {
+    const loadProjectMembers = async (projectId: string) => {
       loadingProjectMembers.value.add(projectId)
 
       try {
@@ -2780,7 +2949,7 @@ export default {
       }
     }
 
-    const openAddMemberDialog = (project) => {
+    const openAddMemberDialog = (project: any) => {
       selectedProjectForMember.value = project
       newMember.email = ''
       newMember.role = 'teacher'
@@ -2827,7 +2996,7 @@ export default {
       }
     }
 
-    const handleMemberRoleChange = async (newRole, projectId, member) => {
+    const handleMemberRoleChange = async (newRole: string, projectId: string, member: any) => {
       try {
         const httpResponse = await rpcClient.projects.viewers['update-role'].$post({
           json: {
@@ -2851,7 +3020,7 @@ export default {
       }
     }
 
-    const removeMember = async (projectId, userEmail) => {
+    const removeMember = async (projectId: string, userEmail: string) => {
       try {
         const httpResponse = await rpcClient.projects.viewers.remove.$post({
           json: {
@@ -2874,8 +3043,8 @@ export default {
       }
     }
 
-    const getRoleLabel = (role) => {
-      const labels = {
+    const getRoleLabel = (role: string): string => {
+      const labels: Record<string, string> = {
         teacher: '教師 (Level 1)',
         observer: '觀察者 (Level 2)',
         viewer: '檢視者 (Level 2)',
@@ -2884,8 +3053,8 @@ export default {
       return labels[role] || role
     }
 
-    const getRoleTagType = (role) => {
-      const types = {
+    const getRoleTagType = (role: string): string => {
+      const types: Record<string, string> = {
         teacher: 'success',    // Green for teachers
         observer: 'info',      // Blue for observers
         viewer: 'primary',     // Purple for viewers
@@ -2895,7 +3064,7 @@ export default {
     }
 
     // Avatar Helper Functions
-    const generateDicebearUrl = (seed, style, options = {}) => {
+    const generateDicebearUrl = (seed: string, style: string, options: Record<string, string> = {}) => {
       const baseUrl = `https://api.dicebear.com/7.x/${style}/svg`
       const params = new URLSearchParams({
         seed: seed,
@@ -2905,7 +3074,7 @@ export default {
       return `${baseUrl}?${params.toString()}`
     }
 
-    const parseAvatarOptions = (optionsData) => {
+    const parseAvatarOptions = (optionsData: any): Record<string, string> => {
       if (!optionsData) return {}
       if (typeof optionsData === 'string') {
         try {
@@ -2918,7 +3087,7 @@ export default {
       return optionsData
     }
 
-    const getAvatarUrl = (user) => {
+    const getAvatarUrl = (user: any) => {
       const options = parseAvatarOptions(user.avatarOptions)
       return generateDicebearUrl(
         user.avatarSeed,
@@ -2927,11 +3096,11 @@ export default {
       )
     }
 
-    const handleAvatarError = (event, user) => {
+    const handleAvatarError = (event: any, user: any) => {
       // Fallback to initials style
       const initials = (user.displayName || user.userEmail || 'U')
         .split(' ')
-        .map(word => word.charAt(0))
+        .map((word: string) => word.charAt(0))
         .join('')
         .substring(0, 2)
         .toUpperCase()
@@ -2940,7 +3109,7 @@ export default {
     }
 
     // Stage Editor Functions
-    const openStageEditor = async (project) => {
+    const openStageEditor = async (project: any) => {
       selectedProject.value = project
       showStageEditor.value = true
       activeCollapse.value = [] // 預設折疊新增階段區塊
@@ -2949,7 +3118,7 @@ export default {
       await loadProjectStages(project.projectId)
     }
 
-    const loadProjectStages = async (projectId) => {
+    const loadProjectStages = async (projectId: string) => {
       loadingStages.value = true
       try {
         // Vue 3 Best Practice: rpcClient automatically handles authentication
@@ -2964,8 +3133,8 @@ export default {
         if (response.success && response.data && response.data.stages) {
           // Inject projectId into each stage for later use
           projectStages.value = response.data.stages
-            .map(stage => ({ ...stage, projectId }))
-            .sort((a, b) => a.stageOrder - b.stageOrder)
+            .map((stage: Stage) => ({ ...stage, projectId }))
+            .sort((a: Stage, b: Stage) => a.stageOrder - b.stageOrder)
         } else {
           console.error('Failed to load stages:', response.error)
           projectStages.value = []
@@ -2981,7 +3150,7 @@ export default {
     }
 
 
-    const editStage = async (stage, project = null) => {
+    const editStage = async (stage: any, project: any = null) => {
       // Clear any previous errors
       stageFormError.value = null
 
@@ -2992,10 +3161,10 @@ export default {
         // Find the project that contains this stage
         const projectForStage = projects.value.find(p =>
           expandedProjects.has(p.projectId) &&
-          projectStagesMap.get(p.projectId)?.some(s => s.stageId === stage.stageId)
+          projectStagesMap.get(p.projectId)?.some((s: Stage) => s.stageId === stage.stageId)
         )
         if (projectForStage) {
-          selectedProject.value = projectForStage
+          selectedProject.value = projectForStage as any
         } else {
           console.error('Cannot determine project for stage:', stage)
           ElMessage.error('無法確定階段所屬的專案')
@@ -3017,7 +3186,7 @@ export default {
         // Get detailed stage information including reward pools
         const httpResponse = await rpcClient.stages.get.$post({
           json: {
-            projectId: selectedProject.value.projectId,
+            projectId: selectedProject.value!.projectId,
             stageId: stage.stageId
           }
         })
@@ -3028,7 +3197,7 @@ export default {
           editStageForm.stageId = stageDetails.stageId
           editStageForm.stageName = stageDetails.stageName
           // 修正時區問題：使用本地時區而不是UTC
-          const formatDatetimeLocal = (timestamp) => {
+          const formatDatetimeLocal = (timestamp: number): string => {
             const date = new Date(timestamp)
             // 獲取本地時間的YYYY-MM-DDTHH:MM格式，避免時區轉換
             const year = date.getFullYear()
@@ -3049,7 +3218,7 @@ export default {
           editStageForm.commentRewardPool = stageDetails.commentRewardPool || 0
 
           // Check voting lock (if stage has votes, prevent time editing)
-          await checkVotingLock(selectedProject.value.projectId, stageDetails.stageId)
+          await checkVotingLock(selectedProject.value!.projectId, stageDetails.stageId)
         } else {
           ElMessage.error(`載入階段詳情失敗: ${response.error?.message || '未知錯誤'}`)
           showEditStageModal.value = false
@@ -3064,7 +3233,7 @@ export default {
     }
 
     // Check if stage has voting records (voting lock)
-    const checkVotingLock = async (projectId, stageId) => {
+    const checkVotingLock = async (projectId: string, stageId: string) => {
       if (!stageId) {
         isVotingLocked.value = false
         return
@@ -3095,7 +3264,7 @@ export default {
       }
     }
 
-    const updateStageDetails = async (formData) => {
+    const updateStageDetails = async (formData: any) => {
       // Clear previous errors
       stageFormError.value = null
 
@@ -3146,7 +3315,7 @@ export default {
 
           const httpResponse = await rpcClient.stages.update.$post({
             json: {
-              projectId: selectedProject.value.projectId,
+              projectId: selectedProject.value!.projectId,
               stageId: editStageForm.stageId,
               updates: updates
             }
@@ -3157,7 +3326,7 @@ export default {
             ElMessage.success('階段已更新')
 
             // Reload project stages to ensure data sync
-            await loadProjectStagesForExpansion(selectedProject.value.projectId)
+            await loadProjectStagesForExpansion(selectedProject.value!.projectId)
 
             showEditStageModal.value = false
           } else {
@@ -3172,7 +3341,7 @@ export default {
           console.log('=== Creating new stage ===')
           console.log('Selected project:', selectedProject.value)
 
-          const stages = projectStagesMap.get(selectedProject.value.projectId) || []
+          const stages = projectStagesMap.get(selectedProject.value!.projectId) || []
           const stageData = {
             stageName: editStageForm.stageName.trim(),
             description: editStageForm.description,
@@ -3184,11 +3353,11 @@ export default {
           }
 
           console.log('Stage data to create:', stageData)
-          console.log('Project ID:', selectedProject.value.projectId)
+          console.log('Project ID:', selectedProject.value!.projectId)
 
           const httpResponse = await rpcClient.stages.create.$post({
             json: {
-              projectId: selectedProject.value.projectId,
+              projectId: selectedProject.value!.projectId,
               stageData: stageData
             }
           })
@@ -3201,7 +3370,7 @@ export default {
             console.log('Stage created successfully:', response.data)
 
             // Reload project stages to ensure data sync
-            await loadProjectStagesForExpansion(selectedProject.value.projectId)
+            await loadProjectStagesForExpansion(selectedProject.value!.projectId)
 
             showEditStageModal.value = false
           } else {
@@ -3224,17 +3393,17 @@ export default {
 
 
     // Drag and Drop Functions
-    const handleDragStart = (stage, event) => {
+    const handleDragStart = (stage: any, event: any) => {
       draggedStage.value = stage
       event.dataTransfer.effectAllowed = 'move'
     }
 
-    const handleDragOver = (event) => {
+    const handleDragOver = (event: any) => {
       event.preventDefault()
       event.dataTransfer.dropEffect = 'move'
     }
 
-    const handleDrop = (event, projectId, targetIndex) => {
+    const handleDrop = (event: any, projectId: string, targetIndex: number) => {
       event.preventDefault()
       
       if (!draggedStage.value) {
@@ -3242,7 +3411,7 @@ export default {
       }
 
       const stages = projectStagesMap.get(projectId) || []
-      const draggedIndex = stages.findIndex(s => s.stageId === draggedStage.value.stageId)
+      const draggedIndex = stages.findIndex((s: Stage) => s.stageId === draggedStage.value!.stageId)
       
       if (draggedIndex === -1 || draggedIndex === targetIndex) {
         return
@@ -3272,53 +3441,53 @@ export default {
       draggedStage.value = null
     }
 
-    const moveStageUpInProject = async (projectId, currentIndex) => {
+    const moveStageUpInProject = async (projectId: string, currentIndex: number) => {
       if (currentIndex === 0) return
-      
+
       const stages = projectStagesMap.get(projectId) || []
       const newStages = [...stages]
-      
+
       // 交換位置
       const temp = newStages[currentIndex]
       newStages[currentIndex] = newStages[currentIndex - 1]
       newStages[currentIndex - 1] = temp
-      
+
       // 更新順序
-      newStages.forEach((stage, index) => {
+      newStages.forEach((stage: Stage, index: number) => {
         stage.stageOrder = index + 1
       })
-      
+
       // 更新map
       projectStagesMap.set(projectId, newStages)
-      
+
       // 保存到後端
       await saveStageOrder(projectId, newStages)
     }
 
-    const moveStageDownInProject = async (projectId, currentIndex) => {
+    const moveStageDownInProject = async (projectId: string, currentIndex: number) => {
       const stages = projectStagesMap.get(projectId) || []
       if (currentIndex === stages.length - 1) return
-      
+
       const newStages = [...stages]
-      
+
       // 交換位置
       const temp = newStages[currentIndex]
       newStages[currentIndex] = newStages[currentIndex + 1]
       newStages[currentIndex + 1] = temp
-      
+
       // 更新順序
-      newStages.forEach((stage, index) => {
+      newStages.forEach((stage: Stage, index: number) => {
         stage.stageOrder = index + 1
       })
-      
+
       // 更新map
       projectStagesMap.set(projectId, newStages)
-      
+
       // 保存到後端
       await saveStageOrder(projectId, newStages)
     }
 
-    const formatDate = (timestamp) => {
+    const formatDate = (timestamp: number | null | undefined): string => {
       if (!timestamp) return '-'
       // 与ProjectDetail.vue保持一致，使用dayjs處理時間
       const date = typeof timestamp === 'number' ? dayjs(timestamp) : dayjs(timestamp)
@@ -3356,7 +3525,7 @@ export default {
         
         const httpResponse = await rpcClient.stages.create.$post({
           json: {
-            projectId: selectedProject.value.projectId,
+            projectId: selectedProject.value!.projectId,
             stageData: stageData
           }
         })
@@ -3374,7 +3543,7 @@ export default {
           newStage.commentRewardPool = 0
           
           // Reload stages
-          await loadProjectStages(selectedProject.value.projectId)
+          await loadProjectStages(selectedProject.value!.projectId)
         } else {
           ElMessage.error(`新增失敗: ${response.error?.message || '未知錯誤'}`)
         }
@@ -3384,14 +3553,14 @@ export default {
       }
     }
 
-    const onDragStart = (stage) => {
+    const onDragStart = (stage: Stage) => {
       draggedStage.value = stage
     }
 
-    const onDrop = (targetIndex) => {
+    const onDrop = (targetIndex: number) => {
       if (!draggedStage.value) return
-      
-      const draggedIndex = projectStages.value.findIndex(s => s.stageId === draggedStage.value.stageId)
+
+      const draggedIndex = projectStages.value.findIndex(s => s.stageId === draggedStage.value!.stageId)
       if (draggedIndex === targetIndex) return
 
       // Reorder the stages array
@@ -3408,11 +3577,11 @@ export default {
       draggedStage.value = null
     }
 
-    const selectStage = (stage) => {
+    const selectStage = (stage: Stage) => {
       selectedStage.value = stage
     }
-    
-    const getStageIndex = (stage) => {
+
+    const getStageIndex = (stage: Stage) => {
       return projectStages.value.findIndex(s => s.stageId === stage.stageId)
     }
     
@@ -3470,14 +3639,14 @@ export default {
       }
     }
     
-    const updateStageOrders = (stages) => {
-      stages.forEach((stage, index) => {
+    const updateStageOrders = (stages: Stage[]) => {
+      stages.forEach((stage: Stage, index: number) => {
         stage.stageOrder = index + 1
       })
       projectStages.value = stages
     }
     
-    const saveStageOrder = async (projectId = null, stages = null) => {
+    const saveStageOrder = async (projectId: string | null = null, stages: Stage[] | null = null) => {
       const targetProjectId = projectId || selectedProject.value?.projectId
       const targetStages = stages || projectStages.value
       
@@ -3516,7 +3685,7 @@ export default {
     }
 
     // Open settlement confirmation drawer
-    const openSettlementConfirmDrawer = (stage, project) => {
+    const openSettlementConfirmDrawer = (stage: Stage & { projectId?: string }, project: ExtendedProject) => {
       // Attach projectId to stage for drawer access
       stage.projectId = project.projectId
       selectedStageForConfirm.value = stage
@@ -3524,15 +3693,15 @@ export default {
     }
 
     // Handle settlement confirmation
-    const handleSettlementConfirmed = (stage, projectId) => {
+    const handleSettlementConfirmed = (stage: Stage, projectId: string) => {
       // Close confirmation drawer
       showSettlementConfirmDrawer.value = false
       // Open progress drawer and trigger settlement
-      settleStage(stage, projectId)
+      settleStage(stage as Stage & { projectId?: string }, projectId)
     }
 
     // Open settlement drawer for a stage
-    const settleStage = async (stage, projectId, forceSettle = false) => {
+    const settleStage = async (stage: Stage & { projectId?: string }, projectId: string, forceSettle = false) => {
       console.log('[ProjectManagement] settleStage called with:', { stageId: stage.stageId, projectId })
       // Attach projectId to stage object so drawer can access it
       stage.projectId = projectId
@@ -3542,14 +3711,14 @@ export default {
     }
 
     // Handle settlement completion
-    const handleSettlementComplete = async ({ stageId, settlementId, result }) => {
+    const handleSettlementComplete = async ({ stageId, settlementId, result }: { stageId: string; settlementId?: string; result: SettlementDetails }) => {
       // Update stage status in local state
       const projectId = selectedProject.value?.projectId
 
       // Update in projectStagesMap
       if (projectId && projectStagesMap.has(projectId)) {
-        const stages = projectStagesMap.get(projectId)
-        const stageIndex = stages.findIndex(s => s.stageId === stageId)
+        const stages = projectStagesMap.get(projectId)!
+        const stageIndex = stages.findIndex((s: Stage) => s.stageId === stageId)
         if (stageIndex !== -1) {
           stages[stageIndex].status = 'completed'
         }
@@ -3565,7 +3734,7 @@ export default {
     }
 
     // Handle settlement error
-    const handleSettlementError = ({ stageId, error }) => {
+    const handleSettlementError = ({ stageId, error }: { stageId: string; error: string }) => {
       // Remove from settlingStages
       settlingStages.value.delete(stageId)
       // Error message already shown by child component
@@ -3573,7 +3742,7 @@ export default {
     }
 
     // Handle drawer closed - refresh stage list
-    const handleDrawerClosed = async ({ projectId }) => {
+    const handleDrawerClosed = async ({ projectId }: { projectId: string }) => {
       console.log('[ProjectManagement] handleDrawerClosed called with projectId:', projectId)
       if (projectId) {
         console.log('[ProjectManagement] Refreshing stages for project:', projectId)
@@ -3584,7 +3753,7 @@ export default {
       }
     }
     
-    const handleDistributionCommand = (command, stage, projectId) => {
+    const handleDistributionCommand = (command: string, stage: Stage, projectId: string) => {
       if (stage.status === 'completed') {
         // 設定要顯示的階段資訊
         selectedStageForAnalysis.value = {
@@ -3602,18 +3771,18 @@ export default {
         ElMessage.warning('只有已結算的階段才能顯示獎金分配結果')
       }
     }
-    
+
     // Open reverse settlement drawer
-    const reverseSettlement = (stage, project) => {
+    const reverseSettlement = (stage: Stage, project: ExtendedProject | null) => {
       selectedStageForReverse.value = stage
       selectedProjectForReverse.value = project || selectedProject.value
       showReverseSettlementDrawer.value = true
     }
 
     // Handle successful reversal from the drawer component
-    const handleReverseSuccess = async ({ reversalId, transactionCount, stageId, projectId }) => {
+    const handleReverseSuccess = async ({ reversalId, transactionCount, stageId, projectId }: { reversalId: string; transactionCount: number; stageId: string; projectId: string }) => {
       // Update stage status in local state
-      const stageIndex = projectStages.value.findIndex(s => s.stageId === stageId)
+      const stageIndex = projectStages.value.findIndex((s: Stage) => s.stageId === stageId)
       if (stageIndex !== -1) {
         projectStages.value[stageIndex].status = 'voting'
       }
@@ -3621,7 +3790,7 @@ export default {
       // Update in projectStagesMap
       const projectStagesList = projectStagesMap.get(projectId)
       if (projectStagesList) {
-        const mapStageIndex = projectStagesList.findIndex(s => s.stageId === stageId)
+        const mapStageIndex = projectStagesList.findIndex((s: Stage) => s.stageId === stageId)
         if (mapStageIndex !== -1) {
           projectStagesList[mapStageIndex].status = 'voting'
         }
@@ -3631,7 +3800,7 @@ export default {
       await loadProjectStagesForExpansion(projectId)
     }
 
-    const archiveStage = async (stage, project) => {
+    const archiveStage = async (stage: Stage, project: ExtendedProject | null) => {
       try {
         // Add to archiving set
         archivingStages.value.add(stage.stageId)
@@ -3669,7 +3838,7 @@ export default {
       }
     }
 
-    const unarchiveStage = async (stage, project) => {
+    const unarchiveStage = async (stage: Stage, project: ExtendedProject | null) => {
       try {
         // Add to archiving set (reuse the same tracking set)
         archivingStages.value.add(stage.stageId)
@@ -3707,16 +3876,16 @@ export default {
       }
     }
 
-    const getFilteredStages = (projectId) => {
+    const getFilteredStages = (projectId: string) => {
       const stages = projectStagesMap.get(projectId) || []
       if (showArchivedStages.value) {
         return stages  // Show all stages including archived
       }
-      return stages.filter(s => s.status !== 'archived')  // Hide archived stages
+      return stages.filter((s: Stage) => s.status !== 'archived')  // Hide archived stages
     }
 
     // Gantt chart helper functions
-    const toggleGanttChart = (projectId, value) => {
+    const toggleGanttChart = (projectId: string, value: boolean) => {
       showGanttChart.value.set(projectId, value)
 
       // Initialize centerTime to today when opening
@@ -3725,9 +3894,9 @@ export default {
       }
     }
 
-    const transformStagesForGantt = (projectId) => {
+    const transformStagesForGantt = (projectId: string) => {
       const stages = getFilteredStages(projectId)
-      return stages.map(stage => ({
+      return stages.map((stage: Stage & { settledTime?: number }) => ({
         stageName: stage.stageName,
         startTime: stage.startTime,
         endTime: stage.endTime,
@@ -3737,15 +3906,16 @@ export default {
       }))
     }
 
-    const handleGanttStageClick = (stage, projectId) => {
+    const handleGanttStageClick = (stage: Stage, projectId: string) => {
       console.log('Gantt stage clicked:', stage)
     }
 
-    const focusStageInGantt = (stage, projectId) => {
+    const focusStageInGantt = (stage: Stage, projectId: string) => {
       if (!showGanttChart.value.get(projectId)) return
+      if (stage.startTime == null || stage.endTime == null) return
 
-      const startTime = stage.startTime
-      const endTime = stage.endTime
+      const startTime = typeof stage.startTime === 'string' ? new Date(stage.startTime).getTime() : stage.startTime
+      const endTime = typeof stage.endTime === 'string' ? new Date(stage.endTime).getTime() : stage.endTime
       const centerTime = Math.floor((startTime + endTime) / 2)
 
       // Update centerTime will trigger gantt chart to re-center
@@ -3753,8 +3923,8 @@ export default {
     }
 
     // Open clone project drawer
-    const openCloneProjectDrawer = (project) => {
-      cloneProjectForm.sourceProject = project
+    const openCloneProjectDrawer = (project: Project | ExtendedProject) => {
+      cloneProjectForm.sourceProject = project as ExtendedProject
       cloneProjectForm.newProjectName = ''
       cloneProjectForm.confirmText = ''
       showCloneProjectDrawer.value = true
@@ -3773,7 +3943,7 @@ export default {
       try {
         const httpResponse = await rpcClient.projects.clone.$post({
           json: {
-            projectId: cloneProjectForm.sourceProject.projectId,
+            projectId: cloneProjectForm.sourceProject!.projectId,
             newProjectName: cloneProjectForm.newProjectName.trim()
           }
         })
@@ -3805,10 +3975,11 @@ export default {
     }
 
     // Open clone stage drawer
-    const openCloneStageDrawer = (stage) => {
+    const openCloneStageDrawer = (stage: Stage & { projectId?: string }) => {
       cloneStageForm.sourceStage = stage
       cloneStageForm.newStageName = ''
       cloneStageForm.confirmText = ''
+      cloneStageForm.targetProjectIds = stage.projectId ? [stage.projectId] : []  // 預設選中目前專案
       showCloneStageDrawer.value = true
     }
 
@@ -3820,26 +3991,37 @@ export default {
       }
 
       cloningStage.value = true
-      ElMessage.info('開始複製階段，請稍候...')
 
       try {
-        const httpResponse = await rpcClient.stages.clone.$post({
+        const targetCount = cloneStageForm.targetProjectIds.length
+        ElMessage.info(`開始複製階段到 ${targetCount} 個專案，請稍候...`)
+
+        const httpResponse = await rpcClient.stages['clone-to-projects'].$post({
           json: {
-            projectId: cloneStageForm.sourceStage.projectId,
+            sourceProjectId: cloneStageForm.sourceStage.projectId,
             stageId: cloneStageForm.sourceStage.stageId,
-            newStageName: cloneStageForm.newStageName.trim()
+            newStageName: cloneStageForm.newStageName.trim(),
+            targetProjectIds: cloneStageForm.targetProjectIds
           }
         })
         const response = await httpResponse.json()
 
         if (response.success) {
-          ElMessage.success(`階段「${cloneStageForm.newStageName}」複製成功！`)
-          // Refresh the stages for this project
-          await loadProjectStagesForExpansion(cloneStageForm.sourceStage.projectId)
-          // Close drawer
+          ElMessage.success(`成功複製到 ${response.data.totalCloned} 個專案！`)
+
+          // Refresh stages for affected projects that are currently expanded
+          for (const projectId of cloneStageForm.targetProjectIds) {
+            if (isProjectExpanded(projectId)) {
+              await loadProjectStagesForExpansion(projectId)
+            }
+          }
+
           closeCloneStageDrawer()
         } else {
-          ElMessage.error(`複製失敗: ${response.error?.message || '未知錯誤'}`)
+          const failedProject = response.data?.failedProjectId
+            ? `（專案: ${response.data.failedProjectName || response.data.failedProjectId}）`
+            : ''
+          ElMessage.error(`複製失敗${failedProject}: ${response.error || '未知錯誤'}`)
         }
       } catch (error) {
         console.error('Error cloning stage:', error)
@@ -3855,10 +4037,11 @@ export default {
       cloneStageForm.sourceStage = null
       cloneStageForm.newStageName = ''
       cloneStageForm.confirmText = ''
+      cloneStageForm.targetProjectIds = []
     }
 
     // Force Voting Drawer Functions
-    const openForceVotingDrawer = (stage) => {
+    const openForceVotingDrawer = (stage: Stage & { projectId?: string }) => {
       selectedForceVotingStage.value = stage
       showForceVotingDrawer.value = true
     }
@@ -3871,23 +4054,51 @@ export default {
       selectedForceVotingStage.value = null
     }
 
+    // Pause Stage Drawer Functions
+    const openPauseStageDrawer = (stage: any, project: any) => {
+      pauseStageData.value = { stage, project }
+      showPauseStageDrawer.value = true
+    }
+
+    const handlePauseStageConfirmed = () => {
+      // Reload stage list after pausing
+      if (pauseStageData.value?.project?.projectId) {
+        loadProjectStagesForExpansion(pauseStageData.value.project.projectId)
+      }
+      pauseStageData.value = null
+    }
+
+    // Resume Stage Drawer Functions
+    const openResumeStageDrawer = (stage: any, project: any) => {
+      resumeStageData.value = { stage, project }
+      showResumeStageDrawer.value = true
+    }
+
+    const handleResumeStageConfirmed = () => {
+      // Reload stage list after resuming
+      if (resumeStageData.value?.project?.projectId) {
+        loadProjectStagesForExpansion(resumeStageData.value.project.projectId)
+      }
+      resumeStageData.value = null
+    }
+
     // Additional helper functions for stage management
-    const showSettlementDistribution = (stage) => {
-      handleDistributionCommand('report', stage)
+    const showSettlementDistribution = (stage: Stage & { projectId?: string }) => {
+      handleDistributionCommand('report', stage, stage.projectId || '')
     }
-    
-    const canSettleStage = (stage) => {
+
+    const canSettleStage = (stage: Stage) => {
       const now = Date.now()
-      return stage.endTime < now && stage.status === 'active'
+      return stage.endTime != null && stage.endTime < now && stage.status === 'active'
     }
-    
-    const openVotingAnalysisModal = (stage) => {
+
+    const openVotingAnalysisModal = (stage: Stage & { projectId?: string }) => {
       selectedStageForAnalysis.value = stage
       showVotingAnalysisModal.value = true
     }
 
     // 為專案列表中的空階段打開階段編輯器
-    const openCreateStageForProject = async (project) => {
+    const openCreateStageForProject = async (project: Project | ExtendedProject) => {
       console.log('=== openCreateStageForProject called ===')
       console.log('Project:', project)
 
@@ -3911,7 +4122,7 @@ export default {
       const now = new Date()
       const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
 
-      const formatDatetimeLocal = (date) => {
+      const formatDatetimeLocal = (date: Date) => {
         const year = date.getFullYear()
         const month = String(date.getMonth() + 1).padStart(2, '0')
         const day = String(date.getDate()).padStart(2, '0')
@@ -4122,6 +4333,7 @@ export default {
       showCloneStageDrawer,
       cloneStageForm,
       isCloneStageFormValid,
+      manageableProjects,
       saveStageOrder,
       onDragStart,
       onDrop,
@@ -4178,9 +4390,9 @@ export default {
       cloningStage,
       // Reverse Settlement Drawer
       showReverseSettlementDrawer,
+      reversingSettlement,
       selectedStageForReverse,
       selectedProjectForReverse,
-      reverseSettlement,
       handleReverseSuccess,
       // Settlement Confirmation Drawer
       showSettlementConfirmDrawer,
@@ -4191,6 +4403,16 @@ export default {
       handleForceVotingConfirmed,
       showForceVotingDrawer,
       selectedForceVotingStage,
+      // Pause Stage Drawer
+      showPauseStageDrawer,
+      pauseStageData,
+      openPauseStageDrawer,
+      handlePauseStageConfirmed,
+      // Resume Stage Drawer
+      showResumeStageDrawer,
+      resumeStageData,
+      openResumeStageDrawer,
+      handleResumeStageConfirmed,
       selectStage,
       getStageIndex,
       moveStageToTop,

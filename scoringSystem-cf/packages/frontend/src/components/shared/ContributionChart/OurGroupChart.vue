@@ -17,9 +17,10 @@ import * as d3 from 'd3'
 import { useD3Chart } from '@/composables/useD3Chart'
 import { usePointCalculation } from '@/composables/usePointCalculation'
 import { useAvatar } from '@/composables/useAvatar'
+import { useChargingAnimation, type ChargingUnit } from '@/composables/useChargingAnimation'
 import EmptyState from '@/components/shared/EmptyState.vue'
 
-interface Member {
+export interface Member {
   email: string
   displayName?: string
   points: number
@@ -29,7 +30,7 @@ interface Member {
   avatarOptions?: Record<string, any>
 }
 
-interface Props {
+export interface Props {
   members: Member[]
   groupName?: string
   totalPoints?: number | null
@@ -47,21 +48,31 @@ const props = withDefaults(defineProps<Props>(), {
 const { createTooltip, clearContainer, getContainerSize, debouncedRender } = useD3Chart()
 const { getRankColor } = usePointCalculation()
 const { generateMemberAvatarUrl } = useAvatar()
+const charging = useChargingAnimation()
 
 const chartContainer: Ref<HTMLElement | null> = ref(null)
 
-// Watch for prop changes
+// 存儲充能層元素引用（按位置索引，每個方塊一個）
+let chargedElements: SVGRectElement[] = []
+
+// Watch for prop changes - reset charging animation on data change
 watch(() => props.members, () => {
+  charging.reset()
+  chargedElements = []
   debouncedRender(() => renderChart())
 }, { deep: true })
 
 watch(() => props.rank, () => {
+  charging.reset()
+  chargedElements = []
   debouncedRender(() => renderChart())
 })
 
 onMounted(() => {
   nextTick(() => {
     renderChart()
+    // 設置視口觸發
+    charging.setupViewportTrigger(chartContainer)
   })
 })
 
@@ -175,7 +186,26 @@ function renderChart(): void {
           .text(warningText)
       }
 
-      // 繪製權重方塊
+      // 清空充能元素引用
+      chargedElements = []
+
+      // 1. 繪製底座層（淡色，始終可見）
+      svg.selectAll('.weight-block-base')
+        .data(blocks)
+        .enter()
+        .append('rect')
+        .attr('class', 'weight-block-base')
+        .attr('x', d => startX + d.position * blockSize)
+        .attr('y', startY)
+        .attr('width', blockSize - 1)
+        .attr('height', blockHeight)
+        .attr('fill', ourGroupColor)
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 0.5)
+        .attr('rx', 2)
+        .style('opacity', 0.5)
+
+      // 2. 繪製充能層（初始不可見，動畫時逐個人點亮）
       const blockElements = svg.selectAll('.weight-block')
         .data(blocks)
         .enter()
@@ -191,12 +221,15 @@ function renderChart(): void {
         .attr('stroke', '#fff')
         .attr('stroke-width', 0.5)
         .attr('rx', 2)
+        .style('opacity', 0)  // 初始不可見，由充能動畫控制
+        .each(function() {
+          // 收集每個方塊的充能層元素（按位置順序）
+          chargedElements.push(this as SVGRectElement)
+        })
         .on('mouseover', (event, d) => {
           tooltip.style('opacity', 0.9)
             .html(`<strong>${d.person.displayName}</strong><br/>
                    參與比例: ${d.person.participationRatio.toFixed(0)}%<br/>
-                   基礎權重: ${d.person.baseWeightUnits.toFixed(1)}<br/>
-                   排名倍率: ${d.person.rankMultiplier}x<br/>
                    最終權重: ${d.person.finalWeight.toFixed(1)}<br/>
                    預期得分: ${d.person.points.toFixed(2)}點`)
             .style('left', (event.pageX + 10) + 'px')
@@ -267,7 +300,44 @@ function renderChart(): void {
         .attr('font-weight', 'bold')
         .attr('fill', '#2c3e50')
         .text(`${props.groupName}: ${Math.round(totalPoints)}點 | 總權重: ${Math.round(totalWeight)}`)
+
+      // 配置充能動畫（按個人充能）
+      setupChargingAnimation(ourGroupData, startX, startY, blockSize, blockHeight)
     }
+
+/**
+ * 設置充能動畫
+ * 每個方塊作為一個充能單位，從左到右逐一點亮
+ */
+function setupChargingAnimation(
+  ourGroupData: Array<{ finalWeight: number }>,
+  startX: number,
+  startY: number,
+  blockSize: number,
+  blockHeight: number
+) {
+  // 每個方塊作為一個充能單位
+  const chargingUnits: ChargingUnit[] = chargedElements.map((element, index) => ({
+    id: `block-${index}`,
+    elements: [element],
+    endX: startX + (index + 1) * blockSize
+  }))
+
+  // 獲取 SVG 元素
+  const svgElement = chartContainer.value?.querySelector('svg') as SVGSVGElement | null
+
+  // 配置充能動畫
+  if (chargingUnits.length > 0 && svgElement) {
+    charging.configure(
+      chargingUnits,
+      startY + blockHeight / 2,
+      blockHeight,
+      svgElement,
+      startX,
+      blockSize
+    )
+  }
+}
 </script>
 
 <style scoped>
@@ -301,5 +371,15 @@ function renderChart(): void {
   height: 180px;
   color: #999;
   font-size: 14px;
+}
+</style>
+
+<style>
+/* 充能彈跳動畫 - 全局樣式（SVG 元素需要） */
+@keyframes charging-bounce {
+  0%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-8px); }
+  50% { transform: translateY(-4px); }
+  70% { transform: translateY(-2px); }
 }
 </style>

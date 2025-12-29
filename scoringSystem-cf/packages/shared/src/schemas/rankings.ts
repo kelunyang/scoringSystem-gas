@@ -171,8 +171,8 @@ export const AIRankingSuggestionRequestSchema = z.object({
   rankingType: z.enum(['submission', 'comment']),
   providerId: z.string().min(1, 'Provider ID is required'),
   items: z.array(AIRankingItemSchema).min(1, 'At least one item is required'),
-  /** Custom prompt from user (max 30 chars) */
-  customPrompt: z.string().max(30, 'Custom prompt must be 30 characters or less').optional()
+  /** Custom prompt from user (max 100 chars) */
+  customPrompt: z.string().max(100, 'Custom prompt must be 100 characters or less').optional()
 });
 
 /**

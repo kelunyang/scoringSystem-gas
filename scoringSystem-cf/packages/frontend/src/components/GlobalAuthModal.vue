@@ -157,7 +157,7 @@ watch(drawerVisible, (newValue) => {
 // Fetch system title from API
 async function fetchSystemTitle() {
   try {
-    const response = await rpcClient.system.info.$get();
+    const response = await rpcClient.api.system.info.$get();
     const data = await response.json();
     if (data.success && data.data?.systemTitle) {
       systemTitle.value = data.data.systemTitle;

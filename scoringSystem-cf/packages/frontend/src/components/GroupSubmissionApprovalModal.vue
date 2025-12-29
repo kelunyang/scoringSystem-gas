@@ -311,6 +311,29 @@
               <span class="vote-badge pending">待投票</span>
             </div>
           </div>
+
+          <!-- 非參與者成員 -->
+          <div
+            v-for="member in nonParticipantMembers"
+            :key="'non-' + (member.userEmail || member.email)"
+            class="vote-item non-participant"
+          >
+            <el-avatar
+              :size="40"
+              :src="getMemberAvatarUrlFromEmail(member.userEmail || member.email, groupMembers)"
+              class="voter-avatar"
+              @error="handleAvatarError(member.userEmail || member.email)"
+            >
+              {{ getMemberInitialsFromEmail(member.userEmail || member.email, groupMembers) }}
+            </el-avatar>
+            <div class="vote-info">
+              <div class="voter-name">{{ getUserDisplayName(member.userEmail || member.email) }}</div>
+              <div class="vote-time">未參與本次提交</div>
+            </div>
+            <div class="vote-result">
+              <span class="vote-badge non-participant">非參與者</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -743,7 +766,7 @@ const localRestoreDrawerVisible = computed({
 })
 
 const sortedVotes = computed(() => {
-  return [...votingData.value.votes].sort((a, b) => a.createdTime - b.createdTime)
+  return [...votingData.value.votes].sort((a, b) => Number(a.createdTime) - Number(b.createdTime))
 })
 
 const pendingMembers = computed(() => {
@@ -769,6 +792,27 @@ const pendingMembers = computed(() => {
     return participantEmails.includes(memberEmail) && !votedEmails.has(memberEmail)
   })
   // ========== END PARTICIPANT-ONLY FIX ==========
+})
+
+// 非參與者組員（在 groupMembers 中但不在 participationProposal 中）
+const nonParticipantMembers = computed(() => {
+  const proposal = votingData.value.participationProposal
+  if (!proposal || typeof proposal !== 'object') {
+    return []
+  }
+
+  // 取得參與者 emails（percentage > 0）
+  const participantEmails = new Set(
+    Object.keys(proposal).filter(
+      email => typeof proposal[email] === 'number' && proposal[email] > 0
+    )
+  )
+
+  // 返回不在參與者名單中的組員
+  return props.groupMembers.filter(member => {
+    const memberEmail = member.userEmail || member.email
+    return !participantEmails.has(memberEmail)
+  })
 })
 
 const isViewingOldVersion = computed(() => {
@@ -939,9 +983,9 @@ const activeParticipationProposal = computed(() => {
     finalVersionData: finalVersionData.value,
     submissionData: props.submissionData,
     currentProposal: currentVersionData.value?.participationProposal,
-    currentPercentages: currentVersionData.value?.participationPercentages,
+    currentPercentages: (currentVersionData.value as any)?.participationPercentages,
     finalProposal: finalVersionData.value?.participationProposal,
-    finalPercentages: finalVersionData.value?.participationPercentages,
+    finalPercentages: (finalVersionData.value as any)?.participationPercentages,
     submissionProposal: props.submissionData?.participationProposal,
     submissionPercentages: props.submissionData?.participationPercentages
   })
@@ -958,7 +1002,7 @@ const activeParticipationProposal = computed(() => {
 
   // 否則使用最終版本的數據
   const finalProposal = finalVersionData.value?.participationProposal
-                     || finalVersionData.value?.participationPercentages
+                     || (finalVersionData.value as any)?.participationPercentages
 
   if (finalProposal && typeof finalProposal === 'object' && Object.keys(finalProposal).length > 0) {
     console.log('✅ 使用 finalVersionData 的參與度數據:', finalProposal)
@@ -975,8 +1019,8 @@ const activeParticipationProposal = computed(() => {
   }
 
   // 備用方案：如果都沒有參與度數據，嘗試從 participants 或 actualAuthors 構建均分數據
-  const participants = finalVersionData.value?.participants
-                    || currentVersionData.value?.participants
+  const participants = (finalVersionData.value as any)?.participants
+                    || (currentVersionData.value as any)?.participants
                     || finalVersionData.value?.actualAuthors
                     || currentVersionData.value?.actualAuthors
 
@@ -1066,13 +1110,12 @@ const chartSelectedMembers = computed(() => {
     }
 
     // Calculate points using the scoring algorithm
-    // @ts-ignore - calculateScoring accepts any[] but TypeScript infers never[]
     const result = calculateScoring(
       selectedMembers,
       simulatedRank.value,
       props.stageReward,
       simulatedGroupCount.value,
-      props.allGroups || [],
+      (props.allGroups || []) as any[],
       props.currentGroupId || null
     )
 
@@ -1298,6 +1341,9 @@ async function submitVote(agree: boolean) {
 
     // ✅ Phase 3 优化：使用 composable 的 submitVote 方法
     const result = await votingDataComposable.submitVote(agree)
+    if (!result) {
+      throw new Error('投票失敗：無法獲取結果')
+    }
     const { votingSummary } = result
 
     if (votingSummary.isApproved) {
@@ -2109,6 +2155,11 @@ function cleanupTooltips() {
   opacity: 0.7;
 }
 
+.vote-item.non-participant {
+  border-left: 3px solid #c0c4cc;
+  opacity: 0.6;
+}
+
 .voter-avatar {
   flex-shrink: 0;
 }
@@ -2154,6 +2205,11 @@ function cleanupTooltips() {
 .vote-badge.pending {
   background: #f4f4f5;
   color: #909399;
+}
+
+.vote-badge.non-participant {
+  background: #e9ecef;
+  color: #6c757d;
 }
 
 .version-timeline-section {

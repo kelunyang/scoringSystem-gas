@@ -178,13 +178,13 @@ interface FilterState {
   dateRange: [Date, Date] | null
 }
 
-interface Props {
+export interface Props {
   searchText?: string
   statusFilter?: '' | 'active' | 'inactive'
   roleFilter?: '' | 'admin' | 'pm' | 'reviewer' | 'user'
 }
 
-interface Emits {
+export interface Emits {
   (e: 'update:searchText', value: string): void
   (e: 'update:statusFilter', value: '' | 'active' | 'inactive'): void
   (e: 'update:roleFilter', value: '' | 'admin' | 'pm' | 'reviewer' | 'user'): void

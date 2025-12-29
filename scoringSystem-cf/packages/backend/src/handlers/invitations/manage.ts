@@ -9,6 +9,21 @@ import { parseJSON } from '../../utils/json';
 import { logGlobalOperation } from '../../utils/logging';
 
 /**
+ * Invitation row type from invitation_codes_with_status VIEW
+ */
+interface InvitationRow {
+  invitationId: string;
+  invitationCode: string;
+  targetEmail: string;
+  creatorEmail: string;
+  createdBy: string;
+  status: string;
+  usedTime: number | null;
+  expiryTime: number;
+  deactivatedTime: number | null;
+}
+
+/**
  * List invitations created by a user
  */
 export async function getUserInvitations(
@@ -108,7 +123,7 @@ export async function deactivateInvitation(
       FROM invitation_codes_with_status i
       JOIN users u ON i.createdBy = u.userId
       WHERE i.invitationId = ?
-    `).bind(invitationId).first();
+    `).bind(invitationId).first() as InvitationRow | null;
 
     if (!invitation) {
       return errorResponse('INVITATION_NOT_FOUND', 'Invitation not found');
@@ -163,7 +178,7 @@ export async function reactivateInvitation(
       FROM invitation_codes_with_status i
       JOIN users u ON i.createdBy = u.userId
       WHERE i.invitationId = ?
-    `).bind(invitationId).first();
+    `).bind(invitationId).first() as InvitationRow | null;
 
     if (!invitation) {
       return errorResponse('INVITATION_NOT_FOUND', 'Invitation not found');
@@ -237,7 +252,7 @@ export async function deleteInvitation(
       FROM invitation_codes_with_status i
       JOIN users u ON i.createdBy = u.userId
       WHERE i.invitationId = ?
-    `).bind(invitationId).first();
+    `).bind(invitationId).first() as InvitationRow | null;
 
     if (!invitation) {
       return errorResponse('INVITATION_NOT_FOUND', 'Invitation not found');

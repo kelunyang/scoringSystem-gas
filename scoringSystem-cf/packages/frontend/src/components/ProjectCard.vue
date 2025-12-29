@@ -128,72 +128,33 @@ import { getUserPreferences } from '@/utils/userPreferences'
 import { useCurrentUser } from '@/composables/useAuth'
 import AvatarGroup from './common/AvatarGroup.vue'
 import StageGanttChart from './charts/StageGanttChart.vue'
-import DOMPurify from 'dompurify'
+import { renderMarkdown } from '@/utils/markdown'
 
 // Module-level Markdown cache (shared across all component instances)
-// This improves performance by avoiding duplicate cache instances
 const markdownCache = new Map()
 const MAX_CACHE_SIZE = 100
 
 /**
- * Parse Markdown with module-level caching (includes DOMPurify sanitization)
- * @param {string} text - Markdown text to parse
- * @returns {string} Sanitized HTML string
+ * Render Markdown with caching for performance
+ * Uses marked + DOMPurify for secure rendering
  */
-function parseMarkdownWithCache(text) {
+function renderMarkdownWithCache(text) {
   if (!text) return ''
 
-  // Check cache first
   if (markdownCache.has(text)) {
     return markdownCache.get(text)
   }
 
-  // 安全的markdown解析，只支援特定標籤
-  let html = text
-    // 底線 (必須在斜體之前處理)
-    .replace(/<u>(.*?)<\/u>/gim, '<u>$1</u>')
+  const result = renderMarkdown(text)
 
-    // 粗體
-    .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
-
-    // 斜體
-    .replace(/\*(.*?)\*/gim, '<em>$1</em>')
-
-    // 連結
-    .replace(/\[([^\]]*)\]\(([^\)]*)\)/gim, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-
-    // 圖片
-    .replace(/!\[([^\]]*)\]\(([^\)]*)\)/gim, '<img src="$2" alt="$1" style="max-width: 100%;">')
-
-    // 無序列表
-    .replace(/^\* (.+)$/gim, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
-
-    // 有序列表
-    .replace(/^\d+\. (.+)$/gim, '<li>$1</li>')
-
-    // 段落
-    .replace(/\n\n/gim, '</p><p>')
-    .replace(/\n/gim, '<br>')
-
-  const rawResult = `<p>${html}</p>`
-
-  // <i class="fas fa-check-circle text-success"></i> DOMPurify sanitization integrated into cache layer (runs only once per input)
-  const sanitized = DOMPurify.sanitize(rawResult, {
-    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'a', 'img', 'ul', 'ol', 'li'],
-    ALLOWED_ATTR: ['href', 'target', 'rel', 'src', 'alt', 'style'],
-    ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
-  })
-
-  // LRU cache eviction (limit cache size to 100 entries)
+  // LRU cache eviction
   if (markdownCache.size >= MAX_CACHE_SIZE) {
     const firstKey = markdownCache.keys().next().value
     markdownCache.delete(firstKey)
   }
 
-  // <i class="fas fa-check-circle text-success"></i> Cache the sanitized result
-  markdownCache.set(text, sanitized)
-  return sanitized
+  markdownCache.set(text, result)
+  return result
 }
 
 export default {
@@ -291,10 +252,9 @@ export default {
       return getProjectStageDisplay(props.project.stages || [])
     })
 
-    // Rendered markdown description (already sanitized in cache layer)
+    // Rendered markdown description (sanitized via marked + DOMPurify)
     const renderedDescription = computed(() => {
-      // <i class="fas fa-check-circle text-success"></i> DOMPurify sanitization is handled in parseMarkdownWithCache
-      return parseMarkdownWithCache(props.project.description || '')
+      return renderMarkdownWithCache(props.project.description || '')
     })
     
     // 顯示的階段列表（前一個、當前、下一個）

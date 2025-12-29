@@ -87,7 +87,7 @@ export interface AvatarData {
   avatarOptions: Record<string, any>
 }
 
-interface Props {
+export interface Props {
   modelValue: AvatarData
   size?: number
   shape?: 'circle' | 'square'

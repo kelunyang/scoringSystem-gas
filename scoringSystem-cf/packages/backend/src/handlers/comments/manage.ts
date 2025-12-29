@@ -9,7 +9,7 @@ import { parseJSON, stringifyJSON } from '@utils/json';
 import { generateId } from '@utils/id-generator';
 import { logProjectOperation } from '@utils/logging';
 import { queueBatchNotifications } from '../../queues/notification-producer';
-import { calculateReactionUsers, checkCommentHasHelpfulReaction } from '@utils/commentVotingUtils';
+import { calculateReactionUsers, calculateReplyUsers, checkCommentHasHelpfulReaction } from '@utils/commentVotingUtils';
 
 /**
  * Check if user has permission to reply to a comment
@@ -58,13 +58,39 @@ async function checkReplyPermission(
       return true;
     }
 
-    // Check if user is directly mentioned (only check mentionedUsers, not groups)
+    // Check if user is directly mentioned in mentionedUsers
     let mentionedUsers: string[] = [];
     if (parentComment.mentionedUsers) {
       try {
         mentionedUsers = JSON.parse(parentComment.mentionedUsers as string);
         if (mentionedUsers.includes(userEmail)) {
           return true;
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
+
+    // Check if user is in one of the mentionedGroups
+    let mentionedGroups: string[] = [];
+    if (parentComment.mentionedGroups) {
+      try {
+        mentionedGroups = JSON.parse(parentComment.mentionedGroups as string);
+        if (mentionedGroups.length > 0) {
+          // Check if user belongs to any of the mentioned groups
+          const placeholders = mentionedGroups.map(() => '?').join(',');
+          const userInGroup = await env.DB.prepare(`
+            SELECT COUNT(*) as count
+            FROM usergroups
+            WHERE projectId = ?
+              AND userEmail = ?
+              AND groupId IN (${placeholders})
+              AND isActive = 1
+          `).bind(projectId, userEmail, ...mentionedGroups).first();
+
+          if (userInGroup && (userInGroup.count as number) > 0) {
+            return true;
+          }
         }
       } catch (e) {
         // Ignore parse errors
@@ -357,11 +383,9 @@ export async function createComment(
       );
     }
 
-    // Derive groups from mentioned users (automatic group resolution)
-    const derivedGroups = await deriveGroupsFromMentionedUsers(env, projectId, mentionedUsers);
-
-    // Merge direct and derived groups (deduplicate)
-    const allMentionedGroups = Array.from(new Set([...directMentionedGroups, ...derivedGroups]));
+    // Use only directly mentioned groups (no automatic derivation from users)
+    // This ensures clear user intent: @user = only that user, @group = whole group
+    const allMentionedGroups = directMentionedGroups;
 
     // Create comment
     const commentId = generateId('cmt');
@@ -678,6 +702,14 @@ export async function getStageComments(
         c.authorEmail as string
       );
 
+      // Calculate replyUsers (users who can reply to this comment)
+      const replyUsers = await calculateReplyUsers(
+        env.DB,
+        projectId,
+        c.mentionedGroups as string | null,
+        c.mentionedUsers as string | null
+      );
+
       // Get reaction data from batch query
       const commentId = c.commentId as string;
       const reactionData = reactionsByComment[commentId] || {
@@ -699,7 +731,8 @@ export async function getStageComments(
         isGroupMember,  // NEW: Whether author is a group leader or member
         mentionedUsers,
         mentionedGroups,
-        reactionUsers,  // NEW: Students who can give reactions (filtered, excluding teachers and author)
+        reactionUsers,  // Students who can give reactions (filtered, excluding teachers and author)
+        replyUsers,     // Users who can reply (mentionedUsers + expanded mentionedGroups)
         parentCommentId: c.parentCommentId,
         isReply: !!c.isReply,
         replyLevel: c.replyLevel || 0,

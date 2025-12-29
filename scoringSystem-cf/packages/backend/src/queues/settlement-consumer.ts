@@ -4,6 +4,7 @@
 
 import type { MessageBatch } from '@cloudflare/workers-types';
 import type { Env } from '../types';
+import type { ApiResponse, SettlementResponseData } from '@repo/shared';
 import { SettlementQueueMessageSchema } from './types';
 import { settleStage } from '../handlers/scoring/settlement';
 import { notifySettlementFailed } from './notification-producer';
@@ -89,7 +90,7 @@ export default {
           );
 
           // 檢查 settleStage 回應
-          const responseBody = await settlementResponse.json();
+          const responseBody = await settlementResponse.json() as ApiResponse<SettlementResponseData>;
 
           if (!responseBody.success) {
             throw new Error(responseBody.error || 'Settlement failed');

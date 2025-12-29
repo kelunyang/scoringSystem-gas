@@ -404,7 +404,7 @@
 import { ref, computed, watch } from 'vue'
 
 // ===== Props =====
-interface Props {
+export interface Props {
   /**
    * Display variant:
    * - 'full': Full notification center (default)

@@ -96,7 +96,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 
-interface Member {
+export interface Member {
   userEmail: string
   displayName?: string
   membershipId?: string
@@ -104,14 +104,14 @@ interface Member {
   joinTime?: number
 }
 
-interface Props {
+export interface Props {
   visible: boolean
   members: Member[]
   groupName: string
   loading?: boolean
 }
 
-interface Emits {
+export interface Emits {
   (e: 'update:visible', value: boolean): void
   (e: 'confirm'): void
   (e: 'cancel'): void

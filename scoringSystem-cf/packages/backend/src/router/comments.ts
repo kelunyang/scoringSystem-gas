@@ -109,6 +109,15 @@ app.post(
       }, 404);
     }
 
+    // Check if stage is paused
+    if (stage.status === 'paused') {
+      return c.json({
+        success: false,
+        error: '階段已暫停，無法發表評論',
+        errorCode: 'STAGE_PAUSED'
+      }, 403);
+    }
+
     const allowedStatuses = isTeacher ? ['active', 'voting'] : ['active'];
     if (!allowedStatuses.includes(stage.status as string)) {
       return c.json({

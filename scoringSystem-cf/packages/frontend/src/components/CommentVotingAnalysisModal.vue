@@ -235,24 +235,24 @@ const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 
 // ================== Interfaces ==================
 
-interface CommentRanking {
+export interface CommentRanking {
   commentId: string
   rank: number
 }
 
-interface StudentVote {
+export interface StudentVote {
   authorEmail: string
   proposerDisplayName?: string
   rankingData: CommentRanking[]
 }
 
-interface TeacherVote {
+export interface TeacherVote {
   teacherEmail: string
   teacherDisplayName?: string
   rankingData: CommentRanking[]
 }
 
-interface CommentInfo {
+export interface CommentInfo {
   commentId: string
   authorEmail: string
   authorDisplayName?: string
@@ -264,7 +264,7 @@ interface CommentInfo {
   totalScore?: number
 }
 
-interface CandidateComment {
+export interface CandidateComment {
   commentId: string
   authorEmail: string
   authorDisplayName?: string
@@ -279,12 +279,12 @@ interface CandidateComment {
   winningVotes: number
 }
 
-interface Voter {
+export interface Voter {
   authorEmail: string
   proposerDisplayName?: string
 }
 
-interface CommentScore {
+export interface CommentScore {
   commentId: string
   studentScore: number
   teacherScore: number
@@ -293,12 +293,12 @@ interface CommentScore {
   rankDistribution: Record<number, number>
 }
 
-interface SettlementRanking {
+export interface SettlementRanking {
   finalRank: number
   allocatedPoints: number
 }
 
-interface AllGroupsChartData {
+export interface AllGroupsChartData {
   rank: number
   groupId: string
   groupName: string
@@ -319,7 +319,7 @@ interface AllGroupsChartData {
 
 // ================== Props & Emits ==================
 
-interface Props {
+export interface Props {
   visible: boolean
   projectId: string
   stageId: string
