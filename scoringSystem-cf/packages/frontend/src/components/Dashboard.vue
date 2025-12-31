@@ -323,7 +323,7 @@
 import { ref, reactive, computed, onMounted, shallowRef, watchEffect, unref, watch } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessageBox } from 'element-plus'
+import { ElMessageBox, ElMessage } from 'element-plus'
 import ProjectCard from './ProjectCard.vue'
 import TopBarUserControls from './TopBarUserControls.vue'
 import EventLogDrawer from './shared/EventLogDrawer.vue'

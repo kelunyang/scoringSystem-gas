@@ -55,7 +55,7 @@ import {
 } from '@/utils/tutorialContent';
 
 // ============================================================================
-// Props & Emits
+// Props
 // ============================================================================
 
 interface Props {
@@ -104,23 +104,23 @@ const preferenceKey = computed((): keyof UserPrefs => {
 // ============================================================================
 
 /**
- * 檢查是否應該顯示教學
+ * 檢查是否應該顯示教學 Drawer（只在首次訪問時顯示）
  */
 function checkShouldShow(): void {
   if (!userId.value) return;
 
   const prefs = getUserPreferences(userId.value);
-  const isCompleted = prefs[preferenceKey.value] as boolean | undefined;
+  const isTutorialCompleted = prefs[preferenceKey.value] as boolean | undefined;
 
-  // 如果未完成，則顯示教學
-  if (!isCompleted) {
+  if (!isTutorialCompleted) {
+    // 首次訪問：顯示教學
     localVisible.value = true;
   }
+  // 教學已完成：不顯示 Drawer
 }
 
 /**
  * 處理 Drawer 關閉
- * 自動標記教學為已完成
  */
 function handleClose(): void {
   if (!userId.value) return;
@@ -137,7 +137,7 @@ function handleClose(): void {
 // ============================================================================
 
 /**
- * 監聽 userId 變化，檢查是否應該顯示教學
+ * 監聽 userId 變化
  */
 watch(
   userId,
@@ -228,6 +228,7 @@ watch(
     }
   }
 }
+
 
 // ============================================================================
 // Responsive Design

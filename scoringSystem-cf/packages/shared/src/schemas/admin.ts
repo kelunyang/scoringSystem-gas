@@ -463,3 +463,58 @@ export const NotificationPatrolRequestSchema = z.object({
 });
 
 export type NotificationPatrolRequest = z.infer<typeof NotificationPatrolRequestSchema>;
+
+/**
+ * ========================================
+ * AI SERVICE LOGS MANAGEMENT SCHEMAS
+ * ========================================
+ */
+
+// Import schemas from rankings.ts to avoid duplication
+import { AIServiceTypeSchema, AIServiceCallStatusSchema } from './rankings';
+
+// Re-export for convenience
+export { AIServiceTypeSchema };
+export { AIServiceCallStatusSchema as AIServiceStatusSchema };
+
+/**
+ * AI ranking type enum
+ */
+export const AIRankingTypeSchema = z.enum([
+  'submission',
+  'comment'
+]);
+
+/**
+ * AI service logs query request schema
+ */
+export const AIServiceLogsQueryRequestSchema = z.object({
+  filters: z.object({
+    search: z.string().optional(),
+    serviceType: AIServiceTypeSchema.optional(),
+    rankingType: AIRankingTypeSchema.optional(),
+    status: AIServiceCallStatusSchema.optional(),
+    providerId: z.string().optional(),
+    startDate: z.number().int().positive('Start date must be a positive timestamp').optional(),
+    endDate: z.number().int().positive('End date must be a positive timestamp').optional(),
+    minTokens: z.number().int().nonnegative().optional(),
+    maxTokens: z.number().int().positive().optional(),
+    minResponseTime: z.number().int().nonnegative().optional(),
+    maxResponseTime: z.number().int().positive().optional(),
+    limit: z.number().int().min(1).max(1000, 'Maximum limit is 1000').default(50),
+    offset: z.number().int().nonnegative('Offset cannot be negative').default(0)
+  }).refine(
+    (data) => {
+      // Validate startDate <= endDate if both provided
+      if (data.startDate && data.endDate) {
+        return data.startDate <= data.endDate;
+      }
+      return true;
+    },
+    {
+      message: 'Start date must be before or equal to end date'
+    }
+  ).optional()
+});
+
+export type AIServiceLogsQueryRequest = z.infer<typeof AIServiceLogsQueryRequestSchema>;

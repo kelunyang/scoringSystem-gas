@@ -182,9 +182,12 @@
  */
 
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import katex from 'katex'
 import EmptyState from '@/components/shared/EmptyState.vue'
-import 'katex/dist/katex.min.css'
+
+// KaTeX 從 CDN 載入，使用全域變數
+declare const katex: {
+  renderToString(tex: string, options?: { throwOnError?: boolean; displayMode?: boolean }): string
+}
 
 // Props
 const props = defineProps({

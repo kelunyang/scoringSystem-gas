@@ -567,6 +567,66 @@ CREATE TABLE IF NOT EXISTS globalemaillogs (
   updatedAt INTEGER NOT NULL
 );
 
+-- AI service calls table (records all AI API invocations for cost tracking and history)
+-- Supports multiple service types: ranking_direct, ranking_bt, summary, translation, etc.
+-- Design principles:
+--   - All teachers in a project can view AI call history for a stage
+--   - Token usage tracked for cost analysis
+--   - BT mode stores all pairwise comparisons for transparency
+CREATE TABLE IF NOT EXISTS aiservicecalls (
+  callId TEXT PRIMARY KEY,
+
+  -- Relationships
+  projectId TEXT NOT NULL,
+  stageId TEXT,                          -- Optional (some AI services may be project-level)
+  userEmail TEXT NOT NULL,               -- Requester email
+
+  -- AI service type (extensible)
+  serviceType TEXT NOT NULL,             -- 'ranking_direct', 'ranking_bt', 'summary', 'translation', etc.
+  rankingType TEXT,                      -- 'submission' | 'comment' (only for ranking services)
+
+  -- Provider info
+  providerId TEXT NOT NULL,
+  providerName TEXT NOT NULL,
+  model TEXT NOT NULL,
+
+  -- Request content
+  itemCount INTEGER,                     -- Number of items processed (for ranking)
+  customPrompt TEXT,                     -- User-provided custom prompt
+
+  -- Results
+  status TEXT NOT NULL,                  -- 'pending', 'processing', 'success', 'failed', 'timeout'
+  result TEXT,                           -- JSON: ranking result or other service result
+  reason TEXT,                           -- AI explanation/reasoning
+  thinkingProcess TEXT,                  -- DeepSeek reasoning_content or similar
+  errorMessage TEXT,                     -- Error message if failed
+
+  -- BT mode specific
+  btComparisons TEXT,                    -- JSON: all pairwise comparisons [{itemA, itemB, winner, reason}]
+  btStrengthParams TEXT,                 -- JSON: strength parameters {itemId: strength}
+
+  -- Multi-Agent mode specific
+  parentCallId TEXT,                     -- Parent call ID (for Multi-Agent sub-requests)
+  debateRound INTEGER,                   -- Debate round number (1 or 2)
+  debateChanged INTEGER,                 -- Whether position changed in Round 2 (0/1)
+  debateCritique TEXT,                   -- Critique of other rankings in Round 2
+
+  -- Token usage (cost tracking)
+  requestTokens INTEGER,
+  responseTokens INTEGER,
+  totalTokens INTEGER,
+
+  -- Performance
+  responseTimeMs INTEGER,
+
+  -- Timestamps
+  createdAt INTEGER NOT NULL,
+  completedAt INTEGER,                   -- Completion timestamp (for duration calculation)
+
+  FOREIGN KEY (projectId) REFERENCES projects(projectId),
+  FOREIGN KEY (stageId) REFERENCES stages(stageId)
+);
+
 -- Email idempotency table (prevents duplicate email sends during queue retries)
 CREATE TABLE IF NOT EXISTS email_idempotency (
   idempotencyKey TEXT PRIMARY KEY,
@@ -712,6 +772,14 @@ CREATE INDEX IF NOT EXISTS idx_reactions_target_user_created
 -- Optimizes "get all active reactions for a comment" queries
 CREATE INDEX IF NOT EXISTS idx_reactions_target_type_created
   ON reactions(targetId, targetType, createdAt DESC);
+
+-- AI service calls indexes (added 2025-12-30 for AI ranking history)
+CREATE INDEX IF NOT EXISTS idx_aiservicecalls_project ON aiservicecalls(projectId, createdAt DESC);
+CREATE INDEX IF NOT EXISTS idx_aiservicecalls_stage ON aiservicecalls(stageId, createdAt DESC);
+CREATE INDEX IF NOT EXISTS idx_aiservicecalls_user ON aiservicecalls(userEmail, createdAt DESC);
+CREATE INDEX IF NOT EXISTS idx_aiservicecalls_service ON aiservicecalls(serviceType, createdAt DESC);
+CREATE INDEX IF NOT EXISTS idx_aiservicecalls_status ON aiservicecalls(status, createdAt DESC);
+CREATE INDEX IF NOT EXISTS idx_aiservicecalls_parent ON aiservicecalls(parentCallId);
 
 -- Idempotency table indexes (added 2025-12-08 for queue consumer deduplication)
 CREATE INDEX IF NOT EXISTS idx_email_idempotency_emailid ON email_idempotency(emailId);
@@ -942,13 +1010,16 @@ FROM invitation_codes ic;
 
 -- ============================================
 -- Schema synchronized with init-system.ts
--- Total: 30 active tables (28 original + 2 idempotency tables; 3 tags tables disabled)
--- Total: 64 indexes (60 original + 4 idempotency indexes)
+-- Total: 31 active tables (28 original + 2 idempotency tables + 1 AI service table; 3 tags tables disabled)
+-- Total: 69 indexes (60 original + 4 idempotency indexes + 5 AI service indexes)
 -- Total: 2 triggers (scoring configuration validation)
 -- Total: 5 VIEWs (status auto-calculation architecture)
--- Last updated: 2025-12-29 (added stage pause feature)
+-- Last updated: 2025-12-30 (added AI service calls table)
 --
 -- Recent Changes:
+--   2025-12-30: Added aiservicecalls table for AI API cost tracking and history,
+--               supports ranking_direct, ranking_bt, and future AI services,
+--               enables teacher-shared AI ranking history within stages
 --   2025-12-29: Added pausedTime column to stages table,
 --               updated stages_with_status VIEW with paused status priority,
 --               status priority: archived > settling > completed > paused > voting > active > pending

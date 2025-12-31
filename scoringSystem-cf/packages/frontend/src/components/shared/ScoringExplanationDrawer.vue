@@ -159,9 +159,12 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import katex from 'katex'
-import 'katex/dist/katex.min.css'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
+
+// KaTeX 從 CDN 載入，使用全域變數
+declare const katex: {
+  renderToString(tex: string, options?: { throwOnError?: boolean; displayMode?: boolean }): string
+}
 
 // Drawer Breadcrumb
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()

@@ -107,11 +107,72 @@ export default defineConfig(({ command, mode }) => ({
     minify: command === 'build' ? 'esbuild' : false,  // 只在 build 时压缩，dev 模式保留代码
     rollupOptions: {
       output: {
-        manualChunks: undefined,
-        inlineDynamicImports: true
+        // 使用函數形式的 manualChunks 進行代碼分割
+        // 支援 pnpm 的 .pnpm 資料夾結構
+        manualChunks(id: string) {
+          if (id.includes('node_modules')) {
+            // 處理 pnpm 的 .pnpm 資料夾結構
+            const modulePath = id.split('node_modules/')[1]
+            if (!modulePath) return 'vendor'
+
+            let packageName: string
+            if (modulePath.startsWith('.pnpm/')) {
+              // pnpm 結構: .pnpm/package@version/node_modules/package
+              const parts = modulePath.split('/')
+              const scopedName = parts[1] // e.g., "vue@3.4.15" or "@vue+runtime-core@3.4.15"
+              if (scopedName.startsWith('@')) {
+                // Scoped package: @vue+runtime-core@3.4.15 -> @vue/runtime-core
+                packageName = scopedName.split('@')[0].replace('+', '/')
+                if (!packageName) packageName = '@' + scopedName.split('@')[1].split('+')[0]
+              } else {
+                packageName = scopedName.split('@')[0]
+              }
+            } else {
+              // 標準 node_modules 結構
+              packageName = modulePath.split('/')[0]
+              if (packageName.startsWith('@')) {
+                packageName = modulePath.split('/').slice(0, 2).join('/')
+              }
+            }
+
+            // 按依賴類型分組
+            // Vue 生態系統
+            if (packageName === 'vue' || packageName.startsWith('@vue/') ||
+                packageName === 'vue-router' || packageName.startsWith('@vueuse/')) {
+              return 'vue-vendor'
+            }
+            // Element Plus UI 框架
+            if (packageName === 'element-plus' || packageName.startsWith('@element-plus/')) {
+              return 'element-plus'
+            }
+            // TanStack (Query + Table)
+            if (packageName.startsWith('@tanstack/')) {
+              return 'tanstack'
+            }
+            // Markdown 渲染相關（不含 diff2html，它有複雜的內部依賴需要保留在 vendor）
+            if (['marked', 'dompurify'].includes(packageName)) {
+              return 'markdown'
+            }
+            // Diff 比對工具（highlight.js, diff2html 等保留在 vendor 讓 Rollup 處理依賴）
+            if (packageName === 'diff') {
+              return 'diff'
+            }
+            // KaTeX
+            if (packageName === 'katex') {
+              return 'katex'
+            }
+            // 物理引擎與動畫
+            if (packageName === 'matter-js') {
+              return 'physics'
+            }
+            // 其他 node_modules 分到 vendor chunk
+            return 'vendor'
+          }
+          return undefined
+        }
       }
     },
-    cssCodeSplit: false,
+    cssCodeSplit: true,  // 啟用 CSS 分割
     copyPublicDir: true
   },
   // 明確配置 esbuild - dev 模式保留 console，build 模式移除

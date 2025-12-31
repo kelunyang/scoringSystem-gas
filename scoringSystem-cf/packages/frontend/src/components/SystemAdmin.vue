@@ -257,12 +257,11 @@ const modeOptions = computed(() => {
     ]
   }
 
-  // SystemLogs: Standard vs Login vs Email
-  if (routeName.includes('logs')) {
+  // SystemLogs: Standard vs Login (only for admin-logs route, not email-logs or ai-service-logs)
+  if (routeName === 'admin-logs' || routeName === 'admin-logs-detail' || routeName === 'admin-logs-login-user') {
     return [
       { label: '標準 Log', value: 'standard' },
-      { label: '登入記錄', value: 'login' },
-      { label: 'Email 記錄', value: 'email' }
+      { label: '登入記錄', value: 'login' }
     ]
   }
 
@@ -279,14 +278,12 @@ function handleModeChange(value: string | number) {
     return
   }
 
-  // SystemLogs navigation
-  if (routeName.includes('logs')) {
+  // SystemLogs navigation (only for admin-logs routes)
+  if (routeName === 'admin-logs' || routeName === 'admin-logs-detail' || routeName === 'admin-logs-login-user') {
     if (value === 'standard') {
       router.push({ name: 'admin-logs' })
     } else if (value === 'login') {
       router.push({ name: 'admin-logs', query: { mode: 'login' } })
-    } else if (value === 'email') {
-      router.push({ name: 'admin-logs', query: { mode: 'email' } })
     }
   }
 }

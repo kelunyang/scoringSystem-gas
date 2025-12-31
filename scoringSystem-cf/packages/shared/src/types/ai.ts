@@ -58,9 +58,21 @@ export interface AIRankingItem {
   content: string;
   /** Item metadata */
   metadata: {
+    /** Group name (for submissions) */
     groupName?: string;
+    /** Author name (for comments) */
     authorName?: string;
+    /** Team member names (for submissions) */
     memberNames?: string[];
+    /** Full reply content array (for comments) */
+    replies?: string[];
+    /** Reaction user lists (for comments) */
+    reactions?: {
+      /** Array of user emails who marked helpful */
+      helpful?: string[];
+      /** Array of user emails who disagreed */
+      disagreed?: string[];
+    };
   };
 }
 
@@ -195,4 +207,232 @@ export interface AIRankingJsonResponse {
   ranking: string[];
   /** DeepSeek Thinking mode reasoning process (extracted from response) */
   thinkingProcess?: string;
+  /** Token usage from AI API (if available) */
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
+// ============================================
+// Bradley-Terry Model Types
+// ============================================
+
+/**
+ * BT strength parameters (ability values)
+ * Key: item ID, Value: strength parameter (log-scale)
+ */
+export type BTStrengthParams = Record<string, number>;
+
+/**
+ * BT ranking progress data (for WebSocket updates)
+ * Note: BTComparison is defined in schemas/rankings.ts
+ */
+export interface BTRankingProgressData {
+  /** Task ID for tracking */
+  taskId: string;
+  /** Project ID */
+  projectId: string;
+  /** Stage ID */
+  stageId: string;
+  /** Task status */
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  /** Progress percentage (0-100) */
+  progress: number;
+  /** Current comparison number */
+  currentComparison: number;
+  /** Total comparisons needed */
+  totalComparisons: number;
+  /** Progress message for UI display */
+  message: string;
+  /** Current comparison being processed (optional) */
+  currentPair?: { itemA: string; itemB: string };
+}
+
+/**
+ * AI ranking progress data (for WebSocket updates - direct mode)
+ */
+export interface AIRankingProgressData {
+  /** Task ID for tracking */
+  taskId: string;
+  /** Project ID */
+  projectId: string;
+  /** Stage ID */
+  stageId: string;
+  /** Task status */
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  /** Progress message for UI display */
+  message: string;
+  /** Streaming content (optional, for real-time AI response display) */
+  streamContent?: string;
+}
+
+// ============================================
+// Multi-Agent Free-MAD Types
+// ============================================
+
+/**
+ * Individual provider result in Multi-Agent mode
+ */
+export interface MultiAgentProviderResult {
+  /** Provider ID */
+  providerId: string;
+  /** Provider display name */
+  providerName: string;
+  /** Round 1 result (independent ranking) */
+  round1?: {
+    ranking: string[];
+    reason: string;
+  };
+  /** Round 2 result (after debate) */
+  round2?: {
+    ranking: string[];
+    reason: string;
+    changed: boolean;
+    critique?: string;
+  };
+  /** Provider status */
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  /** Error message if failed */
+  errorMessage?: string;
+}
+
+/**
+ * Multi-Agent debate details for final result
+ */
+export interface MultiAgentDebateDetail {
+  /** Provider ID */
+  providerId: string;
+  /** Provider display name */
+  providerName: string;
+  /** Round 1 ranking */
+  round1Ranking: string[];
+  /** Round 1 reason */
+  round1Reason: string;
+  /** Round 2 ranking */
+  round2Ranking: string[];
+  /** Round 2 reason */
+  round2Reason: string;
+  /** Whether position changed in Round 2 */
+  changed: boolean;
+  /** Critique of other rankings */
+  critique?: string;
+}
+
+/**
+ * Multi-Agent progress data (for WebSocket updates)
+ */
+export interface MultiAgentProgressData {
+  /** Task ID for tracking */
+  taskId: string;
+  /** Main call ID (parent) */
+  callId: string;
+  /** Project ID */
+  projectId: string;
+  /** Stage ID */
+  stageId: string;
+  /** Task status */
+  status: 'pending' | 'round1' | 'round2' | 'aggregating' | 'completed' | 'failed';
+  /** Progress percentage (0-100) */
+  progress: number;
+  /** Current debate round (1 or 2) */
+  currentRound?: 1 | 2;
+  /** Progress message for UI display */
+  message: string;
+  /** Results from each provider */
+  providerResults?: MultiAgentProviderResult[];
+  /** Final aggregated result */
+  result?: {
+    /** Final ranking */
+    ranking: string[];
+    /** Combined reason */
+    reason: string;
+    /** Score for each item */
+    scores?: Record<string, number>;
+    /** Detailed debate results from each provider */
+    debateDetails: MultiAgentDebateDetail[];
+  };
+}
+
+/**
+ * Free-MAD scoring weights configuration
+ */
+export interface FreeMadWeights {
+  /** Initial Borda score weight for Round 1 */
+  W_INITIAL: number;
+  /** Bonus for persisting with original ranking in Round 2 */
+  W_PERSIST: number;
+  /** Penalty for changing position in Round 2 */
+  W_CHANGE: number;
+  /** Bonus when other agents adopt your ranking */
+  W_ADOPTED: number;
+}
+
+// ============================================
+// AI Service Database Record Types
+// Note: AIServiceType, AIServiceCallStatus, AIServiceCallRecord,
+// BTComparison, BTRankingSuggestionRequest, AIRankingHistoryQuery
+// are defined in schemas/rankings.ts to avoid duplication
+// ============================================
+
+/**
+ * AI service call record with parsed JSON fields (for frontend display)
+ * Imports types from schemas/rankings.ts
+ */
+export interface AIServiceCallRecordParsed {
+  /** Unique call ID (e.g., "aisc_xxx") */
+  callId: string;
+  /** Project ID */
+  projectId: string;
+  /** Stage ID (optional for project-level services) */
+  stageId?: string;
+  /** Requester email */
+  userEmail: string;
+  /** Service type */
+  serviceType: 'ranking_direct' | 'ranking_bt' | 'ranking_multi_agent' | 'summary' | 'translation' | 'feedback';
+  /** Ranking type (only for ranking services) */
+  rankingType?: 'submission' | 'comment';
+  /** Provider ID */
+  providerId: string;
+  /** Provider display name */
+  providerName: string;
+  /** Model used */
+  model: string;
+  /** Number of items processed */
+  itemCount?: number;
+  /** User-provided custom prompt */
+  customPrompt?: string;
+  /** Call status */
+  status: 'pending' | 'processing' | 'success' | 'failed' | 'timeout';
+  /** Parsed ranking result */
+  result?: string[];
+  /** AI explanation/reasoning */
+  reason?: string;
+  /** AI thinking process (for DeepSeek reasoning mode) */
+  thinkingProcess?: string;
+  /** Error message if failed */
+  errorMessage?: string;
+  /** Parsed BT comparisons */
+  btComparisons?: Array<{
+    index: number;
+    itemA: string;
+    itemB: string;
+    winner?: string;
+    reason?: string;
+  }>;
+  /** Parsed BT strength parameters */
+  btStrengthParams?: BTStrengthParams;
+  /** Request tokens used */
+  requestTokens?: number;
+  /** Response tokens used */
+  responseTokens?: number;
+  /** Total tokens used */
+  totalTokens?: number;
+  /** Response time in milliseconds */
+  responseTimeMs?: number;
+  /** Creation timestamp (UNIX ms) */
+  createdAt: number;
+  /** Completion timestamp (UNIX ms) */
+  completedAt?: number;
 }

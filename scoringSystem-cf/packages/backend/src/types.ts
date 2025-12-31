@@ -21,6 +21,7 @@ export interface Env {
   NOTIFICATION_QUEUE: Queue<unknown>;
   SETTLEMENT_QUEUE: Queue<unknown>;
   LOGIN_EVENTS: Queue<unknown>;
+  AI_RANKING_QUEUE: Queue<unknown>;
 
   // KV Namespaces
   // NOTE: SESSIONS is not used - system uses JWT instead

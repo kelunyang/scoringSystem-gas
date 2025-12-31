@@ -236,6 +236,33 @@
                 </el-button>
               </div>
             </div>
+
+            <!-- 第四欄：通知自動開啟設定 -->
+            <div class="preference-card">
+              <div class="preference-header">
+                <i class="fas fa-bell"></i>
+                <h4>通知提醒設定</h4>
+              </div>
+              <p class="preference-description">有未讀通知時自動開啟通知中心</p>
+
+              <div class="toggle-control">
+                <div class="toggle-option">
+                  <span class="option-label">關閉</span>
+                  <el-switch
+                    v-model="autoOpenNotification"
+                    inline-prompt
+                    active-text="開"
+                    inactive-text="關"
+                    @change="handleAutoOpenNotificationChange"
+                  />
+                  <span class="option-label">開啟</span>
+                </div>
+                <div class="preview-hint">
+                  <i class="fas fa-info-circle"></i>
+                  {{ autoOpenNotification ? '有未讀通知時將自動開啟通知中心' : '不會自動開啟通知中心，但鈴鐺會有紅點提示' }}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -319,6 +346,10 @@ export default {
 
       // Stage display preference
       stageDisplayAsGantt: false,
+
+      // Auto-open notification center preference
+      autoOpenNotification: true,
+
       sliderMarks: {
         10: '10分',
         30: '30分',
@@ -521,6 +552,27 @@ export default {
       }).catch(() => {
         // User cancelled, do nothing
       })
+    },
+
+    // Auto-open notification center preference methods
+    loadAutoOpenNotificationPreference() {
+      if (!this.user?.userId) return
+
+      const prefs = getUserPreferences(this.user.userId)
+      // Default to true if not set
+      this.autoOpenNotification = prefs.autoOpenNotificationCenter !== false
+    },
+
+    handleAutoOpenNotificationChange(value) {
+      if (!this.user?.userId) return
+
+      setUserPreference(this.user.userId, 'autoOpenNotificationCenter', value)
+      this.$message.success(value ? '已開啟自動顯示通知中心' : '已關閉自動顯示通知中心')
+
+      // Trigger custom event
+      window.dispatchEvent(new CustomEvent('userPreferencesChanged', {
+        detail: { userId: this.user.userId, autoOpenNotificationCenter: value }
+      }))
     },
 
     // Activity methods
@@ -727,6 +779,7 @@ export default {
   mounted() {
     this.loadRefreshTimer()
     this.loadStageDisplayPreference()
+    this.loadAutoOpenNotificationPreference()
 
     const { setPageTitle, clearProjectTitle } = useBreadcrumb()
     setPageTitle('用戶設置')

@@ -225,7 +225,7 @@
 
         <!-- AI 輔助建議按鈕 -->
         <el-button
-          v-if="!isViewingOldSubmissionVersion && !isViewingOldCommentVersion && currentItemsForAI.length > 0 && !isPreviewMode"
+          v-if="!isViewingOldSubmissionVersion && !isViewingOldCommentVersion && (submissionItemsForAI.length > 0 || commentItemsForAI.length > 0) && !isPreviewMode"
           type="info"
           size="large"
           @click="showAIDrawer = true"
@@ -269,8 +269,10 @@
     v-model:visible="showAIDrawer"
     :project-id="projectId"
     :stage-id="stageId"
-    :ranking-type="currentAIRankingType"
-    :items="currentItemsForAI"
+    :submission-items="submissionItemsForAI"
+    :comment-items="commentItemsForAI"
+    :initial-mode="currentAIRankingType"
+    :max-comment-selections="dynamicMaxCommentSelections"
     @apply-ranking="handleApplyAIRanking"
   />
 </template>
@@ -694,42 +696,53 @@ const currentUserGroupId = computed((): string | null => {
   return (authUser.value as any)?.groupId || null
 })
 
-// AI 輔助建議：當前排名類型
+// AI 輔助建議：當前排名類型（用於決定初始顯示模式）
 const currentAIRankingType = computed((): 'submission' | 'comment' => {
   return activeTab.value === 'submissions' ? 'submission' : 'comment'
 })
 
-// AI 輔助建議：當前項目列表
-const currentItemsForAI = computed(() => {
-  if (activeTab.value === 'submissions') {
-    return rankedSubmissions.value.map(sub => ({
-      id: sub.submissionId,
-      content: sub.reportContent || '',
-      label: sub.groupName,
-      metadata: {
-        groupName: sub.groupName,
-        memberNames: sub.memberNames
+// AI 輔助建議：成果項目列表
+const submissionItemsForAI = computed(() => {
+  return rankedSubmissions.value.map(sub => ({
+    id: sub.submissionId,
+    content: sub.reportContent || '',
+    label: sub.groupName,
+    metadata: {
+      groupName: sub.groupName,
+      memberNames: sub.memberNames
+    }
+  }))
+})
+
+// AI 輔助建議：評論項目列表（包含完整 replies 和 reactions）
+// 傳入所有有效評論（canBeVoted=true），讓 AI 自行挑選和排名
+const commentItemsForAI = computed(() => {
+  return allCommentsForRanking.value.map((comment: any) => ({
+    id: comment.commentId,
+    content: comment.content || '',
+    label: `${comment.authorDisplayName}(${comment.authorEmail})`,
+    metadata: {
+      authorName: comment.authorDisplayName,
+      // Full reply content array
+      replies: comment.replies?.map((r: any) => r.content || r) || [],
+      // Detailed reaction user lists
+      reactions: {
+        helpful: comment.reactions?.find((r: any) => r.type === 'helpful')?.users || [],
+        disagreed: comment.reactions?.find((r: any) => r.type === 'disagreed')?.users || []
       }
-    }))
-  } else {
-    return rankedComments.value.map(comment => ({
-      id: comment.commentId,
-      content: comment.content || '',
-      label: `${comment.authorDisplayName}(${comment.authorEmail})`,
-      metadata: {
-        authorName: comment.authorDisplayName
-      }
-    }))
-  }
+    }
+  }))
 })
 
 // ========== Methods ==========
 
 /**
  * Handle AI ranking applied from AIRankingSuggestionDrawer
+ * @param ranking - Array of IDs in ranked order
+ * @param mode - 'submission' or 'comment' indicating which type of ranking
  */
-function handleApplyAIRanking(ranking: string[]): void {
-  if (activeTab.value === 'submissions') {
+function handleApplyAIRanking(ranking: string[], mode: 'submission' | 'comment'): void {
+  if (mode === 'submission') {
     // Reorder rankedSubmissions based on AI ranking
     const newOrder: Submission[] = []
     const submissionMap = new Map(rankedSubmissions.value.map(s => [s.submissionId, s]))
@@ -751,26 +764,21 @@ function handleApplyAIRanking(ranking: string[]): void {
     rankedSubmissions.value = newOrder
     ElMessage.success('已套用 AI 成果排名建議')
   } else {
-    // Reorder rankedComments based on AI ranking
+    // For comments: AI returns selected + ranked comments from all valid comments
+    // Replace rankedComments with AI's selection (AI picks top N from allCommentsForRanking)
     const newOrder: Comment[] = []
-    const commentMap = new Map(rankedComments.value.map(c => [c.commentId, c]))
+    const commentMap = new Map(allCommentsForRanking.value.map(c => [c.commentId, c]))
 
-    // Add comments in AI ranking order
+    // Add comments in AI ranking order (AI has already selected the best ones)
     for (const id of ranking) {
       const comment = commentMap.get(id)
       if (comment) {
         newOrder.push(comment)
-        commentMap.delete(id)
       }
     }
 
-    // Add any remaining comments not in AI ranking
-    for (const comment of commentMap.values()) {
-      newOrder.push(comment)
-    }
-
     rankedComments.value = newOrder
-    ElMessage.success('已套用 AI 評論排名建議')
+    ElMessage.success(`已套用 AI 評論排名建議（已選出 ${newOrder.length} 個優秀評論）`)
   }
 }
 

@@ -63,6 +63,10 @@ queue = "settlement-queue"
 binding = "LOGIN_EVENTS"
 queue = "login-events-queue"
 
+[[queues.producers]]
+binding = "AI_RANKING_QUEUE"
+queue = "ai-ranking-queue"
+
 # Email Queue Consumer
 # - Processes invitation, password reset, 2FA, and admin notification emails
 # - Retry behavior: Cloudflare uses exponential backoff automatically
@@ -102,6 +106,17 @@ max_batch_size = 10
 max_batch_timeout = 30
 max_retries = 3
 dead_letter_queue = "login-events-dlq"
+
+# AI Ranking Queue Consumer
+# - Processes AI ranking requests (both direct and Bradley-Terry modes)
+# - Sends progress updates via WebSocket (Durable Object)
+# - Long-running task: BT mode may take several minutes with multiple AI calls
+[[queues.consumers]]
+queue = "ai-ranking-queue"
+max_batch_size = 1              # Process one task at a time (AI calls are sequential)
+max_batch_timeout = 5           # Quick start
+max_retries = 2                 # Retry on transient failures
+dead_letter_queue = "ai-ranking-dlq" # Failed requests go here
 
 # Environment Variables
 [vars]

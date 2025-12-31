@@ -28,6 +28,7 @@ export const GLOBAL_PERMISSIONS = {
   VIEW_SYSTEM_LOGS: 'view_system_logs',
   VIEW_EMAIL_LOGS: 'view_email_logs',
   MANAGE_EMAIL_LOGS: 'manage_email_logs',
+  VIEW_AI_SERVICE_LOGS: 'view_ai_service_logs',
 
   // DISABLED: Tags - tags system has been disabled
   // MANAGE_TAGS: 'manage_tags',

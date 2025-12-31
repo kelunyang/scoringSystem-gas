@@ -48,9 +48,13 @@ import {
   GetVotingStatusRequestSchema,
   GetTeacherRankingsRequestSchema,
   GetTeacherRankingVersionsRequestSchema,
-  AIRankingSuggestionRequestSchema
+  AIRankingSuggestionRequestSchema,
+  BTRankingSuggestionRequestSchema,
+  AIRankingHistoryQuerySchema,
+  MultiAgentRankingSuggestionRequestSchema
 } from '@repo/shared/schemas/rankings';
-import { getAIProvidersForRanking, submitAIRankingSuggestion } from '../handlers/rankings/aiSuggestion';
+import { getAIProvidersForRanking, submitAIRankingSuggestion, submitBTRankingSuggestion, submitMultiAgentRankingSuggestion } from '../handlers/rankings/aiSuggestion';
+import { getAIRankingHistory, getAIRankingDetail } from '../handlers/rankings/aiHistory';
 import { aiRateLimitMiddleware } from '../middleware/rate-limit';
 
 
@@ -417,7 +421,8 @@ app.post('/ai-providers', async (c) => {
 });
 
 /**
- * Submit AI ranking suggestion request
+ * Submit AI ranking suggestion request (direct mode)
+ * Now queues the request for async processing
  * Permission: Teachers (Level 1)
  * Body: { projectId, stageId, rankingType, providerId, items, customPrompt? }
  * Rate limited: 10/minute, 60/hour per user
@@ -431,6 +436,101 @@ app.post(
     const body = c.req.valid('json');
 
     const response = await submitAIRankingSuggestion(
+      c.env,
+      user.userEmail,
+      body
+    );
+
+    return response;
+  }
+);
+
+/**
+ * Submit Bradley-Terry AI ranking suggestion request
+ * Queues a BT ranking task with multiple pairwise comparisons
+ * Permission: Teachers (Level 1)
+ * Body: { projectId, stageId, rankingType, providerId, items, customPrompt?, pairsPerItem? }
+ * Rate limited: 10/minute, 60/hour per user
+ */
+app.post(
+  '/ai-bt-suggestion',
+  aiRateLimitMiddleware,
+  zValidator('json', BTRankingSuggestionRequestSchema),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+
+    const response = await submitBTRankingSuggestion(
+      c.env,
+      user.userEmail,
+      body
+    );
+
+    return response;
+  }
+);
+
+/**
+ * Get AI ranking history for a stage
+ * Returns all AI ranking calls made by any teacher for this stage
+ * Permission: Teachers (Level 1)
+ * Body: { projectId, stageId, rankingType?, limit? }
+ */
+app.post(
+  '/ai-history',
+  zValidator('json', AIRankingHistoryQuerySchema),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+
+    const response = await getAIRankingHistory(
+      c.env,
+      user.userEmail,
+      body
+    );
+
+    return response;
+  }
+);
+
+/**
+ * Get AI ranking call detail
+ * Returns a single AI ranking call with parsed fields
+ * Permission: Teachers (Level 1)
+ * Body: { projectId, callId }
+ */
+app.post(
+  '/ai-detail',
+  async (c) => {
+    const user = c.get('user');
+    const body = await c.req.json();
+
+    const response = await getAIRankingDetail(
+      c.env,
+      user.userEmail,
+      body
+    );
+
+    return response;
+  }
+);
+
+/**
+ * Submit Multi-Agent AI ranking suggestion request
+ * Uses Free-MAD style 2-round debate with multiple providers
+ * Permission: Teachers (Level 1)
+ * Body: { projectId, stageId, rankingType, providerIds, items, customPrompt? }
+ * Rate limited: 10/minute, 60/hour per user
+ */
+app.post(
+  '/ai-multi-agent-suggestion',
+  aiRateLimitMiddleware,
+  zValidator('json', MultiAgentRankingSuggestionRequestSchema),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+
+    const response = await submitMultiAgentRankingSuggestion(
       c.env,
       user.userEmail,
       body

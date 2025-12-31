@@ -421,11 +421,13 @@ export async function buildSystemPrompt(
  *
  * @param items - Items to rank
  * @param rankingType - 'submission' or 'comment'
+ * @param maxCommentSelections - For comment mode: how many comments AI should select and rank
  * @returns User prompt string
  */
 export function buildUserPrompt(
   items: AIRankingItem[],
-  rankingType: 'submission' | 'comment'
+  rankingType: 'submission' | 'comment',
+  maxCommentSelections?: number
 ): string {
   const typeLabel = rankingType === 'submission' ? '成果' : '評論';
 
@@ -441,6 +443,33 @@ export function buildUserPrompt(
       metaParts.push(`成員: ${item.metadata.memberNames.join(', ')}`);
     }
 
+    // Add comment-specific metadata (replies and reactions)
+    if (rankingType === 'comment') {
+      // Add reactions summary
+      if (item.metadata.reactions) {
+        const helpfulCount = item.metadata.reactions.helpful?.length || 0;
+        const disagreedCount = item.metadata.reactions.disagreed?.length || 0;
+        if (helpfulCount > 0 || disagreedCount > 0) {
+          const reactionParts: string[] = [];
+          if (helpfulCount > 0) {
+            reactionParts.push(`${helpfulCount} 人認為有幫助`);
+          }
+          if (disagreedCount > 0) {
+            reactionParts.push(`${disagreedCount} 人不同意`);
+          }
+          metaParts.push(`反應: ${reactionParts.join(', ')}`);
+        }
+      }
+
+      // Add replies content
+      if (item.metadata.replies && item.metadata.replies.length > 0) {
+        metaParts.push(`回覆討論串 (${item.metadata.replies.length} 則):`);
+        item.metadata.replies.forEach((reply, idx) => {
+          metaParts.push(`  ${idx + 1}. ${reply}`);
+        });
+      }
+    }
+
     return `
 ---
 ID: ${item.id}
@@ -449,6 +478,20 @@ ${metaParts.join('\n')}
 ${item.content}
 ---`;
   }).join('\n');
+
+  // For comment mode with selection: AI needs to pick top N comments
+  if (rankingType === 'comment' && maxCommentSelections && maxCommentSelections < items.length) {
+    return `請從以下 ${items.length} 個評論中，挑選出最優秀的 ${maxCommentSelections} 個評論並排名。
+
+評論資料包含：
+- 評論內容
+- 回覆討論串（如有）
+- 反應（哪些用戶認為有幫助/不同意）
+
+請根據評論的建設性、深度、討論互動情況等因素，選出最值得獎勵的評論。
+
+${itemsText}`;
+  }
 
   return `請分析以下 ${items.length} 個${typeLabel}並排名：
 ${itemsText}`;
@@ -705,10 +748,15 @@ export async function callAIProvider(
         throw new Error('Invalid AI response structure');
       }
 
-      // Include thinkingProcess from DeepSeek if available
+      // Include thinkingProcess from DeepSeek and usage if available
       return {
         ...parsed,
-        thinkingProcess: thinkingProcess || parsed.thinkingProcess
+        thinkingProcess: thinkingProcess || parsed.thinkingProcess,
+        usage: data.usage ? {
+          prompt_tokens: data.usage.prompt_tokens,
+          completion_tokens: data.usage.completion_tokens,
+          total_tokens: data.usage.total_tokens
+        } : undefined
       };
     } catch (parseError) {
       console.error('Failed to parse AI response:', content);

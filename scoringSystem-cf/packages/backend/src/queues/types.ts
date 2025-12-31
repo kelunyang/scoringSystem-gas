@@ -311,3 +311,66 @@ export const SettlementQueueMessageSchema = z.object({
 });
 
 export type SettlementQueueMessage = z.infer<typeof SettlementQueueMessageSchema>;
+
+// ==================== AI Ranking Queue ====================
+
+// AI ranking item for queue message
+export const AIRankingItemQueueSchema = z.object({
+  id: z.string(),
+  content: z.string(),
+  metadata: z.object({
+    groupName: z.string().optional(),
+    authorName: z.string().optional(),
+    memberNames: z.array(z.string()).optional(),
+  }),
+});
+
+export const AIRankingQueueMessageSchema = z.discriminatedUnion('mode', [
+  // Direct ranking mode (single AI call)
+  z.object({
+    mode: z.literal('direct'),
+    callId: z.string(),
+    taskId: z.string(),
+    userEmail: z.string().email(),
+    projectId: z.string(),
+    stageId: z.string(),
+    rankingType: z.enum(['submission', 'comment']),
+    providerId: z.string(),
+    items: z.array(AIRankingItemQueueSchema),
+    customPrompt: z.string().optional(),
+    timestamp: z.number(),
+  }),
+
+  // Bradley-Terry ranking mode (multiple pairwise comparisons)
+  z.object({
+    mode: z.literal('bt'),
+    callId: z.string(),
+    taskId: z.string(),
+    userEmail: z.string().email(),
+    projectId: z.string(),
+    stageId: z.string(),
+    rankingType: z.enum(['submission', 'comment']),
+    providerId: z.string(),
+    items: z.array(AIRankingItemQueueSchema),
+    customPrompt: z.string().optional(),
+    pairsPerItem: z.number().int().min(2).max(5).default(3),
+    timestamp: z.number(),
+  }),
+
+  // Multi-Agent ranking mode (Free-MAD style debate)
+  z.object({
+    mode: z.literal('multi_agent'),
+    callId: z.string(),
+    taskId: z.string(),
+    userEmail: z.string().email(),
+    projectId: z.string(),
+    stageId: z.string(),
+    rankingType: z.enum(['submission', 'comment']),
+    providerIds: z.array(z.string()).min(2).max(5),
+    items: z.array(AIRankingItemQueueSchema),
+    customPrompt: z.string().optional(),
+    timestamp: z.number(),
+  }),
+]);
+
+export type AIRankingQueueMessage = z.infer<typeof AIRankingQueueMessageSchema>;

@@ -34,6 +34,7 @@ const ProjectManagement = () => import('@/components/admin/ProjectManagement.vue
 const GroupManagement = () => import('@/components/admin/GroupManagement.vue')
 const NotificationManagement = () => import('@/components/admin/NotificationManagement.vue')
 const EmailLogsManagement = () => import('@/components/admin/EmailLogsManagement.vue')
+const AIServiceLogsManagement = () => import('@/components/admin/AIServiceLogsManagement.vue')
 const SystemSettings = () => import('@/components/admin/SystemSettings.vue')
 const SystemLogs = () => import('@/components/admin/SystemLogs.vue')
 
@@ -318,6 +319,29 @@ const routes: RouteRecordRaw[] = [
             props: true,
             meta: {
               title: '郵件詳情',
+              requiresAuth: true,
+              requiresAdmin: true
+            }
+          }
+        ]
+      },
+      {
+        path: 'ai-service-logs',
+        name: 'admin-ai-service-logs',
+        component: AIServiceLogsManagement,
+        meta: {
+          title: 'AI 紀錄',
+          requiresAuth: true,
+          requiresAdmin: true
+        },
+        children: [
+          {
+            path: ':callId',
+            name: 'admin-ai-service-logs-detail',
+            component: AIServiceLogsManagement,
+            props: true,
+            meta: {
+              title: 'AI 呼叫詳情',
               requiresAuth: true,
               requiresAdmin: true
             }

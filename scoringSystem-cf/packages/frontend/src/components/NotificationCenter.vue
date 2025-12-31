@@ -402,6 +402,7 @@
  */
 
 import { ref, computed, watch } from 'vue'
+import { useNotificationCenterStore } from '@/stores/notificationCenter'
 
 // ===== Props =====
 export interface Props {
@@ -417,6 +418,9 @@ export interface Props {
 const props = withDefaults(defineProps<Props>(), {
   variant: 'full'
 })
+
+// ===== Store for global control =====
+const notificationCenterStore = useNotificationCenterStore()
 
 // Drawer size based on variant
 const drawerSize = computed(() => {
@@ -440,6 +444,23 @@ import AdminFilterToolbar from '@/components/admin/shared/AdminFilterToolbar.vue
 // ===== UI State =====
 const showDrawer = ref(false)
 const activeTab = ref('notifications')
+
+// ===== 同步 store.isOpen 與內部 showDrawer =====
+// 這允許從任何地方（如 MainLayout）控制通知中心的開啟/關閉
+watch(() => notificationCenterStore.isOpen, (val) => {
+  if (val !== showDrawer.value) {
+    showDrawer.value = val
+  }
+})
+watch(showDrawer, (val) => {
+  if (val !== notificationCenterStore.isOpen) {
+    if (val) {
+      notificationCenterStore.open()
+    } else {
+      notificationCenterStore.close()
+    }
+  }
+})
 
 // ===== Filter State - Notifications Tab =====
 const currentPage = ref(1)

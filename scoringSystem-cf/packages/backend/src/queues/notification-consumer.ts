@@ -215,30 +215,34 @@ async function processSingleNotification(
 
     // Get user's NotificationHub Durable Object (per-user instance)
     const notificationHubId = env.NOTIFICATION_HUB.idFromName(targetUser.userId as string);
-    const notificationHub = env.NOTIFICATION_HUB.get(notificationHubId);
+    const stub = env.NOTIFICATION_HUB.get(notificationHubId);
 
-    // 直接調用 DO 的 broadcastMessage 方法 (內部方法，不需要認證)
-    notificationHub.broadcastMessage({
-      type: 'notification',
-      data: {
-        title: data.title,
-        message: data.content || '',
-        type: 'info',
-        timestamp: now,
-        notificationId,
-        userEmail: data.targetUserEmail,
-        notificationType: data.notificationType,
-        projectId: data.projectId,
-        stageId: data.stageId,
-        commentId: data.commentId,
-        submissionId: data.submissionId,
-        groupId: data.groupId,
-        transactionId: data.transactionId,
-        settlementId: data.settlementId,
-        rankingProposalId: data.rankingProposalId,
-        metadata: data.metadata,
-      },
-    });
+    // 通過 /broadcast 端點發送消息給 Durable Object
+    await stub.fetch(new Request('https://internal/broadcast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'notification',
+        data: {
+          title: data.title,
+          message: data.content || '',
+          type: 'info',
+          timestamp: now,
+          notificationId,
+          userEmail: data.targetUserEmail,
+          notificationType: data.notificationType,
+          projectId: data.projectId,
+          stageId: data.stageId,
+          commentId: data.commentId,
+          submissionId: data.submissionId,
+          groupId: data.groupId,
+          transactionId: data.transactionId,
+          settlementId: data.settlementId,
+          rankingProposalId: data.rankingProposalId,
+          metadata: data.metadata,
+        },
+      })
+    }));
 
     console.log(`[Notification Consumer] ✅ Broadcasted notification to user ${targetUser.userId}'s NotificationHub`);
   } catch (error) {
@@ -459,31 +463,35 @@ async function processBatchNotifications(
 
         // Get user's NotificationHub Durable Object (per-user instance)
         const notificationHubId = env.NOTIFICATION_HUB.idFromName(targetUser.userId as string);
-        const notificationHub = env.NOTIFICATION_HUB.get(notificationHubId);
+        const stub = env.NOTIFICATION_HUB.get(notificationHubId);
 
         // Broadcast all notifications for this user
         for (const notification of userNotifications) {
-          notificationHub.broadcastMessage({
-            type: 'notification',
-            data: {
-              title: notification.title,
-              message: notification.content || '',
-              type: 'info',
-              timestamp: now,
-              notificationId: notification.notificationId,
-              userEmail: notification.userEmail,
-              notificationType: notification.type,
-              projectId: notification.projectId,
-              stageId: notification.stageId,
-              commentId: notification.commentId,
-              submissionId: notification.submissionId,
-              groupId: notification.groupId,
-              transactionId: notification.transactionId,
-              settlementId: notification.settlementId,
-              rankingProposalId: notification.rankingProposalId,
-              metadata: notification.metadata,
-            },
-          });
+          await stub.fetch(new Request('https://internal/broadcast', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'notification',
+              data: {
+                title: notification.title,
+                message: notification.content || '',
+                type: 'info',
+                timestamp: now,
+                notificationId: notification.notificationId,
+                userEmail: notification.userEmail,
+                notificationType: notification.type,
+                projectId: notification.projectId,
+                stageId: notification.stageId,
+                commentId: notification.commentId,
+                submissionId: notification.submissionId,
+                groupId: notification.groupId,
+                transactionId: notification.transactionId,
+                settlementId: notification.settlementId,
+                rankingProposalId: notification.rankingProposalId,
+                metadata: notification.metadata,
+              },
+            })
+          }));
           successCount++;
         }
 

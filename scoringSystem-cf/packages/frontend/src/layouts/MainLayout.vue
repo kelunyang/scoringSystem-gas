@@ -211,7 +211,11 @@ import { apiClient } from '@/utils/api'
 import { useBreadcrumb } from '../composables/useBreadcrumb'
 import TopBarUserControls from '../components/TopBarUserControls.vue'
 import NotificationCenter from '../components/NotificationCenter.vue'
+import { ElMessage } from 'element-plus'
 import { usePermissionsDrawerStore } from '../stores/permissionsDrawer'
+import { useNotificationCenterStore } from '../stores/notificationCenter'
+import { useNotificationCount } from '../composables/useNotifications'
+import { getUserPreferences } from '../utils/userPreferences'
 
 // ========================================
 // Composables
@@ -269,6 +273,11 @@ const sessionWarningShown = ref(false)
 
 // Permissions Drawer Store
 const permissionsDrawer = usePermissionsDrawerStore()
+
+// Notification Center Store and Query
+const notificationCenterStore = useNotificationCenterStore()
+const notificationCountQuery = useNotificationCount()
+const hasCheckedAutoOpenNotification = ref(false)
 
 // Badge Animation State
 const badgeActiveIndex = ref(0)
@@ -482,6 +491,46 @@ watch(showMobileSidebar, (isOpen) => {
     stopBadgeRotation()
   }
 })
+
+// ========================================
+// Auto-open Notification Center (once per session)
+// ========================================
+
+// Watch notification count to auto-open notification center
+watch(
+  () => notificationCountQuery.data.value,
+  (count) => {
+    // Skip if count is undefined (not yet loaded)
+    if (count === undefined) return
+
+    // Only check once per page load
+    if (hasCheckedAutoOpenNotification.value) return
+    hasCheckedAutoOpenNotification.value = true
+
+    // Check if user has enabled auto-open
+    const userId = user.value?.userId
+    if (!userId) return
+
+    const prefs = getUserPreferences(userId)
+    const autoOpen = prefs.autoOpenNotificationCenter !== false // Default to true
+
+    console.log('🔔 [MainLayout] Auto-open check:', { count, autoOpen, isOpen: notificationCenterStore.isOpen })
+
+    // Check unread count - count is already a number from useNotificationCount
+    if (count > 0 && autoOpen && !notificationCenterStore.isOpen) {
+      // Show toast with message about how to disable
+      ElMessage.info({
+        message: `您有 ${count} 則未讀通知。如不想自動開啟，請至「用戶設定」關閉此功能。`,
+        duration: 5000,
+        showClose: true
+      })
+      // Auto-open notification center via store
+      notificationCenterStore.open()
+      console.log('🔔 [MainLayout] Opening notification center')
+    }
+  },
+  { immediate: true }
+)
 
 // ========================================
 // Interval Functions

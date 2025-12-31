@@ -31,6 +31,10 @@ export interface UserPrefs {
   /** ProjectDetail 首次使用教學是否已完成 */
   tutorialProjectDetailCompleted?: boolean;
 
+  // 通知設定
+  /** 有未讀通知時是否自動開啟通知中心（預設開啟） */
+  autoOpenNotificationCenter?: boolean;
+
   // 用戶日誌（用戶隔離）
   /** 錯誤日誌（最多 20 筆） */
   errorLog?: ErrorLogEntry[];
@@ -66,7 +70,10 @@ export const DEFAULT_USER_PREFS: UserPrefs = {
   // 首次使用教學預設為未完成
   tutorialDashboardCompleted: false,
   tutorialWalletCompleted: false,
-  tutorialProjectDetailCompleted: false
+  tutorialProjectDetailCompleted: false,
+
+  // 通知設定：預設開啟自動顯示
+  autoOpenNotificationCenter: true
 };
 
 /**
@@ -85,6 +92,9 @@ const PREF_KEYS = {
   tutorialDashboardCompleted: `${PREF_KEY_PREFIX}tutorialDashboardCompleted`,
   tutorialWalletCompleted: `${PREF_KEY_PREFIX}tutorialWalletCompleted`,
   tutorialProjectDetailCompleted: `${PREF_KEY_PREFIX}tutorialProjectDetailCompleted`,
+
+  // 通知設定
+  autoOpenNotificationCenter: `${PREF_KEY_PREFIX}autoOpenNotificationCenter`,
 
   // 用戶日誌
   errorLog: `${PREF_KEY_PREFIX}errorLog`,

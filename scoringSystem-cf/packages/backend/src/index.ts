@@ -39,6 +39,7 @@ import emailQueue from './queues/email-consumer';
 import notificationQueue from './queues/notification-consumer';
 import settlementQueue from './queues/settlement-consumer';
 import loginEventsQueue from './queues/login-events-consumer';
+import aiRankingQueue from './queues/ai-ranking-consumer';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -304,6 +305,9 @@ export default {
         case 'login-events-queue':
           await loginEventsQueue.queue(batch as any, env);
           break;
+        case 'ai-ranking-queue':
+          await aiRankingQueue.queue(batch as any, env);
+          break;
         default:
           console.error(`[Queue Router] ❌ Unknown queue: ${queueName}`);
           throw new Error(`Unknown queue: ${queueName}`);
@@ -428,4 +432,4 @@ export { NotificationHub } from './durable-objects/NotificationHub';
 /**
  * Export Queue Consumers (for type inference and testing)
  */
-export { emailQueue, notificationQueue, settlementQueue, loginEventsQueue };
+export { emailQueue, notificationQueue, settlementQueue, loginEventsQueue, aiRankingQueue };

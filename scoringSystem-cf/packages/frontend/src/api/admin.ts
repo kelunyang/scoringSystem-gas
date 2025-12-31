@@ -96,6 +96,12 @@ import type {
   UpdateSmtpConfigRequest,
   TestSmtpConnectionRequest,
   TestSmtpConnectionResponse,
+
+  // AI Service Logs
+  AIServiceLog,
+  AIServiceLogsQueryRequest,
+  AIServiceLogsQueryResponse,
+  AIServiceStatisticsResponse,
 } from '@repo/shared/types/admin'
 
 /**
@@ -390,6 +396,38 @@ export const adminApi = {
       fetchWithAuth<ApiResponse<void>>(
         '/api/admin/email-logs/resend-batch',
         { method: 'POST', body: params, signal }
+      ),
+  },
+
+  // ============================================================================
+  // AI Service Logs Management
+  // ============================================================================
+  aiServiceLogs: {
+    /**
+     * Query AI service logs
+     */
+    query: (params: AIServiceLogsQueryRequest, signal?: AbortSignal) =>
+      fetchWithAuth<ApiResponse<AIServiceLogsQueryResponse>>(
+        '/api/admin/ai-service-logs/query',
+        { method: 'POST', body: params, signal }
+      ),
+
+    /**
+     * Get AI service statistics
+     */
+    statistics: (signal?: AbortSignal) =>
+      fetchWithAuth<ApiResponse<AIServiceStatisticsResponse>>(
+        '/api/admin/ai-service-logs/statistics',
+        { method: 'POST', body: {}, signal }
+      ),
+
+    /**
+     * Get AI service log detail
+     */
+    detail: (callId: string, signal?: AbortSignal) =>
+      fetchWithAuth<ApiResponse<{ log: AIServiceLog; childCalls?: AIServiceLog[]; parentCall?: AIServiceLog }>>(
+        `/api/admin/ai-service-logs/${callId}`,
+        { method: 'GET', signal }
       ),
   },
 

@@ -148,9 +148,21 @@ export type GetTeacherRankingVersionsRequest = z.infer<typeof GetTeacherRankingV
  * AI ranking item metadata schema
  */
 export const AIRankingItemMetadataSchema = z.object({
+  /** Group name (for submissions) */
   groupName: z.string().optional(),
+  /** Author name (for comments) */
   authorName: z.string().optional(),
-  memberNames: z.array(z.string()).optional()
+  /** Team member names (for submissions) */
+  memberNames: z.array(z.string()).optional(),
+  /** Full reply content array (for comments) */
+  replies: z.array(z.string()).optional(),
+  /** Reaction user lists (for comments) */
+  reactions: z.object({
+    /** Array of user emails who marked helpful */
+    helpful: z.array(z.string()).optional(),
+    /** Array of user emails who disagreed */
+    disagreed: z.array(z.string()).optional()
+  }).optional()
 });
 
 /**
@@ -172,7 +184,9 @@ export const AIRankingSuggestionRequestSchema = z.object({
   providerId: z.string().min(1, 'Provider ID is required'),
   items: z.array(AIRankingItemSchema).min(1, 'At least one item is required'),
   /** Custom prompt from user (max 100 chars) */
-  customPrompt: z.string().max(100, 'Custom prompt must be 100 characters or less').optional()
+  customPrompt: z.string().max(100, 'Custom prompt must be 100 characters or less').optional(),
+  /** For comment mode: how many comments AI should select and rank */
+  maxCommentSelections: z.number().int().min(1).optional()
 });
 
 /**
@@ -191,3 +205,202 @@ export const AIRankingSuggestionResponseSchema = z.object({
   /** Custom prompt used in this query */
   customPrompt: z.string().optional()
 });
+
+// ============================================
+// Bradley-Terry Ranking Schemas
+// ============================================
+
+/**
+ * BT ranking suggestion request schema
+ */
+export const BTRankingSuggestionRequestSchema = z.object({
+  projectId: z.string().min(1, 'Project ID is required'),
+  stageId: z.string().min(1, 'Stage ID is required'),
+  rankingType: z.enum(['submission', 'comment']),
+  providerId: z.string().min(1, 'Provider ID is required'),
+  items: z.array(AIRankingItemSchema).min(2, 'At least two items are required for BT comparison'),
+  /** Custom prompt from user (max 100 chars) */
+  customPrompt: z.string().max(100, 'Custom prompt must be 100 characters or less').optional(),
+  /** Number of comparisons per item (2-5, default 3) */
+  pairsPerItem: z.number().int().min(2).max(5).default(3).optional(),
+  /** For comment mode: how many comments AI should select and rank */
+  maxCommentSelections: z.number().int().min(1).optional()
+});
+
+export type BTRankingSuggestionRequest = z.infer<typeof BTRankingSuggestionRequestSchema>;
+
+/**
+ * BT comparison result schema
+ */
+export const BTComparisonSchema = z.object({
+  index: z.number().int().positive(),
+  itemA: z.string(),
+  itemB: z.string(),
+  winner: z.string().optional(),
+  reason: z.string().optional()
+});
+
+export type BTComparison = z.infer<typeof BTComparisonSchema>;
+
+// ============================================
+// AI Service Call Schemas
+// ============================================
+
+/**
+ * AI service type enum schema
+ */
+export const AIServiceTypeSchema = z.enum([
+  'ranking_direct',
+  'ranking_bt',
+  'ranking_multi_agent',
+  'summary',
+  'translation',
+  'feedback'
+]);
+
+export type AIServiceType = z.infer<typeof AIServiceTypeSchema>;
+
+/**
+ * AI service call status enum schema
+ */
+export const AIServiceCallStatusSchema = z.enum([
+  'pending',
+  'processing',
+  'success',
+  'failed',
+  'timeout'
+]);
+
+export type AIServiceCallStatus = z.infer<typeof AIServiceCallStatusSchema>;
+
+/**
+ * AI service call record schema (for database)
+ */
+export const AIServiceCallRecordSchema = z.object({
+  callId: z.string(),
+  projectId: z.string(),
+  stageId: z.string().optional(),
+  userEmail: z.string(),
+  serviceType: AIServiceTypeSchema,
+  rankingType: z.enum(['submission', 'comment']).optional(),
+  providerId: z.string(),
+  providerName: z.string(),
+  model: z.string(),
+  itemCount: z.number().int().optional(),
+  customPrompt: z.string().optional(),
+  status: AIServiceCallStatusSchema,
+  result: z.string().optional(),
+  reason: z.string().optional(),
+  thinkingProcess: z.string().optional(),
+  errorMessage: z.string().optional(),
+  btComparisons: z.string().optional(),
+  btStrengthParams: z.string().optional(),
+  requestTokens: z.number().int().optional(),
+  responseTokens: z.number().int().optional(),
+  totalTokens: z.number().int().optional(),
+  responseTimeMs: z.number().int().optional(),
+  createdAt: z.number().int(),
+  completedAt: z.number().int().optional()
+});
+
+export type AIServiceCallRecord = z.infer<typeof AIServiceCallRecordSchema>;
+
+/**
+ * AI ranking history query request schema
+ */
+export const AIRankingHistoryQuerySchema = z.object({
+  projectId: z.string().min(1, 'Project ID is required'),
+  stageId: z.string().min(1, 'Stage ID is required'),
+  rankingType: z.enum(['submission', 'comment']).optional(),
+  limit: z.number().int().min(1).max(50).default(20).optional()
+});
+
+export type AIRankingHistoryQuery = z.infer<typeof AIRankingHistoryQuerySchema>;
+
+// ============================================
+// Multi-Agent Ranking Schemas
+// ============================================
+
+/**
+ * AI ranking item schema for queue messages (simplified)
+ */
+export const AIRankingItemQueueSchema = z.object({
+  id: z.string().min(1, 'Item ID is required'),
+  content: z.string().min(1, 'Content is required'),
+  metadata: AIRankingItemMetadataSchema
+});
+
+export type AIRankingItemQueue = z.infer<typeof AIRankingItemQueueSchema>;
+
+/**
+ * Multi-Agent ranking suggestion request schema
+ * For Free-MAD style debate mode with 2+ providers
+ */
+export const MultiAgentRankingSuggestionRequestSchema = z.object({
+  projectId: z.string().min(1, 'Project ID is required'),
+  stageId: z.string().min(1, 'Stage ID is required'),
+  rankingType: z.enum(['submission', 'comment']),
+  /** Provider IDs (2-5 providers for Multi-Agent mode) */
+  providerIds: z.array(z.string().min(1)).min(2, 'At least 2 providers required').max(5, 'Maximum 5 providers allowed'),
+  items: z.array(AIRankingItemSchema).min(1, 'At least one item is required'),
+  /** Custom prompt from user (max 100 chars) */
+  customPrompt: z.string().max(100, 'Custom prompt must be 100 characters or less').optional(),
+  /** For comment mode: how many comments AI should select and rank */
+  maxCommentSelections: z.number().int().min(1).optional()
+});
+
+export type MultiAgentRankingSuggestionRequest = z.infer<typeof MultiAgentRankingSuggestionRequestSchema>;
+
+/**
+ * Multi-Agent provider round 1 result schema
+ */
+export const MultiAgentRound1ResultSchema = z.object({
+  providerId: z.string(),
+  providerName: z.string(),
+  ranking: z.array(z.string()),
+  reason: z.string()
+});
+
+export type MultiAgentRound1Result = z.infer<typeof MultiAgentRound1ResultSchema>;
+
+/**
+ * Multi-Agent provider round 2 result schema
+ */
+export const MultiAgentRound2ResultSchema = z.object({
+  providerId: z.string(),
+  providerName: z.string(),
+  ranking: z.array(z.string()),
+  reason: z.string(),
+  changed: z.boolean(),
+  critique: z.string().optional()
+});
+
+export type MultiAgentRound2Result = z.infer<typeof MultiAgentRound2ResultSchema>;
+
+/**
+ * Multi-Agent debate detail schema (for final result)
+ */
+export const MultiAgentDebateDetailSchema = z.object({
+  providerId: z.string(),
+  providerName: z.string(),
+  round1Ranking: z.array(z.string()),
+  round1Reason: z.string(),
+  round2Ranking: z.array(z.string()),
+  round2Reason: z.string(),
+  changed: z.boolean(),
+  critique: z.string().optional()
+});
+
+// Note: MultiAgentDebateDetail type is exported from types/ai.ts
+
+/**
+ * Multi-Agent final result schema
+ */
+export const MultiAgentFinalResultSchema = z.object({
+  ranking: z.array(z.string()),
+  reason: z.string(),
+  scores: z.record(z.string(), z.number()).optional(),
+  debateDetails: z.array(MultiAgentDebateDetailSchema)
+});
+
+export type MultiAgentFinalResult = z.infer<typeof MultiAgentFinalResultSchema>;

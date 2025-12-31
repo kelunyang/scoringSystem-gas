@@ -972,8 +972,8 @@ import { useStageInfoDrawer } from '@/composables/useStageInfoDrawer'
 import { usePointCalculation } from '@/composables/usePointCalculation'
 import { useRouteDrawer } from '@/composables/useRouteDrawer'
 import { useAuth } from '@/composables/useAuth'
-import { getUserPreferences } from '@/utils/userPreferences'
 import { useQueryClient } from '@tanstack/vue-query'
+import { getUserPreferences } from '@/utils/userPreferences'
 
 // ===== Constants =====
 

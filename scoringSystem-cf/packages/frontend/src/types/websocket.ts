@@ -76,6 +76,107 @@ export interface SettlementProgressData {
 }
 
 /**
+ * AI ranking progress data (for direct mode)
+ */
+export interface AIRankingProgressData {
+  taskId: string
+  callId: string
+  projectId: string
+  stageId: string
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  progress?: number
+  message: string
+  result?: {
+    ranking: string[]
+    reason: string
+    thinkingProcess?: string
+  }
+}
+
+/**
+ * BT ranking progress data (for Bradley-Terry mode)
+ */
+export interface BTRankingProgressData {
+  taskId: string
+  callId: string
+  projectId: string
+  stageId: string
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  progress: number
+  currentComparison?: number
+  totalComparisons?: number
+  message: string
+  currentPair?: { itemA: string; itemB: string }
+  result?: {
+    ranking: string[]
+    reason: string
+    btComparisons: Array<{
+      index: number
+      itemA: string
+      itemB: string
+      winner?: string
+      reason?: string
+    }>
+    btStrengthParams: Record<string, number>
+  }
+}
+
+/**
+ * Multi-Agent provider result (for Free-MAD debate)
+ */
+export interface MultiAgentProviderResult {
+  providerId: string
+  providerName: string
+  round1?: {
+    ranking: string[]
+    reason: string
+  }
+  round2?: {
+    ranking: string[]
+    reason: string
+    changed: boolean
+    critique?: string
+  }
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  errorMessage?: string
+}
+
+/**
+ * Multi-Agent debate detail (for final result)
+ */
+export interface MultiAgentDebateDetail {
+  providerId: string
+  providerName: string
+  round1Ranking: string[]
+  round1Reason: string
+  round2Ranking: string[]
+  round2Reason: string
+  changed: boolean
+  critique?: string
+}
+
+/**
+ * Multi-Agent ranking progress data (for Free-MAD mode)
+ */
+export interface MultiAgentProgressData {
+  taskId: string
+  callId: string
+  projectId: string
+  stageId: string
+  status: 'pending' | 'round1' | 'round2' | 'aggregating' | 'completed' | 'failed'
+  progress: number
+  currentRound?: 1 | 2
+  message: string
+  providerResults?: MultiAgentProviderResult[]
+  result?: {
+    ranking: string[]
+    reason: string
+    scores?: Record<string, number>
+    debateDetails: MultiAgentDebateDetail[]
+  }
+}
+
+/**
  * Connection error data
  */
 export interface ConnectionErrorData {
@@ -113,6 +214,9 @@ export type WebSocketMessage =
   | { type: 'system_announcement'; data: SystemAnnouncementData }
   | { type: 'user_data_updated'; data: UserDataUpdatedData }
   | { type: 'settlement_progress'; data: SettlementProgressData }
+  | { type: 'ai_ranking_progress'; data: AIRankingProgressData }
+  | { type: 'bt_ranking_progress'; data: BTRankingProgressData }
+  | { type: 'multi_agent_progress'; data: MultiAgentProgressData }
   | { type: 'token_expired'; data: { message: string; timestamp: string } }
 
 /**

@@ -643,3 +643,138 @@ export interface UpdateUserProfileRequest {
   userName?: string
   userAvatar?: string
 }
+
+// ============================================================================
+// AI Service Logs Types
+// ============================================================================
+
+/**
+ * AI service type enum
+ */
+export type AIServiceType = 'ranking_direct' | 'ranking_bt' | 'ranking_multi_agent' | 'summary' | 'translation' | 'feedback'
+
+/**
+ * AI service status enum
+ */
+export type AIServiceStatus = 'pending' | 'processing' | 'success' | 'failed' | 'timeout'
+
+/**
+ * AI ranking type enum
+ */
+export type AIRankingType = 'submission' | 'comment'
+
+/**
+ * AI service call log entry (matches aiservicecalls table schema)
+ */
+export interface AIServiceLog {
+  callId: string
+  projectId: string
+  stageId?: string
+  userEmail: string
+  serviceType: AIServiceType
+  rankingType?: AIRankingType
+  providerId: string
+  providerName: string
+  model: string
+  itemCount?: number
+  customPrompt?: string
+  status: AIServiceStatus
+  result?: string            // JSON string
+  reason?: string
+  thinkingProcess?: string
+  errorMessage?: string
+  btComparisons?: string     // JSON string
+  btStrengthParams?: string  // JSON string
+  parentCallId?: string
+  debateRound?: number
+  debateChanged?: number     // 0 or 1
+  debateCritique?: string
+  requestTokens?: number
+  responseTokens?: number
+  totalTokens?: number
+  responseTimeMs?: number
+  createdAt: number
+  completedAt?: number
+}
+
+/**
+ * AI service logs query request with filters
+ */
+export interface AIServiceLogsQueryRequest {
+  filters?: {
+    search?: string              // Search in providerName, userEmail, projectId
+    serviceType?: AIServiceType
+    rankingType?: AIRankingType
+    status?: AIServiceStatus
+    providerId?: string
+    startDate?: number
+    endDate?: number
+    minTokens?: number
+    maxTokens?: number
+    minResponseTime?: number
+    maxResponseTime?: number
+    limit?: number
+    offset?: number
+  }
+}
+
+/**
+ * AI service logs query response
+ */
+export interface AIServiceLogsQueryResponse {
+  logs: AIServiceLog[]
+  totalCount: number
+  filters?: AIServiceLogsQueryRequest['filters']
+}
+
+/**
+ * AI service statistics by service type
+ */
+export interface AIServiceStatsByType {
+  serviceType: AIServiceType
+  count: number
+  totalTokens: number
+  avgResponseTime: number
+}
+
+/**
+ * AI service statistics by provider
+ */
+export interface AIServiceStatsByProvider {
+  providerId: string
+  providerName: string
+  count: number
+  totalTokens: number
+  avgResponseTime: number
+}
+
+/**
+ * AI service statistics by status
+ */
+export interface AIServiceStatsByStatus {
+  status: AIServiceStatus
+  count: number
+}
+
+/**
+ * AI service statistics by date
+ */
+export interface AIServiceStatsByDate {
+  date: string
+  count: number
+  totalTokens: number
+}
+
+/**
+ * AI service statistics response
+ */
+export interface AIServiceStatisticsResponse {
+  total: number
+  totalTokens: number
+  avgResponseTime: number
+  byServiceType: AIServiceStatsByType[]
+  byProvider: AIServiceStatsByProvider[]
+  byStatus: AIServiceStatsByStatus[]
+  last7Days: AIServiceStatsByDate[]
+  timestamp: number
+}

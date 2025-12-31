@@ -179,6 +179,20 @@
         },
         "visible": true,
         "order": 7
+      },
+      "ai-service-logs": {
+        "id": "admin_ai_service_logs",
+        "key": "ai-service-logs",
+        "label": "AI 紀錄",
+        "icon": "fas fa-robot",
+        "component": "AIServiceLogsManagement",
+        "description": "查看 AI 服務呼叫記錄，包含排名建議、Token 用量等",
+        "permissions": {
+          "required": ["view_ai_service_logs", "system_admin"],
+          "logic": "OR"
+        },
+        "visible": true,
+        "order": 8
       }
     }
   },

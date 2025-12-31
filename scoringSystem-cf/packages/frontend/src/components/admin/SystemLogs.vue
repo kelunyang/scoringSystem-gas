@@ -283,15 +283,13 @@
             <th style="width: 150px">用户</th>
             <th style="width: 200px">操作</th>
             <th style="width: 120px">实体类型</th>
-            <th style="width: 150px">函数名</th>
-            <th style="min-width: 300px">详情</th>
           </tr>
         </thead>
         <tbody>
           <template v-for="log in displayedLogs" :key="log.logId">
           <ExpandableTableRow
             :is-expanded="expandedLogId === log.logId"
-            :expansion-colspan="8"
+            :expansion-colspan="6"
             @toggle-expansion="handleToggleExpansion(log)"
           >
             <!-- Main Row -->
@@ -315,12 +313,6 @@
                 </el-tag>
               </td>
               <td>{{ getEntityTypeLabel(log.entityType ?? '') }}</td>
-              <td>{{ log.functionName }}</td>
-              <td>
-                <div class="log-message">
-                  {{ log.message }}
-                </div>
-              </td>
             </template>
 
             <!-- Expanded Content: Entity Details -->

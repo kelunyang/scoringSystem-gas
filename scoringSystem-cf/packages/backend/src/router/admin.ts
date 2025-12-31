@@ -59,6 +59,11 @@
  * - POST /admin/email-logs/resend-single - Resend single email
  * - POST /admin/email-logs/resend-batch - Batch resend emails
  *
+ * AI Service Logs Management Endpoints:
+ * - POST /admin/ai-service-logs/query - Query AI service logs with filters
+ * - POST /admin/ai-service-logs/statistics - Get AI service statistics
+ * - GET /admin/ai-service-logs/:callId - Get single AI service log detail
+ *
  * Robots Management Endpoints:
  * - POST /admin/robots/status - Get robot status
  * - POST /admin/robots/notification-patrol - Run notification patrol
@@ -111,7 +116,8 @@ import {
   NotificationPatrolRequestSchema,
   EmailLogsQueryRequestSchema,
   ResendEmailRequestSchema,
-  ResendBatchEmailsRequestSchema
+  ResendBatchEmailsRequestSchema,
+  AIServiceLogsQueryRequestSchema
 } from '@repo/shared/schemas/admin';
 
 import {
@@ -189,6 +195,13 @@ import {
   resendBatchEmailsHandler
 } from '../handlers/admin/email-logs';
 
+// AI service logs handlers
+import {
+  getAIServiceLogs,
+  getAIServiceStatistics,
+  getAIServiceLogDetail
+} from '../handlers/admin/ai-service-logs';
+
 // SMTP configuration (using environment variables)
 
 // Logging utility
@@ -264,6 +277,14 @@ app.use('*', async (c, next) => {
   if (path.includes('/email-logs')) {
     const hasManageEmailLogs = await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.MANAGE_EMAIL_LOGS);
     if (hasManageEmailLogs) {
+      return next();
+    }
+  }
+
+  // For AI service logs endpoints, allow view_ai_service_logs permission
+  if (path.includes('/ai-service-logs')) {
+    const hasViewAIServiceLogs = await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.VIEW_AI_SERVICE_LOGS);
+    if (hasViewAIServiceLogs) {
       return next();
     }
   }
@@ -1952,5 +1973,55 @@ app.post(
     return await resendBatchEmailsHandler(c.env, user.userEmail, body.logIds);
   }
 );
+
+/**
+ * ========================================
+ * AI SERVICE LOGS MANAGEMENT ENDPOINTS
+ * ========================================
+ */
+
+/**
+ * Query AI service logs with filters
+ * Permission: view_ai_service_logs
+ */
+app.post(
+  '/ai-service-logs/query',
+  zValidator('json', AIServiceLogsQueryRequestSchema, (result, c) => {
+    if (!result.success) {
+      return c.json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: result.error.issues.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')
+        }
+      }, 400);
+    }
+    return;
+  }),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+    return await getAIServiceLogs(c.env, user.userEmail, body.filters || {});
+  }
+);
+
+/**
+ * Get AI service statistics
+ * Permission: view_ai_service_logs
+ */
+app.post('/ai-service-logs/statistics', async (c) => {
+  const user = c.get('user');
+  return await getAIServiceStatistics(c.env, user.userEmail);
+});
+
+/**
+ * Get AI service log detail
+ * Permission: view_ai_service_logs
+ */
+app.get('/ai-service-logs/:callId', async (c) => {
+  const user = c.get('user');
+  const callId = c.req.param('callId');
+  return await getAIServiceLogDetail(c.env, user.userEmail, callId);
+});
 
 export default app;
