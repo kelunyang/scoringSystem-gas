@@ -481,6 +481,162 @@ class TestModificationPrevention:
 
 
 # ============================================================================
+# Scoring Configuration Property Tests
+# ============================================================================
+
+class TestScoringConfigProperties:
+    """Test scoring configuration property authorization"""
+
+    @pytest.mark.high
+    @pytest.mark.properties
+    def test_scoring_config_weight_validation(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify scoring config weight sum validation.
+
+        Attack Vector:
+        - User attempts to set weights that don't sum to 1.0
+        - Could manipulate scoring outcomes
+
+        Expected: Validation error when weights don't sum to 1.0
+        """
+        # Get a project
+        response = api_client.post('/projects/list', auth=admin_token)
+        if response.status_code != 200:
+            pytest.skip("Cannot list projects")
+
+        data = response.json()
+        projects = data.get('data', [])
+        if not projects:
+            pytest.skip("No projects available")
+
+        project_id = projects[0]['projectId']
+
+        # Attempt to set invalid weights (sum > 1.0)
+        response = api_client.put(f'/projects/{project_id}/scoring-config', auth=admin_token, json={
+            'studentRankingWeight': 0.8,
+            'teacherRankingWeight': 0.5  # Sum = 1.3, invalid
+        })
+
+        # Should reject invalid weight sum
+        assert response.status_code in [400, 422], \
+            f"Invalid weight sum accepted (status: {response.status_code})"
+
+    @pytest.mark.high
+    @pytest.mark.properties
+    def test_scoring_config_maxVoteResetCount_range(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify maxVoteResetCount has valid range (1-5).
+
+        Attack Vector:
+        - User attempts to set very high or negative reset count
+        - Could allow unlimited vote resets
+
+        Expected: Value limited to 1-5 range
+        """
+        response = api_client.post('/projects/list', auth=admin_token)
+        if response.status_code != 200:
+            pytest.skip("Cannot list projects")
+
+        data = response.json()
+        projects = data.get('data', [])
+        if not projects:
+            pytest.skip("No projects available")
+
+        project_id = projects[0]['projectId']
+
+        # Test invalid values
+        invalid_values = [0, -1, 100, 999]
+
+        for value in invalid_values:
+            response = api_client.put(f'/projects/{project_id}/scoring-config', auth=admin_token, json={
+                'maxVoteResetCount': value
+            })
+
+            # Should reject out-of-range values
+            assert response.status_code in [400, 422], \
+                f"Invalid maxVoteResetCount {value} accepted"
+
+    @pytest.mark.high
+    @pytest.mark.properties
+    def test_scoring_config_requires_project_access(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify scoring config requires project access.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJub2FjY2VzcyJ9.fake"
+
+        response = api_client.get('/projects/proj_test/scoring-config', auth=fake_user_token)
+
+        assert response.status_code in [401, 403, 404], \
+            f"Scoring config accessible without project access"
+
+    @pytest.mark.critical
+    @pytest.mark.properties
+    def test_scoring_config_update_requires_manage(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify scoring config update requires manage permission.
+        """
+        # Get a project
+        response = api_client.post('/projects/list', auth=admin_token)
+        if response.status_code != 200:
+            pytest.skip("Cannot list projects")
+
+        data = response.json()
+        projects = data.get('data', [])
+        if not projects:
+            pytest.skip("No projects available")
+
+        project_id = projects[0]['projectId']
+
+        # Fake viewer token (view but not manage)
+        fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
+
+        response = api_client.put(f'/projects/{project_id}/scoring-config', auth=fake_viewer_token, json={
+            'maxCommentSelections': 5
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Viewer could update scoring config"
+
+    @pytest.mark.high
+    @pytest.mark.properties
+    def test_system_scoring_defaults_requires_admin(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify system scoring defaults require admin permission.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyZWd1bGFyIn0.fake"
+
+        # GET should require admin
+        response = api_client.get('/projects/system/scoring-defaults', auth=fake_user_token)
+        assert response.status_code in [401, 403], \
+            "System scoring defaults GET accessible without admin"
+
+        # PUT should require admin
+        response = api_client.put('/projects/system/scoring-defaults', auth=fake_user_token, json={
+            'maxCommentSelections': 10
+        })
+        assert response.status_code in [401, 403], \
+            "System scoring defaults PUT accessible without admin"
+
+
+# ============================================================================
 # Helper for running property tests
 # ============================================================================
 

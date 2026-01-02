@@ -212,21 +212,22 @@ export async function cloneProject(
       await env.DB.prepare(`
         INSERT INTO stages (
           stageId, projectId, stageName, description, stageOrder,
-          startTime, endTime, reportRewardPool, commentRewardPool,
-          status, createdBy, createdTime, lastModified
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          stageType, startTime, endTime, reportRewardPool, commentRewardPool,
+          config, status, createdTime, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         newStageId,
         newProjectId,
         (stage as any).stageName,
         (stage as any).description || '',
         (stage as any).stageOrder,
+        (stage as any).stageType || 'normal',
         (stage as any).startTime,
         (stage as any).endTime,
         (stage as any).reportRewardPool || 0,
         (stage as any).commentRewardPool || 0,
+        (stage as any).config || null,
         'pending',
-        userId?.userId,
         timestamp,
         timestamp
       ).run();

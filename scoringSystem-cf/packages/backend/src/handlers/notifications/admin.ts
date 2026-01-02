@@ -37,26 +37,33 @@ export async function listAllNotifications(
       return errorResponse('ACCESS_DENIED', 'Only system administrators can list all notifications');
     }
 
-    // Build query
-    let query = 'SELECT * FROM notifications WHERE isDeleted = 0';
+    // Build query with LEFT JOIN to get project name
+    let query = `
+      SELECT
+        n.*,
+        p.projectName
+      FROM notifications n
+      LEFT JOIN projects p ON n.projectId = p.projectId
+      WHERE n.isDeleted = 0
+    `;
     const params: any[] = [];
 
     if (filters.targetUserEmail) {
-      query += ' AND targetUserEmail = ?';
+      query += ' AND n.targetUserEmail = ?';
       params.push(filters.targetUserEmail);
     }
 
     if (filters.type) {
-      query += ' AND type = ?';
+      query += ' AND n.type = ?';
       params.push(filters.type);
     }
 
     if (filters.isRead !== undefined) {
-      query += ' AND isRead = ?';
+      query += ' AND n.isRead = ?';
       params.push(filters.isRead ? 1 : 0);
     }
 
-    query += ' ORDER BY createdTime DESC';
+    query += ' ORDER BY n.createdTime DESC';
 
     if (filters.limit) {
       query += ' LIMIT ?';

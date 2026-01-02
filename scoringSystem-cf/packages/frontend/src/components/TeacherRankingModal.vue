@@ -271,7 +271,7 @@ const initializeRankings = (): void => {
 const loadVersionHistory = async (): Promise<void> => {
   try {
     loading.value = true
-    const httpResponse = await (rpcClient.rankings as any)['teacher-vote-history'].$post({
+    const httpResponse = await (rpcClient.api.rankings as any)['teacher-vote-history'].$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,
@@ -346,7 +346,7 @@ const submitTeacherRanking = async (): Promise<void> => {
       rank: index + 1
     }))
 
-    const httpResponse = await rpcClient.rankings.submit.$post({
+    const httpResponse = await (rpcClient.api.rankings as any).submit.$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,

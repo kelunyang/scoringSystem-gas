@@ -35,6 +35,7 @@
     "katex": "^0.16.25",
     "marked": "^17.0.1",
     "matter-js": "^0.20.0",
+    "md-editor-v3": "^6.3.0",
     "papaparse": "^5.5.3",
     "randomcolor": "^0.6.2",
     "vue": "^3.4.15",

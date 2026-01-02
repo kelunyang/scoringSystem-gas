@@ -33,6 +33,15 @@ export async function getStageRankings(
     const isGlobalPM = !!globalPMCheck;
     console.log(`🔍 [getStageRankings] Is Global PM:`, isGlobalPM);
 
+    // Check if user is teacher or observer (for proposal stats)
+    const roleCheck = await env.DB.prepare(`
+      SELECT role FROM projectviewers
+      WHERE userEmail = ? AND projectId = ?
+    `).bind(userEmail, projectId).first();
+
+    const isTeacherOrObserver = isGlobalPM || roleCheck?.role === 'teacher' || roleCheck?.role === 'observer';
+    console.log(`🔍 [getStageRankings] Is Teacher/Observer:`, isTeacherOrObserver, roleCheck?.role);
+
     // Check project access (if not Global PM)
     if (!isGlobalPM) {
       // Check if user is project member OR project viewer
@@ -228,6 +237,56 @@ export async function getStageRankings(
     }
 
     console.log(`✅ [getStageRankings] Rankings collected:`, Object.keys(rankings).length, 'groups');
+
+    // 3. Get proposal stats for teachers/observers
+    if (isTeacherOrObserver) {
+      console.log(`📊 [getStageRankings] Loading proposal stats for teacher/observer`);
+
+      // Query proposal stats for all groups in this stage
+      const proposalStatsResult = await env.DB.prepare(`
+        WITH ProposalCounts AS (
+          SELECT
+            groupId,
+            COUNT(*) as versionCount
+          FROM rankingproposals_with_status
+          WHERE projectId = ? AND stageId = ?
+          GROUP BY groupId
+        ),
+        LatestProposals AS (
+          SELECT
+            groupId,
+            status,
+            votingResult,
+            ROW_NUMBER() OVER (PARTITION BY groupId ORDER BY createdTime DESC) as rn
+          FROM rankingproposals_with_status
+          WHERE projectId = ? AND stageId = ?
+        )
+        SELECT
+          pc.groupId,
+          pc.versionCount,
+          lp.status as latestStatus,
+          lp.votingResult as latestVotingResult
+        FROM ProposalCounts pc
+        LEFT JOIN LatestProposals lp ON pc.groupId = lp.groupId AND lp.rn = 1
+      `).bind(projectId, stageId, projectId, stageId).all();
+
+      const proposalStats = proposalStatsResult.results || [];
+      console.log(`📊 [getStageRankings] Proposal stats count: ${proposalStats.length}`);
+
+      // Add proposal stats to rankings
+      for (const stat of proposalStats) {
+        const groupId = stat.groupId as string;
+        if (!rankings[groupId]) {
+          rankings[groupId] = {};
+        }
+        rankings[groupId].proposalStats = {
+          versionCount: stat.versionCount as number,
+          latestStatus: stat.latestStatus as string | null,
+          latestVotingResult: stat.latestVotingResult as string | null
+        };
+        console.log(`📊 [getStageRankings] Group ${groupId} proposal stats:`, rankings[groupId].proposalStats);
+      }
+    }
 
     return successResponse({
       rankings

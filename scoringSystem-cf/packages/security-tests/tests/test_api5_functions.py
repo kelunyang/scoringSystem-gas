@@ -532,6 +532,186 @@ class TestSensitiveFunctions:
 
 
 # ============================================================================
+# AI Ranking Function Tests
+# ============================================================================
+
+class TestAIRankingFunctions:
+    """Test AI ranking endpoint access control"""
+
+    @pytest.mark.critical
+    @pytest.mark.functions
+    def test_ai_suggestion_requires_teacher(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify AI suggestion endpoints require teacher role.
+        """
+        fake_student_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdHVkZW50Iiwicm9sZSI6InN0dWRlbnQifQ.fake"
+
+        ai_endpoints = [
+            '/rankings/ai-suggestion',
+            '/rankings/ai-bt-suggestion',
+            '/rankings/ai-multi-agent-suggestion',
+            '/rankings/ai-history',
+            '/rankings/ai-detail',
+        ]
+
+        for endpoint in ai_endpoints:
+            response = api_client.post(endpoint, auth=fake_student_token, json={
+                'projectId': 'proj_test',
+                'stageId': 'stg_test'
+            })
+
+            assert response.status_code in [401, 403], \
+                f"Student accessed AI endpoint {endpoint}"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_ai_service_logs_requires_admin(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify AI service logs require admin permission.
+        """
+        fake_teacher_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZWFjaGVyIiwicm9sZSI6InRlYWNoZXIifQ.fake"
+
+        # Query endpoint
+        response = api_client.post('/api/admin/ai-service-logs/query', auth=fake_teacher_token)
+        assert response.status_code in [401, 403], \
+            "AI service logs query accessible without admin"
+
+        # Statistics endpoint
+        response = api_client.post('/api/admin/ai-service-logs/statistics', auth=fake_teacher_token)
+        assert response.status_code in [401, 403], \
+            "AI service logs statistics accessible without admin"
+
+        # Detail endpoint
+        response = api_client.get('/api/admin/ai-service-logs/call_test', auth=fake_teacher_token)
+        assert response.status_code in [401, 403], \
+            "AI service logs detail accessible without admin"
+
+
+# ============================================================================
+# Stage Control Function Tests
+# ============================================================================
+
+class TestStageControlFunctions:
+    """Test stage control endpoint access"""
+
+    @pytest.mark.critical
+    @pytest.mark.functions
+    def test_stage_pause_requires_manage(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify stage pause requires manage permission.
+        """
+        fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
+
+        # Get a project
+        response = api_client.post('/projects/list-with-stages', auth=admin_token)
+        if response.status_code != 200:
+            pytest.skip("Cannot list projects")
+
+        data = response.json()
+        projects = data.get('data', [])
+
+        project_id = None
+        stage_id = None
+        for project in projects:
+            if project.get('stages'):
+                project_id = project['projectId']
+                stage_id = project['stages'][0]['stageId']
+                break
+
+        if not project_id:
+            pytest.skip("No projects with stages")
+
+        # Viewer should not be able to pause
+        response = api_client.post('/stages/pause', auth=fake_viewer_token, json={
+            'projectId': project_id,
+            'stageId': stage_id
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Viewer could pause stage (status: {response.status_code})"
+
+    @pytest.mark.critical
+    @pytest.mark.functions
+    def test_stage_resume_requires_manage(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify stage resume requires manage permission.
+        """
+        fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
+
+        response = api_client.post('/stages/resume', auth=fake_viewer_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Viewer could resume stage"
+
+
+# ============================================================================
+# Submission Control Function Tests
+# ============================================================================
+
+class TestSubmissionControlFunctions:
+    """Test submission control endpoint access"""
+
+    @pytest.mark.critical
+    @pytest.mark.functions
+    def test_force_withdraw_requires_teacher(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify force-withdraw requires teacher role.
+        """
+        fake_student_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdHVkZW50In0.fake"
+
+        response = api_client.post('/submissions/force-withdraw', auth=fake_student_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test',
+            'submissionId': 'sub_test',
+            'reason': 'Test withdrawal'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Student could force withdraw (status: {response.status_code})"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_force_withdraw_not_by_observer(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify observers cannot force-withdraw.
+        """
+        fake_observer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvYnNlcnZlciIsInJvbGUiOiJvYnNlcnZlciJ9.fake"
+
+        response = api_client.post('/submissions/force-withdraw', auth=fake_observer_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test',
+            'submissionId': 'sub_test',
+            'reason': 'Observer attempt'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Observer could force withdraw"
+
+
+# ============================================================================
 # HTTP Method Enforcement Tests
 # ============================================================================
 

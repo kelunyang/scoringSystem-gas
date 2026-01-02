@@ -132,6 +132,14 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 | POST | `/email-logs/resend-single` | manage_email_logs | 重發單一郵件 |
 | POST | `/email-logs/resend-batch` | manage_email_logs | 批次重發郵件 |
 
+#### AI Service Logs Management
+
+| Method | Endpoint | Permission | Description |
+|--------|----------|------------|-------------|
+| POST | `/ai-service-logs/query` | system_admin | 查詢 AI 服務日誌 |
+| POST | `/ai-service-logs/statistics` | system_admin | AI 服務統計 |
+| GET | `/ai-service-logs/:callId` | system_admin | 取得 AI 呼叫詳情 |
+
 #### Robots Management
 
 | Method | Endpoint | Permission | Description |
@@ -182,6 +190,8 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 | POST | `/viewers/mark-unassigned` | project:view | 標記未分組成員 |
 | GET | `/:projectId/scoring-config` | project:view | 取得評分設定 |
 | PUT | `/:projectId/scoring-config` | project:manage | 更新評分設定 |
+| GET | `/system/scoring-defaults` | system_admin | 取得系統預設評分設定 |
+| PUT | `/system/scoring-defaults` | system_admin | 更新系統預設評分設定 |
 
 ---
 
@@ -201,6 +211,8 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 | POST | `/config/get` | project:view | 取得階段設定 |
 | POST | `/config/update` | project:manage | 更新階段設定 |
 | POST | `/config/reset` | project:manage | 重設階段設定 |
+| POST | `/pause` | project:manage | 暫停階段 |
+| POST | `/resume` | project:manage | 恢復暫停的階段 |
 
 ---
 
@@ -219,6 +231,7 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 | POST | `/participation-status` | project:view | 取得參與確認狀態 |
 | POST | `/voting-history` | project:view | 取得投票歷史 |
 | POST | `/confirm-participation` | project:view + active stage | 確認參與 |
+| POST | `/force-withdraw` | teacher | 教師強制撤回繳交 |
 
 ---
 
@@ -242,6 +255,10 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 | POST | `/teacher-rankings` | teacher | 取得教師排名 |
 | POST | `/ai-providers` | teacher | 取得 AI 提供者列表 |
 | POST | `/ai-suggestion` | teacher | AI 排名建議 (Rate Limited) |
+| POST | `/ai-bt-suggestion` | teacher | Bradley-Terry AI 排名建議 (Rate Limited) |
+| POST | `/ai-multi-agent-suggestion` | teacher | 多代理議會模式 AI 排名 (Rate Limited) |
+| POST | `/ai-history` | teacher | AI 排名歷史記錄 |
+| POST | `/ai-detail` | teacher | AI 排名呼叫詳情 |
 
 ---
 
@@ -488,6 +505,8 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 | Endpoint | Limit |
 |----------|-------|
 | `/rankings/ai-suggestion` | 10/分鐘, 60/小時 |
+| `/rankings/ai-bt-suggestion` | 10/分鐘, 60/小時 |
+| `/rankings/ai-multi-agent-suggestion` | 10/分鐘, 60/小時 |
 | `/api/admin/notifications/send-batch` | Email 發送限制 |
 
 超過限制時回傳 HTTP 429 並包含 `Retry-After` header。

@@ -18,13 +18,25 @@ export interface Notification {
 }
 
 export type NotificationType =
-  | 'stage_start'
-  | 'stage_voting'
-  | 'stage_completed'
-  | 'comment_mention'
-  | 'group_mention'
-  | 'new_comment'
-  | 'comment_vote'
+  | 'submission_created'
+  | 'submission_withdrawn'
+  | 'submission_approved'
+  | 'stage_status_changed'
+  | 'ranking_proposal_submitted'
+  | 'ranking_proposal_withdrawn'
+  | 'ranking_proposal_approved'
+  | 'comment_mentioned'
+  | 'comment_replied'
+  | 'settlement_failed'
+  | 'project_role_assigned'
+  | 'project_role_removed'
+  | 'group_member_added'
+  | 'group_member_removed'
+  | 'account_locked'
+  | 'account_unlocked'
+  | 'password_reset_success'
+  | 'vote_reset'
+  | 'project_info_updated'
 
 export interface NotificationStats {
   totalNotifications: number

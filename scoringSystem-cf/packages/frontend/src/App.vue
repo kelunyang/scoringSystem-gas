@@ -28,9 +28,9 @@ watch(userId, (newUserId) => {
 }, { immediate: true })
 
 // 監聽 brandingIcon 變化，動態更新 favicon
-watch(brandingIcon, (newIcon) => {
+watch(brandingIcon, async (newIcon) => {
   if (newIcon) {
-    updateFavicon(newIcon)
+    await updateFavicon(newIcon)
   }
 }, { immediate: true })
 

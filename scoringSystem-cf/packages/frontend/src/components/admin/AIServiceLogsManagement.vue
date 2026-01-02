@@ -91,6 +91,47 @@
       </template>
     </AdminFilterToolbar>
 
+    <!-- Statistics Card -->
+    <el-card class="stats-card" v-if="statistics">
+      <el-row :gutter="20">
+        <el-col :xs="12" :sm="6" :md="4">
+          <el-statistic title="總請求數" :value="statistics.total || 0">
+            <template #prefix>
+              <i class="fas fa-robot"></i>
+            </template>
+          </el-statistic>
+        </el-col>
+        <el-col :xs="12" :sm="6" :md="4">
+          <el-statistic title="成功" :value="getSuccessCount()">
+            <template #prefix>
+              <i class="fas fa-check-circle" style="color: #67C23A;"></i>
+            </template>
+          </el-statistic>
+        </el-col>
+        <el-col :xs="12" :sm="6" :md="4">
+          <el-statistic title="失敗" :value="getFailedCount()">
+            <template #prefix>
+              <i class="fas fa-times-circle" style="color: #F56C6C;"></i>
+            </template>
+          </el-statistic>
+        </el-col>
+        <el-col :xs="12" :sm="6" :md="4">
+          <el-statistic title="總 Token" :value="statistics.totalTokens || 0">
+            <template #prefix>
+              <i class="fas fa-coins" style="color: #E6A23C;"></i>
+            </template>
+          </el-statistic>
+        </el-col>
+        <el-col :xs="12" :sm="6" :md="4">
+          <el-statistic title="平均回應時間" :value="statistics.avgResponseTime ? Math.round(statistics.avgResponseTime) : 0" suffix="ms">
+            <template #prefix>
+              <i class="fas fa-clock" style="color: #409EFF;"></i>
+            </template>
+          </el-statistic>
+        </el-col>
+      </el-row>
+    </el-card>
+
     <!-- AI Service Logs Table -->
     <div
       class="table-container"
@@ -100,37 +141,322 @@
       :infinite-scroll-disabled="scrollDisabled"
       :infinite-scroll-distance="200"
     >
-      <table class="ai-logs-table">
+      <table class="ai-logs-table" role="table" aria-label="AI 服務紀錄列表">
         <thead>
-          <tr>
-            <th>類型</th>
-            <th>Provider 數量</th>
-            <th>請求者</th>
-            <th>請求時間</th>
-            <th>操作</th>
+          <tr role="row">
+            <th width="40" scope="col"></th>
+            <th scope="col">類型</th>
+            <th scope="col">狀態</th>
+            <th scope="col">Provider</th>
+            <th scope="col">Token</th>
+            <th scope="col">回應時間</th>
+            <th scope="col">請求者</th>
+            <th scope="col">請求時間</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="log in displayedLogs" :key="log.callId">
-            <td>
-              <span class="service-type-badge" :class="getServiceTypeClass(log.serviceType)">
-                {{ getServiceTypeText(log.serviceType) }}
-              </span>
-            </td>
-            <td>{{ getProviderCount(log) }}</td>
-            <td class="email-cell">{{ log.userEmail }}</td>
-            <td>{{ formatTime(log.createdAt) }}</td>
-            <td class="actions">
-              <button
-                class="btn-sm btn-info"
-                @click="viewLogDetail(log)"
-                title="檢視詳情"
-              >
-                <i class="fas fa-eye"></i>
-                檢視
-              </button>
-            </td>
-          </tr>
+          <template v-for="log in displayedLogs" :key="log.callId">
+            <ExpandableTableRow
+              :is-expanded="expandedLogId === log.callId"
+              :expansion-colspan="8"
+              :enable-responsive-rows="true"
+              :actions-colspan="4"
+              @toggle-expansion="handleToggleExpansion(log)"
+            >
+              <!-- 橫屏模式：單行顯示所有欄位 -->
+              <template #main="{ isExpanded }">
+                <td>
+                  <i
+                    class="expand-icon fas"
+                    :class="isExpanded ? 'fa-down-left-and-up-right-to-center' : 'fa-up-right-and-down-left-from-center'"
+                  ></i>
+                </td>
+                <td>
+                  <el-tag size="small" :class="getServiceTypeClass(log.serviceType)">
+                    {{ getServiceTypeText(log.serviceType) }}
+                  </el-tag>
+                </td>
+                <td>
+                  <el-tooltip :content="getStatusText(log.status)" placement="top">
+                    <i
+                      class="status-icon"
+                      :class="getStatusIcon(log.status)"
+                      :style="{ color: getStatusColor(log.status) }"
+                    ></i>
+                  </el-tooltip>
+                </td>
+                <td>
+                  <span class="provider-count">{{ getProviderCount(log) }}</span>
+                </td>
+                <td>{{ formatTokens(log.totalTokens) }}</td>
+                <td>{{ formatDuration(log.responseTimeMs) }}</td>
+                <td class="email-cell">{{ log.userEmail }}</td>
+                <td>{{ formatTime(log.createdAt) }}</td>
+              </template>
+
+              <!-- 豎屏模式：資訊行 -->
+              <template #info="{ isExpanded }">
+                <td>
+                  <i
+                    class="expand-icon fas"
+                    :class="isExpanded ? 'fa-down-left-and-up-right-to-center' : 'fa-up-right-and-down-left-from-center'"
+                  ></i>
+                </td>
+                <td colspan="3">
+                  <div class="info-row-content">
+                    <el-tag size="small" :class="getServiceTypeClass(log.serviceType)">
+                      {{ getServiceTypeText(log.serviceType) }}
+                    </el-tag>
+                    <el-tooltip :content="getStatusText(log.status)" placement="top">
+                      <i
+                        class="status-icon"
+                        :class="getStatusIcon(log.status)"
+                        :style="{ color: getStatusColor(log.status) }"
+                      ></i>
+                    </el-tooltip>
+                    <span class="stat-item">
+                      <i class="fas fa-server"></i> {{ getProviderCount(log) }}
+                    </span>
+                    <span class="stat-item">
+                      <i class="fas fa-coins"></i> {{ formatTokens(log.totalTokens) }}
+                    </span>
+                    <span class="stat-item">
+                      <i class="fas fa-clock"></i> {{ formatDuration(log.responseTimeMs) }}
+                    </span>
+                  </div>
+                </td>
+              </template>
+
+              <!-- 豎屏模式：操作行 -->
+              <template #actions>
+                <span class="email-text">{{ log.userEmail }}</span>
+                <span class="time-text">{{ formatTime(log.createdAt) }}</span>
+              </template>
+
+              <!-- 展開區域：詳細資訊 -->
+              <template #default>
+                <div class="ai-log-expanded-detail" v-loading="loadingDetail && expandedLogId === log.callId">
+                  <template v-if="expandedLogDetails.log">
+                    <!-- Basic Info -->
+                    <div class="detail-section">
+                      <h4><i class="fas fa-info-circle"></i> 基本資訊</h4>
+                      <div class="detail-grid">
+                        <div class="detail-item">
+                          <label>呼叫 ID</label>
+                          <div class="detail-value monospace">{{ expandedLogDetails.log.callId }}</div>
+                        </div>
+                        <div class="detail-item">
+                          <label>Provider</label>
+                          <div class="detail-value">{{ expandedLogDetails.log.providerName }}</div>
+                        </div>
+                        <div class="detail-item">
+                          <label>模型</label>
+                          <div class="detail-value">{{ expandedLogDetails.log.model }}</div>
+                        </div>
+                        <div class="detail-item">
+                          <label>服務類型</label>
+                          <div class="detail-value">
+                            <el-tag size="small" :class="getServiceTypeClass(expandedLogDetails.log.serviceType)">
+                              {{ getServiceTypeText(expandedLogDetails.log.serviceType) }}
+                            </el-tag>
+                          </div>
+                        </div>
+                        <div class="detail-item">
+                          <label>排名類型</label>
+                          <div class="detail-value">
+                            {{ expandedLogDetails.log.rankingType === 'submission' ? '作品排名' : expandedLogDetails.log.rankingType === 'comment' ? '評論排名' : '-' }}
+                          </div>
+                        </div>
+                        <div class="detail-item">
+                          <label>請求者</label>
+                          <div class="detail-value">{{ expandedLogDetails.log.userEmail }}</div>
+                        </div>
+                        <div class="detail-item">
+                          <label>專案 ID</label>
+                          <div class="detail-value monospace">{{ expandedLogDetails.log.projectId }}</div>
+                        </div>
+                        <div class="detail-item">
+                          <label>階段 ID</label>
+                          <div class="detail-value monospace">{{ expandedLogDetails.log.stageId || '-' }}</div>
+                        </div>
+                        <div class="detail-item">
+                          <label>處理項目數</label>
+                          <div class="detail-value">{{ expandedLogDetails.log.itemCount || '-' }}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Performance & Cost -->
+                    <div class="detail-section">
+                      <h4><i class="fas fa-chart-line"></i> 效能與成本</h4>
+                      <div class="detail-grid">
+                        <div class="detail-item">
+                          <label>狀態</label>
+                          <div class="detail-value">
+                            <i
+                              :class="getStatusIcon(expandedLogDetails.log.status)"
+                              :style="{ color: getStatusColor(expandedLogDetails.log.status) }"
+                            ></i>
+                            {{ getStatusText(expandedLogDetails.log.status) }}
+                          </div>
+                        </div>
+                        <div class="detail-item">
+                          <label>請求 Token</label>
+                          <div class="detail-value">{{ formatTokens(expandedLogDetails.log.requestTokens) }}</div>
+                        </div>
+                        <div class="detail-item">
+                          <label>回應 Token</label>
+                          <div class="detail-value">{{ formatTokens(expandedLogDetails.log.responseTokens) }}</div>
+                        </div>
+                        <div class="detail-item">
+                          <label>總 Token</label>
+                          <div class="detail-value token-highlight">{{ formatTokens(expandedLogDetails.log.totalTokens) }}</div>
+                        </div>
+                        <div class="detail-item">
+                          <label>回應時間</label>
+                          <div class="detail-value">{{ formatDuration(expandedLogDetails.log.responseTimeMs) }}</div>
+                        </div>
+                        <div class="detail-item">
+                          <label>建立時間</label>
+                          <div class="detail-value">{{ formatTime(expandedLogDetails.log.createdAt) }}</div>
+                        </div>
+                        <div class="detail-item">
+                          <label>完成時間</label>
+                          <div class="detail-value">{{ formatTime(expandedLogDetails.log.completedAt) }}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Custom Prompt -->
+                    <div class="detail-section" v-if="expandedLogDetails.log.customPrompt">
+                      <h4><i class="fas fa-comment-alt"></i> 自訂 Prompt</h4>
+                      <div class="content-display">
+                        {{ expandedLogDetails.log.customPrompt }}
+                      </div>
+                    </div>
+
+                    <!-- Result Section -->
+                    <div class="detail-section" v-if="expandedLogDetails.log.result">
+                      <h4><i class="fas fa-list-ol"></i> 排名結果</h4>
+                      <div class="content-display">
+                        <pre>{{ formatJSON(expandedLogDetails.log.result) }}</pre>
+                      </div>
+                    </div>
+
+                    <!-- AI Reason -->
+                    <div class="detail-section" v-if="expandedLogDetails.log.reason">
+                      <h4><i class="fas fa-lightbulb"></i> AI 解釋</h4>
+                      <div class="content-display">
+                        {{ expandedLogDetails.log.reason }}
+                      </div>
+                    </div>
+
+                    <!-- Thinking Process -->
+                    <div class="detail-section" v-if="expandedLogDetails.log.thinkingProcess">
+                      <h4>
+                        <i class="fas fa-brain"></i> 思考過程
+                        <el-tag size="small" type="info" style="margin-left: 10px;">DeepSeek Reasoning</el-tag>
+                      </h4>
+                      <el-collapse>
+                        <el-collapse-item title="展開思考過程" name="thinking">
+                          <div class="content-display thinking-content">
+                            {{ expandedLogDetails.log.thinkingProcess }}
+                          </div>
+                        </el-collapse-item>
+                      </el-collapse>
+                    </div>
+
+                    <!-- BT Mode Section -->
+                    <div class="detail-section" v-if="expandedLogDetails.log.serviceType === 'ranking_bt' && expandedLogDetails.log.btComparisons">
+                      <h4><i class="fas fa-balance-scale"></i> BT 配對比較</h4>
+                      <div class="bt-comparisons">
+                        <div
+                          v-for="(comparison, index) in parseBTComparisons(expandedLogDetails.log.btComparisons)"
+                          :key="index"
+                          class="bt-comparison-item"
+                        >
+                          <span class="comparison-index">#{{ index + 1 }}</span>
+                          <span class="comparison-items">{{ comparison.itemA }} vs {{ comparison.itemB }}</span>
+                          <span class="comparison-winner">勝者: {{ comparison.winner }}</span>
+                          <span class="comparison-reason" v-if="comparison.reason">{{ comparison.reason }}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- BT Strength Params -->
+                    <div class="detail-section" v-if="expandedLogDetails.log.serviceType === 'ranking_bt' && expandedLogDetails.log.btStrengthParams">
+                      <h4><i class="fas fa-chart-bar"></i> BT 能力值</h4>
+                      <div class="content-display">
+                        <pre>{{ formatJSON(expandedLogDetails.log.btStrengthParams) }}</pre>
+                      </div>
+                    </div>
+
+                    <!-- Multi-Agent Section -->
+                    <div class="detail-section" v-if="expandedLogDetails.log.serviceType === 'ranking_multi_agent'">
+                      <h4><i class="fas fa-users"></i> Multi-Agent 辯論詳情</h4>
+                      <div class="detail-grid">
+                        <div class="detail-item">
+                          <label>辯論輪次</label>
+                          <div class="detail-value">{{ expandedLogDetails.log.debateRound || '-' }}</div>
+                        </div>
+                        <div class="detail-item">
+                          <label>立場變化</label>
+                          <div class="detail-value">
+                            <el-tag :type="expandedLogDetails.log.debateChanged ? 'warning' : 'success'" size="small">
+                              {{ expandedLogDetails.log.debateChanged ? '已變更' : '堅持原立場' }}
+                            </el-tag>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="detail-item" v-if="expandedLogDetails.log.debateCritique" style="margin-top: 15px;">
+                        <label>辯論評論</label>
+                        <div class="content-display">{{ expandedLogDetails.log.debateCritique }}</div>
+                      </div>
+                    </div>
+
+                    <!-- Child Calls -->
+                    <div class="detail-section" v-if="expandedLogDetails.childCalls && expandedLogDetails.childCalls.length > 0">
+                      <h4><i class="fas fa-sitemap"></i> 子請求 ({{ expandedLogDetails.childCalls.length }})</h4>
+                      <div class="child-calls-list">
+                        <div
+                          v-for="child in expandedLogDetails.childCalls"
+                          :key="child.callId"
+                          class="child-call-item"
+                          @click="expandChildLog(child)"
+                        >
+                          <span class="child-provider">{{ child.providerName }}</span>
+                          <span class="child-round" v-if="child.debateRound">Round {{ child.debateRound }}</span>
+                          <span class="child-status" :style="{ color: getStatusColor(child.status) }">
+                            {{ getStatusText(child.status) }}
+                          </span>
+                          <span class="child-tokens">{{ formatTokens(child.totalTokens) }}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Parent Call -->
+                    <div class="detail-section" v-if="expandedLogDetails.parentCall">
+                      <h4><i class="fas fa-level-up-alt"></i> 父請求</h4>
+                      <div class="parent-call-info" @click="expandChildLog(expandedLogDetails.parentCall!)">
+                        <span class="parent-id">{{ expandedLogDetails.parentCall.callId }}</span>
+                        <span class="parent-status" :style="{ color: getStatusColor(expandedLogDetails.parentCall.status) }">
+                          {{ getStatusText(expandedLogDetails.parentCall.status) }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <!-- Error Info -->
+                    <div class="detail-section" v-if="expandedLogDetails.log.status === 'failed' || expandedLogDetails.log.status === 'timeout'">
+                      <h4><i class="fas fa-exclamation-triangle"></i> 錯誤資訊</h4>
+                      <div class="content-display error-message">
+                        {{ expandedLogDetails.log.errorMessage || '未記錄錯誤訊息' }}
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </ExpandableTableRow>
+          </template>
         </tbody>
       </table>
 
@@ -153,242 +479,6 @@
         顯示 {{ displayedLogs.length }} / {{ filteredLogs.length }} 筆 AI 紀錄
       </div>
     </div>
-
-    <!-- AI Service Log Detail Drawer -->
-    <el-drawer
-      v-model="showDetailDrawer"
-      title="AI 服務詳情"
-      direction="btt"
-      size="100%"
-      :before-close="handleDetailDrawerClose"
-      :lock-scroll="false"
-      :append-to-body="true"
-      class="drawer-green"
-    >
-      <div v-if="selectedLog" class="ai-detail">
-        <!-- Basic Info -->
-        <div class="detail-section">
-          <h4><i class="fas fa-info-circle"></i> 基本資訊</h4>
-          <div class="detail-grid">
-            <div class="detail-item">
-              <label>呼叫 ID</label>
-              <div class="detail-value monospace">{{ selectedLog.callId }}</div>
-            </div>
-            <div class="detail-item">
-              <label>Provider</label>
-              <div class="detail-value">{{ selectedLog.providerName }}</div>
-            </div>
-            <div class="detail-item">
-              <label>模型</label>
-              <div class="detail-value">{{ selectedLog.model }}</div>
-            </div>
-            <div class="detail-item">
-              <label>服務類型</label>
-              <div class="detail-value">
-                <span class="service-type-badge" :class="getServiceTypeClass(selectedLog.serviceType)">
-                  {{ getServiceTypeText(selectedLog.serviceType) }}
-                </span>
-              </div>
-            </div>
-            <div class="detail-item">
-              <label>排名類型</label>
-              <div class="detail-value">
-                {{ selectedLog.rankingType === 'submission' ? '作品排名' : selectedLog.rankingType === 'comment' ? '評論排名' : '-' }}
-              </div>
-            </div>
-            <div class="detail-item">
-              <label>請求者</label>
-              <div class="detail-value">{{ selectedLog.userEmail }}</div>
-            </div>
-            <div class="detail-item">
-              <label>專案 ID</label>
-              <div class="detail-value monospace">{{ selectedLog.projectId }}</div>
-            </div>
-            <div class="detail-item">
-              <label>階段 ID</label>
-              <div class="detail-value monospace">{{ selectedLog.stageId || '-' }}</div>
-            </div>
-            <div class="detail-item">
-              <label>處理項目數</label>
-              <div class="detail-value">{{ selectedLog.itemCount || '-' }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Custom Prompt (if exists) -->
-        <div class="detail-section" v-if="selectedLog.customPrompt">
-          <h4><i class="fas fa-comment-alt"></i> 自訂 Prompt</h4>
-          <div class="content-display">
-            {{ selectedLog.customPrompt }}
-          </div>
-        </div>
-
-        <!-- Result Section -->
-        <div class="detail-section" v-if="selectedLog.result">
-          <h4><i class="fas fa-list-ol"></i> 排名結果</h4>
-          <div class="content-display">
-            <pre>{{ formatJSON(selectedLog.result) }}</pre>
-          </div>
-        </div>
-
-        <!-- AI Reason -->
-        <div class="detail-section" v-if="selectedLog.reason">
-          <h4><i class="fas fa-lightbulb"></i> AI 解釋</h4>
-          <div class="content-display">
-            {{ selectedLog.reason }}
-          </div>
-        </div>
-
-        <!-- Thinking Process (DeepSeek reasoning) -->
-        <div class="detail-section" v-if="selectedLog.thinkingProcess">
-          <h4>
-            <i class="fas fa-brain"></i> 思考過程
-            <el-tag size="small" type="info" style="margin-left: 10px;">DeepSeek Reasoning</el-tag>
-          </h4>
-          <el-collapse>
-            <el-collapse-item title="展開思考過程" name="thinking">
-              <div class="content-display thinking-content">
-                {{ selectedLog.thinkingProcess }}
-              </div>
-            </el-collapse-item>
-          </el-collapse>
-        </div>
-
-        <!-- BT Mode Section -->
-        <div class="detail-section" v-if="selectedLog.serviceType === 'ranking_bt' && selectedLog.btComparisons">
-          <h4><i class="fas fa-balance-scale"></i> BT 配對比較</h4>
-          <div class="bt-comparisons">
-            <div
-              v-for="(comparison, index) in parseBTComparisons(selectedLog.btComparisons)"
-              :key="index"
-              class="bt-comparison-item"
-            >
-              <span class="comparison-index">#{{ index + 1 }}</span>
-              <span class="comparison-items">
-                {{ comparison.itemA }} vs {{ comparison.itemB }}
-              </span>
-              <span class="comparison-winner">
-                勝者: {{ comparison.winner }}
-              </span>
-              <span class="comparison-reason" v-if="comparison.reason">
-                {{ comparison.reason }}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <!-- BT Strength Params -->
-        <div class="detail-section" v-if="selectedLog.serviceType === 'ranking_bt' && selectedLog.btStrengthParams">
-          <h4><i class="fas fa-chart-bar"></i> BT 能力值</h4>
-          <div class="content-display">
-            <pre>{{ formatJSON(selectedLog.btStrengthParams) }}</pre>
-          </div>
-        </div>
-
-        <!-- Multi-Agent Section -->
-        <div class="detail-section" v-if="selectedLog.serviceType === 'ranking_multi_agent'">
-          <h4><i class="fas fa-users"></i> Multi-Agent 辯論詳情</h4>
-          <div class="detail-grid">
-            <div class="detail-item">
-              <label>辯論輪次</label>
-              <div class="detail-value">{{ selectedLog.debateRound || '-' }}</div>
-            </div>
-            <div class="detail-item">
-              <label>立場變化</label>
-              <div class="detail-value">
-                <el-tag :type="selectedLog.debateChanged ? 'warning' : 'success'" size="small">
-                  {{ selectedLog.debateChanged ? '已變更' : '堅持原立場' }}
-                </el-tag>
-              </div>
-            </div>
-          </div>
-          <div class="detail-item" v-if="selectedLog.debateCritique" style="margin-top: 15px;">
-            <label>辯論評論</label>
-            <div class="content-display">{{ selectedLog.debateCritique }}</div>
-          </div>
-        </div>
-
-        <!-- Child Calls (for Multi-Agent parent) -->
-        <div class="detail-section" v-if="childCalls && childCalls.length > 0">
-          <h4><i class="fas fa-sitemap"></i> 子請求 ({{ childCalls.length }})</h4>
-          <div class="child-calls-list">
-            <div
-              v-for="child in childCalls"
-              :key="child.callId"
-              class="child-call-item"
-              @click="viewLogDetail(child)"
-            >
-              <span class="child-provider">{{ child.providerName }}</span>
-              <span class="child-round" v-if="child.debateRound">Round {{ child.debateRound }}</span>
-              <span class="child-status" :style="{ color: getStatusColor(child.status) }">
-                {{ getStatusText(child.status) }}
-              </span>
-              <span class="child-tokens">{{ formatTokens(child.totalTokens) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Parent Call (for Multi-Agent child) -->
-        <div class="detail-section" v-if="parentCall">
-          <h4><i class="fas fa-level-up-alt"></i> 父請求</h4>
-          <div class="parent-call-info" @click="viewLogDetail(parentCall)">
-            <span class="parent-id">{{ parentCall.callId }}</span>
-            <span class="parent-status" :style="{ color: getStatusColor(parentCall.status) }">
-              {{ getStatusText(parentCall.status) }}
-            </span>
-          </div>
-        </div>
-
-        <!-- Performance & Cost -->
-        <div class="detail-section">
-          <h4><i class="fas fa-chart-line"></i> 效能與成本</h4>
-          <div class="detail-grid">
-            <div class="detail-item">
-              <label>狀態</label>
-              <div class="detail-value">
-                <i
-                  :class="getStatusIcon(selectedLog.status)"
-                  :style="{ color: getStatusColor(selectedLog.status) }"
-                ></i>
-                {{ getStatusText(selectedLog.status) }}
-              </div>
-            </div>
-            <div class="detail-item">
-              <label>請求 Token</label>
-              <div class="detail-value">{{ formatTokens(selectedLog.requestTokens) }}</div>
-            </div>
-            <div class="detail-item">
-              <label>回應 Token</label>
-              <div class="detail-value">{{ formatTokens(selectedLog.responseTokens) }}</div>
-            </div>
-            <div class="detail-item">
-              <label>總 Token</label>
-              <div class="detail-value token-highlight">{{ formatTokens(selectedLog.totalTokens) }}</div>
-            </div>
-            <div class="detail-item">
-              <label>回應時間</label>
-              <div class="detail-value">{{ formatDuration(selectedLog.responseTimeMs) }}</div>
-            </div>
-            <div class="detail-item">
-              <label>建立時間</label>
-              <div class="detail-value">{{ formatTime(selectedLog.createdAt) }}</div>
-            </div>
-            <div class="detail-item">
-              <label>完成時間</label>
-              <div class="detail-value">{{ formatTime(selectedLog.completedAt) }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Error Info (if failed) -->
-        <div class="detail-section" v-if="selectedLog.status === 'failed' || selectedLog.status === 'timeout'">
-          <h4><i class="fas fa-exclamation-triangle"></i> 錯誤資訊</h4>
-          <div class="content-display error-message">
-            {{ selectedLog.errorMessage || '未記錄錯誤訊息' }}
-          </div>
-        </div>
-      </div>
-    </el-drawer>
   </div>
 </template>
 
@@ -398,6 +488,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'
 import EmptyState from '@/components/shared/EmptyState.vue'
+import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import type {
@@ -422,11 +513,13 @@ const logs = ref<(AIServiceLog & { selected?: boolean })[]>([])
 const statistics = ref<AIServiceStatisticsResponse | null>(null)
 const loading = ref<boolean>(false)
 
-// Detail drawer state
-const showDetailDrawer = ref<boolean>(false)
-const selectedLog = ref<AIServiceLog | null>(null)
-const childCalls = ref<AIServiceLog[]>([])
-const parentCall = ref<AIServiceLog | null>(null)
+// Expanded row state
+const expandedLogId = ref<string | null>(null)
+const expandedLogDetails = ref<{
+  log: AIServiceLog | null
+  childCalls: AIServiceLog[]
+  parentCall: AIServiceLog | null
+}>({ log: null, childCalls: [], parentCall: null })
 const loadingDetail = ref<boolean>(false)
 
 // Filters (persisted to localStorage)
@@ -599,50 +692,71 @@ const loadMore = (): void => {
   }, 300)
 }
 
-const viewLogDetail = async (log: AIServiceLog): Promise<void> => {
-  selectedLog.value = log
-  childCalls.value = []
-  parentCall.value = null
-  showDetailDrawer.value = true
-
-  // Load detailed info including child/parent calls
-  loadingDetail.value = true
-  try {
-    const response = await adminApi.aiServiceLogs.detail(log.callId)
-    if (response.success && response.data) {
-      selectedLog.value = response.data.log
-      childCalls.value = response.data.childCalls || []
-      parentCall.value = response.data.parentCall || null
+const handleToggleExpansion = async (log: AIServiceLog): Promise<void> => {
+  if (expandedLogId.value === log.callId) {
+    // Collapse
+    expandedLogId.value = null
+    expandedLogDetails.value = { log: null, childCalls: [], parentCall: null }
+    if (route.name === 'admin-ai-service-logs-detail') {
+      router.push({ name: 'admin-ai-service-logs' })
     }
-  } catch (error) {
-    console.error('Error loading log detail:', error)
-  } finally {
-    loadingDetail.value = false
-  }
+  } else {
+    // Expand and load details
+    expandedLogId.value = log.callId
+    expandedLogDetails.value = { log, childCalls: [], parentCall: null }
+    loadingDetail.value = true
 
-  // Update URL
-  if (route.params.callId !== log.callId) {
-    router.replace({
-      name: 'admin-ai-service-logs-detail',
-      params: { callId: log.callId }
-    })
+    try {
+      const response = await adminApi.aiServiceLogs.detail(log.callId)
+      if (response.success && response.data) {
+        expandedLogDetails.value = {
+          log: response.data.log,
+          childCalls: response.data.childCalls || [],
+          parentCall: response.data.parentCall || null
+        }
+      }
+    } catch (error) {
+      console.error('Error loading log detail:', error)
+    } finally {
+      loadingDetail.value = false
+    }
+
+    // Update URL
+    if (route.params.callId !== log.callId) {
+      router.replace({
+        name: 'admin-ai-service-logs-detail',
+        params: { callId: log.callId }
+      })
+    }
   }
 }
 
-const closeDetailDrawer = (): void => {
-  showDetailDrawer.value = false
-  selectedLog.value = null
-  childCalls.value = []
-  parentCall.value = null
+const expandChildLog = async (child: AIServiceLog): Promise<void> => {
+  // Find the child in the main logs list and expand it
+  const childInList = logs.value.find(l => l.callId === child.callId)
+  if (childInList) {
+    await handleToggleExpansion(childInList)
+  } else {
+    // If not in main list, still try to expand it
+    expandedLogId.value = child.callId
+    expandedLogDetails.value = { log: child, childCalls: [], parentCall: null }
+    loadingDetail.value = true
 
-  if (route.name === 'admin-ai-service-logs-detail') {
-    router.push({ name: 'admin-ai-service-logs' })
+    try {
+      const response = await adminApi.aiServiceLogs.detail(child.callId)
+      if (response.success && response.data) {
+        expandedLogDetails.value = {
+          log: response.data.log,
+          childCalls: response.data.childCalls || [],
+          parentCall: response.data.parentCall || null
+        }
+      }
+    } catch (error) {
+      console.error('Error loading child log detail:', error)
+    } finally {
+      loadingDetail.value = false
+    }
   }
-}
-
-const handleDetailDrawerClose = (done: () => void): void => {
-  done()
-  closeDetailDrawer()
 }
 
 // ================== Formatters ==================
@@ -682,6 +796,21 @@ const parseBTComparisons = (jsonString: string | undefined): Array<{ itemA: stri
   } catch {
     return []
   }
+}
+
+// ================== Statistics Helpers ==================
+
+const getSuccessCount = (): number => {
+  if (!statistics.value?.byStatus) return 0
+  const successItem = statistics.value.byStatus.find(s => s.status === 'success')
+  return successItem?.count || 0
+}
+
+const getFailedCount = (): number => {
+  if (!statistics.value?.byStatus) return 0
+  const failedItem = statistics.value.byStatus.find(s => s.status === 'failed')
+  const timeoutItem = statistics.value.byStatus.find(s => s.status === 'timeout')
+  return (failedItem?.count || 0) + (timeoutItem?.count || 0)
 }
 
 // ================== UI Helpers ==================
@@ -757,12 +886,12 @@ const getStatusColor = (status: AIServiceStatus): string => {
 onMounted(async () => {
   await Promise.all([loadAIServiceLogs(), loadStatistics()])
 
-  // Auto-open detail if callId parameter exists in URL
+  // Auto-expand detail if callId parameter exists in URL
   if (route.params.callId && typeof route.params.callId === 'string') {
     await nextTick()
     const targetLog = logs.value.find(log => log.callId === route.params.callId)
     if (targetLog) {
-      viewLogDetail(targetLog)
+      handleToggleExpansion(targetLog)
     } else {
       ElMessage.warning('未找到指定的 AI 紀錄')
       router.push({ name: 'admin-ai-service-logs' })
@@ -783,6 +912,27 @@ onBeforeUnmount(() => {
   padding: 20px;
   background: #f5f7fa;
   min-height: 100%;
+}
+
+/* Statistics Card */
+.stats-card {
+  margin-bottom: 20px;
+  border-radius: 8px;
+}
+
+.stats-card :deep(.el-statistic__head) {
+  font-size: 13px;
+  color: #909399;
+}
+
+.stats-card :deep(.el-statistic__content) {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.stats-card :deep(.el-statistic__prefix) {
+  margin-right: 6px;
+  font-size: 16px;
 }
 
 /* Table Container */
@@ -828,48 +978,94 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
 }
 
-/* Service type badges */
-.service-type-badge {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
+/* Service type tags - using el-tag with custom colors */
+:deep(.el-tag.type-direct) {
+  background: #E6F7FF !important;
+  color: #1890FF !important;
+  border-color: #91D5FF !important;
+}
+
+:deep(.el-tag.type-bt) {
+  background: #F6FFED !important;
+  color: #52C41A !important;
+  border-color: #B7EB8F !important;
+}
+
+:deep(.el-tag.type-multi-agent) {
+  background: #FFF7E6 !important;
+  color: #FA8C16 !important;
+  border-color: #FFD591 !important;
+}
+
+:deep(.el-tag.type-summary) {
+  background: #F9F0FF !important;
+  color: #722ED1 !important;
+  border-color: #D3ADF7 !important;
+}
+
+:deep(.el-tag.type-translation) {
+  background: #E6FFFB !important;
+  color: #13C2C2 !important;
+  border-color: #87E8DE !important;
+}
+
+:deep(.el-tag.type-feedback) {
+  background: #FFF0F6 !important;
+  color: #EB2F96 !important;
+  border-color: #FFADD2 !important;
+}
+
+:deep(.el-tag.type-default) {
+  background: #F0F2F5 !important;
+  color: #8C8C8C !important;
+  border-color: #D9D9D9 !important;
+}
+
+/* Status icon */
+.status-icon {
+  font-size: 16px;
+  cursor: help;
+}
+
+/* Provider count */
+.provider-count {
   font-weight: 500;
+  color: #2c3e50;
 }
 
-.type-direct {
-  background: #E6F7FF;
-  color: #1890FF;
+/* Stat items in vertical mode */
+.stat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #606266;
 }
 
-.type-bt {
-  background: #F0F9FF;
-  color: #52C41A;
+.stat-item i {
+  font-size: 11px;
+  color: #909399;
 }
 
-.type-multi-agent {
-  background: #FFF7E6;
-  color: #FA8C16;
+/* Info row content (vertical mode) */
+.info-row-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
 }
 
-.type-summary {
-  background: #F9F0FF;
-  color: #722ED1;
+/* Email and time text in actions row */
+.email-text {
+  font-weight: 500;
+  color: #2c3e50;
 }
 
-.type-translation {
-  background: #E6FFFB;
-  color: #13C2C2;
-}
-
-.type-feedback {
-  background: #FFF0F6;
-  color: #EB2F96;
-}
-
-.type-default {
-  background: #F0F2F5;
-  color: #8C8C8C;
+.time-text {
+  font-size: 12px;
+  color: #909399;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 /* Actions */
@@ -878,28 +1074,6 @@ onBeforeUnmount(() => {
   gap: 8px;
   align-items: center;
   white-space: nowrap;
-}
-
-/* Buttons */
-.btn-sm {
-  padding: 5px 10px;
-  font-size: 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.3s;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.btn-info {
-  background: #17a2b8;
-  color: white;
-}
-
-.btn-info:hover:not(:disabled) {
-  background: #138496;
 }
 
 /* Loading & Count */
@@ -923,27 +1097,31 @@ onBeforeUnmount(() => {
   border-top: 1px solid #eee;
 }
 
-/* Detail Drawer */
-.ai-detail {
-  padding: 20px;
+/* AI Log Expanded Detail */
+.ai-log-expanded-detail {
+  padding: 0;
 }
 
 .detail-section {
-  margin-bottom: 30px;
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+  background: #fafafa;
+  border-radius: 6px;
+  padding: 16px;
+  border: 1px solid #e9ecef;
+}
+
+.detail-section:last-child {
+  margin-bottom: 0;
 }
 
 .detail-section h4 {
-  margin: 0 0 20px 0;
-  color: #2c3e50;
-  font-size: 16px;
+  margin: 0 0 16px 0;
+  color: #374151;
+  font-size: 15px;
   font-weight: 600;
   display: flex;
   align-items: center;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #e5e7eb;
   padding-bottom: 10px;
 }
 
@@ -1141,32 +1319,5 @@ onBeforeUnmount(() => {
 
 .table-container::-webkit-scrollbar-thumb:hover {
   background: #555;
-}
-
-/* Drawer styles */
-:deep(.el-drawer.drawer-green) {
-  position: fixed !important;
-}
-
-:deep(.el-drawer__header) {
-  background: #2c3e50 !important;
-  color: white !important;
-  padding: 20px 30px !important;
-  margin-bottom: 0 !important;
-  border-bottom: 1px solid #34495e !important;
-}
-
-:deep(.el-drawer__title) {
-  color: white !important;
-  font-size: 18px !important;
-  font-weight: 600 !important;
-}
-
-:deep(.el-drawer__close-btn) {
-  color: white !important;
-}
-
-:deep(.el-drawer__close-btn:hover) {
-  color: #ecf0f1 !important;
 }
 </style>

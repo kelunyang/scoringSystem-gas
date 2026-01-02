@@ -108,6 +108,32 @@
       </template>
     </AdminFilterToolbar>
 
+    <!-- Statistics Card -->
+    <el-card class="stats-card" shadow="hover">
+      <div class="stats-grid">
+        <el-statistic title="總郵件數" :value="stats.totalEmails">
+          <template #prefix>
+            <i class="fas fa-envelope"></i>
+          </template>
+        </el-statistic>
+        <el-statistic title="成功率" :value="stats.successRate" :precision="1" suffix="%">
+          <template #prefix>
+            <i class="fas fa-chart-line"></i>
+          </template>
+        </el-statistic>
+        <el-statistic title="失敗數" :value="stats.failedEmails">
+          <template #prefix>
+            <i class="fas fa-times-circle"></i>
+          </template>
+        </el-statistic>
+        <el-statistic title="24小時內" :value="stats.last24Hours">
+          <template #prefix>
+            <i class="fas fa-clock"></i>
+          </template>
+        </el-statistic>
+      </div>
+    </el-card>
+
     <!-- Email Logs Table -->
     <div
       class="table-container"
@@ -120,6 +146,7 @@
       <table class="email-logs-table">
         <thead>
           <tr>
+            <th width="40"></th>
             <th width="50">
               <el-checkbox
                 v-model="selectAll"
@@ -128,69 +155,273 @@
               />
             </th>
             <th>收件人</th>
-            <th>主旨</th>
             <th>觸發來源</th>
-            <th>狀態</th>
+            <th width="60">狀態</th>
             <th>發送時間</th>
-            <th>耗時</th>
-            <th>操作</th>
+            <th width="100">操作</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="log in displayedLogs" :key="log.logId">
-            <td>
-              <el-checkbox
-                v-model="log.selected"
-                @change="handleSelectionChange"
-              />
-            </td>
-            <td>{{ log.recipient }}</td>
-            <td class="subject-cell">{{ log.subject }}</td>
-            <td>
-              <span class="trigger-badge" :class="getTriggerClass(log.trigger)">
-                {{ getTriggerText(log.trigger) }}
-              </span>
-            </td>
-            <td>
-              <div class="status-indicator">
-                <i
-                  :class="log.status === 'sent' ? 'fas fa-check-circle' : 'fas fa-times-circle'"
-                  :style="{ color: log.status === 'sent' ? '#67C23A' : '#F56C6C' }"
-                ></i>
-                <span>{{ log.status === 'sent' ? '成功' : '失敗' }}</span>
-              </div>
-            </td>
-            <td>{{ formatTime(log.timestamp) }}</td>
-            <td>{{ formatDuration(log.durationMs) }}</td>
-            <td class="actions">
-              <button
-                class="btn-sm btn-info"
-                @click="viewLogDetail(log)"
-                title="檢視詳情"
-              >
-                <i class="fas fa-eye"></i>
-                檢視
-              </button>
-              <el-popconfirm
-                :title="`確定要重送郵件給 ${log.recipient} 嗎？`"
-                confirm-button-text="確定"
-                cancel-button-text="取消"
-                @confirm="resendSingleEmail(log)"
-                :disabled="resending"
-              >
-                <template #reference>
-                  <button
-                    class="btn-sm btn-primary"
-                    :disabled="resending"
-                    title="重送郵件"
-                  >
-                    <i class="fas fa-redo"></i>
-                    重送
-                  </button>
-                </template>
-              </el-popconfirm>
-            </td>
-          </tr>
+          <template v-for="log in displayedLogs" :key="log.logId">
+            <ExpandableTableRow
+              :is-expanded="expandedLogId === log.logId"
+              :is-selected="log.selected"
+              :expansion-colspan="7"
+              :enable-responsive-rows="true"
+              :actions-colspan="7"
+              @toggle-expansion="handleToggleExpansion(log)"
+            >
+              <!-- 橫屏：完整單行 -->
+              <template #main="{ isExpanded }">
+                <td class="expand-cell" @click.stop>
+                  <i :class="['fas', isExpanded ? 'fa-chevron-down' : 'fa-chevron-right', 'expand-icon']"></i>
+                </td>
+                <td @click.stop>
+                  <el-checkbox
+                    v-model="log.selected"
+                    @change="handleSelectionChange"
+                  />
+                </td>
+                <td>{{ log.recipient }}</td>
+                <td>
+                  <el-tag :type="getTriggerTagType(log.trigger)" size="small">
+                    {{ getTriggerText(log.trigger) }}
+                  </el-tag>
+                </td>
+                <td class="status-cell">
+                  <el-tooltip :content="log.status === 'sent' ? '發送成功' : '發送失敗'" placement="top">
+                    <i
+                      :class="log.status === 'sent' ? 'fas fa-check-circle' : 'fas fa-times-circle'"
+                      class="status-icon"
+                      :style="{ color: log.status === 'sent' ? '#67C23A' : '#F56C6C' }"
+                    ></i>
+                  </el-tooltip>
+                </td>
+                <td>{{ formatTime(log.timestamp) }}</td>
+                <td class="actions" @click.stop>
+                  <el-tooltip content="重送郵件" placement="top">
+                    <el-popconfirm
+                      :title="`確定要重送郵件給 ${log.recipient} 嗎？`"
+                      confirm-button-text="確定"
+                      cancel-button-text="取消"
+                      @confirm="resendSingleEmail(log)"
+                      :disabled="resending"
+                    >
+                      <template #reference>
+                        <el-button
+                          type="primary"
+                          size="small"
+                          :disabled="resending"
+                          circle
+                        >
+                          <i class="fas fa-redo"></i>
+                        </el-button>
+                      </template>
+                    </el-popconfirm>
+                  </el-tooltip>
+                </td>
+              </template>
+
+              <!-- 豎屏：資訊行 -->
+              <template #info="{ isExpanded }">
+                <td class="expand-cell" @click.stop>
+                  <i :class="['fas', isExpanded ? 'fa-chevron-down' : 'fa-chevron-right', 'expand-icon']"></i>
+                </td>
+                <td @click.stop>
+                  <el-checkbox
+                    v-model="log.selected"
+                    @change="handleSelectionChange"
+                  />
+                </td>
+                <td colspan="5">
+                  <div class="info-row-content">
+                    <span class="recipient">{{ log.recipient }}</span>
+                    <div class="stat-items">
+                      <span class="stat-item">
+                        <el-tag :type="getTriggerTagType(log.trigger)" size="small">
+                          {{ getTriggerText(log.trigger) }}
+                        </el-tag>
+                      </span>
+                      <span class="stat-item">
+                        <el-tooltip :content="log.status === 'sent' ? '發送成功' : '發送失敗'" placement="top">
+                          <i
+                            :class="log.status === 'sent' ? 'fas fa-check-circle' : 'fas fa-times-circle'"
+                            class="status-icon"
+                            :style="{ color: log.status === 'sent' ? '#67C23A' : '#F56C6C' }"
+                          ></i>
+                        </el-tooltip>
+                      </span>
+                      <span class="stat-item time">{{ formatTime(log.timestamp) }}</span>
+                    </div>
+                  </div>
+                </td>
+              </template>
+
+              <!-- 豎屏：操作行 -->
+              <template #actions>
+                <el-popconfirm
+                  :title="`確定要重送郵件給 ${log.recipient} 嗎？`"
+                  confirm-button-text="確定"
+                  cancel-button-text="取消"
+                  @confirm="resendSingleEmail(log)"
+                  :disabled="resending"
+                >
+                  <template #reference>
+                    <el-button
+                      type="primary"
+                      size="small"
+                      :disabled="resending"
+                    >
+                      <i class="fas fa-redo"></i>
+                      重送郵件
+                    </el-button>
+                  </template>
+                </el-popconfirm>
+              </template>
+
+              <!-- 展開內容 -->
+              <template #default>
+                <div v-if="expandedLogDetails" class="email-detail">
+                  <!-- Basic Info -->
+                  <div class="detail-section">
+                    <h4><i class="fas fa-info-circle"></i> 基本資訊</h4>
+                    <div class="detail-grid">
+                      <div class="detail-item">
+                        <label>郵件 ID</label>
+                        <div class="detail-value">{{ expandedLogDetails.emailId }}</div>
+                      </div>
+                      <div class="detail-item">
+                        <label>日誌 ID</label>
+                        <div class="detail-value">{{ expandedLogDetails.logId }}</div>
+                      </div>
+                      <div class="detail-item">
+                        <label>收件人</label>
+                        <div class="detail-value">{{ expandedLogDetails.recipient }}</div>
+                      </div>
+                      <div class="detail-item">
+                        <label>收件人 ID</label>
+                        <div class="detail-value">{{ expandedLogDetails.recipientUserId || '-' }}</div>
+                      </div>
+                      <div class="detail-item">
+                        <label>觸發來源</label>
+                        <div class="detail-value">
+                          <el-tag :type="getTriggerTagType(expandedLogDetails.trigger)" size="small">
+                            {{ getTriggerText(expandedLogDetails.trigger) }}
+                          </el-tag>
+                        </div>
+                      </div>
+                      <div class="detail-item">
+                        <label>觸發者</label>
+                        <div class="detail-value">{{ expandedLogDetails.triggeredBy || 'system' }}</div>
+                      </div>
+                      <div class="detail-item">
+                        <label>觸發類型</label>
+                        <div class="detail-value">{{ expandedLogDetails.triggerSource || '-' }}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Email Content -->
+                  <div class="detail-section">
+                    <h4><i class="fas fa-file-alt"></i> 郵件內容</h4>
+                    <div class="detail-item">
+                      <label>主旨</label>
+                      <div class="detail-value">{{ expandedLogDetails.subject }}</div>
+                    </div>
+                    <div class="detail-item" style="margin-top: 15px;">
+                      <label>HTML 內容</label>
+                      <div class="content-display" v-html="sanitizedHtmlBody"></div>
+                    </div>
+                    <div class="detail-item" v-if="expandedLogDetails.textBody" style="margin-top: 15px;">
+                      <label>純文字內容</label>
+                      <div class="content-display">{{ expandedLogDetails.textBody }}</div>
+                    </div>
+                  </div>
+
+                  <!-- Status & Performance -->
+                  <div class="detail-section">
+                    <h4><i class="fas fa-chart-line"></i> 狀態與效能</h4>
+                    <div class="detail-grid">
+                      <div class="detail-item">
+                        <label>狀態</label>
+                        <div class="detail-value">
+                          <i
+                            :class="expandedLogDetails.status === 'sent' ? 'fas fa-check-circle' : 'fas fa-times-circle'"
+                            :style="{ color: expandedLogDetails.status === 'sent' ? '#67C23A' : '#F56C6C' }"
+                          ></i>
+                          {{ expandedLogDetails.status === 'sent' ? '發送成功' : '發送失敗' }}
+                        </div>
+                      </div>
+                      <div class="detail-item" v-if="expandedLogDetails.statusCode">
+                        <label>HTTP 狀態碼</label>
+                        <div class="detail-value">{{ expandedLogDetails.statusCode }}</div>
+                      </div>
+                      <div class="detail-item">
+                        <label>郵件大小</label>
+                        <div class="detail-value">{{ formatSize(expandedLogDetails.emailSize) }}</div>
+                      </div>
+                      <div class="detail-item">
+                        <label>發送耗時</label>
+                        <div class="detail-value">{{ formatDuration(expandedLogDetails.durationMs) }}</div>
+                      </div>
+                      <div class="detail-item">
+                        <label>重試次數</label>
+                        <div class="detail-value">{{ expandedLogDetails.retryCount || 0 }}</div>
+                      </div>
+                      <div class="detail-item">
+                        <label>發送時間</label>
+                        <div class="detail-value">{{ formatTime(expandedLogDetails.timestamp) }}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Error Info (if failed) -->
+                  <div class="detail-section" v-if="expandedLogDetails.status === 'failed'">
+                    <h4><i class="fas fa-exclamation-triangle"></i> 錯誤資訊</h4>
+                    <div class="detail-grid">
+                      <div class="detail-item">
+                        <label>錯誤類型</label>
+                        <div class="detail-value">{{ expandedLogDetails.errorType || '-' }}</div>
+                      </div>
+                      <div class="detail-item" style="grid-column: 1 / -1;">
+                        <label>錯誤訊息</label>
+                        <div class="content-display error-message">{{ expandedLogDetails.error || '-' }}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Email Context -->
+                  <div class="detail-section" v-if="expandedLogDetails.emailContext">
+                    <h4><i class="fas fa-code"></i> 郵件上下文</h4>
+                    <div class="content-display">
+                      <pre>{{ formatJSON(expandedLogDetails.emailContext) }}</pre>
+                    </div>
+                  </div>
+
+                  <!-- Actions -->
+                  <div class="detail-actions">
+                    <el-popconfirm
+                      :title="`確定要重送郵件給 ${expandedLogDetails.recipient} 嗎？`"
+                      confirm-button-text="確定"
+                      cancel-button-text="取消"
+                      @confirm="resendFromExpanded"
+                      :disabled="resending"
+                    >
+                      <template #reference>
+                        <el-button
+                          type="primary"
+                          :disabled="resending"
+                        >
+                          <i class="fas fa-redo"></i>
+                          {{ resending ? '重送中...' : '重送郵件' }}
+                        </el-button>
+                      </template>
+                    </el-popconfirm>
+                  </div>
+                </div>
+              </template>
+            </ExpandableTableRow>
+          </template>
         </tbody>
       </table>
 
@@ -234,148 +465,6 @@
       </div>
     </el-dialog>
 
-    <!-- Email Log Detail Drawer -->
-    <el-drawer
-      v-model="showDetailDrawer"
-      title="郵件詳情"
-      direction="btt"
-      size="100%"
-      :before-close="handleDetailDrawerClose"
-      :lock-scroll="false"
-      :append-to-body="true"
-      class="drawer-green"
-    >
-
-      <div v-if="selectedLog" class="email-detail">
-        <!-- Basic Info -->
-        <div class="detail-section">
-          <h4><i class="fas fa-info-circle"></i> 基本資訊</h4>
-          <div class="detail-grid">
-            <div class="detail-item">
-              <label>郵件 ID</label>
-              <div class="detail-value">{{ selectedLog.emailId }}</div>
-            </div>
-            <div class="detail-item">
-              <label>日誌 ID</label>
-              <div class="detail-value">{{ selectedLog.logId }}</div>
-            </div>
-            <div class="detail-item">
-              <label>收件人</label>
-              <div class="detail-value">{{ selectedLog.recipient }}</div>
-            </div>
-            <div class="detail-item">
-              <label>收件人 ID</label>
-              <div class="detail-value">{{ selectedLog.recipientUserId || '-' }}</div>
-            </div>
-            <div class="detail-item">
-              <label>觸發來源</label>
-              <div class="detail-value">
-                <span class="trigger-badge" :class="getTriggerClass(selectedLog.trigger)">
-                  {{ getTriggerText(selectedLog.trigger) }}
-                </span>
-              </div>
-            </div>
-            <div class="detail-item">
-              <label>觸發者</label>
-              <div class="detail-value">{{ selectedLog.triggeredBy || 'system' }}</div>
-            </div>
-            <div class="detail-item">
-              <label>觸發類型</label>
-              <div class="detail-value">{{ selectedLog.triggerSource || '-' }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Email Content -->
-        <div class="detail-section">
-          <h4><i class="fas fa-file-alt"></i> 郵件內容</h4>
-          <div class="detail-item">
-            <label>主旨</label>
-            <div class="detail-value">{{ selectedLog.subject }}</div>
-          </div>
-          <div class="detail-item" style="margin-top: 15px;">
-            <label>HTML 內容</label>
-            <div class="content-display" v-html="sanitizedHtmlBody"></div>
-          </div>
-          <div class="detail-item" v-if="selectedLog.textBody" style="margin-top: 15px;">
-            <label>純文字內容</label>
-            <div class="content-display">{{ selectedLog.textBody }}</div>
-          </div>
-        </div>
-
-        <!-- Status & Performance -->
-        <div class="detail-section">
-          <h4><i class="fas fa-chart-line"></i> 狀態與效能</h4>
-          <div class="detail-grid">
-            <div class="detail-item">
-              <label>狀態</label>
-              <div class="detail-value">
-                <i
-                  :class="selectedLog.status === 'sent' ? 'fas fa-check-circle' : 'fas fa-times-circle'"
-                  :style="{ color: selectedLog.status === 'sent' ? '#67C23A' : '#F56C6C' }"
-                ></i>
-                {{ selectedLog.status === 'sent' ? '發送成功' : '發送失敗' }}
-              </div>
-            </div>
-            <div class="detail-item" v-if="selectedLog.statusCode">
-              <label>HTTP 狀態碼</label>
-              <div class="detail-value">{{ selectedLog.statusCode }}</div>
-            </div>
-            <div class="detail-item">
-              <label>郵件大小</label>
-              <div class="detail-value">{{ formatSize(selectedLog.emailSize) }}</div>
-            </div>
-            <div class="detail-item">
-              <label>發送耗時</label>
-              <div class="detail-value">{{ formatDuration(selectedLog.durationMs) }}</div>
-            </div>
-            <div class="detail-item">
-              <label>重試次數</label>
-              <div class="detail-value">{{ selectedLog.retryCount || 0 }}</div>
-            </div>
-            <div class="detail-item">
-              <label>發送時間</label>
-              <div class="detail-value">{{ formatTime(selectedLog.timestamp) }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Error Info (if failed) -->
-        <div class="detail-section" v-if="selectedLog.status === 'failed'">
-          <h4><i class="fas fa-exclamation-triangle"></i> 錯誤資訊</h4>
-          <div class="detail-grid">
-            <div class="detail-item">
-              <label>錯誤類型</label>
-              <div class="detail-value">{{ selectedLog.errorType || '-' }}</div>
-            </div>
-            <div class="detail-item" style="grid-column: 1 / -1;">
-              <label>錯誤訊息</label>
-              <div class="content-display error-message">{{ selectedLog.error || '-' }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Email Context -->
-        <div class="detail-section" v-if="selectedLog.emailContext">
-          <h4><i class="fas fa-code"></i> 郵件上下文</h4>
-          <div class="content-display">
-            <pre>{{ formatJSON(selectedLog.emailContext) }}</pre>
-          </div>
-        </div>
-
-        <!-- Actions -->
-        <div class="detail-actions">
-          <button
-            class="btn-primary"
-            @click="resendSingleEmailFromDetail"
-            :disabled="resending"
-          >
-            <i class="fas fa-redo"></i>
-            {{ resending ? '重送中...' : '重送郵件' }}
-          </button>
-        </div>
-      </div>
-    </el-drawer>
   </div>
 </template>
 
@@ -385,6 +474,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'
 import EmptyState from '@/components/shared/EmptyState.vue'
+import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
 import DOMPurify from 'dompurify'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
@@ -497,9 +587,8 @@ const progressMessage = ref<string>('')
 const progressPercentage = ref<number>(0)
 const progressStatus = ref<'' | 'success' | 'warning' | 'exception'>('')
 
-// Detail drawer
-const showDetailDrawer = ref<boolean>(false)
-const selectedLog = ref<EmailLog | null>(null)
+// Expandable row
+const expandedLogId = ref<string | null>(null)
 
 // ================== Constants ==================
 
@@ -591,6 +680,12 @@ const scrollDisabled = computed<boolean>(() => {
 
 const selectedLogs = computed<EmailLog[]>(() => {
   return logs.value.filter(l => l.selected)
+})
+
+// Get the currently expanded log details
+const expandedLogDetails = computed<EmailLog | null>(() => {
+  if (!expandedLogId.value) return null
+  return logs.value.find(l => l.logId === expandedLogId.value || l.emailId === expandedLogId.value) || null
 })
 
 // ================== Watchers ==================
@@ -703,6 +798,27 @@ const loadMore = (): void => {
   }, 300)
 }
 
+const handleToggleExpansion = (log: EmailLog): void => {
+  if (expandedLogId.value === log.logId) {
+    // Collapse
+    expandedLogId.value = null
+    // Navigate back if on detail route
+    if (route.name === 'admin-email-logs-detail') {
+      router.push({ name: 'admin-email-logs' })
+    }
+  } else {
+    // Expand
+    expandedLogId.value = log.logId
+    // Update URL for sharing
+    if (route.params.emailId !== log.emailId) {
+      router.replace({
+        name: 'admin-email-logs-detail',
+        params: { emailId: log.emailId }
+      })
+    }
+  }
+}
+
 const resendSelectedEmails = async (): Promise<void> => {
   const selected = selectedLogs.value
   if (selected.length === 0) {
@@ -794,13 +910,6 @@ const resendSingleEmail = async (log: EmailLog): Promise<void> => {
   }
 }
 
-const resendSingleEmailFromDetail = async (): Promise<void> => {
-  if (selectedLog.value) {
-    await resendSingleEmail(selectedLog.value)
-    closeDetailDrawer()
-  }
-}
-
 const formatTime = (timestamp: number | undefined): string => {
   if (!timestamp) return '-'
   return new Date(timestamp).toLocaleString('zh-TW')
@@ -851,39 +960,19 @@ const sanitizeHTML = (html: string | undefined): string => {
  * Computed property for sanitized HTML body
  */
 const sanitizedHtmlBody = computed(() => {
-  return selectedLog.value ? sanitizeHTML(selectedLog.value.htmlBody) : ''
+  return expandedLogDetails.value ? sanitizeHTML(expandedLogDetails.value.htmlBody) : ''
 })
 
-// Detail drawer methods
-const viewLogDetail = (log: EmailLog): void => {
-  selectedLog.value = log
-  showDetailDrawer.value = true
-
-  // Update URL to include emailId for sharing and bookmarking
-  if (route.params.emailId !== log.emailId) {
-    router.replace({
-      name: 'admin-email-logs-detail',
-      params: { emailId: log.emailId }
-    })
+// Resend from expanded detail
+const resendFromExpanded = async (): Promise<void> => {
+  if (expandedLogDetails.value) {
+    await resendSingleEmail(expandedLogDetails.value)
+    // Collapse after resending
+    expandedLogId.value = null
+    if (route.name === 'admin-email-logs-detail') {
+      router.push({ name: 'admin-email-logs' })
+    }
   }
-}
-
-const closeDetailDrawer = (): void => {
-  showDetailDrawer.value = false
-  selectedLog.value = null
-
-  // Navigate back to list view if currently on detail route
-  if (route.name === 'admin-email-logs-detail') {
-    router.push({ name: 'admin-email-logs' })
-  }
-}
-
-const handleDetailDrawerClose = (done: () => void): void => {
-  if (resending.value) {
-    ElMessage.warning('正在處理中，請稍候...')
-    return
-  }
-  done()
 }
 
 const getTriggerText = (trigger: string): string => {
@@ -914,12 +1003,26 @@ const getTriggerClass = (trigger: string): string => {
   return classMap[trigger] || 'trigger-default'
 }
 
+const getTriggerTagType = (trigger: string): 'success' | 'warning' | 'info' | 'danger' | 'primary' => {
+  const typeMap: Record<string, 'success' | 'warning' | 'info' | 'danger' | 'primary'> = {
+    'notification_patrol': 'info',
+    'invitation': 'success',
+    'password_reset': 'warning',
+    'password_reset_2fa': 'warning',
+    'account_locked': 'danger',
+    'system_announcement': 'primary',
+    'manual_admin': 'info',
+    'resend': 'warning'
+  }
+  return typeMap[trigger] || 'info'
+}
+
 // ================== Lifecycle Hooks ==================
 
 onMounted(async () => {
   await Promise.all([loadEmailLogs(), loadStatistics()])
 
-  // Auto-open email detail if emailId parameter exists in URL
+  // Auto-expand email detail if emailId parameter exists in URL
   if (route.params.emailId && typeof route.params.emailId === 'string') {
     await nextTick()
 
@@ -928,7 +1031,7 @@ onMounted(async () => {
     )
 
     if (targetLog) {
-      viewLogDetail(targetLog)
+      expandedLogId.value = targetLog.logId
     } else {
       ElMessage.warning('未找到指定的郵件記錄')
       router.push({ name: 'admin-email-logs' })
@@ -950,6 +1053,38 @@ onBeforeUnmount(() => {
   padding: 20px;
   background: #f5f7fa;
   min-height: 100%;
+}
+
+/* Statistics Card */
+.stats-card {
+  margin-bottom: 20px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.stats-card :deep(.el-statistic__head) {
+  font-size: 13px;
+  color: #666;
+}
+
+.stats-card :deep(.el-statistic__content) {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.stats-card :deep(.el-statistic__prefix i) {
+  color: #409EFF;
+  margin-right: 6px;
 }
 
 /* Badge 樣式 */
@@ -1069,8 +1204,58 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   overflow: hidden;
-  max-height: calc(100vh - 400px);
+  max-height: calc(100vh - 450px);
   overflow-y: auto;
+}
+
+/* Expand cell */
+.expand-cell {
+  width: 40px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.expand-icon {
+  font-size: 12px;
+  color: #409eff;
+  transition: transform 0.2s;
+}
+
+/* Status icon */
+.status-icon {
+  font-size: 16px;
+  cursor: default;
+}
+
+/* Info row content (vertical mode) */
+.info-row-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.info-row-content .recipient {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.info-row-content .stat-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.info-row-content .stat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #666;
+  font-size: 13px;
+}
+
+.info-row-content .stat-item.time {
+  color: #909399;
 }
 
 .email-logs-table {
@@ -1096,14 +1281,6 @@ onBeforeUnmount(() => {
 
 .email-logs-table tr:hover {
   background: #f5f7fa;
-}
-
-/* Subject cell */
-.subject-cell {
-  max-width: 300px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Trigger badges */
@@ -1160,6 +1337,11 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+/* Status cell (icon only) */
+.status-cell {
+  text-align: center;
 }
 
 /* Actions */
@@ -1445,40 +1627,4 @@ button:disabled {
   font-weight: 500;
 }
 
-/* ========================================
-   Drawer 佈局保護
-   ======================================== */
-
-/* 防止 Element Plus drawer 的 body 鎖定造成佈局偏移 */
-:deep(.el-drawer.drawer-green) {
-  position: fixed !important;
-}
-
-/* 確保不會添加 padding-right */
-body:has(.el-drawer.drawer-green) {
-  padding-right: 0 !important;
-}
-
-/* el-drawer header styles */
-:deep(.el-drawer__header) {
-  background: #2c3e50 !important;
-  color: white !important;
-  padding: 20px 30px !important;
-  margin-bottom: 0 !important;
-  border-bottom: 1px solid #34495e !important;
-}
-
-:deep(.el-drawer__title) {
-  color: white !important;
-  font-size: 18px !important;
-  font-weight: 600 !important;
-}
-
-:deep(.el-drawer__close-btn) {
-  color: white !important;
-}
-
-:deep(.el-drawer__close-btn:hover) {
-  color: #ecf0f1 !important;
-}
 </style>

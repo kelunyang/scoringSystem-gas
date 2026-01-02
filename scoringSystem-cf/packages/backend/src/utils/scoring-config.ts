@@ -20,6 +20,7 @@ export interface ScoringConfig {
   studentRankingWeight: number
   teacherRankingWeight: number
   commentRewardPercentile: number
+  maxVoteResetCount: number
 }
 
 // Note: Env type is imported from main types.ts in consuming files
@@ -30,6 +31,7 @@ export interface ScoringConfigEnv {
   DEFAULT_STUDENT_RANKING_WEIGHT: string
   DEFAULT_TEACHER_RANKING_WEIGHT: string
   DEFAULT_COMMENT_REWARD_PERCENTILE: string
+  DEFAULT_MAX_VOTE_RESET_COUNT: string
 }
 
 // ============================================================================
@@ -45,6 +47,7 @@ export const SCORING_CONFIG_KEYS = {
   STUDENT_RANKING_WEIGHT: 'config:student_ranking_weight',
   TEACHER_RANKING_WEIGHT: 'config:teacher_ranking_weight',
   COMMENT_REWARD_PERCENTILE: 'config:comment_reward_percentile',
+  MAX_VOTE_RESET_COUNT: 'config:max_vote_reset_count',
 } as const
 
 /**
@@ -56,6 +59,7 @@ export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
   studentRankingWeight: 0.7,
   teacherRankingWeight: 0.3,
   commentRewardPercentile: 0, // 0 means use fixed topN: 3 (legacy behavior)
+  maxVoteResetCount: 1, // Maximum times a group leader can reset votes per stage
 }
 
 // ============================================================================
@@ -82,13 +86,14 @@ export async function getEffectiveScoringConfig(
 ): Promise<ScoringConfig> {
   // Tier 1: Check project-level database config
   const project = await db
-    .prepare('SELECT maxCommentSelections, studentRankingWeight, teacherRankingWeight, commentRewardPercentile FROM projects WHERE projectId = ?')
+    .prepare('SELECT maxCommentSelections, studentRankingWeight, teacherRankingWeight, commentRewardPercentile, maxVoteResetCount FROM projects WHERE projectId = ?')
     .bind(projectId)
     .first<{
       maxCommentSelections: number | null
       studentRankingWeight: number | null
       teacherRankingWeight: number | null
       commentRewardPercentile: number | null
+      maxVoteResetCount: number | null
     }>()
 
   // Tier 2: Get system-level KV defaults
@@ -96,6 +101,7 @@ export async function getEffectiveScoringConfig(
   const kvStudentWeight = await kv.get(SCORING_CONFIG_KEYS.STUDENT_RANKING_WEIGHT)
   const kvTeacherWeight = await kv.get(SCORING_CONFIG_KEYS.TEACHER_RANKING_WEIGHT)
   const kvPercentile = await kv.get(SCORING_CONFIG_KEYS.COMMENT_REWARD_PERCENTILE)
+  const kvMaxVoteReset = await kv.get(SCORING_CONFIG_KEYS.MAX_VOTE_RESET_COUNT)
 
   // Tier 3: Fallback to wrangler.toml env vars → Tier 4: Hardcoded defaults
   const result = {
@@ -114,6 +120,10 @@ export async function getEffectiveScoringConfig(
     commentRewardPercentile:
       project?.commentRewardPercentile ??
       (kvPercentile ? parseFloat(kvPercentile) : parseFloat(env.DEFAULT_COMMENT_REWARD_PERCENTILE || String(DEFAULT_SCORING_CONFIG.commentRewardPercentile))),
+
+    maxVoteResetCount:
+      project?.maxVoteResetCount ??
+      (kvMaxVoteReset ? parseInt(kvMaxVoteReset, 10) : parseInt(env.DEFAULT_MAX_VOTE_RESET_COUNT || String(DEFAULT_SCORING_CONFIG.maxVoteResetCount), 10)),
   }
 
   return result
@@ -137,6 +147,7 @@ export async function getSystemScoringDefaults(
   const kvStudentWeight = await kv.get(SCORING_CONFIG_KEYS.STUDENT_RANKING_WEIGHT)
   const kvTeacherWeight = await kv.get(SCORING_CONFIG_KEYS.TEACHER_RANKING_WEIGHT)
   const kvPercentile = await kv.get(SCORING_CONFIG_KEYS.COMMENT_REWARD_PERCENTILE)
+  const kvMaxVoteReset = await kv.get(SCORING_CONFIG_KEYS.MAX_VOTE_RESET_COUNT)
 
   return {
     maxCommentSelections: kvMaxSelections
@@ -151,6 +162,9 @@ export async function getSystemScoringDefaults(
     commentRewardPercentile: kvPercentile
       ? parseFloat(kvPercentile)
       : parseFloat(env.DEFAULT_COMMENT_REWARD_PERCENTILE || String(DEFAULT_SCORING_CONFIG.commentRewardPercentile)),
+    maxVoteResetCount: kvMaxVoteReset
+      ? parseInt(kvMaxVoteReset, 10)
+      : parseInt(env.DEFAULT_MAX_VOTE_RESET_COUNT || String(DEFAULT_SCORING_CONFIG.maxVoteResetCount), 10),
   }
 }
 
@@ -231,5 +245,9 @@ export function validateScoringConfig(config: Partial<ScoringConfig>): void {
 
   if (config.commentRewardPercentile !== undefined && (config.commentRewardPercentile < 0 || config.commentRewardPercentile > 100)) {
     throw new Error('commentRewardPercentile must be between 0 and 100')
+  }
+
+  if (config.maxVoteResetCount !== undefined && (config.maxVoteResetCount < 1 || config.maxVoteResetCount > 5)) {
+    throw new Error('maxVoteResetCount must be between 1 and 5')
   }
 }

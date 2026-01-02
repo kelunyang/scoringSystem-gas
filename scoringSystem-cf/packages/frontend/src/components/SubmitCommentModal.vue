@@ -29,45 +29,17 @@
 
       <!-- Markdown 編輯區 -->
       <div class="editor-section">
-        <!-- 工具列 -->
-        <div class="editor-toolbar">
-          <button
-            v-for="tool in markdownTools"
-            :key="tool.name"
-            class="tool-btn"
-            :title="tool.title"
-            @click="insertMarkdown(tool)"
-          >
-            <span v-if="tool.icon" v-html="tool.icon"></span>
-            <span v-else>{{ tool.name }}</span>
-          </button>
-          <div class="toolbar-divider"></div>
-          <button
-            class="tool-btn preview-btn"
-            :class="{ active: showPreview }"
-            @click="togglePreview"
-            title="預覽Markdown"
-          >
-            <i class="fas fa-eye"></i> 預覽
-          </button>
-        </div>
-
-        <!-- 編輯/預覽區域 -->
-        <div class="editor-content" :class="{ preview: showPreview }">
-          <textarea
-            v-if="!showPreview"
+        <!-- 編輯區域 - 使用 MdEditorWrapper -->
+        <div class="editor-content">
+          <MdEditorWrapper
             ref="editorRef"
             v-model="content"
-            class="markdown-editor"
             :placeholder="placeholder"
-            @input="handleInput"
+            :enable-mention="true"
+            @mention-trigger="handleMentionTrigger"
+            @mention-close="hideMentionDropdown"
             @keydown="handleKeydown"
-            @keyup="handleKeyup"
-          ></textarea>
-
-          <div v-if="showPreview" class="markdown-preview">
-            <div v-html="renderedMarkdown" class="preview-content"></div>
-          </div>
+          />
 
           <!-- @mention 下拉選單 -->
           <div
@@ -75,29 +47,41 @@
             class="mention-dropdown"
             :style="mentionDropdownStyle"
           >
-            <div
-              v-for="(option, index) in filteredUsers"
-              :key="option.isGroup ? `group-${option.groupId}` : `user-${option.userEmail}`"
-              class="mention-item"
-              :class="{
-                active: index === selectedMentionIndex,
-                'is-group': option.isGroup
-              }"
-              @click="selectMention(option)"
-            >
-              <span
-                class="mention-name"
-                :style="option.isGroup ? {color: 'maroon'} : {}"
+            <!-- Empty state - 無可 mention 的用戶 -->
+            <EmptyState
+              v-if="filteredUsers.length === 0"
+              parent-icon="fa-at"
+              title="目前沒有任何組有繳交階段成果，因此無法@任何人"
+              compact
+              :enable-animation="false"
+            />
+
+            <!-- User/Group list -->
+            <template v-else>
+              <div
+                v-for="(option, index) in filteredUsers"
+                :key="option.isGroup ? `group-${option.groupId}` : `user-${option.userEmail}`"
+                class="mention-item"
+                :class="{
+                  active: index === selectedMentionIndex,
+                  'is-group': option.isGroup
+                }"
+                @click="selectMention(option)"
               >
-                {{ option.isGroup ? option.name : `${option.name} (${option.userEmail})` }}
-                <span v-if="option.groupInfo && !option.isGroup" class="group-badge">{{ option.groupInfo.groupName }}</span>
-              </span>
-              <span v-if="!option.isGroup" class="mention-group">{{ option.groupNames.join('、') }}</span>
-              <span v-if="!option.isGroup && option.groupInfo" class="voting-tip">@用戶將自動標記所屬群組</span>
-              <span v-if="option.isGroup" class="group-mention-hint">
-                點選將 @全組 {{ option.participantEmails.length }} 位成員
-              </span>
-            </div>
+                <span
+                  class="mention-name"
+                  :style="option.isGroup ? {color: 'maroon'} : {}"
+                >
+                  {{ option.isGroup ? option.name : `${option.name} (${option.userEmail})` }}
+                  <span v-if="option.groupInfo && !option.isGroup" class="group-badge">{{ option.groupInfo.groupName }}</span>
+                </span>
+                <span v-if="!option.isGroup" class="mention-group">{{ option.groupNames.join('、') }}</span>
+                <span v-if="!option.isGroup && option.groupInfo" class="voting-tip">@用戶將自動標記所屬群組</span>
+                <span v-if="option.isGroup" class="group-mention-hint">
+                  點選將 @全組 {{ option.participantEmails.length }} 位成員
+                </span>
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -252,10 +236,11 @@ import { ElMessage } from 'element-plus'
 import AllGroupsChart from './shared/ContributionChart/AllGroupsChart.vue'
 import DrawerAlertZone from './common/DrawerAlertZone.vue'
 import StageDescriptionDrawer from './shared/StageDescriptionDrawer.vue'
+import EmptyState from './shared/EmptyState.vue'
+import MdEditorWrapper from './MdEditorWrapper.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { rpcClient } from '@/utils/rpc-client'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
-import { renderMarkdown } from '@/utils/markdown'
 
 // Drawer Breadcrumb
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
@@ -305,7 +290,7 @@ const emit = defineEmits<{
 const { warning, addAlert, clearAlerts } = useDrawerAlerts()
 
 // Refs
-const editorRef = ref<HTMLTextAreaElement | null>(null)
+const editorRef = ref<InstanceType<typeof MdEditorWrapper> | null>(null)
 const content = ref('')
 const submitting = ref(false)
 const mentionCount = ref(0)
@@ -316,10 +301,8 @@ const groupMentions = ref<Array<{
   mentionText: string
 }>>([])
 const previewScenario = ref(1)
-const showPreview = ref(false)
 const showMentionDropdown = ref(false)
 const mentionQuery = ref('')
-const mentionStartPos = ref(0)
 const selectedMentionIndex = ref(0)
 const mentionDropdownStyle = ref<Record<string, string>>({})
 
@@ -331,49 +314,6 @@ const canConfirmNoMention = computed(() => confirmationInput.value === 'COMMENT'
 
 // Constants
 const placeholder = '我覺得做得很讚的就是@第一組，他們的成果和 [Google](www.google.com) 上能找到的一模一樣！\n\n💡 提示：必須在評論中@提及至少一組才能參與投票！'
-
-const markdownTools = [
-  {
-    name: 'B',
-    title: '粗體文字',
-    icon: '<i class="fas fa-bold"></i>',
-    prefix: '**',
-    suffix: '**',
-    placeholder: '粗體文字'
-  },
-  {
-    name: 'I',
-    title: '斜體文字',
-    icon: '<i class="fas fa-italic"></i>',
-    prefix: '*',
-    suffix: '*',
-    placeholder: '斜體文字'
-  },
-  {
-    name: '@',
-    title: '@提及 (tag其他組)',
-    icon: '<i class="fas fa-at"></i>',
-    prefix: '@',
-    suffix: '',
-    placeholder: '用戶名'
-  },
-  {
-    name: 'LINK',
-    title: '插入連結',
-    icon: '<i class="fas fa-link"></i>',
-    prefix: '[',
-    suffix: '](url)',
-    placeholder: '連結文字'
-  },
-  {
-    name: 'CODE',
-    title: '程式碼區塊',
-    icon: '<i class="fas fa-code"></i>',
-    prefix: '```\n',
-    suffix: '\n```',
-    placeholder: '程式碼'
-  }
-]
 
 // 動態計算可選評論數量（根據模式）
 const dynamicMaxCommentSelections = computed((): number => {
@@ -419,11 +359,6 @@ const localVisible = computed({
 // Computed - canSubmit
 const canSubmit = computed(() => {
   return content.value.trim().length > 0 && !submitting.value
-})
-
-// Computed - renderedMarkdown
-const renderedMarkdown = computed(() => {
-  return renderMarkdown(content.value)
 })
 
 // Computed - canShowPreview
@@ -602,16 +537,9 @@ watch(() => props.visible, (newVal) => {
       closable: false,
       autoClose: 0
     })
-
-    nextTick(() => {
-      if (editorRef.value) {
-        editorRef.value.focus()
-      }
-    })
   } else {
     // Drawer closed - cleanup
     content.value = ''
-    showPreview.value = false
     submitting.value = false
     mentionCount.value = 0
     groupMentions.value = []
@@ -657,15 +585,43 @@ function handleClose() {
   emit('update:visible', false)
 }
 
-function handleInput() {
-  if (editorRef.value) {
-    handleMentionTyping(editorRef.value)
+// Handle mention trigger from MdEditorWrapper
+function handleMentionTrigger(payload: { query: string; cursorPosition: number; screenPosition?: { x: number; y: number } }) {
+  mentionQuery.value = payload.query
+  selectedMentionIndex.value = 0
+  showMentionDropdown.value = true
+
+  // Position dropdown based on device and cursor position
+  const isMobile = window.innerWidth < 768
+  if (isMobile) {
+    // Mobile: position at bottom of editor container
+    mentionDropdownStyle.value = {
+      position: 'absolute',
+      top: '100%',
+      left: '0',
+      right: '0',
+      marginTop: '4px'
+    }
+  } else if (payload.screenPosition) {
+    // Desktop: follow cursor with fixed positioning
+    mentionDropdownStyle.value = {
+      position: 'fixed',
+      top: `${payload.screenPosition.y + 4}px`,
+      left: `${payload.screenPosition.x}px`,
+      marginTop: '0'
+    }
+  } else {
+    // Fallback: position below editor
+    mentionDropdownStyle.value = {
+      position: 'absolute',
+      top: '100%',
+      left: '0',
+      marginTop: '4px'
+    }
   }
 }
 
 function handleKeydown(event: KeyboardEvent) {
-  const target = event.target as HTMLTextAreaElement
-
   // 處理 @mention 下拉選單導航
   if (showMentionDropdown.value) {
     switch (event.key) {
@@ -688,88 +644,15 @@ function handleKeydown(event: KeyboardEvent) {
         }
         break
       case 'Escape':
+        event.preventDefault()
         hideMentionDropdown()
         break
     }
-    return
-  }
-
-  // Ctrl/Cmd + B for bold
-  if ((event.ctrlKey || event.metaKey) && event.key === 'b') {
-    event.preventDefault()
-    insertMarkdown(markdownTools[0])
-  }
-
-  // Ctrl/Cmd + I for italic
-  if ((event.ctrlKey || event.metaKey) && event.key === 'i') {
-    event.preventDefault()
-    insertMarkdown(markdownTools[1])
-  }
-
-  // Tab 縮排
-  if (event.key === 'Tab') {
-    event.preventDefault()
-    const start = target.selectionStart
-    const end = target.selectionEnd
-
-    const beforeText = content.value.substring(0, start)
-    const afterText = content.value.substring(end)
-    content.value = beforeText + '  ' + afterText
-
-    nextTick(() => {
-      target.setSelectionRange(start + 2, start + 2)
-    })
-  }
-}
-
-function handleKeyup() {
-  if (editorRef.value) {
-    handleMentionTyping(editorRef.value)
-  }
-}
-
-function handleMentionTyping(editor: HTMLTextAreaElement) {
-  const cursorPos = editor.selectionStart
-  const textBeforeCursor = content.value.substring(0, cursorPos)
-  const lastAtIndex = textBeforeCursor.lastIndexOf('@')
-
-  if (lastAtIndex === -1) {
-    hideMentionDropdown()
-    return
-  }
-
-  // 檢查 @ 後面是否有空格
-  const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1)
-  if (textAfterAt.includes(' ')) {
-    hideMentionDropdown()
-    return
-  }
-
-  // 更新 mention 查詢和顯示下拉選單
-  mentionQuery.value = textAfterAt
-  mentionStartPos.value = lastAtIndex
-  selectedMentionIndex.value = 0
-  showMentionDropdown.value = true
-
-  // 計算下拉選單位置
-  updateMentionDropdownPosition(editor, lastAtIndex)
-}
-
-function updateMentionDropdownPosition(editor: HTMLTextAreaElement, atIndex: number) {
-  // 簡化的位置計算
-  const rect = editor.getBoundingClientRect()
-
-  mentionDropdownStyle.value = {
-    top: `${rect.top - 120}px`,
-    left: `${rect.left + 20}px`
   }
 }
 
 function selectMention(user: any) {
   if (!editorRef.value) return
-
-  const beforeText = content.value.substring(0, mentionStartPos.value)
-  const afterText = content.value.substring(editorRef.value.selectionStart)
 
   // 檢查是否為自己或同組成員
   const currentUserEmail = props.currentUser?.userEmail
@@ -810,14 +693,8 @@ function selectMention(user: any) {
     }
   }
 
-  content.value = beforeText + `@${mentionText} ` + afterText
-
-  nextTick(() => {
-    const newPos = mentionStartPos.value + mentionText.length + 2
-    editorRef.value?.setSelectionRange(newPos, newPos)
-    editorRef.value?.focus()
-  })
-
+  // Use MdEditorWrapper's insertMention method
+  editorRef.value.insertMention(mentionText)
   hideMentionDropdown()
 }
 
@@ -825,59 +702,6 @@ function hideMentionDropdown() {
   showMentionDropdown.value = false
   mentionQuery.value = ''
   selectedMentionIndex.value = 0
-}
-
-function insertMarkdown(tool: typeof markdownTools[0]) {
-  const editor = editorRef.value
-  if (!editor) return
-
-  const start = editor.selectionStart
-  const end = editor.selectionEnd
-  const selectedText = content.value.substring(start, end)
-
-  let newText = ''
-
-  if (tool.name === '@') {
-    // @ mention 功能 - 觸發下拉選單
-    newText = '@'
-    const beforeText = content.value.substring(0, start)
-    const afterText = content.value.substring(end)
-    content.value = beforeText + newText + afterText
-
-    nextTick(() => {
-      const newPosition = start + 1
-      editor.setSelectionRange(newPosition, newPosition)
-      editor.focus()
-      handleMentionTyping(editor)
-    })
-    return
-  } else if (tool.name === 'LINK') {
-    // 連結功能
-    if (selectedText) {
-      newText = `[${selectedText}](url)`
-    } else {
-      newText = `[${tool.placeholder}](url)`
-    }
-  } else {
-    // 一般 markdown 標記
-    if (selectedText) {
-      newText = `${tool.prefix}${selectedText}${tool.suffix}`
-    } else {
-      newText = `${tool.prefix}${tool.placeholder}${tool.suffix}`
-    }
-  }
-
-  // 替換選中的文字
-  const beforeText = content.value.substring(0, start)
-  const afterText = content.value.substring(end)
-  content.value = beforeText + newText + afterText
-
-  // 重新設定游標位置
-  nextTick(() => {
-    const newPosition = start + newText.length
-    editor.setSelectionRange(newPosition, newPosition)
-    editor.focus()
-  })
 }
 
 // No-mention confirmation drawer handlers
@@ -995,15 +819,10 @@ function getUserGroupInfo(userEmail: string) {
 
 function clearContent() {
   content.value = ''
-  showPreview.value = false
   mentionCount.value = 0
   groupMentions.value = []
   hideMentionDropdown()
   clearAlerts()
-
-  if (editorRef.value) {
-    editorRef.value.focus()
-  }
 }
 
 function updateMentionCount(contentValue: string) {
@@ -1041,10 +860,6 @@ function updateMentionCount(contentValue: string) {
   mentionCount.value = count
   console.log(`當前有效 mention 數量: ${mentionCount.value} (群組: ${groupMatches.length}, 個人: ${emailMatches.length})`)
 }
-
-function togglePreview() {
-  showPreview.value = !showPreview.value
-}
 </script>
 
 <style scoped>
@@ -1077,156 +892,8 @@ function togglePreview() {
   padding: 0 25px 20px;
 }
 
-.editor-toolbar {
-  display: flex;
-  gap: 8px;
-  padding: 15px 0;
-  border-bottom: 1px solid #e1e8ed;
-  margin-bottom: 15px;
-}
-
-.tool-btn {
-  background: #f8f9fa;
-  border: 1px solid #e1e8ed;
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  color: #2c3e50;
-  transition: all 0.2s;
-  min-width: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.tool-btn:hover {
-  background: #e9ecef;
-  border-color: #999;
-  transform: translateY(-1px);
-}
-
-.tool-btn:active {
-  transform: translateY(0);
-}
-
-.toolbar-divider {
-  width: 1px;
-  height: 24px;
-  background: #ddd;
-  margin: 0 8px;
-}
-
-.preview-btn.active {
-  background: #007bff !important;
-  color: white !important;
-}
-
 .editor-content {
   position: relative;
-}
-
-.editor-container {
-  position: relative;
-}
-
-.markdown-editor {
-  width: 100%;
-  min-height: 200px;
-  padding: 15px;
-  border: 2px solid #e1e8ed;
-  border-radius: 6px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  font-size: 14px;
-  line-height: 1.5;
-  resize: vertical;
-  transition: border-color 0.3s;
-}
-
-.markdown-editor:focus {
-  outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
-}
-
-.markdown-editor::placeholder {
-  color: #7f8c8d;
-}
-
-.markdown-preview {
-  min-height: 200px;
-  border: 2px solid #e1e8ed;
-  border-radius: 6px;
-  background: white;
-}
-
-.preview-content {
-  padding: 15px;
-  line-height: 1.6;
-  color: #2c3e50;
-}
-
-.preview-content h1,
-.preview-content h2,
-.preview-content h3 {
-  margin: 16px 0 8px 0;
-  color: #2c3e50;
-}
-
-.preview-content h1 {
-  font-size: 24px;
-  border-bottom: 2px solid #e1e8ed;
-  padding-bottom: 8px;
-}
-
-.preview-content h2 {
-  font-size: 20px;
-  border-bottom: 1px solid #e1e8ed;
-  padding-bottom: 6px;
-}
-
-.preview-content h3 {
-  font-size: 16px;
-}
-
-.preview-content strong {
-  font-weight: 600;
-}
-
-.preview-content em {
-  font-style: italic;
-}
-
-.preview-content code {
-  background: #f5f5f5;
-  padding: 2px 4px;
-  border-radius: 3px;
-  font-family: 'Courier New', monospace;
-  font-size: 13px;
-}
-
-.preview-content pre {
-  background: #f5f5f5;
-  padding: 12px;
-  border-radius: 6px;
-  overflow-x: auto;
-  margin: 12px 0;
-}
-
-.preview-content pre code {
-  background: none;
-  padding: 0;
-  border-radius: 0;
-}
-
-.preview-content a {
-  color: #007bff;
-  text-decoration: none;
-}
-
-.preview-content a:hover {
-  text-decoration: underline;
 }
 
 .mention-dropdown {

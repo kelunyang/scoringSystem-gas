@@ -49,13 +49,25 @@
           <span class="filter-label">通知類型：</span>
           <el-select v-model="filters.typeFilter" style="width: 200px;">
             <el-option label="全部類型" value="all" />
-            <el-option label="階段開始" value="stage_start" />
-            <el-option label="階段投票" value="stage_voting" />
-            <el-option label="階段完成" value="stage_completed" />
-            <el-option label="評論提及" value="comment_mention" />
-            <el-option label="群組提及" value="group_mention" />
-            <el-option label="新評論" value="new_comment" />
-            <el-option label="評論投票" value="comment_vote" />
+            <el-option label="作品提交" value="submission_created" />
+            <el-option label="作品撤回" value="submission_withdrawn" />
+            <el-option label="作品批准" value="submission_approved" />
+            <el-option label="階段狀態變更" value="stage_status_changed" />
+            <el-option label="排名提案提交" value="ranking_proposal_submitted" />
+            <el-option label="排名提案撤回" value="ranking_proposal_withdrawn" />
+            <el-option label="排名提案批准" value="ranking_proposal_approved" />
+            <el-option label="評論提及" value="comment_mentioned" />
+            <el-option label="評論回覆" value="comment_replied" />
+            <el-option label="結算失敗" value="settlement_failed" />
+            <el-option label="專案角色分配" value="project_role_assigned" />
+            <el-option label="專案角色移除" value="project_role_removed" />
+            <el-option label="群組成員新增" value="group_member_added" />
+            <el-option label="群組成員移除" value="group_member_removed" />
+            <el-option label="帳戶鎖定" value="account_locked" />
+            <el-option label="帳戶解鎖" value="account_unlocked" />
+            <el-option label="密碼重設成功" value="password_reset_success" />
+            <el-option label="投票重置" value="vote_reset" />
+            <el-option label="專案資訊更新" value="project_info_updated" />
           </el-select>
         </div>
 
@@ -104,6 +116,47 @@
       </template>
     </AdminFilterToolbar>
 
+    <!-- Statistics Card -->
+    <el-card class="stats-card">
+      <el-row :gutter="20">
+        <el-col :xs="12" :sm="6" :md="4">
+          <el-statistic title="總通知數" :value="stats.totalNotifications">
+            <template #prefix>
+              <i class="fas fa-bell"></i>
+            </template>
+          </el-statistic>
+        </el-col>
+        <el-col :xs="12" :sm="6" :md="4">
+          <el-statistic title="已讀" :value="stats.readNotifications">
+            <template #prefix>
+              <i class="fas fa-envelope-open" style="color: #67C23A;"></i>
+            </template>
+          </el-statistic>
+        </el-col>
+        <el-col :xs="12" :sm="6" :md="4">
+          <el-statistic title="未讀" :value="stats.totalNotifications - stats.readNotifications">
+            <template #prefix>
+              <i class="fas fa-envelope" style="color: #E6A23C;"></i>
+            </template>
+          </el-statistic>
+        </el-col>
+        <el-col :xs="12" :sm="6" :md="4">
+          <el-statistic title="已發送郵件" :value="stats.emailSentNotifications">
+            <template #prefix>
+              <i class="fas fa-paper-plane" style="color: #409EFF;"></i>
+            </template>
+          </el-statistic>
+        </el-col>
+        <el-col :xs="12" :sm="6" :md="4">
+          <el-statistic title="待發送郵件" :value="stats.totalNotifications - stats.emailSentNotifications">
+            <template #prefix>
+              <i class="far fa-paper-plane" style="color: #909399;"></i>
+            </template>
+          </el-statistic>
+        </el-col>
+      </el-row>
+    </el-card>
+
     <!-- Notification Table with Infinite Scroll -->
     <div
       class="table-container"
@@ -116,6 +169,7 @@
       <table class="notification-table" role="table" aria-label="通知列表">
         <thead>
           <tr role="row">
+            <th width="40" scope="col"></th>
             <th width="50" scope="col">
               <el-checkbox
                 v-model="selectAll"
@@ -125,7 +179,6 @@
             </th>
             <th scope="col">收件人</th>
             <th scope="col">通知類型</th>
-            <th scope="col">標題</th>
             <th scope="col">專案</th>
             <th scope="col">狀態</th>
             <th scope="col">創建時間</th>
@@ -133,87 +186,203 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="notification in displayedNotifications" :key="notification.notificationId" role="row">
-            <td>
-              <el-checkbox
-                :model-value="isSelected(notification.notificationId)"
-                @change="toggleSelection(notification.notificationId)"
-                :aria-label="`選擇通知: ${notification.title}`"
-              />
-            </td>
-            <td>{{ notification.targetUserEmail }}</td>
-            <td>
-              <span class="type-badge" :class="getTypeClass(notification.type)">
-                {{ getTypeText(notification.type) }}
-              </span>
-            </td>
-            <td class="title-cell">
-              {{ notification.title }}
-            </td>
-            <td>{{ notification.projectName || '-' }}</td>
-            <td>
-              <div class="status-indicators">
-                <el-tooltip content="閱讀狀態" placement="top">
+          <template v-for="notification in displayedNotifications" :key="notification.notificationId">
+            <ExpandableTableRow
+              :is-expanded="expandedNotificationId === notification.notificationId"
+              :expansion-colspan="8"
+              :enable-responsive-rows="true"
+              :actions-colspan="4"
+              @toggle-expansion="handleToggleExpansion(notification)"
+            >
+              <!-- 橫屏模式：單行顯示所有欄位 -->
+              <template #main="{ isExpanded }">
+                <td>
                   <i
-                    :class="notification.isRead ? 'fas fa-envelope-open' : 'fas fa-envelope'"
-                    :style="{ color: notification.isRead ? '#67C23A' : '#909399' }"
-                    :aria-label="notification.isRead ? '已讀' : '未讀'"
+                    class="expand-icon fas"
+                    :class="isExpanded ? 'fa-down-left-and-up-right-to-center' : 'fa-up-right-and-down-left-from-center'"
                   ></i>
-                </el-tooltip>
-                <el-tooltip content="郵件發送狀態" placement="top">
-                  <i
-                    :class="notification.emailSent ? 'fas fa-paper-plane' : 'far fa-paper-plane'"
-                    :style="{ color: notification.emailSent ? '#409EFF' : '#909399' }"
-                    :aria-label="notification.emailSent ? '已發送' : '未發送'"
-                  ></i>
-                </el-tooltip>
-              </div>
-            </td>
-            <td>{{ formatTime(notification.createdTime) }}</td>
-            <td class="actions">
-              <button
-                class="btn-sm btn-info"
-                @click="viewNotificationDetail(notification)"
-                :aria-label="`檢視通知: ${notification.title}`"
-              >
-                <i class="fas fa-eye"></i>
-                檢視
-              </button>
-              <el-popconfirm
-                :title="`確定要發送通知郵件給 ${notification.targetUserEmail} 嗎？`"
-                confirm-button-text="確定"
-                cancel-button-text="取消"
-                @confirm="sendSingleEmail(notification)"
-                :disabled="notification.emailSent || sendingEmails"
-              >
-                <template #reference>
-                  <button
-                    class="btn-sm btn-primary"
+                </td>
+                <td @click.stop>
+                  <el-checkbox
+                    :model-value="isSelected(notification.notificationId)"
+                    @change="toggleSelection(notification.notificationId)"
+                    :aria-label="`選擇通知: ${notification.title}`"
+                  />
+                </td>
+                <td>{{ notification.targetUserEmail }}</td>
+                <td>
+                  <el-tag size="small" :class="getTypeClass(notification.type)">
+                    {{ getTypeText(notification.type) }}
+                  </el-tag>
+                </td>
+                <td>{{ notification.projectName || '-' }}</td>
+                <td>
+                  <div class="status-indicators">
+                    <el-tooltip content="閱讀狀態" placement="top">
+                      <i
+                        :class="notification.isRead ? 'fas fa-envelope-open' : 'fas fa-envelope'"
+                        :style="{ color: notification.isRead ? '#67C23A' : '#909399' }"
+                        :aria-label="notification.isRead ? '已讀' : '未讀'"
+                      ></i>
+                    </el-tooltip>
+                    <el-tooltip content="郵件發送狀態" placement="top">
+                      <i
+                        :class="notification.emailSent ? 'fas fa-paper-plane' : 'far fa-paper-plane'"
+                        :style="{ color: notification.emailSent ? '#409EFF' : '#909399' }"
+                        :aria-label="notification.emailSent ? '已發送' : '未發送'"
+                      ></i>
+                    </el-tooltip>
+                  </div>
+                </td>
+                <td>{{ formatTime(notification.createdTime) }}</td>
+                <td class="actions" @click.stop>
+                  <el-popconfirm
+                    :title="`確定要發送通知郵件給 ${notification.targetUserEmail} 嗎？`"
+                    confirm-button-text="確定"
+                    cancel-button-text="取消"
+                    @confirm="sendSingleEmail(notification)"
                     :disabled="notification.emailSent || sendingEmails"
-                    :aria-label="`發送郵件給 ${notification.targetUserEmail}`"
                   >
-                    <i class="fas fa-paper-plane"></i>
-                    {{ notification.emailSent ? '已發送' : '發送' }}
-                  </button>
-                </template>
-              </el-popconfirm>
-              <el-popconfirm
-                title="確定要刪除此通知嗎？"
-                confirm-button-text="確定"
-                cancel-button-text="取消"
-                @confirm="deleteNotification(notification)"
-              >
-                <template #reference>
-                  <button
-                    class="btn-sm btn-danger"
-                    :aria-label="`刪除通知: ${notification.title}`"
+                    <template #reference>
+                      <el-tooltip :content="notification.emailSent ? '已發送' : '發送郵件'" placement="top">
+                        <el-button
+                          type="primary"
+                          size="small"
+                          circle
+                          :disabled="notification.emailSent || sendingEmails"
+                          :aria-label="`發送郵件給 ${notification.targetUserEmail}`"
+                        >
+                          <i class="fas fa-paper-plane"></i>
+                        </el-button>
+                      </el-tooltip>
+                    </template>
+                  </el-popconfirm>
+                  <el-popconfirm
+                    title="確定要刪除此通知嗎？"
+                    confirm-button-text="確定"
+                    cancel-button-text="取消"
+                    @confirm="deleteNotification(notification)"
                   >
-                    <i class="fas fa-trash"></i>
-                  </button>
-                </template>
-              </el-popconfirm>
-            </td>
-          </tr>
+                    <template #reference>
+                      <el-tooltip content="刪除通知" placement="top">
+                        <el-button
+                          type="danger"
+                          size="small"
+                          circle
+                          :aria-label="`刪除通知: ${notification.title}`"
+                        >
+                          <i class="fas fa-trash"></i>
+                        </el-button>
+                      </el-tooltip>
+                    </template>
+                  </el-popconfirm>
+                </td>
+              </template>
+
+              <!-- 豎屏模式：資訊行 -->
+              <template #info="{ isExpanded }">
+                <td>
+                  <i
+                    class="expand-icon fas"
+                    :class="isExpanded ? 'fa-down-left-and-up-right-to-center' : 'fa-up-right-and-down-left-from-center'"
+                  ></i>
+                </td>
+                <td @click.stop>
+                  <el-checkbox
+                    :model-value="isSelected(notification.notificationId)"
+                    @change="toggleSelection(notification.notificationId)"
+                    :aria-label="`選擇通知: ${notification.title}`"
+                  />
+                </td>
+                <td colspan="2">
+                  <div class="info-row-content">
+                    <span class="email-text">{{ notification.targetUserEmail }}</span>
+                    <el-tag size="small" :class="getTypeClass(notification.type)">
+                      {{ getTypeText(notification.type) }}
+                    </el-tag>
+                    <div class="status-indicators">
+                      <i
+                        :class="notification.isRead ? 'fas fa-envelope-open' : 'fas fa-envelope'"
+                        :style="{ color: notification.isRead ? '#67C23A' : '#909399' }"
+                      ></i>
+                      <i
+                        :class="notification.emailSent ? 'fas fa-paper-plane' : 'far fa-paper-plane'"
+                        :style="{ color: notification.emailSent ? '#409EFF' : '#909399' }"
+                      ></i>
+                    </div>
+                  </div>
+                </td>
+              </template>
+
+              <!-- 豎屏模式：操作行 -->
+              <template #actions>
+                <el-popconfirm
+                  :title="`確定要發送通知郵件給 ${notification.targetUserEmail} 嗎？`"
+                  confirm-button-text="確定"
+                  cancel-button-text="取消"
+                  @confirm="sendSingleEmail(notification)"
+                  :disabled="notification.emailSent || sendingEmails"
+                >
+                  <template #reference>
+                    <el-button
+                      type="primary"
+                      size="small"
+                      :disabled="notification.emailSent || sendingEmails"
+                    >
+                      <i class="fas fa-paper-plane"></i>
+                      {{ notification.emailSent ? '已發送' : '發送' }}
+                    </el-button>
+                  </template>
+                </el-popconfirm>
+                <el-popconfirm
+                  title="確定要刪除此通知嗎？"
+                  confirm-button-text="確定"
+                  cancel-button-text="取消"
+                  @confirm="deleteNotification(notification)"
+                >
+                  <template #reference>
+                    <el-button type="danger" size="small">
+                      <i class="fas fa-trash"></i>
+                    </el-button>
+                  </template>
+                </el-popconfirm>
+                <span class="time-text">{{ formatTime(notification.createdTime) }}</span>
+              </template>
+
+              <!-- 展開區域：通知詳情 -->
+              <template #default>
+                <div class="notification-expanded-detail">
+                  <h4><i class="fas fa-info-circle"></i> 通知詳情</h4>
+                  <div class="detail-grid">
+                    <div class="detail-item">
+                      <label>通知標題</label>
+                      <div class="detail-value">{{ notification.title }}</div>
+                    </div>
+                    <div class="detail-item">
+                      <label>關聯專案</label>
+                      <div class="detail-value">{{ notification.projectName || '無' }}</div>
+                    </div>
+                    <div class="detail-item">
+                      <label>創建時間</label>
+                      <div class="detail-value">{{ formatTime(notification.createdTime) }}</div>
+                    </div>
+                    <div class="detail-item" v-if="notification.readTime">
+                      <label>讀取時間</label>
+                      <div class="detail-value">{{ formatTime(notification.readTime) }}</div>
+                    </div>
+                    <div class="detail-item" v-if="notification.emailSentTime">
+                      <label>郵件發送時間</label>
+                      <div class="detail-value">{{ formatTime(notification.emailSentTime) }}</div>
+                    </div>
+                  </div>
+                  <div class="content-section">
+                    <label>通知內容</label>
+                    <div class="content-display">{{ notification.content }}</div>
+                  </div>
+                </div>
+              </template>
+            </ExpandableTableRow>
+          </template>
         </tbody>
       </table>
 
@@ -256,118 +425,15 @@
         />
       </div>
     </el-dialog>
-
-    <!-- Notification Detail Drawer -->
-    <el-drawer
-      v-model="showDetailDrawer"
-      title="通知詳情"
-      direction="btt"
-      size="100%"
-      :before-close="handleDetailDrawerClose"
-      class="drawer-green"
-    >
-
-      <div v-if="selectedNotification" class="notification-detail">
-        <!-- Basic Info -->
-        <div class="detail-section">
-          <h4><i class="fas fa-info-circle"></i> 基本資訊</h4>
-          <div class="detail-grid">
-            <div class="detail-item">
-              <label>通知標題</label>
-              <div class="detail-value">{{ selectedNotification.title }}</div>
-            </div>
-            <div class="detail-item">
-              <label>收件人</label>
-              <div class="detail-value">{{ selectedNotification.targetUserEmail }}</div>
-            </div>
-            <div class="detail-item">
-              <label>通知類型</label>
-              <div class="detail-value">
-                <span class="type-badge" :class="getTypeClass(selectedNotification.type)">
-                  {{ getTypeText(selectedNotification.type) }}
-                </span>
-              </div>
-            </div>
-            <div class="detail-item">
-              <label>關聯專案</label>
-              <div class="detail-value">{{ selectedNotification.projectName || '無' }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Content -->
-        <div class="detail-section">
-          <h4><i class="fas fa-file-alt"></i> 通知內容</h4>
-          <div class="content-display">
-            {{ selectedNotification.content }}
-          </div>
-        </div>
-
-        <!-- Status -->
-        <div class="detail-section">
-          <h4><i class="fas fa-chart-line"></i> 狀態資訊</h4>
-          <div class="detail-grid">
-            <div class="detail-item">
-              <label>閱讀狀態</label>
-              <div class="detail-value">
-                <i
-                  :class="selectedNotification.isRead ? 'fas fa-envelope-open' : 'fas fa-envelope'"
-                  :style="{ color: selectedNotification.isRead ? '#67C23A' : '#909399' }"
-                ></i>
-                {{ selectedNotification.isRead ? '已讀' : '未讀' }}
-              </div>
-            </div>
-            <div class="detail-item">
-              <label>郵件發送</label>
-              <div class="detail-value">
-                <i
-                  :class="selectedNotification.emailSent ? 'fas fa-paper-plane' : 'far fa-paper-plane'"
-                  :style="{ color: selectedNotification.emailSent ? '#409EFF' : '#909399' }"
-                ></i>
-                {{ selectedNotification.emailSent ? '已發送' : '未發送' }}
-              </div>
-            </div>
-            <div class="detail-item">
-              <label>創建時間</label>
-              <div class="detail-value">{{ formatTime(selectedNotification.createdTime) }}</div>
-            </div>
-            <div class="detail-item" v-if="selectedNotification.emailSentTime">
-              <label>發送時間</label>
-              <div class="detail-value">{{ formatTime(selectedNotification.emailSentTime) }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Actions -->
-        <div class="detail-actions">
-          <button
-            v-if="!selectedNotification.emailSent"
-            class="btn-primary"
-            @click="sendSingleEmailFromDetail"
-            :disabled="sendingEmails"
-          >
-            <i class="fas fa-paper-plane"></i>
-            {{ sendingEmails ? '發送中...' : '發送郵件' }}
-          </button>
-          <button
-            class="btn-danger"
-            @click="deleteNotificationFromDetail"
-          >
-            <i class="fas fa-trash"></i>
-            刪除通知
-          </button>
-        </div>
-      </div>
-    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, shallowRef, inject, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
-import { rpcClient } from '@/utils/rpc-client'
 import { adminApi } from '@/api/admin'
 import EmptyState from '@/components/shared/EmptyState.vue'
+import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
 import { useNotificationFilters, type Notification, type NotificationType } from '@/composables/useNotificationFilters'
 import { useNotificationSelection } from '@/composables/useNotificationSelection'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
@@ -375,11 +441,6 @@ import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 
 // ================== Interfaces ==================
-
-interface Project {
-  projectId: string
-  projectName: string
-}
 
 interface BatchSendResponse {
   success: boolean
@@ -402,7 +463,6 @@ const registerRefresh = inject<(fn: (() => void) | null) => void>('registerRefre
 const notifications = shallowRef<Notification[]>([])
 const loading = ref(false)
 const sendingEmails = ref(false)
-const projects = ref<Project[]>([])
 
 // Filter persistence (localStorage)
 const { filters, isLoaded: filtersLoaded } = useFilterPersistence('notificationManagement', {
@@ -530,9 +590,8 @@ const progressMessage = ref('')
 const progressPercentage = ref(0)
 const progressStatus = ref<'' | 'success' | 'warning' | 'exception'>('')
 
-// Detail drawer
-const showDetailDrawer = ref(false)
-const selectedNotification = ref<Notification | null>(null)
+// Expandable row tracking
+const expandedNotificationId = ref<string | null>(null)
 
 // Active filter count for badge
 const activeFilterCount = computed(() => {
@@ -551,23 +610,47 @@ const BATCH_SIZE = 50
 
 // Type mapping constants (using satisfies for type safety)
 const TYPE_TEXT_MAP = {
-  'stage_start': '階段開始',
-  'stage_voting': '階段投票',
-  'stage_completed': '階段完成',
-  'comment_mention': '評論提及',
-  'group_mention': '群組提及',
-  'new_comment': '新評論',
-  'comment_vote': '評論投票'
+  'submission_created': '作品提交',
+  'submission_withdrawn': '作品撤回',
+  'submission_approved': '作品批准',
+  'stage_status_changed': '階段狀態變更',
+  'ranking_proposal_submitted': '排名提案提交',
+  'ranking_proposal_withdrawn': '排名提案撤回',
+  'ranking_proposal_approved': '排名提案批准',
+  'comment_mentioned': '評論提及',
+  'comment_replied': '評論回覆',
+  'settlement_failed': '結算失敗',
+  'project_role_assigned': '專案角色分配',
+  'project_role_removed': '專案角色移除',
+  'group_member_added': '群組成員新增',
+  'group_member_removed': '群組成員移除',
+  'account_locked': '帳戶鎖定',
+  'account_unlocked': '帳戶解鎖',
+  'password_reset_success': '密碼重設成功',
+  'vote_reset': '投票重置',
+  'project_info_updated': '專案資訊更新'
 } satisfies Record<NotificationType, string>
 
 const TYPE_CLASS_MAP = {
-  'stage_start': 'type-stage',
-  'stage_voting': 'type-voting',
-  'stage_completed': 'type-completed',
-  'comment_mention': 'type-mention',
-  'group_mention': 'type-mention',
-  'new_comment': 'type-comment',
-  'comment_vote': 'type-vote'
+  'submission_created': 'type-submission',
+  'submission_withdrawn': 'type-submission',
+  'submission_approved': 'type-submission',
+  'stage_status_changed': 'type-stage',
+  'ranking_proposal_submitted': 'type-ranking',
+  'ranking_proposal_withdrawn': 'type-ranking',
+  'ranking_proposal_approved': 'type-ranking',
+  'comment_mentioned': 'type-comment',
+  'comment_replied': 'type-comment',
+  'settlement_failed': 'type-error',
+  'project_role_assigned': 'type-role',
+  'project_role_removed': 'type-role',
+  'group_member_added': 'type-group',
+  'group_member_removed': 'type-group',
+  'account_locked': 'type-account',
+  'account_unlocked': 'type-account',
+  'password_reset_success': 'type-account',
+  'vote_reset': 'type-vote',
+  'project_info_updated': 'type-project'
 } satisfies Record<NotificationType, string>
 
 // ================== Export Config ==================
@@ -580,7 +663,7 @@ const exportConfig = computed(() => ({
     const notification = n as unknown as Notification
     return [
       notification.targetUserEmail,
-      TYPE_TEXT_MAP[notification.type],
+      getTypeText(notification.type),
       notification.title,
       notification.content,
       notification.projectName || '-',
@@ -603,12 +686,8 @@ const loadNotifications = async (): Promise<void> => {
     if (response.success && response.data) {
       const notificationList = response.data.notifications || response.data || []
       const notificationArray = Array.isArray(notificationList) ? notificationList : []
-
-      // Map project names without mutating the original objects
-      notifications.value = notificationArray.map((n: any) => ({
-        ...n,
-        projectName: getProjectName(n.projectId)
-      })) as Notification[]
+      // projectName is now returned directly from API via LEFT JOIN
+      notifications.value = notificationArray as unknown as Notification[]
     } else {
       throw new Error(response.error?.message || '無法載入通知資料')
     }
@@ -618,28 +697,6 @@ const loadNotifications = async (): Promise<void> => {
   } finally {
     loading.value = false
   }
-}
-
-const loadProjects = async (): Promise<void> => {
-  try {
-    const httpResponse = await rpcClient.projects.list.$post({ json: {} })
-    const response = await httpResponse.json()
-
-    if (response.success && response.data) {
-      projects.value = response.data
-    } else {
-      throw new Error(response.error?.message || '載入專案失敗')
-    }
-  } catch (error) {
-    console.error('Error loading projects:', error)
-    ElMessage.error('無法載入專案列表')
-  }
-}
-
-const getProjectName = (projectId: string | undefined): string | null => {
-  if (!projectId) return null
-  const project = projects.value.find(p => p.projectId === projectId)
-  return project ? project.projectName : projectId
 }
 
 const refreshNotifications = async (): Promise<void> => {
@@ -797,50 +854,26 @@ const formatTime = (timestamp: number | undefined): string => {
   return new Date(timestamp).toLocaleString('zh-TW')
 }
 
-// Detail drawer methods
-const viewNotificationDetail = (notification: Notification): void => {
-  selectedNotification.value = notification
-  showDetailDrawer.value = true
-}
-
-const closeDetailDrawer = (): void => {
-  showDetailDrawer.value = false
-  selectedNotification.value = null
-}
-
-const handleDetailDrawerClose = (done: () => void): void => {
-  if (sendingEmails.value) {
-    ElMessage.warning('正在處理中，請稍候...')
-    return
-  }
-  done()
-}
-
-const sendSingleEmailFromDetail = async (): Promise<void> => {
-  if (selectedNotification.value) {
-    await sendSingleEmail(selectedNotification.value)
+// Expandable row methods
+const handleToggleExpansion = (notification: Notification): void => {
+  if (expandedNotificationId.value === notification.notificationId) {
+    expandedNotificationId.value = null
+  } else {
+    expandedNotificationId.value = notification.notificationId
   }
 }
 
-const deleteNotificationFromDetail = async (): Promise<void> => {
-  if (selectedNotification.value) {
-    await deleteNotification(selectedNotification.value)
-    closeDetailDrawer()
-  }
+const getTypeText = (type: NotificationType | string): string => {
+  return TYPE_TEXT_MAP[type as NotificationType] || type || '未知類型'
 }
 
-const getTypeText = (type: NotificationType): string => {
-  return TYPE_TEXT_MAP[type]
-}
-
-const getTypeClass = (type: NotificationType): string => {
-  return TYPE_CLASS_MAP[type]
+const getTypeClass = (type: NotificationType | string): string => {
+  return TYPE_CLASS_MAP[type as NotificationType] || 'type-default'
 }
 
 // ================== Lifecycle Hooks ==================
 
 onMounted(() => {
-  loadProjects()
   loadNotifications()
 
   // Register refresh function with parent SystemAdmin
@@ -971,6 +1004,27 @@ onBeforeUnmount(() => {
   min-width: 50px;
 }
 
+/* Statistics Card */
+.stats-card {
+  margin-bottom: 20px;
+  border-radius: 8px;
+}
+
+.stats-card :deep(.el-statistic__head) {
+  font-size: 13px;
+  color: #909399;
+}
+
+.stats-card :deep(.el-statistic__content) {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.stats-card :deep(.el-statistic__prefix) {
+  margin-right: 6px;
+  font-size: 16px;
+}
+
 /* Table */
 .table-container {
   background: white;
@@ -1012,48 +1066,71 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
 }
 
-/* Type badges */
-.type-badge {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
+/* Type tags - using el-tag with custom colors */
+:deep(.el-tag.type-submission) {
+  background: #E6F7FF !important;
+  color: #1890FF !important;
+  border-color: #91D5FF !important;
 }
 
-.type-stage {
-  background: #E6F7FF;
-  color: #1890FF;
+:deep(.el-tag.type-stage) {
+  background: #FFF7E6 !important;
+  color: #FA8C16 !important;
+  border-color: #FFD591 !important;
 }
 
-.type-voting {
-  background: #FFF7E6;
-  color: #FA8C16;
+:deep(.el-tag.type-ranking) {
+  background: #F0F9FF !important;
+  color: #52C41A !important;
+  border-color: #B7EB8F !important;
 }
 
-.type-completed {
-  background: #F0F9FF;
-  color: #52C41A;
+:deep(.el-tag.type-comment) {
+  background: #F9F0FF !important;
+  color: #722ED1 !important;
+  border-color: #D3ADF7 !important;
 }
 
-.type-mention {
-  background: #FFF0F6;
-  color: #EB2F96;
+:deep(.el-tag.type-error) {
+  background: #FFF1F0 !important;
+  color: #F5222D !important;
+  border-color: #FFA39E !important;
 }
 
-.type-comment {
-  background: #F9F0FF;
-  color: #722ED1;
+:deep(.el-tag.type-role) {
+  background: #FFF0F6 !important;
+  color: #EB2F96 !important;
+  border-color: #FFADD2 !important;
 }
 
-.type-vote {
-  background: #E6FFFB;
-  color: #13C2C2;
+:deep(.el-tag.type-group) {
+  background: #F6FFED !important;
+  color: #389E0D !important;
+  border-color: #95DE64 !important;
 }
 
-.type-default {
-  background: #F0F2F5;
-  color: #8C8C8C;
+:deep(.el-tag.type-account) {
+  background: #FFFBE6 !important;
+  color: #D48806 !important;
+  border-color: #FFE58F !important;
+}
+
+:deep(.el-tag.type-vote) {
+  background: #E6FFFB !important;
+  color: #13C2C2 !important;
+  border-color: #87E8DE !important;
+}
+
+:deep(.el-tag.type-project) {
+  background: #F0F2F5 !important;
+  color: #595959 !important;
+  border-color: #D9D9D9 !important;
+}
+
+:deep(.el-tag.type-default) {
+  background: #F0F2F5 !important;
+  color: #8C8C8C !important;
+  border-color: #D9D9D9 !important;
 }
 
 /* Status indicators */
@@ -1063,84 +1140,107 @@ onBeforeUnmount(() => {
   font-size: 16px;
 }
 
+/* Info row content (vertical mode) */
+.info-row-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.info-row-content .email-text {
+  font-weight: 500;
+  color: #2c3e50;
+  flex-shrink: 0;
+}
+
+/* Time text in actions row */
+.time-text {
+  font-size: 12px;
+  color: #909399;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* Notification expanded detail */
+.notification-expanded-detail {
+  padding: 0;
+}
+
+.notification-expanded-detail h4 {
+  margin: 0 0 16px 0;
+  color: #374151;
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 12px;
+}
+
+.notification-expanded-detail h4 i {
+  color: #409eff;
+  margin-right: 8px;
+}
+
+.notification-expanded-detail .detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.notification-expanded-detail .detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notification-expanded-detail .detail-item label {
+  font-weight: 500;
+  color: #6c757d;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.notification-expanded-detail .detail-value {
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+.notification-expanded-detail .content-section {
+  margin-top: 16px;
+}
+
+.notification-expanded-detail .content-section label {
+  display: block;
+  font-weight: 500;
+  color: #6c757d;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.notification-expanded-detail .content-display {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 12px;
+  line-height: 1.6;
+  color: #2c3e50;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 14px;
+}
+
 /* Actions */
 .actions {
   display: flex;
   gap: 8px;
   align-items: center;
   white-space: nowrap;
-}
-
-/* Buttons */
-.btn-primary,
-.btn-secondary,
-.btn-info,
-.btn-success,
-.btn-danger {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 4px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.3s;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.btn-primary {
-  background: #409EFF;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #66b1ff;
-}
-
-.btn-secondary {
-  background: #909399;
-  color: white;
-}
-
-.btn-secondary:hover {
-  background: #a6a9ad;
-}
-
-.btn-info {
-  background: #17a2b8;
-  color: white;
-}
-
-.btn-info:hover:not(:disabled) {
-  background: #138496;
-}
-
-.btn-success {
-  background: #67C23A;
-  color: white;
-}
-
-.btn-success:hover:not(:disabled) {
-  background: #85ce61;
-}
-
-.btn-danger {
-  background: #F56C6C;
-  color: white;
-}
-
-.btn-danger:hover {
-  background: #f78989;
-}
-
-.btn-sm {
-  padding: 5px 10px;
-  font-size: 12px;
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 /* No data */
@@ -1240,185 +1340,4 @@ button:disabled {
   white-space: nowrap;
 }
 
-/* Drawer Navy Header */
-.drawer-header-navy {
-  background: linear-gradient(135deg, #1e3a8a 0%, #3730a3 100%);
-  padding: 16px 24px;
-  margin: -20px -20px 20px -20px;
-  border-radius: 0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.drawer-header-navy h3 {
-  margin: 0;
-  color: white;
-  font-weight: 600;
-  font-size: 18px;
-}
-
-.drawer-header-navy i {
-  margin-right: 8px;
-}
-
-.drawer-close-btn {
-  background: none;
-  border: none;
-  color: white;
-  font-size: 18px;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 4px;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-}
-
-.drawer-close-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: scale(1.05);
-}
-
-/* Notification Detail */
-.notification-detail {
-  padding: 20px;
-}
-
-.detail-section {
-  margin-bottom: 30px;
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.detail-section h4 {
-  margin: 0 0 20px 0;
-  color: #2c3e50;
-  font-size: 16px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 10px;
-}
-
-.detail-section h4 i {
-  margin-right: 8px;
-  color: #409eff;
-}
-
-.detail-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-}
-
-.detail-item {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.detail-item label {
-  font-weight: 500;
-  color: #6c757d;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.detail-value {
-  color: #2c3e50;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.content-display {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 6px;
-  padding: 16px;
-  line-height: 1.6;
-  color: #2c3e50;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.detail-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: flex-end;
-  padding: 20px;
-  background: #f8f9fa;
-  border-top: 1px solid #eee;
-  margin: 20px -20px -20px -20px;
-}
-
-.detail-actions .btn-primary,
-.detail-actions .btn-danger {
-  padding: 10px 20px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.3s ease;
-}
-
-.detail-actions .btn-primary {
-  background: #409eff;
-  color: white;
-}
-
-.detail-actions .btn-primary:hover {
-  background: #66b1ff;
-}
-
-.detail-actions .btn-primary:disabled {
-  background: #a0cfff;
-  cursor: not-allowed;
-}
-
-.detail-actions .btn-danger {
-  background: #f56c6c;
-  color: white;
-}
-
-.detail-actions .btn-danger:hover {
-  background: #f78989;
-}
-
-/* el-drawer header 樣式 */
-:deep(.el-drawer__header) {
-  background: #2c3e50 !important;
-  color: white !important;
-  padding: 20px 30px !important;
-  margin-bottom: 0 !important;
-  border-bottom: 1px solid #34495e !important;
-}
-
-:deep(.el-drawer__title) {
-  color: white !important;
-  font-size: 18px !important;
-  font-weight: 600 !important;
-}
-
-:deep(.el-drawer__close-btn) {
-  color: white !important;
-}
-
-:deep(.el-drawer__close-btn:hover) {
-  color: #ecf0f1 !important;
-}
 </style>

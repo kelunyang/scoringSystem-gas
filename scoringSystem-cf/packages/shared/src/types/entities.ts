@@ -151,6 +151,12 @@ export interface Group {
   reportContent?: string;
   participationPercentages?: Record<string, number>;
   submittedAt?: number;
+  // Proposal stats (teacher/observer view only)
+  proposalStats?: {
+    versionCount: number;
+    latestStatus: 'pending' | 'settled' | 'withdrawn' | 'reset' | null;
+    latestVotingResult: 'agree' | 'disagree' | 'tie' | 'no_votes' | null;
+  };
 }
 
 /**

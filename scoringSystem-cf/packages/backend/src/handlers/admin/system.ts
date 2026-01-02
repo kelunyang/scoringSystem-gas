@@ -400,6 +400,7 @@ export async function getEntityDetails(
     const validTypes = [
       'user', 'project', 'stage', 'group', 'submission', 'comment',
       'settlement', 'notification', 'transaction', 'invitation',
+      'ranking_proposal',
       // System entity types (for audit logs)
       'system_settings', 'system_dashboard', 'system_robots', 'system_audit', 'security_audit'
     ];
@@ -543,6 +544,14 @@ export async function getEntityDetails(
         query = `
           SELECT invitationId, invitationCode, targetEmail, createdBy, createdTime, expiryTime, status, usedTime
           FROM invitation_codes_with_status WHERE invitationId = ?
+        `;
+        break;
+      case 'ranking_proposal':
+        query = `
+          SELECT proposalId, projectId, stageId, groupId, proposerEmail,
+                 rankingData, createdTime, status, votingResult,
+                 agreeVotes, opposeCount, totalVotes, voteScore
+          FROM rankingproposals_with_status WHERE proposalId = ?
         `;
         break;
 

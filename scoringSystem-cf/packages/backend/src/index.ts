@@ -220,7 +220,7 @@ app.route('/comments', commentsRouter);
 // Scoring routes (COMPLETED)
 app.route('/scoring', scoringRouter);
 
-// Rankings routes (COMPLETED) - Using /api prefix to match frontend RPC client
+// Rankings routes (COMPLETED)
 app.route('/api/rankings', rankingsRouter);
 
 // DISABLED: Tag management routes - tags system has been disabled

@@ -167,6 +167,26 @@
             </div>
           </div>
 
+          <!-- Max Vote Reset Count -->
+          <div class="config-item">
+            <label class="config-label">組長重置投票次數上限</label>
+            <div class="slider-with-value">
+              <el-slider
+                v-model="editForm.maxVoteResetCount"
+                :min="1"
+                :max="5"
+                :step="1"
+                :show-stops="true"
+                :marks="{ 1: '1', 2: '2', 3: '3', 4: '4', 5: '5' }"
+              />
+              <span class="slider-value">{{ editForm.maxVoteResetCount }} 次</span>
+            </div>
+            <div class="field-hint">
+              每個小組在每個階段最多可重置投票的次數（預設：1 次）<br>
+              當投票結果為平手或反對票多時，組長可重置投票讓組員重新投票
+            </div>
+          </div>
+
           <!-- Reset to Defaults Button -->
           <div class="config-actions">
             <button class="btn-reset" @click="loadSystemDefaults" :disabled="loadingDefaults">
@@ -224,6 +244,7 @@ export interface ProjectForm {
   studentRankingWeight: number
   teacherRankingWeight: number
   commentRewardPercentile: number
+  maxVoteResetCount: number
 }
 
 export interface Props {
@@ -244,7 +265,8 @@ const props = withDefaults(defineProps<Props>(), {
     maxCommentSelections: 3,
     studentRankingWeight: 0.7,
     teacherRankingWeight: 0.3,
-    commentRewardPercentile: 0
+    commentRewardPercentile: 0,
+    maxVoteResetCount: 1
   }),
   updating: false
 })
@@ -348,6 +370,7 @@ async function loadSystemDefaults(): Promise<void> {
       editForm.value.studentRankingWeight = response.data.studentRankingWeight
       editForm.value.teacherRankingWeight = response.data.teacherRankingWeight
       editForm.value.commentRewardPercentile = response.data.commentRewardPercentile
+      editForm.value.maxVoteResetCount = response.data.maxVoteResetCount
     }
   } catch (error) {
     console.error('Failed to load system scoring defaults:', error)
@@ -372,6 +395,7 @@ async function loadProjectScoringConfig(projectId: string): Promise<void> {
       editForm.value.studentRankingWeight = response.data.studentRankingWeight
       editForm.value.teacherRankingWeight = response.data.teacherRankingWeight
       editForm.value.commentRewardPercentile = response.data.commentRewardPercentile
+      editForm.value.maxVoteResetCount = response.data.maxVoteResetCount
     }
   } catch (error) {
     console.error('Failed to load project scoring config:', error)

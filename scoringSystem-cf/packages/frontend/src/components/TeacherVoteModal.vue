@@ -785,7 +785,7 @@ function handleApplyAIRanking(ranking: string[], mode: 'submission' | 'comment')
 async function loadVersionHistory(autoEnterPreview: boolean = false): Promise<void> {
   try {
     // 載入成果排名版本歷史（完整數據）
-    const httpResponse1 = await (rpcClient.rankings as any)['teacher-ranking-versions'].$post({
+    const httpResponse1 = await (rpcClient.api.rankings as any)['teacher-ranking-versions'].$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,
@@ -816,7 +816,7 @@ async function loadVersionHistory(autoEnterPreview: boolean = false): Promise<vo
     }
 
     // 載入評論排名版本歷史（完整數據）
-    const httpResponse2 = await (rpcClient.rankings as any)['teacher-ranking-versions'].$post({
+    const httpResponse2 = await (rpcClient.api.rankings as any)['teacher-ranking-versions'].$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,
@@ -1272,7 +1272,7 @@ async function submitSubmissionRankings(): Promise<void> {
       rank: index + 1
     }))
 
-    const httpResponse = await (rpcClient.rankings as any)['teacher-comprehensive-vote'].$post({
+    const httpResponse = await (rpcClient.api.rankings as any)['teacher-comprehensive-vote'].$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,
@@ -1325,7 +1325,7 @@ async function submitCommentRankings(): Promise<void> {
         rank: index + 1
       }))
 
-    const httpResponse = await (rpcClient.rankings as any)['teacher-comprehensive-vote'].$post({
+    const httpResponse = await (rpcClient.api.rankings as any)['teacher-comprehensive-vote'].$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,

@@ -311,7 +311,7 @@
           @click="showResetDrawer = true"
         >
           <i class="fas fa-sync-alt"></i>
-          重置組內投票（僅此一次機會）
+          重置組內投票（剩餘 {{ maxVoteResetCount - resetCount }} 次機會）
         </el-button>
 
         <!-- 關閉按鈕（當沒有其他按鈕時顯示） -->
@@ -494,17 +494,18 @@
           <div class="info-row">
             <span class="info-label">投票狀況：</span>
             <span class="info-value vote-status-tie">
-              <i class="fas fa-balance-scale"></i>
+              <i :class="isTied ? 'fas fa-balance-scale' : 'fas fa-thumbs-down'"></i>
               支持 {{ currentResetInfo.supportCount }} 票 /
               反對 {{ currentResetInfo.opposeCount }} 票
-              （共 {{ currentResetInfo.totalVotes }} 票，平手）
+              （共 {{ currentResetInfo.totalVotes }} 票，{{ isTied ? '平手' : '反對票多' }}）
             </span>
           </div>
           <div class="info-row">
             <span class="info-label">重置次數：</span>
             <span class="info-value">
-              {{ currentResetInfo.resetCount }} / 1
+              {{ currentResetInfo.resetCount }} / {{ maxVoteResetCount }}
               <span v-if="currentResetInfo.resetCount === 0" style="color: #52c41a;">（尚未使用）</span>
+              <span v-else-if="currentResetInfo.resetCount < maxVoteResetCount" style="color: #fa8c16;">（剩餘 {{ maxVoteResetCount - currentResetInfo.resetCount }} 次）</span>
             </span>
           </div>
         </div>
@@ -541,7 +542,7 @@
           <li>系統會創建一個新的提案，使用相同的排名資料</li>
           <li>所有組員需要對新提案重新投票</li>
           <li>舊提案的投票記錄將保留，但不再生效</li>
-          <li><strong>每組每階段只有一次重置機會</strong>，使用後無法再次重置</li>
+          <li><strong>每組每階段最多 {{ maxVoteResetCount }} 次重置機會</strong>，目前剩餘 {{ maxVoteResetCount - resetCount }} 次</li>
           <li>此操作無法復原，請謹慎確認</li>
         </ul>
       </div>
@@ -731,17 +732,19 @@ const userGroupInfo = computed(() => rankingProposals.userGroupInfo.value || pro
 // ============= Computed Properties =============
 
 const hasExistingProposal = computed(() => {
-  return !!(proposalVersions.value.some(p => p.status !== 'withdrawn') && selectedVersionId.value)
+  // 只有 pending 狀態才算是「有現存提案」，reset/withdrawn/settled 都不阻擋新提案
+  return !!(proposalVersions.value.some(p => p.status === 'pending') && selectedVersionId.value)
 })
 
 const isLatestVersion = computed(() => {
   if (!proposalVersions.value || proposalVersions.value.length === 0) {
     return false
   }
+  // 只有 pending 狀態才算是「最新版本」
   const latestProposal = proposalVersions.value
     .slice()
     .reverse()
-    .find(p => p.status !== 'withdrawn')
+    .find(p => p.status === 'pending')
   return selectedVersionId.value === latestProposal?.proposalId
 })
 
@@ -752,7 +755,8 @@ const isViewingOldVersion = computed(() => {
 const latestProposalRankings = ref<RankingItem[]>([])
 
 const hasActiveProposal = computed(() => {
-  return proposalVersions.value.some(p => p.status !== 'withdrawn')
+  // 只有 pending 狀態才算是「有活躍提案」
+  return proposalVersions.value.some(p => p.status === 'pending')
 })
 
 const displayRankings = computed(() => {
@@ -806,6 +810,10 @@ const resetCount = computed(() => {
   return proposalVersions.value.filter(p => p.status === 'reset').length
 })
 
+// Project scoring config from hook
+const projectScoringConfig = computed(() => rankingProposals.projectScoringConfig.value)
+const maxVoteResetCount = computed(() => projectScoringConfig.value?.maxVoteResetCount ?? 1)
+
 const isGroupLeader = computed(() => {
   return userGroupInfo.value?.isGroupLeader || false
 })
@@ -823,13 +831,22 @@ const isTied = computed(() => {
          currentProposal.value.supportCount > 0
 })
 
+// New: Check if oppose votes are more than support votes
+const isDisagree = computed(() => {
+  if (!currentProposal.value) return false
+  return currentProposal.value.opposeCount > currentProposal.value.supportCount
+})
+
+// Can reset when: tied OR disagree (not when proposal passed with support > oppose)
+const canResetCondition = computed(() => isTied.value || isDisagree.value)
+
 const showResetButton = computed(() => {
   return !!(isGroupLeader.value &&
          hasExistingProposal.value &&
          isLatestVersion.value &&
          allMembersVoted.value &&
-         isTied.value &&
-         resetCount.value < 1 &&
+         canResetCondition.value &&
+         resetCount.value < maxVoteResetCount.value &&
          currentProposal.value?.status === 'pending')
 })
 
@@ -838,8 +855,8 @@ const showTieReminderForMembers = computed(() => {
          hasExistingProposal.value &&
          isLatestVersion.value &&
          allMembersVoted.value &&
-         isTied.value &&
-         resetCount.value < 1 &&
+         canResetCondition.value &&
+         resetCount.value < maxVoteResetCount.value &&
          currentProposal.value?.status === 'pending')
 })
 
@@ -1135,7 +1152,8 @@ const { clearAlerts } = useVoteResultAlerts({
   hasExistingProposal,
   currentProposal,
   resetCount,
-  currentResetInfo
+  currentResetInfo,
+  maxVoteResetCount
 })
 
 // ============= Watchers =============
@@ -1231,21 +1249,26 @@ watch([currentProposal, () => localSubmittedGroups.value], ([proposal, groups]) 
 
 // ============= Event Handlers =============
 
-function onVersionChange(proposalId: string) {
-  if (proposalId) {
-    rankingProposals.selectVersion(proposalId)
+async function onVersionChange(proposalId: string) {
+  if (!proposalId) return
 
-    if (isViewingOldVersion.value) {
-      const latestProposal = proposalVersions.value
-        .slice()
-        .reverse()
-        .find(p => p.status !== 'withdrawn')
-      if (latestProposal && latestProposal.proposalId !== proposalId) {
-        loadLatestProposalRankings(latestProposal.proposalId)
-      }
-    } else {
-      latestProposalRankings.value = []
+  // First update the selected version - this triggers isViewingOldVersion recalculation
+  rankingProposals.selectVersion(proposalId)
+
+  // Wait for Vue to update computed properties
+  await nextTick()
+
+  // Now check if we're viewing an old version and need to load comparison data
+  if (isViewingOldVersion.value) {
+    const latestProposal = proposalVersions.value
+      .slice()
+      .reverse()
+      .find(p => p.status !== 'withdrawn')
+    if (latestProposal && latestProposal.proposalId !== proposalId) {
+      loadLatestProposalRankings(latestProposal.proposalId)
     }
+  } else {
+    latestProposalRankings.value = []
   }
 }
 

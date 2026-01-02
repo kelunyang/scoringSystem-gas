@@ -101,6 +101,17 @@ export interface SubmittedGroup {
 }
 
 /**
+ * Project scoring config
+ */
+export interface ProjectScoringConfig {
+  maxVoteResetCount: number
+  maxCommentSelections: number
+  studentRankingWeight: number
+  teacherRankingWeight: number
+  commentRewardPercentile: number
+}
+
+/**
  * Return type for useRankingProposals
  */
 export interface UseRankingProposalsReturn {
@@ -110,6 +121,7 @@ export interface UseRankingProposalsReturn {
   currentProposal: ComputedRef<RankingProposal | null>
   userVote: ComputedRef<'support' | 'oppose' | null>
   userGroupInfo: ComputedRef<UserGroupInfo | null>
+  projectScoringConfig: ComputedRef<ProjectScoringConfig | null>
 
   // Loading states
   isLoading: ComputedRef<boolean>
@@ -168,7 +180,7 @@ export function useRankingProposals(
   const proposalsQuery = useQuery({
     queryKey: computed(() => ['rankings', 'proposals', getValue(projectId), getValue(stageId)]),
     queryFn: async (): Promise<ProposalsResponseData> => {
-      const httpResponse = await (rpcClient.rankings as any).proposals.$post({
+      const httpResponse = await (rpcClient.api.rankings as any).proposals.$post({
         json: {
           projectId: getValue(projectId),
           stageId: getValue(stageId)
@@ -190,6 +202,31 @@ export function useRankingProposals(
     }),
     staleTime: 1000 * 30, // 30 seconds for voting data
     gcTime: 1000 * 60 * 5, // 5 minutes garbage collection
+    refetchOnWindowFocus: false
+  })
+
+  // ===== Query: Project Scoring Config =====
+  const configQuery = useQuery({
+    queryKey: computed(() => ['projects', 'scoring-config', getValue(projectId)]),
+    queryFn: async (): Promise<ProjectScoringConfig> => {
+      const httpResponse = await rpcClient.projects[':projectId']['scoring-config'].$get({
+        param: { projectId: getValue(projectId) }
+      })
+      const response = await httpResponse.json()
+
+      if (!response.success) {
+        throw new Error(response.error || '載入專案配置失敗')
+      }
+
+      return response.data as ProjectScoringConfig
+    },
+    enabled: computed(() => {
+      const externalEnabled = options?.enabled ? getValue(options.enabled) : true
+      const pid = getValue(projectId)
+      return externalEnabled && userQuery.isSuccess.value && !!pid
+    }),
+    staleTime: 1000 * 60 * 5, // 5 minutes for config data
+    gcTime: 1000 * 60 * 10,
     refetchOnWindowFocus: false
   })
 
@@ -258,9 +295,10 @@ export function useRankingProposals(
   const currentProposal = computed(() => {
     if (proposals.value.length === 0) return null
 
-    // If no version selected, auto-select latest non-withdrawn
+    // If no version selected, auto-select latest pending proposal
+    // 只有 pending 狀態才是真正「進行中」的提案
     if (!selectedVersionId.value) {
-      const latest = [...proposals.value].reverse().find(p => p.status !== 'withdrawn')
+      const latest = [...proposals.value].reverse().find(p => p.status === 'pending')
       if (latest) {
         selectedVersionId.value = latest.proposalId
       }
@@ -286,7 +324,8 @@ export function useRankingProposals(
   // ===== Auto-select latest version when proposals change =====
   watch(proposals, (newProposals) => {
     if (newProposals.length > 0 && !selectedVersionId.value) {
-      const latest = [...newProposals].reverse().find(p => p.status !== 'withdrawn')
+      // 只有 pending 狀態才是真正「進行中」的提案
+      const latest = [...newProposals].reverse().find(p => p.status === 'pending')
       if (latest) {
         selectedVersionId.value = latest.proposalId
       }
@@ -296,7 +335,7 @@ export function useRankingProposals(
   // ===== Mutation: Vote =====
   const voteMutation = useMutation({
     mutationFn: async ({ type }: { type: 'support' | 'oppose' }) => {
-      const httpResponse = await (rpcClient.rankings as any).vote.$post({
+      const httpResponse = await (rpcClient.api.rankings as any).vote.$post({
         json: {
           projectId: getValue(projectId),
           proposalId: selectedVersionId.value,
@@ -324,7 +363,7 @@ export function useRankingProposals(
   // ===== Mutation: Submit Proposal =====
   const submitMutation = useMutation({
     mutationFn: async ({ rankingData }: { rankingData: RankingData[] }) => {
-      const httpResponse = await (rpcClient.rankings as any).submit.$post({
+      const httpResponse = await (rpcClient.api.rankings as any).submit.$post({
         json: {
           projectId: getValue(projectId),
           stageId: getValue(stageId),
@@ -354,7 +393,7 @@ export function useRankingProposals(
   // ===== Mutation: Withdraw =====
   const withdrawMutation = useMutation({
     mutationFn: async () => {
-      const httpResponse = await (rpcClient.rankings as any).withdraw.$post({
+      const httpResponse = await (rpcClient.api.rankings as any).withdraw.$post({
         json: { proposalId: selectedVersionId.value }
       })
       const response = await httpResponse.json()
@@ -378,7 +417,7 @@ export function useRankingProposals(
   // ===== Mutation: Reset Votes =====
   const resetMutation = useMutation({
     mutationFn: async ({ reason }: { reason?: string }) => {
-      const httpResponse = await (rpcClient.rankings as any)['reset-votes'].$post({
+      const httpResponse = await (rpcClient.api.rankings as any)['reset-votes'].$post({
         json: { proposalId: selectedVersionId.value, reason: reason || '' }
       })
       const response = await httpResponse.json()
@@ -401,6 +440,9 @@ export function useRankingProposals(
     }
   })
 
+  // ===== Computed: Project Scoring Config =====
+  const projectScoringConfig = computed(() => configQuery.data.value || null)
+
   // ===== Return =====
   return {
     // Queries
@@ -409,6 +451,7 @@ export function useRankingProposals(
     currentProposal,
     userVote,
     userGroupInfo,
+    projectScoringConfig,
 
     // Loading states
     isLoading: computed(() => proposalsQuery.isLoading.value || groupsQuery.isLoading.value),

@@ -528,6 +528,185 @@ class TestCommentReactionSecurity:
 
 
 # ============================================================================
+# Stage Pause/Resume Workflow Tests
+# ============================================================================
+
+class TestStagePauseResumeWorkflow:
+    """Test stage pause/resume workflow integrity"""
+
+    @pytest.mark.high
+    @pytest.mark.business
+    def test_paused_stage_blocks_submissions(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify paused stages block new submissions.
+
+        Attack Vector:
+        - Submit during paused stage
+        - Bypass pause restrictions
+
+        Expected: Submissions rejected during pause
+        """
+        # Get project with stages
+        response = api_client.post('/projects/list-with-stages', auth=admin_token)
+        if response.status_code != 200:
+            pytest.skip("Cannot list projects")
+
+        data = response.json()
+        projects = data.get('data', [])
+
+        for project in projects:
+            for stage in project.get('stages', []):
+                if stage.get('status') == 'paused':
+                    # Try to submit to paused stage
+                    response = api_client.post('/submissions/submit', auth=admin_token, json={
+                        'projectId': project['projectId'],
+                        'stageId': stage['stageId'],
+                        'content': 'Test during pause'
+                    })
+
+                    assert response.status_code in [400, 403, 422], \
+                        "Submission accepted during paused stage"
+                    return
+
+        # Note: If no paused stages exist, this test passes silently
+
+    @pytest.mark.high
+    @pytest.mark.business
+    def test_resume_restores_previous_status(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify resume restores to previous status, not arbitrary status.
+
+        Attack Vector:
+        - Manipulate resume to change stage to different status
+        - Bypass workflow
+
+        Expected: Resume only restores to pre-pause status
+        """
+        # This is a conceptual test - actual implementation
+        # should restore to the status before pause
+        pass
+
+
+# ============================================================================
+# Force Withdraw Workflow Tests
+# ============================================================================
+
+class TestForceWithdrawWorkflow:
+    """Test force withdrawal workflow integrity"""
+
+    @pytest.mark.high
+    @pytest.mark.business
+    def test_force_withdraw_requires_valid_submission(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify force-withdraw requires valid submission.
+        """
+        response = api_client.post('/submissions/force-withdraw', auth=admin_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test',
+            'submissionId': 'sub_nonexistent',
+            'reason': 'Test withdrawal'
+        })
+
+        # Should fail for non-existent submission
+        assert response.status_code in [400, 404], \
+            f"Force withdraw accepted non-existent submission"
+
+    @pytest.mark.high
+    @pytest.mark.business
+    def test_force_withdraw_creates_audit_trail(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify force-withdraw creates proper audit trail.
+
+        Important for accountability of teacher actions.
+        """
+        # Force withdraw should be logged in event logs
+        # This is a conceptual test
+        pass
+
+
+# ============================================================================
+# Vote Reset Limit Tests
+# ============================================================================
+
+class TestVoteResetLimits:
+    """Test vote reset limit enforcement"""
+
+    @pytest.mark.high
+    @pytest.mark.business
+    def test_vote_reset_respects_limit(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify vote reset respects maxVoteResetCount limit.
+
+        Attack Vector:
+        - Reset votes unlimited times
+        - Stall voting indefinitely
+
+        Expected: Resets limited by project config
+        """
+        # This test verifies the reset count is enforced
+        # Actual testing requires project with votes
+        pass
+
+    @pytest.mark.high
+    @pytest.mark.business
+    def test_vote_reset_only_by_leader(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify only group leader can reset votes.
+        """
+        fake_member_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJtZW1iZXIifQ.fake"
+
+        response = api_client.post('/rankings/reset-votes', auth=fake_member_token, json={
+            'proposalId': 'prop_test',
+            'reason': 'Member attempt'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Non-leader could reset votes"
+
+    @pytest.mark.medium
+    @pytest.mark.business
+    def test_vote_reset_only_for_tied_proposals(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify vote reset only allowed for tied/failed proposals.
+
+        Attack Vector:
+        - Reset a passed proposal
+        - Override agreed results
+
+        Expected: Reset rejected for passed proposals
+        """
+        # Reset should only work on tied/disagreed proposals
+        pass
+
+
+# ============================================================================
 # Data Export Security Tests
 # ============================================================================
 

@@ -306,14 +306,14 @@ export async function logApiAction(
     entityId?: string;         // Primary entity ID
     message: string;           // REQUIRED: Human-readable message
     context?: any;             // Additional context data
-    level?: 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL'; // Log level
+    level?: 'info' | 'warning' | 'error' | 'critical'; // Log level
     relatedEntities?: Record<string, string>; // Secondary entities
   }
 ): Promise<boolean> {
   try {
     const now = Date.now();
     const logId = generateId('log');
-    const level = details.level ?? 'INFO';
+    const level = details.level ?? 'info';
 
     // Prepare context JSON (include dedupKey for debugging)
     const contextData = {

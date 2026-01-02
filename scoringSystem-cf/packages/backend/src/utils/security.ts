@@ -62,7 +62,7 @@ export async function logSecurityAction(
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       generateId(ID_PREFIXES.LOG),
-      details.severity.toUpperCase(), // level: INFO, WARNING, ERROR, CRITICAL
+      details.severity.toLowerCase(), // level: info, warning, error, critical
       details.action,                  // functionName
       details.userEmail,               // userId (now using userEmail)
       details.action,                  // action
@@ -187,7 +187,7 @@ export async function disableUserAccount(
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       generateId(ID_PREFIXES.LOG),
-      'CRITICAL',
+      'critical',
       'disableUserAccount',
       userEmail,
       `ACCOUNT_${lockType.toUpperCase()}_LOCK`,

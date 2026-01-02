@@ -75,6 +75,7 @@ export interface Env {
   DEFAULT_STUDENT_RANKING_WEIGHT: string;
   DEFAULT_TEACHER_RANKING_WEIGHT: string;
   DEFAULT_COMMENT_REWARD_PERCENTILE: string;
+  DEFAULT_MAX_VOTE_RESET_COUNT: string;
 
   // R2 Storage (for file uploads)
   FILES?: R2Bucket;

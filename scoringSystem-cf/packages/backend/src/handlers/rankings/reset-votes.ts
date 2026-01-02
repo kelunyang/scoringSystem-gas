@@ -1,6 +1,6 @@
 /**
  * @fileoverview Reset ranking proposal votes handler
- * Allows group leaders to reset votes when there's a tie
+ * Allows group leaders to reset votes when proposal doesn't pass (tie or disagree)
  * Political science basis: "Division of the Assembly" - re-vote on the same motion
  */
 
@@ -11,13 +11,13 @@ import { queueSingleNotification } from '../../queues/notification-producer';
 
 /**
  * Reset votes on a ranking proposal
- * Permission: Level 3-4 (Group leader only, when all members voted and tied)
+ * Permission: Level 3-4 (Group leader only, when all members voted and proposal didn't pass)
  *
  * Requirements:
  * - User must be group leader
  * - All group members must have voted
- * - Vote must be tied (support == oppose)
- * - Can only reset once per stage (resetCount < 1)
+ * - Proposal must not have passed (support <= oppose, i.e. tied or disagreed)
+ * - Can only reset N times per stage (N = project.maxVoteResetCount, default 1)
  * - Proposal status must be 'pending'
  *
  * Actions:
@@ -76,15 +76,25 @@ export async function resetProposalVotes(
       return errorResponse('NOT_GROUP_LEADER', 'Only group leaders can reset votes');
     }
 
-    // Check reset count: only allow 1 reset per group per stage
+    // Get project configuration for maxVoteResetCount
+    const projectConfig = await env.DB.prepare(`
+      SELECT maxVoteResetCount FROM projects WHERE projectId = ?
+    `).bind(projectId).first<{ maxVoteResetCount: number | null }>();
+
+    const maxResetCount = projectConfig?.maxVoteResetCount ?? 1;
+
+    // Check reset count: only allow N resets per group per stage (N from project config)
     const resetCount = await env.DB.prepare(`
       SELECT COUNT(*) as count
       FROM rankingproposals_with_status
       WHERE groupId = ? AND stageId = ? AND status = 'reset'
     `).bind(groupId, stageId).first();
 
-    if (resetCount && (resetCount.count as number) >= 1) {
-      return errorResponse('RESET_LIMIT_EXCEEDED', 'Each group can only reset votes once per stage');
+    if (resetCount && (resetCount.count as number) >= maxResetCount) {
+      return errorResponse(
+        'RESET_LIMIT_EXCEEDED',
+        `Each group can only reset votes ${maxResetCount} time(s) per stage`
+      );
     }
 
     // Get all group members
@@ -130,13 +140,15 @@ export async function resetProposalVotes(
       }
     }
 
-    // Check if tied
-    if (supportCount !== opposeCount) {
+    // Check if proposal passed (support > oppose means proposal approved, cannot reset)
+    // Allow reset when: tied (support == oppose) OR disagreed (oppose > support)
+    if (supportCount > opposeCount) {
       return errorResponse(
-        'NOT_TIED',
-        `Votes are not tied. Support: ${supportCount}, Oppose: ${opposeCount}`
+        'PROPOSAL_PASSED',
+        `Proposal passed with majority support (${supportCount} vs ${opposeCount}). Cannot reset.`
       );
     }
+    // At this point: supportCount <= opposeCount (tied or disagreed), reset is allowed
 
     // ========== DEDUPLICATION: Prevent duplicate resets ==========
     const now = Date.now();
@@ -246,11 +258,14 @@ export async function resetProposalVotes(
 
       // Send notification to all members
       for (const memberEmail of memberEmails) {
+        const voteStatus = supportCount === opposeCount
+          ? `票數持平（${supportCount}-${opposeCount}）`
+          : `反對票多（贊成${supportCount}，反對${opposeCount}）`;
         await queueSingleNotification(env, {
           targetUserEmail: memberEmail,
           type: 'ranking_proposal_approved',
           title: '投票已重置',
-          content: `因票數持平（${supportCount}-${opposeCount}），小組長已重置投票。請對新提案重新投票。`,
+          content: `因${voteStatus}，小組長已重置投票。請對新提案重新投票。`,
           projectId,
           stageId,
           metadata: {
@@ -266,7 +281,8 @@ export async function resetProposalVotes(
       // Don't fail the reset if notification fails
     }
 
-    console.log(`✅ Reset votes for proposal ${proposalId} by ${userEmail}. Tie: ${supportCount}-${opposeCount}`);
+    const voteResult = supportCount === opposeCount ? 'Tie' : 'Disagree';
+    console.log(`✅ Reset votes for proposal ${proposalId} by ${userEmail}. ${voteResult}: ${supportCount}-${opposeCount}`);
     console.log(`✅ Created new proposal ${newProposalId} with same ranking data`);
 
     return successResponse({

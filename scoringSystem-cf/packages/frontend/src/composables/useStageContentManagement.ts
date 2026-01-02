@@ -396,7 +396,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
         stageId: stage.id
       })
 
-      const httpResponse = await (rpcClient.rankings as any)['stage-rankings'].$post({
+      const httpResponse = await (rpcClient.api.rankings as any)['stage-rankings'].$post({
         json: {
           projectId: projectId,
           stageId: stage.id
@@ -444,11 +444,17 @@ export function useStageContentManagement(projectData: any, userData: any) {
                 }
               }
 
+              // 新增：映射 proposalStats（教師/觀察者視圖）
+              if (groupRankings.proposalStats) {
+                group.proposalStats = groupRankings.proposalStats
+              }
+
               console.log(`✅ [loadStageRankings] 組別 ${group.groupId} 排名已更新:`, {
                 voteRank: group.voteRank,
                 voteRankData: group.voteRankData,
                 teacherRank: group.teacherRank,
-                teacherRankData: group.teacherRankData
+                teacherRankData: group.teacherRankData,
+                proposalStats: group.proposalStats
               })
             } else {
               console.log(`ℹ️ [loadStageRankings] 組別 ${group.groupId} 沒有找到 rankings 資料`)

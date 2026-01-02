@@ -141,6 +141,82 @@ class TestRateLimiting:
         # AI endpoint should be rate limited
         # Note: May need actual AI endpoint access to fully test
 
+    @pytest.mark.high
+    @pytest.mark.resources
+    def test_ai_bt_suggestion_rate_limiting(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify Bradley-Terry AI suggestion has rate limiting.
+
+        Same limits as regular AI suggestion (10/min, 60/hour).
+        """
+        response = api_client.post('/projects/list', auth=admin_token)
+        if response.status_code != 200:
+            pytest.skip("Cannot list projects")
+
+        data = response.json()
+        projects = data.get('data', [])
+        if not projects:
+            pytest.skip("No projects available")
+
+        project_id = projects[0]['projectId']
+
+        rate_limited = False
+
+        for i in range(12):
+            response = api_client.post('/rankings/ai-bt-suggestion', auth=admin_token, json={
+                'projectId': project_id,
+                'stageId': 'stg_test',
+                'provider': 'test'
+            })
+
+            if response.status_code == 429:
+                rate_limited = True
+                break
+
+            time.sleep(0.1)
+
+    @pytest.mark.high
+    @pytest.mark.resources
+    def test_ai_multi_agent_rate_limiting(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify Multi-Agent AI suggestion has rate limiting.
+
+        Multi-agent mode is more resource-intensive, should have same limits.
+        """
+        response = api_client.post('/projects/list', auth=admin_token)
+        if response.status_code != 200:
+            pytest.skip("Cannot list projects")
+
+        data = response.json()
+        projects = data.get('data', [])
+        if not projects:
+            pytest.skip("No projects available")
+
+        project_id = projects[0]['projectId']
+
+        rate_limited = False
+
+        for i in range(12):
+            response = api_client.post('/rankings/ai-multi-agent-suggestion', auth=admin_token, json={
+                'projectId': project_id,
+                'stageId': 'stg_test',
+                'provider': 'test'
+            })
+
+            if response.status_code == 429:
+                rate_limited = True
+                break
+
+            time.sleep(0.1)
+
 
 # ============================================================================
 # Pagination Tests

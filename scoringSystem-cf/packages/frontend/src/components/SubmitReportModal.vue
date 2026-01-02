@@ -74,44 +74,10 @@
 
       <!-- Markdown 編輯區 -->
       <div class="editor-section">
-        <!-- 工具列 -->
-        <div class="editor-toolbar">
-          <button
-            v-for="tool in markdownTools"
-            :key="tool.name"
-            class="tool-btn"
-            :title="tool.title"
-            @click="insertMarkdown(tool)"
-          >
-            <span v-if="tool.icon" v-html="tool.icon"></span>
-            <span v-else>{{ tool.name }}</span>
-          </button>
-          <div class="toolbar-divider"></div>
-          <button
-            class="tool-btn preview-btn"
-            :class="{ active: showPreview }"
-            @click="togglePreview"
-            title="預覽Markdown"
-          >
-            <i class="fas fa-eye"></i> 預覽
-          </button>
-        </div>
-
-        <!-- 編輯/預覽區域 -->
-        <div class="editor-content" :class="{ preview: showPreview }">
-          <textarea
-            v-if="!showPreview"
-            ref="editor"
-            v-model="content"
-            class="markdown-editor"
-            :placeholder="placeholder"
-            @keydown="handleKeydown"
-          ></textarea>
-
-          <div v-if="showPreview" class="markdown-preview">
-            <div v-html="renderedMarkdown" class="preview-content"></div>
-          </div>
-        </div>
+        <MdEditorWrapper
+          v-model="content"
+          :placeholder="placeholder"
+        />
       </div>
 
       <!-- 參與者選擇區域 -->
@@ -291,11 +257,11 @@ import AllGroupsChart from './shared/ContributionChart/AllGroupsChart.vue'
 import ScoringExplanationDrawer from './shared/ScoringExplanationDrawer.vue'
 import StageDescriptionDrawer from './shared/StageDescriptionDrawer.vue'
 import DrawerAlertZone from './common/DrawerAlertZone.vue'
+import MdEditorWrapper from './MdEditorWrapper.vue'
 import { usePointCalculation } from '@/composables/usePointCalculation'
 import { useAvatar } from '@/composables/useAvatar'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
-import { parseMarkdown } from '@/utils/markdown'
 
 // Drawer Breadcrumb
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
@@ -314,15 +280,6 @@ interface GroupMember {
   contribution: number
   points?: number        // Calculated points for this member
   finalWeight?: number   // Final calculated weight for scoring
-}
-
-interface MarkdownTool {
-  name: string
-  title: string
-  icon?: string
-  prefix: string
-  suffix: string
-  placeholder: string
 }
 
 interface HistoricalVersion {
@@ -416,50 +373,13 @@ const simulatedRank = ref<number>(1)
 const simulatedGroupCount = ref<number>(4)
 const submitting = ref<boolean>(false)
 const placeholder = ref<string>('我覺得做得很讚的就是@A，他們的成果和 [Google](www.google.com) 上能找到的一模一樣！')
-const showPreview = ref<boolean>(false)
 const historicalVersions = ref<HistoricalVersion[]>([])
 const selectedHistoricalVersion = ref<string>('')
 const loadingHistoricalVersions = ref<boolean>(false)
-const editor = ref<HTMLTextAreaElement | null>(null)
 const showScoringExplanation = ref<boolean>(false)
 const showStageDescriptionDrawer = ref<boolean>(false)
 let validationAlertId: string | null = null
 let validationDebounceTimer: ReturnType<typeof setTimeout> | null = null
-
-const markdownTools: MarkdownTool[] = [
-  {
-    name: 'B',
-    title: '粗體文字',
-    icon: '<i class="fas fa-bold"></i>',
-    prefix: '**',
-    suffix: '**',
-    placeholder: '粗體文字'
-  },
-  {
-    name: 'I',
-    title: '斜體文字',
-    icon: '<i class="fas fa-italic"></i>',
-    prefix: '*',
-    suffix: '*',
-    placeholder: '斜體文字'
-  },
-  {
-    name: 'LINK',
-    title: '插入連結',
-    icon: '<i class="fas fa-link"></i>',
-    prefix: '[',
-    suffix: '](url)',
-    placeholder: '連結文字'
-  },
-  {
-    name: 'CODE',
-    title: '程式碼區塊',
-    icon: '<i class="fas fa-code"></i>',
-    prefix: '```\n',
-    suffix: '\n```',
-    placeholder: '程式碼'
-  }
-]
 
 // Computed
 const localVisible = computed({
@@ -469,10 +389,6 @@ const localVisible = computed({
 
 const canSubmit = computed<boolean>(() => {
   return content.value.trim().length > 0 && totalPercentage.value === 100 && !submitting.value
-})
-
-const renderedMarkdown = computed<string>(() => {
-  return parseMarkdown(content.value)
 })
 
 const totalPercentage = computed<number>(() => {
@@ -572,14 +488,8 @@ watch(() => props.visible, (newVal) => {
 
     initializeGroupMembers()
     loadHistoricalVersions()
-    nextTick(() => {
-      if (editor.value) {
-        editor.value.focus()
-      }
-    })
   } else {
     content.value = ''
-    showPreview.value = false
     submitting.value = false
     resetParticipants()
     resetHistoricalVersions()
@@ -643,67 +553,6 @@ watch([() => canSubmit.value, () => content.value, () => totalPercentage.value],
 })
 
 // Methods
-const insertMarkdown = (tool: MarkdownTool): void => {
-  const editorEl = editor.value
-  if (!editorEl) return
-
-  const start = editorEl.selectionStart
-  const end = editorEl.selectionEnd
-  const selectedText = content.value.substring(start, end)
-
-  let newText = ''
-
-  if (tool.name === 'LINK') {
-    if (selectedText) {
-      newText = `[${selectedText}](url)`
-    } else {
-      newText = `[${tool.placeholder}](url)`
-    }
-  } else {
-    if (selectedText) {
-      newText = `${tool.prefix}${selectedText}${tool.suffix}`
-    } else {
-      newText = `${tool.prefix}${tool.placeholder}${tool.suffix}`
-    }
-  }
-
-  const beforeText = content.value.substring(0, start)
-  const afterText = content.value.substring(end)
-  content.value = beforeText + newText + afterText
-
-  nextTick(() => {
-    const newPosition = start + newText.length
-    editorEl.setSelectionRange(newPosition, newPosition)
-    editorEl.focus()
-  })
-}
-
-const handleKeydown = (event: KeyboardEvent): void => {
-  if ((event.ctrlKey || event.metaKey) && event.key === 'b') {
-    event.preventDefault()
-    insertMarkdown(markdownTools[0])
-  }
-
-  if (event.key === 'Tab') {
-    event.preventDefault()
-    const target = event.target as HTMLTextAreaElement
-    const start = target.selectionStart
-    const end = target.selectionEnd
-
-    const beforeText = content.value.substring(0, start)
-    const afterText = content.value.substring(end)
-    content.value = beforeText + '  ' + afterText
-
-    nextTick(() => {
-      target.setSelectionRange(start + 2, start + 2)
-    })
-  }
-}
-
-const togglePreview = (): void => {
-  showPreview.value = !showPreview.value
-}
-
 const submitReport = async (): Promise<void> => {
   if (!canSubmit.value) return
 
@@ -721,7 +570,6 @@ const submitReport = async (): Promise<void> => {
       participationProposal: participationProposal.value,
       metadata: {
         wordCount: content.value.length,
-        hasPreview: showPreview.value,
         submittedAt: new Date().toISOString()
       }
     }
@@ -758,11 +606,7 @@ const submitReport = async (): Promise<void> => {
 
 const clearContent = (): void => {
   content.value = ''
-  showPreview.value = false
   resetParticipants()
-  if (editor.value) {
-    editor.value.focus()
-  }
 }
 
 const initializeGroupMembers = (): void => {

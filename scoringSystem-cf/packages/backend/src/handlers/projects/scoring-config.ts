@@ -33,6 +33,7 @@ interface Env {
   DEFAULT_STUDENT_RANKING_WEIGHT: string
   DEFAULT_TEACHER_RANKING_WEIGHT: string
   DEFAULT_COMMENT_REWARD_PERCENTILE: string
+  DEFAULT_MAX_VOTE_RESET_COUNT: string
 }
 
 // ============================================================================
@@ -48,6 +49,7 @@ const updateProjectConfigSchema = z.object({
   studentRankingWeight: z.number().min(0).max(1).optional(),
   teacherRankingWeight: z.number().min(0).max(1).optional(),
   commentRewardPercentile: z.number().min(0).max(100).optional(),
+  maxVoteResetCount: z.number().int().min(1).max(5).optional(),
 })
 
 /**
@@ -59,6 +61,7 @@ const updateSystemDefaultsSchema = z.object({
   studentRankingWeight: z.number().min(0).max(1).optional(),
   teacherRankingWeight: z.number().min(0).max(1).optional(),
   commentRewardPercentile: z.number().min(0).max(100).optional(),
+  maxVoteResetCount: z.number().int().min(1).max(5).optional(),
 })
 
 // ============================================================================
@@ -162,6 +165,10 @@ scoringConfigRouter.put('/:projectId/scoring-config', async (c: Context<{ Bindin
       fields.push('commentRewardPercentile = ?')
       values.push(validated.commentRewardPercentile)
     }
+    if (validated.maxVoteResetCount !== undefined) {
+      fields.push('maxVoteResetCount = ?')
+      values.push(validated.maxVoteResetCount)
+    }
 
     if (fields.length === 0) {
       return c.json({
@@ -259,6 +266,9 @@ scoringConfigRouter.put('/system/scoring-defaults', async (c: Context<{ Bindings
     }
     if (validated.commentRewardPercentile !== undefined) {
       promises.push(c.env.KV.put(SCORING_CONFIG_KEYS.COMMENT_REWARD_PERCENTILE, String(validated.commentRewardPercentile)))
+    }
+    if (validated.maxVoteResetCount !== undefined) {
+      promises.push(c.env.KV.put(SCORING_CONFIG_KEYS.MAX_VOTE_RESET_COUNT, String(validated.maxVoteResetCount)))
     }
 
     if (promises.length === 0) {

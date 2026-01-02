@@ -55,6 +55,9 @@ export interface VoteResultAlertsParams {
 
   // Reset info (for reset drawer)
   currentResetInfo: ComputedRef<ResetInfo | null>
+
+  // Project config
+  maxVoteResetCount?: ComputedRef<number>
 }
 
 // ============= Main Composable =============
@@ -78,8 +81,12 @@ export function useVoteResultAlerts(params: VoteResultAlertsParams) {
     hasExistingProposal,
     currentProposal,
     resetCount,
-    currentResetInfo
+    currentResetInfo,
+    maxVoteResetCount
   } = params
+
+  // Helper to get max reset count (default to 1 if not provided)
+  const getMaxResetCount = () => maxVoteResetCount?.value ?? 1
 
   // ===== Watch: User Has Voted =====
   watch(userHasVoted, (hasVoted) => {
@@ -94,15 +101,20 @@ export function useVoteResultAlerts(params: VoteResultAlertsParams) {
     }
   })
 
-  // ===== Watch: Tie Reminder for Members =====
+  // ===== Watch: Tie/Disagree Reminder for Members =====
   watch(showTieReminderForMembers, (show) => {
     if (show) {
       const support = currentProposal.value?.supportCount || 0
       const oppose = currentProposal.value?.opposeCount || 0
+      const isTied = support === oppose
+      const maxResets = getMaxResetCount()
+      const remainingResets = maxResets - resetCount.value
       addAlert({
         type: 'info',
-        title: '投票結果平手',
-        message: `目前支持和反對票數相同（${support} : ${oppose}）。\n\n您可以聯絡組長發起重置投票，讓組員重新討論和投票。\n\n注意：每組每階段僅有一次重置機會`,
+        title: isTied ? '投票結果平手' : '投票未通過',
+        message: isTied
+          ? `目前支持和反對票數相同（${support} : ${oppose}）。\n\n您可以聯絡組長發起重置投票，讓組員重新討論和投票。\n\n注意：每組每階段最多 ${maxResets} 次重置機會，目前剩餘 ${remainingResets} 次`
+          : `目前反對票（${oppose}）多於支持票（${support}）。\n\n您可以聯絡組長發起重置投票，讓組員重新討論和投票。\n\n注意：每組每階段最多 ${maxResets} 次重置機會，目前剩餘 ${remainingResets} 次`,
         closable: false,
         autoClose: 0
       })
@@ -112,10 +124,17 @@ export function useVoteResultAlerts(params: VoteResultAlertsParams) {
   // ===== Watch: Reset Button (Group Leader Warning) =====
   watch(showResetButton, (show) => {
     if (show) {
+      const support = currentProposal.value?.supportCount || 0
+      const oppose = currentProposal.value?.opposeCount || 0
+      const isTied = support === oppose
+      const maxResets = getMaxResetCount()
+      const remainingResets = maxResets - resetCount.value
       addAlert({
         type: 'warning',
-        title: '投票平手 - 組長可重置投票',
-        message: '目前支持和反對票數相同，您作為組長可以選擇重置投票，讓組員重新討論和投票。\n\n⚠️ 注意：每個階段每組僅有一次重置機會，請謹慎使用！',
+        title: isTied ? '投票平手 - 組長可重置投票' : '投票未通過 - 組長可重置投票',
+        message: isTied
+          ? `目前支持和反對票數相同（${support} : ${oppose}），您作為組長可以選擇重置投票，讓組員重新討論和投票。\n\n⚠️ 注意：每個階段每組最多 ${maxResets} 次重置機會，目前剩餘 ${remainingResets} 次，請謹慎使用！`
+          : `目前反對票（${oppose}）多於支持票（${support}），您作為組長可以選擇重置投票，讓組員重新討論和投票。\n\n⚠️ 注意：每個階段每組最多 ${maxResets} 次重置機會，目前剩餘 ${remainingResets} 次，請謹慎使用！`,
         closable: false,
         autoClose: 0
       })
@@ -128,6 +147,9 @@ export function useVoteResultAlerts(params: VoteResultAlertsParams) {
     (votingResult) => {
       if (!votingResult || votingResult === 'no_votes') return
 
+      const maxResets = getMaxResetCount()
+      const remainingResets = maxResets - resetCount.value
+
       if (votingResult === 'agree') {
         addAlert({
           type: 'success',
@@ -137,18 +159,28 @@ export function useVoteResultAlerts(params: VoteResultAlertsParams) {
           autoClose: 0
         })
       } else if (votingResult === 'disagree') {
-        addAlert({
-          type: 'info',
-          title: '投票結果',
-          message: '未達成多數同意。',
-          closable: true,
-          autoClose: 0
-        })
-      } else if (votingResult === 'tie' && resetCount.value < 1) {
+        if (remainingResets > 0) {
+          addAlert({
+            type: 'info',
+            title: '投票未通過',
+            message: `未達成多數同意。組長可發起重置投票（剩餘 ${remainingResets} 次機會）。`,
+            closable: true,
+            autoClose: 0
+          })
+        } else {
+          addAlert({
+            type: 'info',
+            title: '投票結果',
+            message: '未達成多數同意。',
+            closable: true,
+            autoClose: 0
+          })
+        }
+      } else if (votingResult === 'tie' && remainingResets > 0) {
         addAlert({
           type: 'warning',
           title: '投票結果平手',
-          message: '目前投票結果是平手，組長將有一次重置投票的機會。',
+          message: `目前投票結果是平手，組長可發起重置投票（剩餘 ${remainingResets} 次機會）。`,
           closable: false,
           autoClose: 0
         })
@@ -227,11 +259,14 @@ export function useVoteResultAlerts(params: VoteResultAlertsParams) {
     if (isOpen) {
       clearAlerts()
 
+      const maxResets = getMaxResetCount()
+      const remainingResets = maxResets - resetCount.value
+
       // Severe warning
       addAlert({
         type: 'error',
         title: '嚴重警告',
-        message: '重置投票是不可逆的操作！每組每階段只有一次重置機會，使用後無法再次重置。',
+        message: `重置投票是不可逆的操作！每組每階段最多 ${maxResets} 次重置機會，目前剩餘 ${remainingResets} 次。`,
         closable: false,
         autoClose: 0
       })
@@ -247,10 +282,13 @@ export function useVoteResultAlerts(params: VoteResultAlertsParams) {
 
       // Current vote status
       if (currentResetInfo.value) {
+        const support = currentResetInfo.value.supportCount
+        const oppose = currentResetInfo.value.opposeCount
+        const isTied = support === oppose
         addAlert({
           type: 'info',
           title: '當前投票狀況',
-          message: `支持 ${currentResetInfo.value.supportCount} 票，反對 ${currentResetInfo.value.opposeCount} 票（平手）。已有 ${currentResetInfo.value.totalVotes}/${currentResetInfo.value.memberCount} 人投票。`,
+          message: `支持 ${support} 票，反對 ${oppose} 票（${isTied ? '平手' : '反對票多'}）。已有 ${currentResetInfo.value.totalVotes}/${currentResetInfo.value.memberCount} 人投票。`,
           closable: true,
           autoClose: 0
         })

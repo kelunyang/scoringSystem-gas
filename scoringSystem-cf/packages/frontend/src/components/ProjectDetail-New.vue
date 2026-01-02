@@ -3023,7 +3023,7 @@ async function loadAllStageProposals() {
 
   const proposalPromises = stages.value.map(async (stage: ExtendedStage) => {
     try {
-      const httpResponse = await (rpcClient.rankings as any).proposals.$post({
+      const httpResponse = await (rpcClient.api.rankings as any).proposals.$post({
         json: {
           projectId: projectId.value,
           stageId: stage.id

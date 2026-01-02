@@ -223,53 +223,58 @@ export async function updateStage(
 
     const allowedUpdates: any = {};
 
-    // Validate and process updates
+    // Validate and process updates - only add to allowedUpdates if value actually changed
     if (updates.stageName !== undefined) {
-      allowedUpdates.stageName = updates.stageName.substring(0, 100);
+      const trimmedName = updates.stageName.substring(0, 100);
+      if (trimmedName !== stage.stageName) {
+        allowedUpdates.stageName = trimmedName;
+      }
     }
 
     if (updates.description !== undefined) {
-      allowedUpdates.description = updates.description;
+      if (updates.description !== stage.description) {
+        allowedUpdates.description = updates.description;
+      }
     }
 
     if (updates.startTime !== undefined) {
       const dateValue = parseInt(String(updates.startTime));
-      if (!isNaN(dateValue)) {
+      if (!isNaN(dateValue) && dateValue !== stage.startTime) {
         allowedUpdates.startTime = dateValue;
       }
     }
 
     if (updates.endTime !== undefined) {
       const dateValue = parseInt(String(updates.endTime));
-      if (!isNaN(dateValue)) {
+      if (!isNaN(dateValue) && dateValue !== stage.endTime) {
         allowedUpdates.endTime = dateValue;
       }
     }
 
     if (updates.status !== undefined) {
       const validStatuses = ['pending', 'active', 'voting', 'completed', 'archived', 'paused'];
-      if (validStatuses.includes(updates.status)) {
+      if (validStatuses.includes(updates.status) && updates.status !== stage.status) {
         allowedUpdates.status = updates.status;
       }
     }
 
     if (updates.stageOrder !== undefined) {
       const orderValue = parseInt(String(updates.stageOrder));
-      if (!isNaN(orderValue) && orderValue > 0) {
+      if (!isNaN(orderValue) && orderValue > 0 && orderValue !== stage.stageOrder) {
         allowedUpdates.stageOrder = orderValue;
       }
     }
 
     if (updates.reportRewardPool !== undefined) {
       const poolValue = parseInt(String(updates.reportRewardPool));
-      if (!isNaN(poolValue) && poolValue >= 0) {
+      if (!isNaN(poolValue) && poolValue >= 0 && poolValue !== stage.reportRewardPool) {
         allowedUpdates.reportRewardPool = poolValue;
       }
     }
 
     if (updates.commentRewardPool !== undefined) {
       const poolValue = parseInt(String(updates.commentRewardPool));
-      if (!isNaN(poolValue) && poolValue >= 0) {
+      if (!isNaN(poolValue) && poolValue >= 0 && poolValue !== stage.commentRewardPool) {
         allowedUpdates.commentRewardPool = poolValue;
       }
     }
@@ -340,6 +345,28 @@ export async function updateStage(
             }
           );
         }
+      }
+    }
+
+    // REWARD LOCK: Prevent reward pool changes if stage has voting records
+    const isRewardChange = allowedUpdates.reportRewardPool !== undefined ||
+                           allowedUpdates.commentRewardPool !== undefined;
+
+    if (isRewardChange) {
+      const voteStatus = await env.DB.prepare(`
+        SELECT hasAnyVotes FROM stages_vote_status WHERE stageId = ? AND projectId = ?
+      `).bind(stageId, projectId).first();
+
+      if (voteStatus?.hasAnyVotes) {
+        return errorResponse(
+          'VOTING_LOCKED',
+          '該階段已有投票紀錄，無法修改獎金池。',
+          {
+            stageStatus: stage.status,
+            canModifyReward: false,
+            reason: 'Cannot modify reward pool when votes exist'
+          }
+        );
       }
     }
 

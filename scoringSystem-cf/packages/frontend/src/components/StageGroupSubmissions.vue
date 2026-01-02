@@ -94,40 +94,59 @@
               </div>
             </template>
 
-            <!-- voting 階段：維持現有看板 -->
+            <!-- voting 階段：根據角色顯示不同內容 -->
             <template v-else-if="stage.status === 'voting'">
-              <div class="stat">
-                <span class="stat-label">結算名次</span>
-                <StatNumberDisplay
-                  :value="group.settlementRank || '-'"
-                  :loading="group.rankingsLoading"
-                  display-state="normal"
-                  :enable-animation="true"
-                  size="medium"
-                />
-              </div>
-              <div class="stat">
-                <span class="stat-label">貴組投票名次</span>
-                <StatNumberDisplay
-                  :value="group.voteRank || '-'"
-                  :loading="group.rankingsLoading"
-                  :display-state="getVoteRankDisplayState(group, stage)"
-                  :tooltip-data="getVoteRankTooltipData(group, stage)"
-                  :enable-animation="true"
-                  size="medium"
-                />
-              </div>
-              <div class="stat">
-                <span class="stat-label">老師給的排名</span>
-                <StatNumberDisplay
-                  :value="group.teacherRank || '-'"
-                  :loading="group.rankingsLoading"
-                  :display-state="group.teacherRankData ? 'approved' : 'normal'"
-                  :tooltip-data="getTeacherRankTooltipData(group)"
-                  :enable-animation="true"
-                  size="medium"
-                />
-              </div>
+              <!-- 教師/觀察者視圖：顯示組別提案數 -->
+              <template v-if="props.isTeacher">
+                <div class="stat">
+                  <span class="stat-label">組別提案數</span>
+                  <StatNumberDisplay
+                    :value="getGroupProposalCount(group)"
+                    :loading="group.rankingsLoading"
+                    :display-state="getTeacherProposalDisplayState(group)"
+                    :tooltip-data="getTeacherProposalTooltipData(group)"
+                    :enable-animation="true"
+                    size="medium"
+                  />
+                </div>
+                <div class="stat">
+                  <span class="stat-label">老師給的排名</span>
+                  <StatNumberDisplay
+                    :value="group.teacherRank || '-'"
+                    :loading="group.rankingsLoading"
+                    :display-state="group.teacherRankData ? 'approved' : 'normal'"
+                    :tooltip-data="getTeacherRankTooltipData(group)"
+                    :enable-animation="true"
+                    size="medium"
+                  />
+                </div>
+              </template>
+
+              <!-- 學生視圖：顯示投票名次 -->
+              <template v-else>
+                <div class="stat">
+                  <span class="stat-label">貴組投票名次</span>
+                  <StatNumberDisplay
+                    :value="group.voteRank || '-'"
+                    :loading="group.rankingsLoading"
+                    :display-state="getVoteRankDisplayState(group, stage)"
+                    :tooltip-data="getVoteRankTooltipData(group, stage)"
+                    :enable-animation="true"
+                    size="medium"
+                  />
+                </div>
+                <div class="stat">
+                  <span class="stat-label">老師給的排名</span>
+                  <StatNumberDisplay
+                    :value="group.teacherRank || '-'"
+                    :loading="group.rankingsLoading"
+                    :display-state="group.teacherRankData ? 'approved' : 'normal'"
+                    :tooltip-data="getTeacherRankTooltipData(group)"
+                    :enable-animation="true"
+                    size="medium"
+                  />
+                </div>
+              </template>
             </template>
 
             <!-- completed 階段：顯示最終結果 -->
@@ -188,7 +207,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+// computed 未使用，已移除
 import type { Group } from '@/types'
 import type { ExtendedStage } from '@/composables/useStageContentManagement'
 import StatNumberDisplay from './shared/StatNumberDisplay.vue'
@@ -595,6 +614,70 @@ function getTeacherRankTooltipData(group: Group) {
     proposerLabel: '教師',
     status: 'approved',
     timestamp: group.teacherRankData.createdTime || null
+  }
+}
+
+/**
+ * 獲取組別提案數量（教師視圖）
+ */
+function getGroupProposalCount(group: Group): number | string {
+  const stats = group.proposalStats
+  if (!stats) return '-'
+  return stats.versionCount || 0
+}
+
+/**
+ * 計算教師視圖的提案狀態（displayState）
+ * - dead (fa-skull): 無提案或版本數為 0
+ * - approved (fa-check): 等待投票且同意票領先
+ * - not-voted (fa-bomb): 其他情況（pending+disagree 或 非 pending）
+ */
+function getTeacherProposalDisplayState(group: Group): string {
+  const stats = group.proposalStats
+
+  // 無提案或版本數為 0
+  if (!stats || stats.versionCount === 0) {
+    return 'dead'  // fa-skull
+  }
+
+  // 等待投票且同意票領先
+  if (stats.latestStatus === 'pending' && stats.latestVotingResult === 'agree') {
+    return 'approved'  // fa-check
+  }
+
+  // 其他情況（pending+disagree 或 非 pending）
+  return 'not-voted'  // fa-bomb
+}
+
+/**
+ * 獲取教師視圖的 Tooltip 數據
+ */
+function getTeacherProposalTooltipData(group: Group) {
+  const stats = group.proposalStats
+
+  if (!stats || stats.versionCount === 0) {
+    return { customMessage: '該組尚未提出任何排名提案' }
+  }
+
+  const statusTextMap: Record<string, string> = {
+    'settled': '已結算',
+    'pending': '等待投票',
+    'withdrawn': '已撤回',
+    'reset': '已重設'
+  }
+
+  const votingResultTextMap: Record<string, string> = {
+    'agree': '同意通過',
+    'disagree': '反對否決',
+    'tie': '票數持平',
+    'no_votes': '尚無投票'
+  }
+
+  const statusText = statusTextMap[stats.latestStatus || ''] || stats.latestStatus || '未知'
+  const votingText = votingResultTextMap[stats.latestVotingResult || ''] || stats.latestVotingResult || '未知'
+
+  return {
+    customMessage: `共 ${stats.versionCount} 版提案，最新狀態：${statusText}（${votingText}）`
   }
 }
 

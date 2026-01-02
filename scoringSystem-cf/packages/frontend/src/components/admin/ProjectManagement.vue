@@ -214,29 +214,34 @@
                 <td>學:{{ formatWeight(project.studentRankingWeight) }} / 師:{{ formatWeight(project.teacherRankingWeight) }}</td>
               </template>
 
-              <!-- 豎屏第二行：操作 -->
+              <!-- 豎屏第二行：操作（icon-only + tooltip） -->
               <template #actions>
-                <el-button type="primary" size="small" @click.stop="editProject(project)">
-                  <i class="fas fa-edit"></i>
-                  編輯
-                </el-button>
-                <el-button type="info" size="small" @click.stop="openCloneProjectDrawer(project)" :disabled="cloningProject">
-                  <i :class="cloningProject ? 'fas fa-spinner fa-spin' : 'fas fa-copy'"></i>
-                  複製
-                </el-button>
-                <el-button type="success" size="small" @click.stop="navigateToWallet(project)">
-                  <i class="fas fa-coins"></i>
-                  帳本
-                </el-button>
-                <el-button type="info" size="small" @click.stop="openEventLogViewer(project)">
-                  <i class="fas fa-history"></i>
-                  日誌
-                </el-button>
-                <el-dropdown trigger="click" @command="(cmd) => handleViewerCommand(cmd, project)">
-                  <el-button type="info" size="small" @click.stop>
-                    <i class="fas fa-user-shield"></i>
-                    存取
+                <el-tooltip content="編輯" placement="top">
+                  <el-button type="primary" size="small" @click.stop="editProject(project)">
+                    <i class="fas fa-edit"></i>
                   </el-button>
+                </el-tooltip>
+                <el-tooltip content="複製專案" placement="top">
+                  <el-button type="info" size="small" @click.stop="openCloneProjectDrawer(project)" :disabled="cloningProject">
+                    <i :class="cloningProject ? 'fas fa-spinner fa-spin' : 'fas fa-copy'"></i>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="帳本管理" placement="top">
+                  <el-button type="success" size="small" @click.stop="navigateToWallet(project)">
+                    <i class="fas fa-coins"></i>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="事件日誌" placement="top">
+                  <el-button type="info" size="small" @click.stop="openEventLogViewer(project)">
+                    <i class="fas fa-history"></i>
+                  </el-button>
+                </el-tooltip>
+                <el-dropdown trigger="click" @command="(cmd) => handleViewerCommand(cmd, project)">
+                  <el-tooltip content="存取者清單" placement="top">
+                    <el-button type="info" size="small" @click.stop>
+                      <i class="fas fa-user-shield"></i>
+                    </el-button>
+                  </el-tooltip>
                   <template #dropdown>
                     <el-dropdown-menu>
                       <el-dropdown-item command="settings">
@@ -248,26 +253,26 @@
                     </el-dropdown-menu>
                   </template>
                 </el-dropdown>
-                <el-button
-                  v-if="project.status === 'archived'"
-                  type="success"
-                  size="small"
-                  :disabled="archivingProjects.has(project.projectId)"
-                  @click.stop="unarchiveProject(project)"
-                >
-                  <i :class="archivingProjects.has(project.projectId) ? 'fas fa-spinner fa-spin' : 'fas fa-box-open'"></i>
-                  解除封存
-                </el-button>
-                <el-button
-                  v-else
-                  type="warning"
-                  size="small"
-                  :disabled="archivingProjects.has(project.projectId)"
-                  @click.stop="openArchiveProjectDrawer(project)"
-                >
-                  <i :class="archivingProjects.has(project.projectId) ? 'fas fa-spinner fa-spin' : 'fas fa-archive'"></i>
-                  封存
-                </el-button>
+                <el-tooltip v-if="project.status === 'archived'" content="解除封存" placement="top">
+                  <el-button
+                    type="success"
+                    size="small"
+                    :disabled="archivingProjects.has(project.projectId)"
+                    @click.stop="unarchiveProject(project)"
+                  >
+                    <i :class="archivingProjects.has(project.projectId) ? 'fas fa-spinner fa-spin' : 'fas fa-box-open'"></i>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip v-else content="封存" placement="top">
+                  <el-button
+                    type="warning"
+                    size="small"
+                    :disabled="archivingProjects.has(project.projectId)"
+                    @click.stop="openArchiveProjectDrawer(project)"
+                  >
+                    <i :class="archivingProjects.has(project.projectId) ? 'fas fa-spinner fa-spin' : 'fas fa-archive'"></i>
+                  </el-button>
+                </el-tooltip>
               </template>
 
               <!-- 展开内容：阶段列表 -->
@@ -1449,7 +1454,8 @@ export default {
       maxCommentSelections: 3,
       studentRankingWeight: 0.7,
       teacherRankingWeight: 0.3,
-      commentRewardPercentile: 0
+      commentRewardPercentile: 0,
+      maxVoteResetCount: 1
     })
 
     const newStage = reactive({
@@ -2123,7 +2129,8 @@ export default {
         maxCommentSelections: formData.maxCommentSelections,
         studentRankingWeight: formData.studentRankingWeight,
         teacherRankingWeight: formData.teacherRankingWeight,
-        commentRewardPercentile: formData.commentRewardPercentile
+        commentRewardPercentile: formData.commentRewardPercentile,
+        maxVoteResetCount: formData.maxVoteResetCount
       }
 
       try {

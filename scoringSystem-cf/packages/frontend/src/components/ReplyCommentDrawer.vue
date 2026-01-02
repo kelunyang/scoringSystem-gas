@@ -42,47 +42,10 @@
       <!-- Markdown 編輯區 -->
       <div class="editor-section">
         <div class="section-label">您的回覆</div>
-
-        <!-- 工具列 -->
-        <div class="editor-toolbar">
-          <button
-            v-for="tool in markdownTools"
-            :key="tool.name"
-            class="tool-btn"
-            :title="tool.title"
-            @click="insertMarkdown(tool)"
-          >
-            <span v-if="tool.icon" v-html="tool.icon"></span>
-            <span v-else>{{ tool.name }}</span>
-          </button>
-          <div class="toolbar-divider"></div>
-          <button
-            class="tool-btn preview-btn"
-            :class="{ active: showPreview }"
-            @click="togglePreview"
-            title="預覽Markdown"
-          >
-            <i class="fas fa-eye"></i> 預覽
-          </button>
-        </div>
-
-        <!-- 編輯/預覽區域 -->
-        <div class="editor-content" :class="{ preview: showPreview }">
-          <textarea
-            v-if="!showPreview"
-            ref="editorRef"
-            v-model="content"
-            class="markdown-editor"
-            placeholder="輸入您的回覆..."
-            @input="handleInput"
-            @keydown="handleKeydown"
-            @keyup="handleKeyup"
-          ></textarea>
-
-          <div v-if="showPreview" class="markdown-preview">
-            <div v-html="renderedMarkdown" class="preview-content"></div>
-          </div>
-        </div>
+        <MdEditorWrapper
+          v-model="content"
+          placeholder="輸入您的回覆..."
+        />
       </div>
 
       <!-- 操作按鈕 -->
@@ -100,9 +63,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import DrawerAlertZone from './common/DrawerAlertZone.vue'
+import MdEditorWrapper from './MdEditorWrapper.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { rpcClient } from '@/utils/rpc-client'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
@@ -141,25 +105,12 @@ const emit = defineEmits<{
 const { warning, clearAlerts } = useDrawerAlerts()
 
 // Refs
-const editorRef = ref<HTMLTextAreaElement | null>(null)
 const content = ref('')
 const submitting = ref(false)
-const showPreview = ref(false)
-
-// Constants
-const markdownTools = [
-  { name: 'B', title: '粗體 (Ctrl+B)', icon: '<i class="fas fa-bold"></i>', action: 'bold' },
-  { name: 'I', title: '斜體 (Ctrl+I)', icon: '<i class="fas fa-italic"></i>', action: 'italic' },
-  { name: '連結', title: '插入連結', icon: '<i class="fas fa-link"></i>', action: 'link' }
-]
 
 // Computed
 const canSubmit = computed(() => {
   return content.value.trim().length > 0 && !submitting.value
-})
-
-const renderedMarkdown = computed(() => {
-  return renderMarkdown(content.value)
 })
 
 // Watch - visible
@@ -169,10 +120,6 @@ watch(() => props.visible, (newVal) => {
     content.value = ''
     submitting.value = false
     clearAlerts()
-
-    nextTick(() => {
-      editorRef.value?.focus()
-    })
   } else {
     // Drawer closed
     clearAlerts()
@@ -188,87 +135,7 @@ function handleClose() {
 
 function clearContent() {
   content.value = ''
-  showPreview.value = false
   clearAlerts()
-  editorRef.value?.focus()
-}
-
-function togglePreview() {
-  showPreview.value = !showPreview.value
-}
-
-function insertMarkdown(tool: typeof markdownTools[0]) {
-  const editor = editorRef.value
-  if (!editor) return
-
-  const start = editor.selectionStart
-  const end = editor.selectionEnd
-  const selectedText = content.value.substring(start, end)
-  let insertion = ''
-
-  switch(tool.action) {
-    case 'bold':
-      insertion = `**${selectedText || '粗體文字'}**`
-      break
-    case 'italic':
-      insertion = `*${selectedText || '斜體文字'}*`
-      break
-    case 'heading':
-      insertion = `\n### ${selectedText || '標題'}\n`
-      break
-    case 'link':
-      insertion = `[${selectedText || '連結文字'}](url)`
-      break
-    case 'list':
-      insertion = `\n- ${selectedText || '列表項目'}`
-      break
-    case 'orderedList':
-      insertion = `\n1. ${selectedText || '列表項目'}`
-      break
-    case 'quote':
-      insertion = `\n> ${selectedText || '引用文字'}`
-      break
-    case 'code':
-      if (selectedText.includes('\n')) {
-        insertion = `\n\`\`\`\n${selectedText}\n\`\`\`\n`
-      } else {
-        insertion = `\`${selectedText || '程式碼'}\``
-      }
-      break
-    case 'hr':
-      insertion = '\n---\n'
-      break
-  }
-
-  content.value = content.value.substring(0, start) + insertion + content.value.substring(end)
-
-  // 重新聚焦並選擇插入的文字
-  nextTick(() => {
-    editor.focus()
-    const newEnd = start + insertion.length
-    editor.setSelectionRange(newEnd, newEnd)
-  })
-}
-
-function handleInput() {
-  // No mention handling needed for replies
-}
-
-function handleKeydown(e: KeyboardEvent) {
-  // Markdown 快捷鍵
-  if (e.ctrlKey || e.metaKey) {
-    if (e.key === 'b') {
-      e.preventDefault()
-      insertMarkdown({ action: 'bold' } as any)
-    } else if (e.key === 'i') {
-      e.preventDefault()
-      insertMarkdown({ action: 'italic' } as any)
-    }
-  }
-}
-
-function handleKeyup() {
-  // No mention handling needed for replies
 }
 
 async function submitReply() {

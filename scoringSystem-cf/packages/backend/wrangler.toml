@@ -131,6 +131,7 @@ DEFAULT_MAX_COMMENT_SELECTIONS = "3" # Maximum comments teachers can rank
 DEFAULT_STUDENT_RANKING_WEIGHT = "0.7" # Student ranking weight (70%)
 DEFAULT_TEACHER_RANKING_WEIGHT = "0.3" # Teacher ranking weight (30%)
 DEFAULT_COMMENT_REWARD_PERCENTILE = "0" # Comment reward percentile (0 = fixed top 3)
+DEFAULT_MAX_VOTE_RESET_COUNT = "1" # Maximum times group leader can reset votes per stage
 
 # Secrets (set using: wrangler secret put SECRET_NAME)
 # These should NOT be committed to version control
