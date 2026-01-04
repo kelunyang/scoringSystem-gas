@@ -77,13 +77,16 @@
     </div>
 
     <!-- Wallet Ladder Drawer (非 HUD - 熱帶風格配色) -->
-    <DrawerContainer
-      v-model="walletLadderOpen"
+    <PhysicsDrawerContainer
+      v-model="walletLadderDrawer.modelValue.value"
       drawer-name="點數天梯"
       theme-color="#E84393"
       :loading="loadingLadder"
       loading-text="載入天梯數據中..."
       :condition="!!selectedProjectId"
+      :is-minimized="walletLadderDrawer.isMinimized.value"
+      @minimized-hover="walletLadderDrawer.handleMouseEnter"
+      @minimized-unhover="walletLadderDrawer.handleMouseLeave"
     >
       <!-- 閾值輸入區域 -->
       <div class="threshold-input-section">
@@ -122,17 +125,20 @@
         :compact="true"
         :enable-animation="false"
       />
-    </DrawerContainer>
+    </PhysicsDrawerContainer>
 
     <!-- Stage Growth Drawer (非 HUD - 熱帶風格配色) -->
-    <DrawerContainer
-      v-model="stageGrowthOpen"
+    <PhysicsDrawerContainer
+      v-model="stageGrowthDrawer.modelValue.value"
       drawer-name="各階段點數成長圖"
       theme-color="#00CED1"
       :loading="loadingStageGrowth"
       loading-text="載入成長數據中..."
       max-height="700px"
       :condition="!!selectedProjectId && !!selectedUserEmail"
+      :is-minimized="stageGrowthDrawer.isMinimized.value"
+      @minimized-hover="stageGrowthDrawer.handleMouseEnter"
+      @minimized-unhover="stageGrowthDrawer.handleMouseLeave"
     >
       <!-- Gantt Chart Section -->
       <div v-if="projectStagesForGrowth && projectStagesForGrowth.length > 0" class="gantt-section">
@@ -174,7 +180,7 @@
         :compact="true"
         :enable-animation="false"
       />
-    </DrawerContainer>
+    </PhysicsDrawerContainer>
 
     <!-- Content -->
     <div class="content-wrapper" v-loading="loading || loadingProjects" element-loading-text="載入專案資料中...">
@@ -320,7 +326,7 @@ import type { User, Transaction } from '@/types'
 import TopBarUserControls from './TopBarUserControls.vue'
 import TransactionFiltersSection from './TransactionFiltersSection.vue'
 import TransactionTableSection from './TransactionTableSection.vue'
-import DrawerContainer from './shared/DrawerContainer.vue'
+import PhysicsDrawerContainer from './shared/PhysicsDrawerContainer.vue'
 import WalletLadder from './charts/WalletLadder.vue'
 import StageGrowthChart from './charts/StageGrowthChart.vue'
 import StageGanttChart from './charts/StageGanttChart.vue'
@@ -342,6 +348,7 @@ import { useExpandableList } from '@/composables/useExpandableList'
 import { useTransactionReversal } from '@/composables/useTransactionReversal'
 import { useBreadcrumb } from '@/composables/useBreadcrumb'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
+import { useCoordinatedDrawer } from '@/composables/useCoordinatedDrawer'
 
 // Utilities
 import {
@@ -409,13 +416,24 @@ interface StageGrowthData {
   [key: string]: any
 }
 
-// ===== Wallet Ladder Drawer State =====
-const walletLadderOpen = ref(false)
+// ===== Coordinated Drawers =====
+// 使用 useCoordinatedDrawer 來管理抽屜協調（同時只能展開一個）
+const walletLadderDrawer = useCoordinatedDrawer({
+  id: 'wallet-ladder',
+  drawerName: '點數天梯',
+  themeColor: '#E84393'
+})
+
+const stageGrowthDrawer = useCoordinatedDrawer({
+  id: 'wallet-stageGrowth',
+  drawerName: '各階段點數成長圖',
+  themeColor: '#00CED1'
+})
+
 /** Points below this threshold are treated as 0 score (default: 0 = disabled) */
 const zeroScoreThreshold = ref(0)
 
-// ===== Stage Growth Drawer State =====
-const stageGrowthOpen = ref(false)
+// ===== Stage Growth Drawer Data =====
 const stageGrowthData = ref<StageGrowthData | null>(null)
 const loadingStageGrowth = ref(false)
 
@@ -1044,7 +1062,7 @@ watch(
  * 修復：loadStageGrowth 原本只在 toggleStageGrowth 中調用，
  * 但 toggleStageGrowth 從未被使用，導致抽屜打開時無資料
  */
-watch(stageGrowthOpen, (newValue) => {
+watch(() => stageGrowthDrawer.isExpanded.value, (newValue) => {
   if (newValue && !stageGrowthData.value && !loadingStageGrowth.value) {
     loadStageGrowth()
   }

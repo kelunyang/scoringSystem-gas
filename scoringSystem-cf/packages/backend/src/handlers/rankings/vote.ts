@@ -31,7 +31,6 @@ export async function voteOnRankingProposal(
     if (!projectId || !proposalId || agree === undefined) {
       return errorResponse('MISSING_FIELDS', 'Missing required fields: projectId, proposalId, agree');
     }
-
     // Get proposal details (use VIEW for correct status calculation)
     const proposal = await env.DB.prepare(`
       SELECT proposalId, projectId, stageId, groupId, proposerEmail,
@@ -43,7 +42,6 @@ export async function voteOnRankingProposal(
     if (!proposal) {
       return errorResponse('PROPOSAL_NOT_FOUND', 'Ranking proposal not found');
     }
-
     // Check proposal status - disallow voting on finalized proposals
     // Only allow voting on pending or reset proposals (not settled or withdrawn)
     if (proposal.settleTime !== null) {
@@ -174,7 +172,6 @@ export async function voteOnRankingProposal(
 
     const voteId = existingVote ? (existingVote.voteId as string) : generateId('rpv');
     const isUpdate = !!existingVote;
-
     // Use D1 batch for atomic transaction
     const statements = [
       // 1. Insert or update vote (agree=1, disagree=-1 encoding for SUM optimization)
@@ -206,6 +203,12 @@ export async function voteOnRankingProposal(
       console.log(`✅ ${isUpdate ? 'Updated' : 'Created'} vote ${voteId} for proposal ${proposalId} by ${userEmail}`);
     } catch (batchError: any) {
       console.error('Vote batch error:', batchError);
+
+      // Handle SUDO mode write blocked error (check both name and message for robustness)
+      if (batchError?.name === 'SudoWriteBlockedError' || batchError?.message?.includes('SUDO_NO_WRITE')) {
+        return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
+      }
+
       if (batchError.message?.includes('UNIQUE constraint failed')) {
         return errorResponse('ALREADY_VOTED', 'Vote already recorded');
       }
@@ -276,8 +279,14 @@ export async function voteOnRankingProposal(
       }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Vote on proposal error:', error);
+
+    // Handle SUDO mode write blocked error (check both name and message for robustness)
+    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+      return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
+    }
+
     const errorMessage = error instanceof Error ? error.message : String(error);
     return errorResponse('VOTE_FAILED', `Failed to record vote: ${errorMessage}`);
   }

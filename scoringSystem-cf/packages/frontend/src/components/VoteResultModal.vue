@@ -389,24 +389,12 @@
       <!-- 撤回確認輸入區域 -->
       <div class="form-section">
         <h4><i class="fas fa-keyboard"></i> 確認撤回</h4>
-
-        <div class="form-group">
-          <label class="required">請輸入 <code class="revert-code">REVERT</code> 以確認撤回此提案：</label>
-          <el-input
-            v-model="withdrawInputText"
-            placeholder="請輸入 REVERT"
-            size="large"
-            clearable
-            maxlength="6"
-            show-word-limit
-            class="confirmation-code-input"
-            @input="withdrawInputText = String($event).toUpperCase()"
-          />
-          <div class="input-hint">
-            <i class="fas fa-lightbulb"></i>
-            請完整輸入大寫字母 "REVERT"
-          </div>
-        </div>
+        <ConfirmationInput
+          v-model="withdrawInputText"
+          keyword="REVERT"
+          hint-action="撤回"
+          @confirm="confirmWithdraw"
+        />
       </div>
 
       <!-- 撤回說明 -->
@@ -514,24 +502,12 @@
       <!-- 重置確認輸入區域 -->
       <div class="form-section">
         <h4><i class="fas fa-keyboard"></i> 確認重置</h4>
-
-        <div class="form-group">
-          <label class="required">請輸入 <code class="reset-code">RESET</code> 以確認重置投票：</label>
-          <el-input
-            v-model="resetInputText"
-            placeholder="請輸入 RESET"
-            size="large"
-            clearable
-            maxlength="5"
-            show-word-limit
-            class="confirmation-code-input"
-            @input="resetInputText = String($event).toUpperCase()"
-          />
-          <div class="input-hint">
-            <i class="fas fa-lightbulb"></i>
-            請完整輸入大寫字母 "RESET"
-          </div>
-        </div>
+        <ConfirmationInput
+          v-model="resetInputText"
+          keyword="RESET"
+          hint-action="重置"
+          @confirm="confirmReset"
+        />
       </div>
 
       <!-- 重置說明 -->
@@ -585,6 +561,7 @@ import RankingComparison from './common/RankingComparison.vue'
 import DraggableRankingList from './common/DraggableRankingList.vue'
 import AllGroupsChart from './shared/ContributionChart/AllGroupsChart.vue'
 import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
+import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import { usePointCalculation } from '@/composables/usePointCalculation'
 import { useAvatar } from '@/composables/useAvatar'

@@ -44,17 +44,12 @@
 
       <!-- Confirmation Input -->
       <div class="form-group">
-        <label>確認操作：請輸入 <code>RESET</code> 以繼續 *</label>
-        <el-input
+        <ConfirmationInput
           v-model="confirmText"
-          placeholder="輸入 RESET"
-          class="confirmation-code-input"
-          @input="confirmText = String($event).toUpperCase()"
-          @keyup.enter="handleConfirm"
+          keyword="RESET"
+          hint-action="重設密碼"
+          @confirm="handleConfirm"
         />
-        <p class="help-text">
-          此安全措施確保您了解操作的影響
-        </p>
       </div>
 
       <!-- Action Buttons -->
@@ -80,6 +75,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
+import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 

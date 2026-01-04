@@ -287,7 +287,11 @@ const emit = defineEmits<{
 }>()
 
 // DrawerAlerts composable
-const { warning, addAlert, clearAlerts } = useDrawerAlerts()
+const { warning, addAlert, removeAlert, clearAlerts } = useDrawerAlerts()
+
+// Debounce variables for mention validation alert
+let mentionAlertId: string | null = null
+let mentionDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 // Refs
 const editorRef = ref<InstanceType<typeof MdEditorWrapper> | null>(null)
@@ -548,6 +552,12 @@ watch(() => props.visible, (newVal) => {
     // Clean up confirmation drawer state
     showNoMentionConfirmDrawer.value = false
     confirmationInput.value = ''
+    // Clean up debounce timer
+    if (mentionDebounceTimer) {
+      clearTimeout(mentionDebounceTimer)
+      mentionDebounceTimer = null
+    }
+    mentionAlertId = null
   }
 })
 
@@ -565,19 +575,31 @@ watch(rankingAlertTitle, (newTitle) => {
   }
 })
 
-// Watch - content (update mention count and validation alerts)
+// Watch - content (update mention count and validation alerts with debounce)
 watch(content, (newVal) => {
   updateMentionCount(newVal)
 
-  // Show or clear validation alert based on mention count
-  if (newVal.trim().length > 0 && mentionCount.value === 0) {
-    warning(
-      '您的評論沒有標記任何其他組，無法參與評論排名分獎金',
-      '提示'
-    )
-  } else if (mentionCount.value > 0) {
-    clearAlerts()  // 有 mention 時清除警告
+  // Clear old alert immediately
+  if (mentionAlertId) {
+    removeAlert(mentionAlertId)
+    mentionAlertId = null
   }
+
+  // Clear existing debounce timer
+  if (mentionDebounceTimer) {
+    clearTimeout(mentionDebounceTimer)
+    mentionDebounceTimer = null
+  }
+
+  // Debounce 500ms to avoid flickering during typing
+  mentionDebounceTimer = setTimeout(() => {
+    if (newVal.trim().length > 0 && mentionCount.value === 0) {
+      mentionAlertId = warning(
+        '您的評論沒有標記任何其他組，無法參與評論排名分獎金',
+        '提示'
+      )
+    }
+  }, 500)
 })
 
 // Methods

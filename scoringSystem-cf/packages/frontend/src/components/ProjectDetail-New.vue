@@ -85,12 +85,15 @@
     </div>
 
     <!-- Gantt Chart Drawer (非 HUD - 熱帶風格配色) -->
-    <DrawerContainer
-      v-model="ganttDrawerOpen"
+    <PhysicsDrawerContainer
+      v-model="ganttDrawer.modelValue.value"
       drawer-name="階段時間軸"
       theme-color="#1ABC9C"
       max-height="400px"
       :condition="stages.length > 0"
+      :is-minimized="ganttDrawer.isMinimized.value"
+      @minimized-hover="ganttDrawer.handleMouseEnter"
+      @minimized-unhover="ganttDrawer.handleMouseLeave"
     >
       <StageGanttChart
         :stages="ganttChartStages"
@@ -98,15 +101,18 @@
         :show-minimap="true"
         :height="320"
       />
-    </DrawerContainer>
+    </PhysicsDrawerContainer>
 
     <!-- Project Description Drawer (非 HUD - 熱帶風格配色) -->
-    <DrawerContainer
-      v-model="projectDescriptionDrawerOpen"
+    <PhysicsDrawerContainer
+      v-model="projectDescriptionDrawer.modelValue.value"
       drawer-name="專案介紹"
       theme-color="#9B59B6"
       max-height="500px"
       :condition="!!projectData?.project"
+      :is-minimized="projectDescriptionDrawer.isMinimized.value"
+      @minimized-hover="projectDescriptionDrawer.handleMouseEnter"
+      @minimized-unhover="projectDescriptionDrawer.handleMouseLeave"
     >
       <div class="project-description-content">
         <!-- 評分參數統計區 -->
@@ -151,27 +157,35 @@
         <!-- 專案描述 -->
         <MarkdownViewer v-if="projectDescription" :content="projectDescription" />
       </div>
-    </DrawerContainer>
+    </PhysicsDrawerContainer>
 
-    <!-- 階段訊息抽屜（最下方的抽屜）-->
-    <DrawerContainer
+    <!-- 階段訊息抽屜（最下方的抽屜）- 使用物理動畫 -->
+    <PhysicsDrawerContainer
       v-if="stageInfoDrawer.activeDrawerStageId.value"
       v-model="stageInfoDrawer.stageDrawerOpen.value"
       drawer-name="當前階段"
       :theme-color="drawerColor"
       :stage-status="currentDrawerStage?.status"
       :max-height="drawerMaxHeight"
+      :enable-physics="true"
+      :bounce="0.25"
+      :enable-gravity="true"
+      :drag-resistance="0.3"
+      direction="up"
+      :is-minimized="stageInfoDrawer.isMinimized.value"
       role="region"
       aria-live="polite"
       :aria-label="`${currentDrawerStage?.title} 階段資訊與快速操作`"
+      @gesture-start="stageInfoDrawer.pauseScrollDetection"
+      @gesture-end="stageInfoDrawer.resumeScrollDetection"
+      @minimized-hover="stageInfoDrawer.handleMinimizedMouseEnter"
+      @minimized-unhover="stageInfoDrawer.handleMinimizedMouseLeave"
     >
       <!-- Trigger Bar（關閉狀態）-->
       <template #trigger>
-        <i class="fa fa-chevron-down"></i>
-        <span>
-          {{ drawerStatusText }} [按這裡展開抽屜]
-        </span>
-        <i class="fa fa-chevron-down"></i>
+        <i class="fa fa-grip-vertical"></i>
+        <span>{{ drawerStatusText }} [按這裡展開抽屜]</span>
+        <i class="fa fa-grip-vertical"></i>
       </template>
 
       <!-- 緊湊型 Windows 8 Tile HUD -->
@@ -311,13 +325,11 @@
 
       <!-- Handle Bar（展開狀態）-->
       <template #handle>
-        <i class="fa fa-chevron-up"></i>
-        <span>
-          {{ drawerStatusText }} [按這裡收起抽屜]
-        </span>
-        <i class="fa fa-chevron-up"></i>
+        <i class="fa fa-grip-vertical"></i>
+        <span>{{ drawerStatusText }} [按這裡收起抽屜]</span>
+        <i class="fa fa-grip-vertical"></i>
       </template>
-    </DrawerContainer>
+    </PhysicsDrawerContainer>
 
     <!-- 無階段提示 -->
     <EmptyState
@@ -930,7 +942,7 @@ import StageViewToggle from './StageViewToggle.vue'
 import MarkdownViewer from './MarkdownViewer.vue'
 import StageComments from './StageComments.vue'
 import StageGroupSubmissions from './StageGroupSubmissions.vue'
-import DrawerContainer from './shared/DrawerContainer.vue'
+import PhysicsDrawerContainer from './shared/PhysicsDrawerContainer.vue'
 import StageGanttChart from './charts/StageGanttChart.vue'
 import VoteResultModal from './VoteResultModal.vue'
 import SubmitReportModal from './SubmitReportModal.vue'
@@ -969,6 +981,7 @@ import { useProjectCore, useStages, useStageComments } from '@/composables/usePr
 import { useWalletLeaderboard, extractTopWealthRankings } from '@/composables/useWallet'
 import { useStageSettlementRankings, mapSettlementToGroups } from '@/composables/useSettlementData'
 import { useStageInfoDrawer } from '@/composables/useStageInfoDrawer'
+import { useCoordinatedDrawer } from '@/composables/useCoordinatedDrawer'
 import { usePointCalculation } from '@/composables/usePointCalculation'
 import { useRouteDrawer } from '@/composables/useRouteDrawer'
 import { useAuth } from '@/composables/useAuth'
@@ -1010,7 +1023,6 @@ const emit = defineEmits(['back', 'user-command'])
 // ===== 基礎狀態 =====
 // loading 和 projectData 現在由 TanStack Query 管理，在下方定義
 const currentStageId = ref<string | null>(null)
-const projectDescriptionDrawerOpen = ref(false)
 const showEventLogDrawer = ref(false)
 const stageDescriptionDrawerOpen = ref(false)
 const selectedStageForDescription = ref<ExtendedStage | null>(null)
@@ -1111,8 +1123,19 @@ const commentRewardModeText = computed(() => {
   return `前 ${percentile}%`
 })
 
-// ===== Gantt Drawer 狀態 =====
-const ganttDrawerOpen = ref(false)
+// ===== Coordinated Drawers =====
+// 使用 useCoordinatedDrawer 來管理抽屜協調（同時只能展開一個）
+const ganttDrawer = useCoordinatedDrawer({
+  id: 'projectDetail-gantt',
+  drawerName: '階段時間軸',
+  themeColor: '#1ABC9C'
+})
+
+const projectDescriptionDrawer = useCoordinatedDrawer({
+  id: 'projectDetail-description',
+  drawerName: '專案介紹',
+  themeColor: '#9B59B6'
+})
 
 // ===== Per-Stage Timeline 狀態 =====
 // <i class="fas fa-check-circle text-success"></i> 使用 reactive() 包裹 Map，確保響應式更新
@@ -1265,7 +1288,11 @@ const consensusWarning = useConsensusWarning()
 const routeDrawer = useRouteDrawer()
 
 // 階段訊息抽屜 (with URL sync)
-const stageInfoDrawer = useStageInfoDrawer(projectId, TOPBAR_HEIGHT)
+const stageInfoDrawer = useStageInfoDrawer(projectId, TOPBAR_HEIGHT, {
+  coordinationId: 'projectDetail-stageInfo',
+  drawerName: '當前階段',
+  themeColor: '#667eea'  // 預設紫藍色，會被 stage status 覆蓋
+})
 
 // ===== Stages 響應式數據 =====
 
@@ -1616,11 +1643,13 @@ const currentModalStageDescription = computed(() => {
 })
 
 // 計算當前 modal 階段的有效評論作者數量（用於百分比模式顯示）
+// 使用 canBeVoted 標誌（後端計算：非回覆、有提及、是組員、有 helpful）
 const currentModalStageValidCommentAuthors = computed(() => {
   const stageId = modalManager.currentModalStageId.value
   if (!stageId) return 0
   const stage = stages.value.find((s: ExtendedStage) => s.id === stageId) as ExtendedStage | undefined
   if (!stage?.comments || !Array.isArray(stage.comments)) return 0
+
   // 過濾有效評論（canBeVoted = true）並計算不同作者數量
   const validComments = stage.comments.filter((c: any) => c.canBeVoted === true)
   const uniqueAuthors = new Set(validComments.map((c: any) => c.authorEmail))
@@ -1832,7 +1861,7 @@ function toggleGroupReport(group: Group) {
  * 切換甘特圖抽屜
  */
 function toggleGanttDrawer() {
-  ganttDrawerOpen.value = !ganttDrawerOpen.value
+  ganttDrawer.toggle()
 }
 
 // ===== 動態馬路效果（階段訊息抽屜相關）=====
@@ -1922,6 +1951,10 @@ const drawerStatusText = computed(() => {
 
 /**
  * 抽屜動態高度（根據按鈕數量）
+ * baseHeight 需包含：
+ * - hud-stats-grid: ~100px (4 tiles)
+ * - hud-actions-row padding: ~20px
+ * - 額外 padding/margin: ~20px
  */
 const drawerMaxHeight = computed(() => {
   if (!currentDrawerStage.value) return '200px'
@@ -1945,10 +1978,20 @@ const drawerMaxHeight = computed(() => {
   if (currentDrawerStage.value.status === 'voting') {
     if (canVote.value) buttonCount++
     if (canTeacherVote.value) buttonCount++
+    // 評論投票按鈕
+    if (canVote.value && userHasValidCommentInStage(currentDrawerStage.value)) {
+      buttonCount++
+    }
   }
 
-  const baseHeight = 140
-  const perButtonHeight = 44
+  // 獎金分配按鈕（completed 狀態）
+  if (currentDrawerStage.value.status === 'completed') {
+    buttonCount++
+  }
+
+  // baseHeight: stats grid (~100px) + actions row padding (~40px) + margin (~20px)
+  const baseHeight = 160
+  const perButtonHeight = 40
 
   return `${baseHeight + buttonCount * perButtonHeight}px`
 })
@@ -3977,12 +4020,17 @@ onBeforeUnmount(() => {
 /* Dropdown 按鈕特殊處理 */
 .stage-controls :deep(.el-dropdown) {
   height: 32px;
+  color: inherit;  /* Ensure color inheritance for btn inside */
 }
 
 .stage-controls :deep(.el-dropdown .btn) {
   display: flex;
   align-items: center;
   gap: 4px;
+  /* Force inherit color for dropdown buttons (override .btn-dark/.btn-info) */
+  color: inherit !important;
+  border-color: currentColor !important;
+  background: transparent !important;
 }
 
 /* 按钮样式已移至全局 _buttons.scss，此处不再定义 */

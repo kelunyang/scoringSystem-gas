@@ -135,14 +135,15 @@
     </el-card>
 
     <!-- Email Logs Table -->
-    <div
+    <el-scrollbar
       class="table-container"
-      v-loading="loading"
-      element-loading-text="載入郵件紀錄中..."
-      v-infinite-scroll="loadMore"
-      :infinite-scroll-disabled="scrollDisabled"
-      :infinite-scroll-distance="200"
+      @end-reached="handleEndReached"
+      :distance="200"
     >
+      <div
+        v-loading="loading"
+        element-loading-text="載入郵件紀錄中..."
+      >
       <table class="email-logs-table">
         <thead>
           <tr>
@@ -443,7 +444,8 @@
       <div v-if="displayedLogs.length > 0" class="count-info">
         顯示 {{ displayedLogs.length }} / {{ filteredLogs.length }} 筆郵件紀錄
       </div>
-    </div>
+      </div>
+    </el-scrollbar>
 
     <!-- Progress Dialog -->
     <el-dialog
@@ -472,6 +474,7 @@
 import { ref, computed, onMounted, watch, nextTick, inject, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import type { ScrollbarDirection } from 'element-plus'
 import { adminApi } from '@/api/admin'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
@@ -796,6 +799,12 @@ const loadMore = (): void => {
     displayCount.value += 50
     loadingMore.value = false
   }, 300)
+}
+
+// Handler for el-scrollbar end-reached event
+const handleEndReached = (direction: ScrollbarDirection): void => {
+  if (direction !== 'bottom') return
+  loadMore()
 }
 
 const handleToggleExpansion = (log: EmailLog): void => {
@@ -1204,8 +1213,7 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   overflow: hidden;
-  max-height: calc(100vh - 450px);
-  overflow-y: auto;
+  height: calc(100vh - 450px);
 }
 
 /* Expand cell */
@@ -1488,24 +1496,6 @@ button:disabled {
   margin-bottom: 20px;
   font-size: 14px;
   color: #606266;
-}
-
-/* Custom scrollbar */
-.table-container::-webkit-scrollbar {
-  width: 8px;
-}
-
-.table-container::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-.table-container::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
-}
-
-.table-container::-webkit-scrollbar-thumb:hover {
-  background: #555;
 }
 
 /* Email Detail */

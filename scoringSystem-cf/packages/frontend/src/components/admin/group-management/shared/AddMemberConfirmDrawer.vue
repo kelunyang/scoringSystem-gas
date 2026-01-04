@@ -76,32 +76,16 @@
       <div class="form-section">
         <h4><i class="fas fa-shield-alt"></i> 安全確認</h4>
 
-        <div class="confirmation-group">
-          <div class="confirmation-warning">
-            <i class="fas fa-info-circle"></i>
-            <span>此操作將新增 <strong>{{ members.length }}</strong> 位成員到群組</span>
-          </div>
-
-          <div class="form-group">
-            <label class="confirmation-label">
-              請輸入 <code class="confirmation-code">ADD</code> 以確認新增操作
-              <span class="required">*</span>
-            </label>
-            <el-input
-              v-model="confirmationText"
-              placeholder="請輸入 ADD"
-              clearable
-              size="large"
-              class="confirmation-code-input"
-              @input="confirmationText = String($event).toUpperCase()"
-              @keyup.enter="handleConfirm"
-            />
-            <div class="confirmation-hint">
-              <i class="fas fa-keyboard"></i>
-              輸入完成後按 Enter 或點擊下方按鈕執行
-            </div>
-          </div>
-        </div>
+        <ConfirmationInput
+          v-model="confirmationText"
+          keyword="ADD"
+          hint-action="新增"
+          @confirm="handleConfirm"
+        >
+          <template #hint>
+            輸入 <strong>ADD</strong> 新增 ｜ 此操作將新增 {{ members.length }} 位成員到群組
+          </template>
+        </ConfirmationInput>
       </div>
 
       <!-- Action Buttons -->
@@ -131,6 +115,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { getAvatarUrl, generateInitialsAvatar } from '@/utils/avatar'
+import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 
 interface Member {
   userEmail: string

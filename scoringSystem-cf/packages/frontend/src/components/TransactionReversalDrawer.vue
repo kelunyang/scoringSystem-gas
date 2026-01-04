@@ -84,20 +84,12 @@
       <!-- Confirmation Text Input -->
       <div class="form-section">
         <h4><i class="fas fa-exclamation-triangle"></i> 確認撤銷 *</h4>
-        <div class="form-group">
-          <label>確認文字 <span class="required">*</span></label>
-          <el-input
-            v-model="reverseConfirmText"
-            placeholder="請輸入 REVERSE"
-            maxlength="20"
-            class="confirmation-code-input"
-            @input="reverseConfirmText = String($event).toUpperCase()"
-          />
-          <div class="field-hint" style="margin-top: 8px;">
-            <i class="fas fa-shield-alt"></i>
-            請輸入 <code style="background: #fff; padding: 2px 6px; border-radius: 3px; color: #f56c6c; font-weight: bold;">REVERSE</code> 以確認撤銷操作
-          </div>
-        </div>
+        <ConfirmationInput
+          v-model="reverseConfirmText"
+          keyword="REVERSE"
+          hint-action="撤銷"
+          prefix-icon="fas fa-shield-alt"
+        />
       </div>
 
       <!-- Action Buttons -->
@@ -126,6 +118,7 @@
 import { ref, computed, watch } from 'vue'
 import { formatTime, getTransactionTypeText } from '@/utils/walletHelpers'
 import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
+import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 

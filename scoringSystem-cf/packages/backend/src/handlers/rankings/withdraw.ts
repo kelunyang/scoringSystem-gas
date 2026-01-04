@@ -41,22 +41,20 @@ export async function withdrawRankingProposal(
 
     // Check proposal status - only pending proposals can be withdrawn
     if (proposal.withdrawnTime !== null) {
-      return errorResponse('ALREADY_WITHDRAWN', 'This proposal has already been withdrawn', 400);
+      return errorResponse('ALREADY_WITHDRAWN', 'This proposal has already been withdrawn');
     }
 
     if (proposal.settleTime !== null) {
       return errorResponse(
         'CANNOT_WITHDRAW_SETTLED',
-        'Cannot withdraw a settled proposal. Once settled, the proposal is finalized.',
-        400
+        'Cannot withdraw a settled proposal. Once settled, the proposal is finalized.'
       );
     }
 
     if (proposal.status !== 'pending') {
       return errorResponse(
         'CANNOT_WITHDRAW',
-        `Cannot withdraw a ${proposal.status} proposal. Only pending proposals can be withdrawn.`,
-        400
+        `Cannot withdraw a ${proposal.status} proposal. Only pending proposals can be withdrawn.`
       );
     }
 
@@ -113,8 +111,7 @@ export async function withdrawRankingProposal(
     if (!result.meta.changes || result.meta.changes === 0) {
       return errorResponse(
         'WITHDRAW_FAILED',
-        'Failed to withdraw proposal - it may have already been withdrawn or changed status',
-        400
+        'Failed to withdraw proposal - it may have already been withdrawn or changed status'
       );
     }
 
@@ -154,8 +151,14 @@ export async function withdrawRankingProposal(
       status: 'withdrawn'
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Withdraw ranking proposal error:', error);
+
+    // Handle SUDO mode write blocked error (check both name and message for robustness)
+    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+      return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
+    }
+
     const errorMessage = error instanceof Error ? error.message : String(error);
     return errorResponse('WITHDRAW_FAILED', `Failed to withdraw proposal: ${errorMessage}`);
   }

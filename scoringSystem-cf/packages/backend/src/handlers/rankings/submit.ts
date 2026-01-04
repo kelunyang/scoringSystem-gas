@@ -232,7 +232,7 @@ export async function submitGroupRanking(
       status: 'pending'
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ [submitGroupRanking] ERROR CAUGHT:', {
       errorType: error?.constructor?.name,
       errorMessage: error instanceof Error ? error.message : String(error),
@@ -242,6 +242,12 @@ export async function submitGroupRanking(
       userEmail,
       rankingDataLength: Array.isArray(rankingData) ? rankingData.length : 'N/A'
     });
+
+    // Handle SUDO mode write blocked error (check both name and message for robustness)
+    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+      return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
+    }
+
     const errorMessage = error instanceof Error ? error.message : String(error);
     return errorResponse('SUBMIT_RANKING_FAILED', `Failed to submit ranking: ${errorMessage}`);
   }

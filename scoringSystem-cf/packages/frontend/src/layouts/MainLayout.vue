@@ -17,7 +17,8 @@
       <!-- Custom Sidebar -->
       <div class="sidebar" :class="{
         collapsed: sidebarCollapsed,
-        'mobile-open': showMobileSidebar
+        'mobile-open': showMobileSidebar,
+        'sudo-mode': sudoStore.isActive
       }">
         <!-- Header with collapse button -->
         <div class="sidebar-header">
@@ -214,6 +215,7 @@ import NotificationCenter from '../components/NotificationCenter.vue'
 import { ElMessage } from 'element-plus'
 import { usePermissionsDrawerStore } from '../stores/permissionsDrawer'
 import { useNotificationCenterStore } from '../stores/notificationCenter'
+import { useSudoStore } from '../stores/sudo'
 import { useNotificationCount } from '../composables/useNotifications'
 import { getUserPreferences } from '../utils/userPreferences'
 
@@ -274,6 +276,9 @@ const sessionWarningShown = ref(false)
 // Permissions Drawer Store
 const permissionsDrawer = usePermissionsDrawerStore()
 
+// Sudo Store
+const sudoStore = useSudoStore()
+
 // Notification Center Store and Query
 const notificationCenterStore = useNotificationCenterStore()
 const notificationCountQuery = useNotificationCount()
@@ -310,6 +315,14 @@ const sessionPercentage = computed(() => {
 // ========================================
 
 const userAvatarUrl = computed(() => {
+  // SUDO 模式：使用被 sudo 的學生頭像
+  if (sudoStore.isActive && sudoStore.displayInfo) {
+    const seed = sudoStore.displayInfo.avatarSeed || `${sudoStore.displayInfo.email}_sudo`
+    const style = sudoStore.displayInfo.avatarStyle || 'avataaars'
+    return `https://api.dicebear.com/7.x/${style}/svg?seed=${seed}&size=40`
+  }
+
+  // 正常模式：使用自己的頭像
   if (!user.value) return ''
   const seed = user.value.avatarSeed || user.value.userEmail
   const style = user.value.avatarStyle || 'avataaars'
@@ -317,6 +330,13 @@ const userAvatarUrl = computed(() => {
 })
 
 const userInitials = computed(() => {
+  // SUDO 模式：使用被 sudo 的學生名稱
+  if (sudoStore.isActive && sudoStore.displayInfo?.name) {
+    const name = sudoStore.displayInfo.name
+    return name.split(' ').map((w: string) => w[0]).join('').substring(0, 2).toUpperCase()
+  }
+
+  // 正常模式：使用自己的名稱
   const name = user.value?.displayName || 'U'
   return name.split(' ').map((w: string) => w[0]).join('').substring(0, 2).toUpperCase()
 })
@@ -413,6 +433,16 @@ const globalPermissionBadge = computed<Badge | null>(() => {
 const allUserBadges = computed<Badge[]>(() => {
   const badges: Badge[] = []
 
+  // 0. SUDO 模式徽章（最高優先級，永遠顯示在最前面）
+  if (sudoStore.isActive) {
+    badges.push({
+      type: 'sudo',
+      icon: 'fas fa-user-secret',
+      color: '#e6a23c',
+      label: `正在以 ${sudoStore.displayInfo?.name || '學生'} 的身份檢視（唯讀模式）`
+    })
+  }
+
   // 1. 全域權限徽章
   if (globalPermissionBadge.value) badges.push(globalPermissionBadge.value)
 
@@ -431,10 +461,18 @@ const nextBadge = computed<Badge | null>(() => {
 })
 
 const badgeTooltipText = computed(() => {
-  if (globalPermissionBadge.value) {
-    return `你的全站權限為${globalPermissionBadge.value.label}`
+  const messages: string[] = []
+
+  // SUDO 模式徽章提示（最高優先級）
+  if (sudoStore.isActive) {
+    messages.push(`正在以 ${sudoStore.displayInfo?.name || '學生'} 的身份檢視（唯讀模式）`)
   }
-  return ''
+
+  if (globalPermissionBadge.value) {
+    messages.push(`你的全站權限為${globalPermissionBadge.value.label}`)
+  }
+
+  return messages.join('，')
 })
 
 const startBadgeRotation = () => {
@@ -1292,5 +1330,44 @@ onBeforeUnmount(() => {
 .sidebar.collapsed .sidebar-footer a {
   margin-left: 0;
   margin: 0 4px;
+}
+
+/* ===== Sidebar Sudo Mode ===== */
+.sidebar.sudo-mode {
+  background: linear-gradient(180deg, #8B5A2B 0%, #5D3A1A 100%); /* 棕橙色漸層 */
+  border-right: 3px solid #e6a23c;
+}
+
+.sidebar.sudo-mode .sidebar-header {
+  border-bottom-color: #e6a23c;
+}
+
+.sidebar.sudo-mode .sidebar-breadcrumb {
+  background: rgba(230, 162, 60, 0.2);
+}
+
+.sidebar.sudo-mode .nav-item {
+  color: #ffecd2;
+}
+
+.sidebar.sudo-mode .nav-item:hover {
+  background-color: rgba(230, 162, 60, 0.3);
+}
+
+.sidebar.sudo-mode .sidebar-user-controls {
+  background: linear-gradient(135deg, #5D3A1A 0%, #8B5A2B 100%);
+  border-top-color: #e6a23c;
+}
+
+.sidebar.sudo-mode .sidebar-watermark-2025 {
+  color: #ffecd2;
+}
+
+.sidebar.sudo-mode .sidebar-watermark-2025 a {
+  color: #ffecd2;
+}
+
+.sidebar.sudo-mode .sidebar-watermark-2025 a:hover {
+  color: #e6a23c;
 }
 </style>

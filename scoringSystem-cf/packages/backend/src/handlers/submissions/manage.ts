@@ -250,8 +250,14 @@ export async function submitDeliverable(
       status: 'submitted'
     }, 'Submission created successfully');
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Submit deliverable error:', error);
+
+    // Handle SUDO mode write blocked error (check both name and message for robustness)
+    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+      return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
+    }
+
     return errorResponse('SYSTEM_ERROR', 'Failed to submit deliverable');
   }
 }
@@ -473,8 +479,14 @@ export async function updateSubmission(
 
     return successResponse(null, 'Submission updated successfully');
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Update submission error:', error);
+
+    // Handle SUDO mode write blocked error (check both name and message for robustness)
+    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+      return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
+    }
+
     return errorResponse('SYSTEM_ERROR', 'Failed to update submission');
   }
 }
@@ -666,6 +678,11 @@ export async function withdrawSubmission(
 
   } catch (error: any) {
     console.error('Withdraw submission error:', error);
+
+    // Handle SUDO mode write blocked error (check both name and message for robustness)
+    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+      return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
+    }
 
     // Handle specific D1 errors
     if (error.message?.includes('FOREIGN KEY constraint failed')) {
@@ -1382,6 +1399,11 @@ export async function voteParticipationProposal(
   } catch (error: any) {
     console.error('Vote participation proposal error:', error);
 
+    // Handle SUDO mode write blocked error (check both name and message for robustness)
+    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+      return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
+    }
+
     // Handle specific D1 errors
     if (error.message?.includes('UNIQUE constraint failed') ||
         error.message?.includes('already voted')) {
@@ -1634,8 +1656,14 @@ export async function forceWithdrawSubmission(
       withdrawnAt: now
     }, 'Submission force withdrawn successfully');
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Force withdraw submission error:', error);
+
+    // Handle SUDO mode write blocked error (check both name and message for robustness)
+    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+      return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
+    }
+
     return errorResponse('SYSTEM_ERROR', `Failed to force withdraw submission: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }

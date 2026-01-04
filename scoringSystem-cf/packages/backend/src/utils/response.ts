@@ -111,6 +111,10 @@ export const ERROR_CODES = {
   INSUFFICIENT_PERMISSIONS: 'INSUFFICIENT_PERMISSIONS',
   NOT_PROJECT_MEMBER: 'NOT_PROJECT_MEMBER',
   ACCESS_DENIED: 'ACCESS_DENIED',
+  SUDO_NO_WRITE: 'SUDO_NO_WRITE',
+  NOT_GROUP_MEMBER: 'NOT_GROUP_MEMBER',
+  NOT_GROUP_LEADER: 'NOT_GROUP_LEADER',
+  NOT_AUTHORIZED: 'NOT_AUTHORIZED',
 
   // Not found errors (404)
   NOT_FOUND: 'NOT_FOUND',
@@ -120,6 +124,7 @@ export const ERROR_CODES = {
   SUBMISSION_NOT_FOUND: 'SUBMISSION_NOT_FOUND',
   GROUP_NOT_FOUND: 'GROUP_NOT_FOUND',
   ENTITY_NOT_FOUND: 'ENTITY_NOT_FOUND',
+  PROPOSAL_NOT_FOUND: 'PROPOSAL_NOT_FOUND',
 
   // Validation errors (400)
   VALIDATION_ERROR: 'VALIDATION_ERROR',
@@ -139,6 +144,18 @@ export const ERROR_CODES = {
   GROUP_EXISTS: 'GROUP_EXISTS',
   PROPOSAL_EXISTS: 'PROPOSAL_EXISTS',
   LIMIT_EXCEEDED: 'LIMIT_EXCEEDED',
+  MISSING_FIELDS: 'MISSING_FIELDS',
+  PROPOSAL_NOT_PENDING: 'PROPOSAL_NOT_PENDING',
+  NO_GROUP_MEMBERS: 'NO_GROUP_MEMBERS',
+  NO_VOTES: 'NO_VOTES',
+  NOT_ALL_VOTED: 'NOT_ALL_VOTED',
+  PROPOSAL_PASSED: 'PROPOSAL_PASSED',
+  RESET_LIMIT_EXCEEDED: 'RESET_LIMIT_EXCEEDED',
+  RESET_FAILED: 'RESET_FAILED',
+  ALREADY_WITHDRAWN: 'ALREADY_WITHDRAWN',
+  CANNOT_WITHDRAW: 'CANNOT_WITHDRAW',
+  CANNOT_WITHDRAW_SETTLED: 'CANNOT_WITHDRAW_SETTLED',
+  WITHDRAW_FAILED: 'WITHDRAW_FAILED',
 
   // Server errors (500)
   INTERNAL_ERROR: 'INTERNAL_ERROR',
@@ -167,7 +184,11 @@ export function getHttpStatus(errorCode: string): number {
     errorCode === ERROR_CODES.INSUFFICIENT_PERMISSIONS ||
     errorCode === ERROR_CODES.NOT_PROJECT_MEMBER ||
     errorCode === ERROR_CODES.USER_DISABLED ||
-    errorCode === ERROR_CODES.ACCESS_DENIED
+    errorCode === ERROR_CODES.ACCESS_DENIED ||
+    errorCode === ERROR_CODES.SUDO_NO_WRITE ||
+    errorCode === ERROR_CODES.NOT_GROUP_MEMBER ||
+    errorCode === ERROR_CODES.NOT_GROUP_LEADER ||
+    errorCode === ERROR_CODES.NOT_AUTHORIZED
   ) {
     return 403;
   }
@@ -180,7 +201,8 @@ export function getHttpStatus(errorCode: string): number {
     errorCode === ERROR_CODES.STAGE_NOT_FOUND ||
     errorCode === ERROR_CODES.SUBMISSION_NOT_FOUND ||
     errorCode === ERROR_CODES.GROUP_NOT_FOUND ||
-    errorCode === ERROR_CODES.ENTITY_NOT_FOUND
+    errorCode === ERROR_CODES.ENTITY_NOT_FOUND ||
+    errorCode === ERROR_CODES.PROPOSAL_NOT_FOUND
   ) {
     return 404;
   }
@@ -201,7 +223,19 @@ export function getHttpStatus(errorCode: string): number {
     errorCode === ERROR_CODES.TRANSACTION_FAILED ||
     errorCode === ERROR_CODES.GROUP_EXISTS ||
     errorCode === ERROR_CODES.PROPOSAL_EXISTS ||
-    errorCode === ERROR_CODES.LIMIT_EXCEEDED
+    errorCode === ERROR_CODES.LIMIT_EXCEEDED ||
+    errorCode === ERROR_CODES.MISSING_FIELDS ||
+    errorCode === ERROR_CODES.PROPOSAL_NOT_PENDING ||
+    errorCode === ERROR_CODES.NO_GROUP_MEMBERS ||
+    errorCode === ERROR_CODES.NO_VOTES ||
+    errorCode === ERROR_CODES.NOT_ALL_VOTED ||
+    errorCode === ERROR_CODES.PROPOSAL_PASSED ||
+    errorCode === ERROR_CODES.RESET_LIMIT_EXCEEDED ||
+    errorCode === ERROR_CODES.RESET_FAILED ||
+    errorCode === ERROR_CODES.ALREADY_WITHDRAWN ||
+    errorCode === ERROR_CODES.CANNOT_WITHDRAW ||
+    errorCode === ERROR_CODES.CANNOT_WITHDRAW_SETTLED ||
+    errorCode === ERROR_CODES.WITHDRAW_FAILED
   ) {
     return 400;
   }
@@ -297,6 +331,15 @@ export function getErrorMessage(error: unknown): string {
  */
 export function handleError(error: unknown, context?: any): Response {
   console.error('Error occurred:', error, context);
+
+  // Handle SudoWriteBlockedError - check by name since it's from a different module
+  if (error instanceof Error && error.name === 'SudoWriteBlockedError') {
+    return errorResponse(
+      ERROR_CODES.SUDO_NO_WRITE,
+      'SUDO 模式為唯讀，無法進行寫入操作',
+      context
+    );
+  }
 
   // Handle known error types
   if (error && typeof error === 'object' && 'code' in error && 'message' in error) {

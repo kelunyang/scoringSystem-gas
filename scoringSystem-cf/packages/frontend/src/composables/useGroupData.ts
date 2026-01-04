@@ -8,6 +8,7 @@
 
 import { computed, type Ref } from 'vue'
 import type { User, Group } from '@/types'
+import { useSudoStore } from '@/stores/sudo'
 
 /**
  * 群組數據處理 composable
@@ -16,7 +17,6 @@ import type { User, Group } from '@/types'
  * @returns {Object} 群組相關計算函數
  */
 export function useGroupData(projectData: any, user: Ref<User>) {
-  console.log('🔧 [useGroupData] composable 初始化')
 
   /**
    * 取得當前用戶所屬的群組資訊
@@ -27,49 +27,36 @@ export function useGroupData(projectData: any, user: Ref<User>) {
       return null
     }
 
-    console.log('currentUserGroup 檢查:', {
-      hasProjectData: !!projectData.value,
-      user: user.value,
-      userEmail: user.value?.email,
-      userUserEmail: user.value?.userEmail
-    })
-
-    if (!projectData.value || (!user.value?.email && !user.value?.userEmail)) {
-      console.log('currentUserGroup: 缺少 projectData 或 user email')
+    if (!projectData.value) {
       return null
     }
 
-    const userEmail = user.value.email || user.value.userEmail
+    // 🕵️ 檢查是否為 sudo 模式
+    // 注意：projectData 結構是 { project: { projectId: ... }, groups: [...], ... }
+    const sudoStore = useSudoStore()
+    const isSudoActive = sudoStore.isActive &&
+                         sudoStore.projectId === projectData.value?.project?.projectId &&
+                         sudoStore.targetUser
+
+    // 🕵️ 使用有效的 email（sudo target 或真實用戶）
+    const effectiveEmail = isSudoActive
+      ? sudoStore.targetUser!.userEmail
+      : (user.value?.email || user.value?.userEmail)
+
+    if (!effectiveEmail) {
+      return null
+    }
     const userGroups = projectData.value.userGroups || []
     const groups = projectData.value.groups || []
 
-    console.log('currentUserGroup 調試:', {
-      userEmail,
-      userGroupsCount: userGroups.length,
-      groupsCount: groups.length,
-      userGroups: userGroups.map((ug: any) => ({
-        userEmail: ug.userEmail,
-        groupId: ug.groupId,
-        isActive: ug.isActive
-      })),
-      groups: groups.map((g: Group) => ({
-        groupId: g.groupId,
-        groupName: g.groupName,
-        status: g.status
-      }))
-    })
-
-    // 找到當前用戶的群組成員記錄（isActive=true）
+    // 找到當前用戶（或 sudo target）的群組成員記錄（isActive=true）
     const userGroupRecord = userGroups.find((ug: any) =>
-      ug.userEmail === userEmail && ug.isActive
+      ug.userEmail === effectiveEmail && ug.isActive
     )
 
     if (!userGroupRecord) {
-      console.log('currentUserGroup: 找不到用戶的群組記錄')
       return null
     }
-
-    console.log('找到用戶群組記錄:', userGroupRecord)
 
     // 找到對應的群組
     const group = groups.find((g: Group) =>
@@ -101,8 +88,6 @@ export function useGroupData(projectData: any, user: Ref<User>) {
         }
       })
 
-    console.log('群組成員列表:', groupMembers)
-
     const result = {
       groupId: group.groupId,
       groupName: group.groupName,
@@ -111,7 +96,6 @@ export function useGroupData(projectData: any, user: Ref<User>) {
       members: groupMembers
     }
 
-    console.log('currentUserGroup 最終結果:', result)
     return result
   })
 
@@ -201,13 +185,27 @@ export function useGroupData(projectData: any, user: Ref<User>) {
 
   /**
    * 獲取當前用戶所屬群組（非響應式版本）
+   * 🕵️ 支援 sudo 模式
    * @returns {Object|null} 群組記錄或 null
    */
   function getCurrentUserGroup() {
-    if (!projectData.value?.userGroups || !user.value?.userEmail) return null
+    if (!projectData.value?.userGroups) return null
+
+    // 🕵️ 檢查是否為 sudo 模式
+    // 注意：projectData 結構是 { project: { projectId: ... }, groups: [...], ... }
+    const sudoStore = useSudoStore()
+    const isSudoActive = sudoStore.isActive &&
+                         sudoStore.projectId === projectData.value?.project?.projectId &&
+                         sudoStore.targetUser
+
+    const effectiveEmail = isSudoActive
+      ? sudoStore.targetUser!.userEmail
+      : user.value?.userEmail
+
+    if (!effectiveEmail) return null
 
     return projectData.value.userGroups.find((ug: any) =>
-      ug.userEmail === user.value.userEmail && ug.isActive
+      ug.userEmail === effectiveEmail && ug.isActive
     )
   }
 

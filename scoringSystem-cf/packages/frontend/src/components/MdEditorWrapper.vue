@@ -19,8 +19,16 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { MdEditor, type ToolbarNames, type Footers, type CustomIcon } from 'md-editor-v3'
+import { MdEditor, config, type ToolbarNames, type Footers, type CustomIcon } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
+
+// 停用 linkShortener 擴充功能，避免長網址被折疊顯示為 "..."
+// 參考: https://github.com/imzbf/md-editor-v3/issues/972
+config({
+  codeMirrorExtensions(extensions) {
+    return extensions.filter(item => item.type !== 'linkShortener')
+  }
+})
 
 // FontAwesome icon mapping - 只映射 toolbarConfig 用到的圖示
 // Note: image upload is intentionally disabled
@@ -303,8 +311,10 @@ defineExpose({
     border-radius: 0;
   }
 
-  /* Links */
+  /* Links - 覆蓋 md-editor-v3 default-theme 的 inline-flex 導致長網址顯示為 "..." 的問題 */
   a {
+    display: inline !important;
+    word-break: break-all;
     color: #007bff;
     text-decoration: none;
   }

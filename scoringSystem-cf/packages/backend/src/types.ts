@@ -104,11 +104,28 @@ export interface RequestContext {
 }
 
 /**
+ * Sudo target user info (the user being impersonated)
+ */
+export interface SudoTargetUser {
+  userId: string;
+  userEmail: string;
+  displayName: string;
+  avatarSeed?: string;
+  avatarStyle?: string;
+}
+
+/**
  * Extended Hono context type variables
  */
 export interface HonoVariables {
   user: AuthUser;
   newToken?: string;
+
+  // Sudo mode fields
+  sudoMode?: boolean;           // Whether in sudo mode
+  sudoAs?: SudoTargetUser;      // The user being impersonated
+  actualUser?: AuthUser;        // The real user (preserved during sudo)
+  sudoProjectId?: string;       // The project ID sudo is limited to
 }
 
 /**

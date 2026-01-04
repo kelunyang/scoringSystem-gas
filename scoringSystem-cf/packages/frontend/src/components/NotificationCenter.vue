@@ -145,11 +145,10 @@
             </AdminFilterToolbar>
 
             <!-- Notification List -->
-            <div
+            <el-scrollbar
               class="notification-list-container"
-              v-infinite-scroll="loadMoreNotifications"
-              :infinite-scroll-disabled="disableInfiniteScroll"
-              :infinite-scroll-distance="10"
+              @end-reached="loadMoreNotifications"
+              :distance="10"
               role="region"
               aria-label="通知列表"
             >
@@ -238,7 +237,7 @@
                   <el-skeleton :rows="2" animated />
                 </div>
               </div>
-            </div>
+            </el-scrollbar>
           </el-tab-pane>
 
           <!-- 通知日誌 Tab -->
@@ -428,6 +427,7 @@ const drawerSize = computed(() => {
   return '600px'
 })
 import { ElMessageBox, ElMessage } from 'element-plus'
+import type { ScrollbarDirection } from 'element-plus'
 import { useDebounceFn } from '@vueuse/core'
 import { useNotificationLog } from '@/composables/useNotificationLog'
 import {
@@ -648,7 +648,8 @@ function refreshNotifications() {
 }
 
 // ===== Infinite Scroll =====
-function loadMoreNotifications() {
+function loadMoreNotifications(direction: ScrollbarDirection) {
+  if (direction !== 'bottom') return
   if (!hasMore.value || isFetchingNotifications.value) return
   currentPage.value++
 }
@@ -979,7 +980,11 @@ function getTypeLabel(type: string) {
 }
 
 /* Notification List Container */
-.notification-list-container,
+.notification-list-container {
+  flex: 1;
+  padding: 0 20px;
+}
+
 .notification-log-list-container {
   flex: 1;
   overflow-y: auto;

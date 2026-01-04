@@ -782,6 +782,541 @@ class TestCrossUserAccess:
 
 
 # ============================================================================
+# Stages Access Control Tests
+# ============================================================================
+
+class TestStagesBOLA:
+    """Test stage-level access control across projects"""
+
+    @pytest.mark.critical
+    @pytest.mark.bola
+    def test_cross_project_stage_access(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify users cannot access stages from other projects.
+
+        Attack Vector:
+        - Attacker obtains stage ID from another project
+        - Attacker attempts to view stage details using their own token
+
+        Expected: 403 Forbidden or 404 Not Found
+        """
+        fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post(
+            '/stages/get',
+            auth=fake_token,
+            json={
+                'projectId': 'proj_other_project',
+                'stageId': 'stg_target_stage'
+            }
+        )
+
+        assert response.status_code in [401, 403, 404], \
+            f"Cross-project stage access allowed (status: {response.status_code})"
+
+    @pytest.mark.critical
+    @pytest.mark.bola
+    def test_cross_project_stage_update(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify users cannot update stages in other projects.
+
+        Attack Vector:
+        - Attacker with access to Project A attempts to update stage in Project B
+
+        Expected: 403 Forbidden
+        """
+        fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhdHRhY2tlciJ9.fake"
+
+        response = api_client.post(
+            '/stages/update',
+            auth=fake_token,
+            json={
+                'projectId': 'proj_victim_project',
+                'stageId': 'stg_target_stage',
+                'stageData': {'stageName': 'Hacked Stage'}
+            }
+        )
+
+        assert response.status_code in [401, 403, 404], \
+            f"Cross-project stage update allowed (status: {response.status_code})"
+
+    @pytest.mark.critical
+    @pytest.mark.bola
+    def test_cross_project_stage_delete(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify users cannot delete stages in other projects.
+
+        Attack Vector:
+        - Attacker attempts to delete a stage from unauthorized project
+
+        Expected: 403 Forbidden
+        """
+        fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhdHRhY2tlciJ9.fake"
+
+        response = api_client.post(
+            '/stages/delete',
+            auth=fake_token,
+            json={
+                'projectId': 'proj_unauthorized',
+                'stageId': 'stg_target_stage'
+            }
+        )
+
+        assert response.status_code in [401, 403, 404], \
+            f"Cross-project stage deletion allowed (status: {response.status_code})"
+
+    @pytest.mark.high
+    @pytest.mark.bola
+    def test_cross_project_stage_config_access(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify users cannot access stage configuration from other projects.
+
+        Attack Vector:
+        - Attacker attempts to view stage config (scoring rules, etc.) from unauthorized project
+
+        Expected: 403 Forbidden
+        """
+        fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post(
+            '/stages/config',
+            auth=fake_token,
+            json={
+                'projectId': 'proj_unauthorized',
+                'stageId': 'stg_target_stage'
+            }
+        )
+
+        assert response.status_code in [401, 403, 404], \
+            f"Cross-project stage config access allowed (status: {response.status_code})"
+
+    @pytest.mark.high
+    @pytest.mark.bola
+    def test_cross_project_stage_clone(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify users cannot clone stages to/from unauthorized projects.
+
+        Attack Vector:
+        - Attacker attempts to clone a stage from Project A to Project B
+
+        Expected: 403 Forbidden
+        """
+        fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhdHRhY2tlciJ9.fake"
+
+        response = api_client.post(
+            '/stages/clone',
+            auth=fake_token,
+            json={
+                'projectId': 'proj_source',
+                'stageId': 'stg_source_stage'
+            }
+        )
+
+        assert response.status_code in [401, 403, 404], \
+            f"Cross-project stage clone allowed (status: {response.status_code})"
+
+    @pytest.mark.medium
+    @pytest.mark.bola
+    def test_stage_id_enumeration_cross_project(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify stage ID enumeration doesn't leak cross-project information.
+
+        Attack Vector:
+        - Attacker enumerates stage IDs to find stages in other projects
+        - System should not reveal which stages exist in unauthorized projects
+
+        Expected: Consistent 403/404 responses with no information leakage
+        """
+        fake_stage_ids = [
+            'stg_00000000-0000-0000-0000-000000000001',
+            'stg_00000000-0000-0000-0000-000000000002',
+            'stg_12345678-1234-1234-1234-123456789abc',
+        ]
+
+        for fake_id in fake_stage_ids:
+            response = api_client.post(
+                '/stages/get',
+                auth=admin_token,
+                json={
+                    'projectId': 'proj_nonexistent',
+                    'stageId': fake_id
+                }
+            )
+
+            # Should be consistent response, no 500 errors
+            assert response.status_code in [400, 403, 404], \
+                f"Unexpected response for stage enumeration '{fake_id}': {response.status_code}"
+
+            # No sensitive info leakage
+            response_text = response.text.lower()
+            assert 'stack' not in response_text, \
+                f"Stack trace leaked for stage ID '{fake_id}'"
+
+
+# ============================================================================
+# Settlement Access Control Tests
+# ============================================================================
+
+class TestSettlementBOLA:
+    """Test settlement-level access control across projects"""
+
+    @pytest.mark.critical
+    @pytest.mark.bola
+    def test_cross_project_settlement_history(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify users cannot access settlement history from other projects.
+
+        Attack Vector:
+        - Attacker attempts to view settlement history from unauthorized project
+
+        Expected: 403 Forbidden
+        """
+        fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post(
+            '/settlement/history',
+            auth=fake_token,
+            json={
+                'projectId': 'proj_unauthorized'
+            }
+        )
+
+        assert response.status_code in [401, 403, 404], \
+            f"Cross-project settlement history access allowed (status: {response.status_code})"
+
+    @pytest.mark.critical
+    @pytest.mark.bola
+    def test_cross_project_settlement_details(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify users cannot access settlement details from other projects.
+
+        Attack Vector:
+        - Attacker obtains settlement ID and attempts to view details
+
+        Expected: 403 Forbidden
+        """
+        fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhdHRhY2tlciJ9.fake"
+
+        response = api_client.post(
+            '/settlement/details',
+            auth=fake_token,
+            json={
+                'projectId': 'proj_unauthorized',
+                'stageId': 'stg_target',
+                'settlementId': 'stl_target_settlement'
+            }
+        )
+
+        assert response.status_code in [401, 403, 404], \
+            f"Cross-project settlement details access allowed (status: {response.status_code})"
+
+    @pytest.mark.high
+    @pytest.mark.bola
+    def test_cross_project_settlement_transactions(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify users cannot access settlement transactions from other projects.
+
+        Attack Vector:
+        - Attacker attempts to view financial transactions from unauthorized project
+
+        Expected: 403 Forbidden
+        """
+        fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhdHRhY2tlciJ9.fake"
+
+        response = api_client.post(
+            '/settlement/transactions',
+            auth=fake_token,
+            json={
+                'projectId': 'proj_unauthorized',
+                'settlementId': 'stl_target'
+            }
+        )
+
+        assert response.status_code in [401, 403, 404], \
+            f"Cross-project settlement transactions access allowed (status: {response.status_code})"
+
+    @pytest.mark.high
+    @pytest.mark.bola
+    def test_cross_project_settlement_rankings(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify users cannot access settlement rankings from other projects.
+
+        Attack Vector:
+        - Attacker attempts to view stage/comment rankings from unauthorized project
+
+        Expected: 403 Forbidden
+        """
+        fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        # Test stage rankings
+        response = api_client.post(
+            '/settlement/stage-rankings',
+            auth=fake_token,
+            json={
+                'projectId': 'proj_unauthorized',
+                'stageId': 'stg_target'
+            }
+        )
+
+        assert response.status_code in [401, 403, 404], \
+            f"Cross-project stage rankings access allowed (status: {response.status_code})"
+
+        # Test comment rankings
+        response = api_client.post(
+            '/settlement/comment-rankings',
+            auth=fake_token,
+            json={
+                'projectId': 'proj_unauthorized',
+                'stageId': 'stg_target'
+            }
+        )
+
+        assert response.status_code in [401, 403, 404], \
+            f"Cross-project comment rankings access allowed (status: {response.status_code})"
+
+    @pytest.mark.medium
+    @pytest.mark.bola
+    def test_settlement_id_enumeration_prevention(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify settlement ID enumeration doesn't reveal cross-project data.
+
+        Attack Vector:
+        - Attacker iterates through settlement IDs
+        - System should not reveal which settlements exist in other projects
+
+        Expected: Consistent 403/404 responses
+        """
+        fake_settlement_ids = [
+            'stl_00000000-0000-0000-0000-000000000001',
+            'stl_00000000-0000-0000-0000-000000000002',
+            'stl_12345678-1234-1234-1234-123456789abc',
+        ]
+
+        for fake_id in fake_settlement_ids:
+            response = api_client.post(
+                '/settlement/details',
+                auth=admin_token,
+                json={
+                    'projectId': 'proj_nonexistent',
+                    'stageId': 'stg_nonexistent',
+                    'settlementId': fake_id
+                }
+            )
+
+            # Should be consistent response, no 500 errors
+            assert response.status_code in [400, 403, 404], \
+                f"Unexpected response for settlement enumeration '{fake_id}': {response.status_code}"
+
+
+# ============================================================================
+# Event Logs Access Control Tests
+# ============================================================================
+
+class TestEventLogsBOLA:
+    """Test event logs access control with 5-layer permission model"""
+
+    @pytest.mark.critical
+    @pytest.mark.bola
+    def test_cross_project_eventlog_access(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify users cannot access event logs from other projects.
+
+        Attack Vector:
+        - Attacker attempts to view project event logs from unauthorized project
+
+        Expected: 403 Forbidden
+        """
+        fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post(
+            '/eventlogs/project',
+            auth=fake_token,
+            json={
+                'projectId': 'proj_unauthorized'
+            }
+        )
+
+        assert response.status_code in [401, 403, 404], \
+            f"Cross-project event log access allowed (status: {response.status_code})"
+
+    @pytest.mark.critical
+    @pytest.mark.bola
+    def test_cross_user_eventlog_access(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify users cannot access event logs of other users.
+
+        Attack Vector:
+        - Attacker attempts to view event logs of another user
+
+        Expected: 403 Forbidden or filtered results (own logs only)
+        """
+        fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhdHRhY2tlciJ9.fake"
+
+        response = api_client.post(
+            '/eventlogs/user',
+            auth=fake_token,
+            json={
+                'projectId': 'proj_test',
+                'userId': 'usr_victim_user'  # Attempting to view another user's logs
+            }
+        )
+
+        assert response.status_code in [401, 403, 404], \
+            f"Cross-user event log access allowed (status: {response.status_code})"
+
+    @pytest.mark.high
+    @pytest.mark.bola
+    def test_eventlog_resource_cross_project(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify users cannot access resource event logs from other projects.
+
+        Attack Vector:
+        - Attacker attempts to view logs for a resource in unauthorized project
+
+        Expected: 403 Forbidden
+        """
+        fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post(
+            '/eventlogs/resource',
+            auth=fake_token,
+            json={
+                'projectId': 'proj_unauthorized',
+                'resourceType': 'submission',
+                'resourceId': 'sub_target_resource'
+            }
+        )
+
+        assert response.status_code in [401, 403, 404], \
+            f"Cross-project resource event log access allowed (status: {response.status_code})"
+
+    @pytest.mark.high
+    @pytest.mark.bola
+    def test_eventlog_layer_permission_enforcement(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify 5-layer permission model is enforced for event logs.
+
+        Event Log Permission Layers:
+        1. System Admin - can see all logs
+        2. Project Owner/Teacher - can see project-level logs
+        3. Group Leader - can see group-level logs
+        4. Group Member - can see own logs + limited group logs
+        5. Observer - can see limited read-only logs
+
+        Attack Vector:
+        - Lower-layer user attempts to access higher-layer logs
+
+        Expected: 403 or filtered results based on permission layer
+        """
+        # Test with fake viewer token (should have limited access)
+        fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
+
+        # Viewer should not be able to see system-level logs
+        response = api_client.post(
+            '/eventlogs/project',
+            auth=fake_viewer_token,
+            json={
+                'projectId': 'proj_test',
+                'level': 'system'  # Attempting to access system-level logs
+            }
+        )
+
+        # Should either be denied or return filtered (non-system) results
+        assert response.status_code in [401, 403, 404], \
+            f"Layer permission bypass for event logs (status: {response.status_code})"
+
+    @pytest.mark.medium
+    @pytest.mark.bola
+    def test_eventlog_id_enumeration_prevention(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify event log ID enumeration doesn't reveal cross-project data.
+
+        Attack Vector:
+        - Attacker enumerates log IDs to discover logs from other projects
+
+        Expected: Consistent responses with no information leakage
+        """
+        fake_log_ids = [
+            'log_00000000-0000-0000-0000-000000000001',
+            'log_00000000-0000-0000-0000-000000000002',
+            'log_sensitive-operation-12345',
+        ]
+
+        for fake_id in fake_log_ids:
+            response = api_client.post(
+                '/eventlogs/resource',
+                auth=admin_token,
+                json={
+                    'projectId': 'proj_nonexistent',
+                    'resourceType': 'log',
+                    'resourceId': fake_id
+                }
+            )
+
+            # Should be consistent response, no 500 errors
+            assert response.status_code in [400, 403, 404], \
+                f"Unexpected response for log enumeration '{fake_id}': {response.status_code}"
+
+            # No sensitive info leakage
+            response_text = response.text.lower()
+            assert 'internal' not in response_text or 'internal server' not in response_text, \
+                f"Internal error leaked for log ID '{fake_id}'"
+
+
+# ============================================================================
 # Helper for running BOLA tests
 # ============================================================================
 

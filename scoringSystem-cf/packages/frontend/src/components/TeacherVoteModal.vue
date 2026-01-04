@@ -782,6 +782,71 @@ function handleApplyAIRanking(ranking: string[], mode: 'submission' | 'comment')
   }
 }
 
+// ========== 版本歷史輔助函數 ==========
+
+/**
+ * 載入成果排名數據到編輯區
+ * @param version - 要載入的版本數據
+ */
+function loadSubmissionRankingsToEditor(version: Version): void {
+  // 建立 submissionId -> 原始 Submission 的映射
+  const submissionMap = new Map(rankedSubmissions.value.map(s => [s.submissionId, s]))
+
+  // 根據歷史排名重新排序，並補充完整資料
+  const reorderedSubmissions: Submission[] = version.rankings
+    .sort((a, b) => a.rank - b.rank)
+    .map(ranking => {
+      const original = submissionMap.get(ranking.targetId)
+      if (original) {
+        return { ...original }
+      }
+      // 如果找不到原始資料，使用 API 返回的基本資訊
+      return {
+        submissionId: ranking.targetId,
+        groupId: ranking.groupId || '',
+        groupName: (ranking as any).groupName || '',
+        memberNames: (ranking as any).memberNames || [],
+        reportContent: '',
+        submitTime: '',
+        status: ''
+      }
+    })
+    .filter(s => s.submissionId)
+
+  rankedSubmissions.value = reorderedSubmissions
+}
+
+/**
+ * 載入評論排名數據到編輯區
+ * @param version - 要載入的版本數據
+ */
+function loadCommentRankingsToEditor(version: Version): void {
+  // 建立 commentId -> 原始 Comment 的映射
+  const commentMap = new Map(allCommentsForRanking.value.map(c => [c.commentId, c]))
+
+  // 根據歷史排名重新排序，並補充完整資料
+  const reorderedComments: Comment[] = version.rankings
+    .sort((a, b) => a.rank - b.rank)
+    .map(ranking => {
+      const original = commentMap.get(ranking.targetId)
+      if (original) {
+        return { ...original }
+      }
+      // 如果找不到原始資料，使用 API 返回的基本資訊
+      return {
+        commentId: ranking.targetId,
+        authorEmail: ranking.authorEmail || '',
+        authorDisplayName: ranking.authorEmail || '',
+        content: '',
+        createdTime: '',
+        mentionedGroups: []
+      }
+    })
+    .filter(c => c.commentId)
+
+  rankedComments.value = reorderedComments
+}
+
 async function loadVersionHistory(autoEnterPreview: boolean = false): Promise<void> {
   try {
     // 載入成果排名版本歷史（完整數據）
@@ -854,9 +919,24 @@ async function loadVersionHistory(autoEnterPreview: boolean = false): Promise<vo
       // 清除舊的 alert
       clearAlerts()
 
-      // 根據當前 tab 判斷應該預覽哪個類型
-      if (activeTab.value === 'submissions' && submissionVersions.value.length > 0) {
-        loadedSubmissionVersionId.value = submissionVersions.value[submissionVersions.value.length - 1].versionId
+      const hasSubmissionVersions = submissionVersions.value.length > 0
+      const hasCommentVersions = commentVersions.value.length > 0
+
+      // 同時載入兩種類型的排名數據（如果存在），避免切換 tab 時數據遺失
+      if (hasSubmissionVersions) {
+        const latestSubmissionVersion = submissionVersions.value[submissionVersions.value.length - 1]
+        loadedSubmissionVersionId.value = latestSubmissionVersion.versionId
+        loadSubmissionRankingsToEditor(latestSubmissionVersion)
+      }
+
+      if (hasCommentVersions) {
+        const latestCommentVersion = commentVersions.value[commentVersions.value.length - 1]
+        loadedCommentVersionId.value = latestCommentVersion.versionId
+        loadCommentRankingsToEditor(latestCommentVersion)
+      }
+
+      // 根據當前 tab 顯示對應的提示訊息
+      if (hasSubmissionVersions || hasCommentVersions) {
         addAlert({
           type: 'info',
           title: '正在檢視最新投票結果',
@@ -864,36 +944,6 @@ async function loadVersionHistory(autoEnterPreview: boolean = false): Promise<vo
           closable: false,
           autoClose: 0
         })
-      } else if (activeTab.value === 'comments' && commentVersions.value.length > 0) {
-        loadedCommentVersionId.value = commentVersions.value[commentVersions.value.length - 1].versionId
-        addAlert({
-          type: 'info',
-          title: '正在檢視最新投票結果',
-          message: '目前顯示最新提交的排名結果（唯讀模式），點擊下方「離開檢視模式」按鈕可重新編輯',
-          closable: false,
-          autoClose: 0
-        })
-      } else {
-        // 如果兩個 tab 都有版本歷史，預設預覽成果排名
-        if (submissionVersions.value.length > 0) {
-          loadedSubmissionVersionId.value = submissionVersions.value[submissionVersions.value.length - 1].versionId
-          addAlert({
-            type: 'info',
-            title: '正在檢視最新投票結果',
-            message: '目前顯示最新提交的排名結果（唯讀模式），點擊下方「離開檢視模式」按鈕可重新編輯',
-            closable: false,
-            autoClose: 0
-          })
-        } else if (commentVersions.value.length > 0) {
-          loadedCommentVersionId.value = commentVersions.value[commentVersions.value.length - 1].versionId
-          addAlert({
-            type: 'info',
-            title: '正在檢視最新投票結果',
-            message: '目前顯示最新提交的排名結果（唯讀模式），點擊下方「離開檢視模式」按鈕可重新編輯',
-            closable: false,
-            autoClose: 0
-          })
-        }
       }
     }
   } catch (error) {
@@ -908,14 +958,28 @@ function handleSubmissionVersionChange(versionId: string): void {
   if (submissionVersions.value.length > 0) {
     const latestVersion = submissionVersions.value[submissionVersions.value.length - 1]
     const isLatest = versionId === latestVersion.versionId
+    const selectedVersion = submissionVersions.value.find(v => v.versionId === versionId)
 
     if (isLatest) {
-      // 如果選擇的是最新版本，退出預覽模式
-      loadedSubmissionVersionId.value = null
+      // 如果選擇的是最新版本，進入最新版本的預覽模式
+      loadedSubmissionVersionId.value = versionId
+      if (selectedVersion) {
+        loadSubmissionRankingsToEditor(selectedVersion)
+      }
       clearAlerts()
+      addAlert({
+        type: 'info',
+        title: '正在檢視最新投票結果',
+        message: '目前顯示最新提交的排名結果（唯讀模式），點擊下方「離開檢視模式」按鈕可重新編輯',
+        closable: false,
+        autoClose: 0
+      })
     } else {
       // 如果選擇的是歷史版本，進入預覽模式
       loadedSubmissionVersionId.value = versionId
+      if (selectedVersion) {
+        loadSubmissionRankingsToEditor(selectedVersion)
+      }
       clearAlerts()
       addAlert({
         type: 'info',
@@ -935,14 +999,28 @@ function handleCommentVersionChange(versionId: string): void {
   if (commentVersions.value.length > 0) {
     const latestVersion = commentVersions.value[commentVersions.value.length - 1]
     const isLatest = versionId === latestVersion.versionId
+    const selectedVersion = commentVersions.value.find(v => v.versionId === versionId)
 
     if (isLatest) {
-      // 如果選擇的是最新版本，退出預覽模式
-      loadedCommentVersionId.value = null
+      // 如果選擇的是最新版本，進入最新版本的預覽模式
+      loadedCommentVersionId.value = versionId
+      if (selectedVersion) {
+        loadCommentRankingsToEditor(selectedVersion)
+      }
       clearAlerts()
+      addAlert({
+        type: 'info',
+        title: '正在檢視最新投票結果',
+        message: '目前顯示最新提交的排名結果（唯讀模式），點擊下方「離開檢視模式」按鈕可重新編輯',
+        closable: false,
+        autoClose: 0
+      })
     } else {
       // 如果選擇的是歷史版本，進入預覽模式
       loadedCommentVersionId.value = versionId
+      if (selectedVersion) {
+        loadCommentRankingsToEditor(selectedVersion)
+      }
       clearAlerts()
       addAlert({
         type: 'info',

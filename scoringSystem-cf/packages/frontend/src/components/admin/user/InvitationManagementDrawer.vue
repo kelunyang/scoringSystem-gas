@@ -617,18 +617,12 @@
           </el-alert>
 
           <div class="form-group">
-            <label>請輸入 <strong>RESEND</strong> 來確認重發：</label>
-            <el-input
+            <ConfirmationInput
               v-model="resendConfirmationText"
-              placeholder="請輸入 RESEND"
-              clearable
-              class="confirmation-code-input"
-              @input="(val: string | number) => { resendConfirmationText = String(val).toUpperCase() }"
-              @keyup.enter="handleConfirmResend"
+              keyword="RESEND"
+              hint-action="重發"
+              @confirm="handleConfirmResend"
             />
-            <div class="help-text" :class="{ 'text-success': isResendConfirmationValid }">
-              {{ isResendConfirmationValid ? '✓ 確認文字正確' : '請輸入正確的確認文字' }}
-            </div>
           </div>
         </div>
       </div>
@@ -655,6 +649,7 @@
 import { ref, reactive, computed, watch, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
+import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { rpcClient } from '@/utils/rpc-client'
 import { fetchWithAuth } from '@/utils/api-helpers'

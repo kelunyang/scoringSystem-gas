@@ -72,20 +72,12 @@
       <!-- 安全確認輸入 -->
       <div class="form-section">
         <h4><i class="fas fa-shield-alt"></i> 安全確認</h4>
-        <div class="form-group">
-          <label>確認結算 *</label>
-          <el-input
-            v-model="confirmText"
-            placeholder="請輸入 SETTLE 以確認"
-            clearable
-            class="confirmation-code-input"
-            @input="confirmText = String($event).toUpperCase()"
-            @keyup.enter="handleConfirm"
-          />
-          <div class="field-hint">
-            請輸入 <strong>SETTLE</strong>（全大寫）以確認結算操作
-          </div>
-        </div>
+        <ConfirmationInput
+          v-model="confirmText"
+          keyword="SETTLE"
+          hint-action="結算"
+          @confirm="handleConfirm"
+        />
       </div>
 
       <!-- 操作按鈕 -->
@@ -107,6 +99,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
+import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 
 export interface Stage {

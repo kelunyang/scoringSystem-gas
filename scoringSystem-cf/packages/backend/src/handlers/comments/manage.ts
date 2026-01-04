@@ -10,6 +10,7 @@ import { generateId } from '@utils/id-generator';
 import { logProjectOperation } from '@utils/logging';
 import { queueBatchNotifications } from '../../queues/notification-producer';
 import { calculateReactionUsers, calculateReplyUsers, checkCommentHasHelpfulReaction } from '@utils/commentVotingUtils';
+import { SudoWriteBlockedError } from '@utils/sudo-db-proxy';
 
 /**
  * Check if user has permission to reply to a comment
@@ -483,7 +484,14 @@ export async function createComment(
       parentCommentId: commentData.parentCommentId || null
     }, 'Comment created successfully');
 
-  } catch (error) {
+  } catch (error: any) {
+    // Re-throw SudoWriteBlockedError to let global handler return proper message
+    // Check both instanceof and error properties for robustness across module boundaries
+    if (error instanceof SudoWriteBlockedError ||
+        error?.name === 'SudoWriteBlockedError' ||
+        error?.message?.includes('SUDO_NO_WRITE')) {
+      throw error;
+    }
     console.error('Create comment error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to create comment');
   }

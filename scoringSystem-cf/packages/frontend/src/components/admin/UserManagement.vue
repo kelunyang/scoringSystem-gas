@@ -557,17 +557,13 @@
 
         <!-- Confirm Input -->
         <div class="form-group">
-          <label>確認操作：請輸入 <code>UNLOCK</code> 以繼續 *</label>
-          <el-input
+          <label>確認操作 *</label>
+          <ConfirmationInput
             v-model="unlockConfirmText"
-            placeholder="輸入 UNLOCK"
-            class="confirmation-code-input"
-            @input="unlockConfirmText = String($event).toUpperCase()"
-            @keyup.enter="confirmUnlock"
+            keyword="UNLOCK"
+            hint-action="解鎖"
+            @confirm="confirmUnlock"
           />
-          <p class="help-text">
-            此安全措施確保您了解操作的影響
-          </p>
         </div>
 
         <!-- Action Buttons -->
@@ -686,6 +682,7 @@ import InvitationManagementDrawer from './user/InvitationManagementDrawer.vue'
 import UserEditorDrawer from './user/UserEditorDrawer.vue'
 import PasswordResetDrawer from './user/PasswordResetDrawer.vue'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
+import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 
 export default {
   name: 'UserManagement',

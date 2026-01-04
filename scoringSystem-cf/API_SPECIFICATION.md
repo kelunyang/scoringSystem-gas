@@ -186,8 +186,11 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 | POST | `/viewers/add` | project:manage | 新增檢視者 |
 | POST | `/viewers/add-batch` | project:manage | 批次新增檢視者 |
 | POST | `/viewers/remove` | project:manage | 移除檢視者 |
+| POST | `/viewers/remove-batch` | project:manage | 批次移除檢視者 |
 | POST | `/viewers/update-role` | project:manage | 更新檢視者角色 |
+| POST | `/viewers/update-roles-batch` | project:manage | 批次更新檢視者角色 |
 | POST | `/viewers/mark-unassigned` | project:view | 標記未分組成員 |
+| POST | `/mark-unassigned-members` | project:manage | 批次標記未分組成員 |
 | GET | `/:projectId/scoring-config` | project:view | 取得評分設定 |
 | PUT | `/:projectId/scoring-config` | project:manage | 更新評分設定 |
 | GET | `/system/scoring-defaults` | system_admin | 取得系統預設評分設定 |
@@ -204,11 +207,14 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 | POST | `/create` | project:manage | 建立階段 |
 | POST | `/get` | project:view | 取得階段詳情 |
 | POST | `/update` | project:manage | 更新階段 |
+| POST | `/delete` | project:manage | 刪除階段 |
 | POST | `/list` | project:view | 列出專案階段 |
 | POST | `/clone` | project:manage | 複製階段 |
+| POST | `/clone-to-projects` | project:manage | 複製階段至多個專案 |
 | POST | `/check-voting-lock` | project:view | 檢查投票鎖定 |
 | POST | `/force-transition` | project:manage | 強制轉換狀態 |
-| POST | `/config/get` | project:view | 取得階段設定 |
+| POST | `/config` | project:view | 取得階段設定 |
+| POST | `/config/get` | project:view | 取得階段設定 (alias) |
 | POST | `/config/update` | project:manage | 更新階段設定 |
 | POST | `/config/reset` | project:manage | 重設階段設定 |
 | POST | `/pause` | project:manage | 暫停階段 |
@@ -315,10 +321,14 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 
 | Method | Endpoint | Permission | Description |
 |--------|----------|------------|-------------|
+| POST | `/get` | project:view | 取得使用者錢包 |
 | POST | `/transactions` | project:view | 取得交易歷史 |
+| POST | `/transactions/all` | project:manage | 取得專案所有交易 |
 | POST | `/award` | project:manage | 獎勵積分 |
 | POST | `/reverse` | project:manage | 撤銷交易 |
 | POST | `/project-ladder` | project:view | 專案錢包排行 |
+| POST | `/leaderboard` | project:view | 錢包排行榜 |
+| POST | `/group-stats` | project:view | 群組財富統計 |
 | POST | `/export` | project:manage | 匯出錢包摘要 |
 | POST | `/stage-growth` | project:view | 階段成長資料 |
 
@@ -378,6 +388,7 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 | POST | `/reverse-preview` | project:manage | 預覽撤銷影響 |
 | POST | `/history` | project:view | 結算歷史 |
 | POST | `/details` | project:view | 結算詳情 |
+| POST | `/transactions` | project:view | 結算交易記錄 |
 | POST | `/stage-rankings` | project:view | 階段結算排名 |
 | POST | `/comment-rankings` | project:view | 留言結算排名 |
 
@@ -409,6 +420,7 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 | POST | `/ai-providers/create` | system_admin | 建立 AI 提供者 |
 | POST | `/ai-providers/update` | system_admin | 更新 AI 提供者 |
 | POST | `/ai-providers/delete` | system_admin | 刪除 AI 提供者 |
+| POST | `/ai-providers/test` | system_admin | 測試 AI 提供者連線 |
 | POST | `/ai-prompts/get` | system_admin | 取得 AI 提示設定 |
 | POST | `/ai-prompts/update` | system_admin | 更新 AI 提示設定 |
 
@@ -487,14 +499,93 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 
 ### Common Error Codes
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| `UNAUTHORIZED` | 401 | 未認證 |
-| `ACCESS_DENIED` | 403 | 權限不足 |
-| `NOT_FOUND` | 404 | 資源不存在 |
-| `VALIDATION_ERROR` | 400 | 請求驗證失敗 |
-| `INTERNAL_ERROR` | 500 | 內部錯誤 |
-| `RATE_LIMIT_EXCEEDED` | 429 | 請求過於頻繁 |
+#### Authentication Errors (401)
+
+| Code | Description |
+|------|-------------|
+| `NO_SESSION` | 無 Session |
+| `UNAUTHORIZED` | 未認證 |
+| `INVALID_SESSION` | Session 無效 |
+| `SESSION_EXPIRED` | Session 已過期 |
+| `INVALID_CREDENTIALS` | 認證資訊無效 |
+
+#### Authorization Errors (403)
+
+| Code | Description |
+|------|-------------|
+| `FORBIDDEN` | 禁止存取 |
+| `INSUFFICIENT_PERMISSIONS` | 權限不足 |
+| `NOT_PROJECT_MEMBER` | 非專案成員 |
+| `ACCESS_DENIED` | 拒絕存取 |
+| `SUDO_NO_WRITE` | SUDO 模式為唯讀 |
+| `NOT_GROUP_MEMBER` | 非群組成員 |
+| `NOT_GROUP_LEADER` | 非群組組長 |
+| `NOT_AUTHORIZED` | 未授權操作 |
+| `USER_DISABLED` | 使用者已停用 |
+
+#### Not Found Errors (404)
+
+| Code | Description |
+|------|-------------|
+| `NOT_FOUND` | 資源不存在 |
+| `USER_NOT_FOUND` | 使用者不存在 |
+| `PROJECT_NOT_FOUND` | 專案不存在 |
+| `STAGE_NOT_FOUND` | 階段不存在 |
+| `SUBMISSION_NOT_FOUND` | 繳交不存在 |
+| `GROUP_NOT_FOUND` | 群組不存在 |
+| `ENTITY_NOT_FOUND` | 實體不存在 |
+| `PROPOSAL_NOT_FOUND` | 提案不存在 |
+
+#### Validation Errors (400)
+
+| Code | Description |
+|------|-------------|
+| `VALIDATION_ERROR` | 請求驗證失敗 |
+| `INVALID_INPUT` | 輸入無效 |
+| `MISSING_PARAMETER` | 缺少必要參數 |
+| `MISSING_FIELDS` | 缺少必要欄位 |
+| `INVALID_INVITATION_CODE` | 邀請碼無效 |
+| `USERNAME_TAKEN` | 使用者名稱已被使用 |
+| `EMAIL_TAKEN` | Email 已被使用 |
+
+#### Business Logic Errors (400)
+
+| Code | Description |
+|------|-------------|
+| `STAGE_NOT_ACTIVE` | 階段非進行中 |
+| `SUBMISSION_DEADLINE_PASSED` | 繳交期限已過 |
+| `ALREADY_SUBMITTED` | 已繳交過 |
+| `USER_ALREADY_IN_PROJECT_GROUP` | 使用者已在專案群組中 |
+| `INSUFFICIENT_BALANCE` | 餘額不足 |
+| `TRANSACTION_FAILED` | 交易失敗 |
+| `GROUP_EXISTS` | 群組已存在 |
+| `PROPOSAL_EXISTS` | 提案已存在 |
+| `PROPOSAL_NOT_PENDING` | 提案非待處理狀態 |
+| `LIMIT_EXCEEDED` | 超過限制 |
+| `NO_GROUP_MEMBERS` | 群組無成員 |
+| `NO_VOTES` | 無投票 |
+| `NOT_ALL_VOTED` | 尚有成員未投票 |
+| `PROPOSAL_PASSED` | 提案已通過 |
+| `RESET_LIMIT_EXCEEDED` | 重設次數超過限制 |
+| `RESET_FAILED` | 重設失敗 |
+| `ALREADY_WITHDRAWN` | 已撤回 |
+| `CANNOT_WITHDRAW` | 無法撤回 |
+| `CANNOT_WITHDRAW_SETTLED` | 無法撤回已結算提案 |
+| `WITHDRAW_FAILED` | 撤回失敗 |
+
+#### Rate Limiting (429)
+
+| Code | Description |
+|------|-------------|
+| `RATE_LIMIT_EXCEEDED` | 請求過於頻繁 |
+
+#### Server Errors (500)
+
+| Code | Description |
+|------|-------------|
+| `INTERNAL_ERROR` | 內部錯誤 |
+| `DATABASE_ERROR` | 資料庫錯誤 |
+| `UNKNOWN_ERROR` | 未知錯誤 |
 
 ---
 

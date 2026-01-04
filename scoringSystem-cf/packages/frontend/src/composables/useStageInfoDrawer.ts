@@ -8,19 +8,49 @@
  * 3. 階段高度過濾 - 只為長階段啟用抽屜
  * 4. ResizeObserver - 監聯階段動態高度變化
  * 5. URL 同步 - 階段切換時同步更新 URL
+ * 6. 抽屜協調 - 與其他抽屜的三態協調（展開/收合/最小化）
  */
 
-import { ref, onBeforeUnmount, unref } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, unref } from 'vue'
 import type { Ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useRouteDrawer } from './useRouteDrawer'
+import { useDrawerCoordinationStore } from '@/stores/drawerCoordination'
+import { storeToRefs } from 'pinia'
+
+/**
+ * 協調選項
+ */
+export interface StageInfoDrawerCoordinationOptions {
+  /** 是否啟用抽屜協調（預設：true） */
+  enableCoordination?: boolean
+  /** 協調 ID（預設：'stageInfo'） */
+  coordinationId?: string
+  /** 顯示名稱（預設：'當前階段'） */
+  drawerName?: string
+  /** 主題顏色（預設會從 stage status 推斷） */
+  themeColor?: string
+}
 
 export function useStageInfoDrawer(
   projectId: Ref<string> | string,
-  topbarHeight = 60
+  topbarHeight = 60,
+  coordinationOptions: StageInfoDrawerCoordinationOptions = {}
 ) {
   const route = useRoute()
   const { navigateToStageAction, navigateToGlobalAction, currentAction, currentExtraParam } = useRouteDrawer()
+
+  // === 協調選項 ===
+  const {
+    enableCoordination = true,
+    coordinationId = 'stageInfo',
+    drawerName = '當前階段',
+    themeColor = '#667eea'
+  } = coordinationOptions
+
+  // === 協調 Store ===
+  const coordinationStore = useDrawerCoordinationStore()
+  const { hasExpandedDrawer } = storeToRefs(coordinationStore)
 
   // Helper to get projectId value (supports both Ref and string)
   const getProjectId = () => unref(projectId)
@@ -30,9 +60,26 @@ export function useStageInfoDrawer(
   // 抽屜開關狀態（控制 v-model）
   const stageDrawerOpen = ref(false)
 
+  // === 協調狀態 ===
+  const isMinimized = computed(() => {
+    if (!enableCoordination) return false
+    return coordinationStore.getDrawerState(coordinationId) === 'minimized'
+  })
+
+  const isExpanded = computed(() => {
+    if (!enableCoordination) return stageDrawerOpen.value
+    return coordinationStore.getDrawerState(coordinationId) === 'expanded'
+  })
+
   // 動畫鎖（防止快速滾動時頻繁觸發）
   const isAnimating = ref(false)
   const ANIMATION_DURATION = 500 // 與 CSS transition 一致
+
+  // 手勢活動狀態（當用戶正在拖曳時暫停滾動觸發）
+  const isGestureActive = ref(false)
+
+  // 本地 hover 追蹤（用於最小化狀態）
+  const isHovering = ref(false)
 
   // Observer 實例
   const topObservers = new Map<string, IntersectionObserver>()
@@ -41,6 +88,44 @@ export function useStageInfoDrawer(
 
   // 防抖計時器（避免頻繁觸發）
   const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+  // === 協調 Store 註冊 ===
+  onMounted(() => {
+    if (enableCoordination) {
+      coordinationStore.registerDrawer(coordinationId, {
+        drawerName,
+        themeColor
+      })
+    }
+  })
+
+  // === 協調 Store 同步：監聽其他抽屜展開導致本抽屜被最小化 ===
+  if (enableCoordination) {
+    watch(
+      () => coordinationStore.getDrawerState(coordinationId),
+      (newState, oldState) => {
+        // 當從 expanded 變成 minimized（被其他抽屜擠掉）
+        if (oldState === 'expanded' && newState === 'minimized') {
+          // 關閉抽屜動畫
+          stageDrawerOpen.value = false
+        }
+        // 當從 minimized 恢復為 collapsed（其他抽屜關閉了）
+        else if (oldState === 'minimized' && newState === 'collapsed') {
+          // 抽屜保持關閉，但恢復正常 trigger bar
+        }
+      }
+    )
+
+    // === 協調 Store 同步：監聽用戶主動關閉抽屜（點擊 handle）===
+    watch(stageDrawerOpen, (newValue, oldValue) => {
+      // 當抽屜從開啟變成關閉，且是 expanded 狀態（用戶主動關閉）
+      if (oldValue === true && newValue === false) {
+        if (coordinationStore.getDrawerState(coordinationId) === 'expanded') {
+          coordinationStore.collapseDrawer(coordinationId)
+        }
+      }
+    })
+  }
 
   /**
    * 檢查階段是否應該啟用抽屜（高度過濾）
@@ -65,6 +150,11 @@ export function useStageInfoDrawer(
    * @param force - 是否強制激活（忽略動畫鎖）
    */
   function activateStageDrawer(stageId: string, force = false) {
+    // 手勢進行中不觸發滾動激活
+    if (isGestureActive.value) {
+      return
+    }
+
     // 動畫鎖檢查
     if (!force && isAnimating.value) {
       return
@@ -76,6 +166,11 @@ export function useStageInfoDrawer(
     // 更新狀態
     activeDrawerStageId.value = stageId
     stageDrawerOpen.value = true
+
+    // 🔗 協調系統：通知展開（會自動最小化其他抽屜）
+    if (enableCoordination) {
+      coordinationStore.expandDrawer(coordinationId)
+    }
 
     // 🔗 URL 同步：更新 URL 到階段路由（保留當前的 action 和 extraParam）
     if (route.name !== 'projects-stage' || route.params.stageId !== stageId) {
@@ -101,6 +196,11 @@ export function useStageInfoDrawer(
     // 開始收起動畫
     stageDrawerOpen.value = false
 
+    // 🔗 協調系統：通知收合（會恢復其他抽屜為 collapsed）
+    if (enableCoordination) {
+      coordinationStore.collapseDrawer(coordinationId)
+    }
+
     // 🔗 URL 同步：如果沒有 action，則導航到全域路由（projects-view）
     // 如果有 action，則保留在當前階段路由（drawer 未關閉）
     if (!currentAction.value) {
@@ -111,6 +211,23 @@ export function useStageInfoDrawer(
     setTimeout(() => {
       activeDrawerStageId.value = null
     }, ANIMATION_DURATION)
+  }
+
+  /**
+   * 最小化狀態的 hover 處理
+   */
+  function handleMinimizedMouseEnter() {
+    if (isMinimized.value) {
+      isHovering.value = true
+      coordinationStore.hoverMinimizedDrawer(coordinationId)
+    }
+  }
+
+  function handleMinimizedMouseLeave() {
+    if (isHovering.value) {
+      isHovering.value = false
+      coordinationStore.unhoverDrawer(coordinationId)
+    }
   }
 
   /**
@@ -315,7 +432,26 @@ export function useStageInfoDrawer(
   // 組件卸載時自動清理
   onBeforeUnmount(() => {
     cleanup()
+    // 從協調 store 取消註冊
+    if (enableCoordination) {
+      coordinationStore.unregisterDrawer(coordinationId)
+    }
   })
+
+  /**
+   * 暫停滾動檢測（手勢拖曳開始時調用）
+   * 防止拖曳過程中 IntersectionObserver 觸發開關
+   */
+  function pauseScrollDetection() {
+    isGestureActive.value = true
+  }
+
+  /**
+   * 恢復滾動檢測（手勢拖曳結束時調用）
+   */
+  function resumeScrollDetection() {
+    isGestureActive.value = false
+  }
 
   /**
    * 主動檢查並激活抽屜（用於 viewMode 切換後）- Sentinel 方案
@@ -364,6 +500,13 @@ export function useStageInfoDrawer(
     activeDrawerStageId,
     stageDrawerOpen,
     isAnimating,
+    isGestureActive,
+
+    // 協調狀態
+    isMinimized,
+    isExpanded,
+    isHovering,
+    hasExpandedDrawer,
 
     // 方法
     activateStageDrawer,
@@ -371,6 +514,12 @@ export function useStageInfoDrawer(
     shouldEnableDrawer,
     bindObservers,
     cleanup,
-    checkAndActivateIfNeeded
+    checkAndActivateIfNeeded,
+    pauseScrollDetection,
+    resumeScrollDetection,
+
+    // 協調方法
+    handleMinimizedMouseEnter,
+    handleMinimizedMouseLeave
   }
 }

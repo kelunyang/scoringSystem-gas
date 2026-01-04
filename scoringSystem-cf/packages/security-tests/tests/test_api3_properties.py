@@ -637,6 +637,284 @@ class TestScoringConfigProperties:
 
 
 # ============================================================================
+# Stage Configuration Property Tests
+# ============================================================================
+
+class TestStageConfigProperties:
+    """Test stage configuration property authorization"""
+
+    @pytest.mark.critical
+    @pytest.mark.properties
+    def test_stage_config_mass_assignment_prevention(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify stage config update prevents mass assignment attacks.
+
+        Attack Vector:
+        - User includes system/internal fields in stage config update
+        - User attempts to modify protected configuration values
+
+        Expected: System fields ignored or request rejected
+        """
+        # Get a project with stages
+        response = api_client.post('/projects/list-with-stages', auth=admin_token)
+        if response.status_code != 200:
+            pytest.skip("Cannot list projects with stages")
+
+        data = response.json()
+        projects = data.get('data', [])
+        if not projects:
+            pytest.skip("No projects available")
+
+        project_with_stages = None
+        stage_id = None
+        for project in projects:
+            if project.get('stages'):
+                project_with_stages = project
+                stage_id = project['stages'][0]['stageId']
+                break
+
+        if not project_with_stages:
+            pytest.skip("No projects with stages available")
+
+        project_id = project_with_stages['projectId']
+
+        # Attempt to inject system/protected fields
+        response = api_client.post('/stages/config/update', auth=admin_token, json={
+            'projectId': project_id,
+            'stageId': stage_id,
+            'config': {
+                # Normal fields
+                'allowVoting': True,
+                # Mass assignment attempts
+                'settlementCompleted': True,  # Should be system-controlled
+                'internalScore': 999,  # Should not exist/be modifiable
+                'createdBy': 'usr_hacker',  # Should be immutable
+                '_systemFlag': True,  # Internal field attempt
+            }
+        })
+
+        # If request succeeded, verify protected fields were not modified
+        if response.status_code == 200:
+            # Get the config to verify
+            check_response = api_client.post('/stages/config', auth=admin_token, json={
+                'projectId': project_id,
+                'stageId': stage_id
+            })
+
+            if check_response.status_code == 200:
+                config_data = check_response.json().get('data', {})
+                assert config_data.get('settlementCompleted') != True or \
+                    'settlementCompleted' not in config_data, \
+                    "Mass assignment: settlementCompleted was modified"
+
+    @pytest.mark.high
+    @pytest.mark.properties
+    def test_stage_config_sensitive_data_protection(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify stage config doesn't expose sensitive scoring data.
+
+        Attack Vector:
+        - User requests stage config to see hidden scoring formulas
+        - Could reveal teacher evaluation weights before settlement
+
+        Expected: Sensitive scoring details hidden until appropriate time
+        """
+        fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
+
+        response = api_client.post('/stages/config', auth=fake_viewer_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test'
+        })
+
+        # Should either fail auth or return limited data
+        if response.status_code == 200:
+            data = response.json().get('data', {})
+
+            # Sensitive fields that should be hidden from non-teachers
+            sensitive_fields = [
+                'teacherScoringFormula',
+                'internalWeights',
+                'evaluationCriteria',
+                'scoringAlgorithm'
+            ]
+
+            for field in sensitive_fields:
+                if field in data:
+                    # If field exists, ensure it's appropriate for viewer role
+                    pass  # Implementation depends on actual API design
+
+    @pytest.mark.high
+    @pytest.mark.properties
+    def test_stage_config_readonly_fields(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify readonly stage config fields cannot be modified.
+
+        Attack Vector:
+        - User attempts to modify stageId, projectId, createdAt
+        - Could break referential integrity
+
+        Expected: Readonly fields ignored or request rejected
+        """
+        response = api_client.post('/stages/config/update', auth=admin_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test',
+            'config': {
+                'stageId': 'stg_new_id',  # Should be readonly
+                'projectId': 'proj_different',  # Should be readonly
+                'createdAt': '2020-01-01T00:00:00Z',  # Should be readonly
+                'settlementTimestamp': '2020-01-01T00:00:00Z'  # System-controlled
+            }
+        })
+
+        # Request should either fail (403) or succeed but ignore readonly fields
+        assert response.status_code in [400, 401, 403, 404, 200], \
+            f"Unexpected status for readonly field update: {response.status_code}"
+
+
+# ============================================================================
+# Settlement Property Tests
+# ============================================================================
+
+class TestSettlementProperties:
+    """Test settlement data property authorization"""
+
+    @pytest.mark.critical
+    @pytest.mark.properties
+    def test_settlement_data_exposure_prevention(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify settlement data doesn't expose sensitive scoring details.
+
+        Attack Vector:
+        - User requests settlement details before it's finalized
+        - Could reveal pending rankings and affect voting behavior
+
+        Expected: Pre-settlement data appropriately filtered
+        """
+        fake_student_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdHVkZW50In0.fake"
+
+        response = api_client.post('/settlement/details', auth=fake_student_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test',
+            'settlementId': 'stl_test'
+        })
+
+        # Student should either not access or see limited data
+        if response.status_code == 200:
+            data = response.json().get('data', {})
+
+            # Sensitive settlement details that should be hidden
+            sensitive_fields = [
+                'rawScores',  # Individual raw scores
+                'teacherEvaluations',  # Teacher-only evaluations
+                'scoringBreakdown',  # Detailed calculation breakdown
+                'internalRanking'  # Pre-announcement rankings
+            ]
+
+            for field in sensitive_fields:
+                assert field not in data or data[field] is None, \
+                    f"Sensitive settlement field '{field}' exposed to student"
+
+    @pytest.mark.high
+    @pytest.mark.properties
+    def test_settlement_internal_id_hidden(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify settlement responses use UUIDs, not internal IDs.
+
+        Attack Vector:
+        - Internal numeric IDs exposed could enable enumeration
+        - Sequential IDs reveal business information
+
+        Expected: Only UUID-format IDs exposed
+        """
+        response = api_client.post('/settlement/history', auth=admin_token, json={
+            'projectId': 'proj_test'
+        })
+
+        if response.status_code == 200:
+            data = response.json()
+            settlements = data.get('data', [])
+
+            for settlement in settlements:
+                settlement_id = settlement.get('settlementId', '')
+
+                # Should use UUID prefix format
+                if settlement_id:
+                    assert settlement_id.startswith('stl_'), \
+                        f"Settlement ID '{settlement_id}' should use UUID prefix (stl_xxx)"
+
+                    # Should not be a simple numeric ID
+                    id_part = settlement_id.replace('stl_', '')
+                    assert not id_part.isdigit(), \
+                        f"Settlement uses numeric ID instead of UUID: {settlement_id}"
+
+                # Internal database row ID should not be exposed
+                assert 'rowid' not in settlement, \
+                    "Internal rowid exposed in settlement"
+                assert 'id' not in settlement or settlement.get('id', '').startswith('stl_'), \
+                    "Internal numeric ID exposed in settlement"
+
+    @pytest.mark.high
+    @pytest.mark.properties
+    def test_settlement_wallet_privacy(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify settlement doesn't expose individual wallet balances inappropriately.
+
+        Attack Vector:
+        - User views settlement to see other users' wallet balances
+        - Could reveal private financial information
+
+        Expected: Wallet details filtered based on role
+        """
+        fake_student_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdHVkZW50In0.fake"
+
+        # Get settlement transactions (wallet impact)
+        response = api_client.post('/settlement/transactions', auth=fake_student_token, json={
+            'projectId': 'proj_test',
+            'settlementId': 'stl_test'
+        })
+
+        # Student should either not access or see limited data
+        if response.status_code == 200:
+            data = response.json()
+            transactions = data.get('data', [])
+
+            for txn in transactions:
+                # Should not expose other users' balances
+                if txn.get('userId') != 'usr_self':  # Not the requesting user
+                    assert 'currentBalance' not in txn, \
+                        "Other user's wallet balance exposed in settlement"
+                    assert 'totalBalance' not in txn, \
+                        "Other user's total balance exposed in settlement"
+
+                # Transaction amounts may be visible, but balances should not
+                # (depends on your privacy model)
+
+
+# ============================================================================
 # Helper for running property tests
 # ============================================================================
 

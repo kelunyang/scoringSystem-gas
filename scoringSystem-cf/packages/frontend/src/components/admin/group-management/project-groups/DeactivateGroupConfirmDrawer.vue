@@ -82,22 +82,12 @@
       <div class="form-section">
         <h4><i class="fas fa-shield-alt"></i> 安全確認</h4>
 
-        <div class="confirmation-group">
-          <label class="confirmation-label">
-            請輸入 <code class="confirmation-code">DEACTIVE</code> 以確認停用操作
-            <span class="required">*</span>
-          </label>
-          <el-input
-            v-model="confirmationText"
-            placeholder="請輸入 DEACTIVE"
-            clearable
-            @keyup.enter="handleConfirm"
-          />
-          <div class="confirmation-hint">
-            <i class="fas fa-info-circle"></i>
-            輸入完全符合後才能執行停用操作
-          </div>
-        </div>
+        <ConfirmationInput
+          v-model="confirmationText"
+          keyword="DEACTIVE"
+          hint-action="停用"
+          @confirm="handleConfirm"
+        />
       </div>
 
       <!-- Action Buttons -->
@@ -127,6 +117,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type { ProjectGroup } from '@/types/group-management'
+import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 
 export interface Props {
   visible: boolean

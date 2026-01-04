@@ -101,6 +101,76 @@
           </div>
         </div>
 
+        <!-- Sudo Mode Section (only for Teacher/Observer in project context) -->
+        <div v-if="canSudo && drawerStore.projectId" class="form-section sudo-section">
+          <h4><i class="fas fa-user-secret"></i> Sudo 模式</h4>
+
+          <!-- Currently in sudo mode -->
+          <div v-if="sudoStore.isActive" class="sudo-active-info">
+            <el-alert
+              type="warning"
+              :closable="false"
+              show-icon
+            >
+              <template #title>
+                <span>正在以 <strong>{{ sudoStore.displayInfo?.name }}</strong> 的身份檢視</span>
+              </template>
+              <template #default>
+                <div class="sudo-target-details">
+                  <span>{{ sudoStore.displayInfo?.email }}</span>
+                  <span v-if="sudoStore.displayInfo?.group"> | {{ sudoStore.displayInfo?.group }} ({{ sudoStore.displayInfo?.role }})</span>
+                </div>
+              </template>
+            </el-alert>
+            <el-button type="warning" @click="handleExitSudo" class="sudo-exit-btn">
+              <i class="fas fa-sign-out-alt"></i> 退出 Sudo 模式
+            </el-button>
+          </div>
+
+          <!-- Not in sudo mode - show selector -->
+          <div v-else class="sudo-selector">
+            <div class="sudo-description">
+              <i class="fas fa-info-circle"></i>
+              以學生視角查看系統（唯讀模式）
+            </div>
+            <el-select
+              v-model="selectedSudoTarget"
+              placeholder="選擇要扮演的學生..."
+              filterable
+              clearable
+              class="sudo-select"
+              :loading="loadingMembers"
+            >
+              <el-option-group
+                v-for="group in groupedMembers"
+                :key="group.groupName"
+                :label="group.groupName"
+              >
+                <el-option
+                  v-for="member in group.members"
+                  :key="member.userEmail"
+                  :label="`${member.displayName} (${member.role === 'leader' ? '組長' : '組員'})`"
+                  :value="member.userEmail"
+                >
+                  <div class="sudo-option">
+                    <span class="sudo-option-name">{{ member.displayName }}</span>
+                    <el-tag size="small" :type="member.role === 'leader' ? 'warning' : 'info'">
+                      {{ member.role === 'leader' ? '組長' : '組員' }}
+                    </el-tag>
+                  </div>
+                </el-option>
+              </el-option-group>
+            </el-select>
+            <el-button
+              type="primary"
+              :disabled="!selectedSudoTarget"
+              @click="handleEnterSudo"
+            >
+              <i class="fas fa-user-secret"></i> 進入 Sudo 模式
+            </el-button>
+          </div>
+        </div>
+
         <!-- Action Buttons -->
         <div class="drawer-actions">
           <el-button @click="drawerStore.close()">
@@ -115,13 +185,15 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { usePermissionsDrawerStore } from '@/stores/permissionsDrawer'
+import { useSudoStore, type SudoTargetUser } from '@/stores/sudo'
 import { useAuth } from '@/composables/useAuth'
 import { useProjectCore } from '@/composables/useProjectDetail'
 import { useRoleSwitch } from '@/composables/useRoleSwitch'
 import DrawerAlertZone from './DrawerAlertZone.vue'
 
-// Store
+// Stores
 const drawerStore = usePermissionsDrawerStore()
+const sudoStore = useSudoStore()
 
 // Auth
 const { user } = useAuth()
@@ -179,6 +251,157 @@ const handleRoleChange = (newRole: string) => {
   selectedRole.value = newRole
   switchRole(newRole)
 }
+
+// ============ Sudo Mode Logic ============
+
+// Check if current user can sudo (Teacher or Observer)
+const canSudo = computed(() => {
+  // Must have a project context
+  if (!drawerStore.projectId) return false
+
+  // Check if user is teacher, observer, admin, or project creator
+  const isTeacher = availableRoles.value.includes('teacher')
+  const isObserver = availableRoles.value.includes('observer')
+  const isAdmin = availableRoles.value.includes('admin')
+
+  return isTeacher || isObserver || isAdmin
+})
+
+// Loading state for members
+const loadingMembers = computed(() => projectLoading.value)
+
+// Selected sudo target email
+const selectedSudoTarget = ref<string>('')
+
+// Group members by their groups for the selector
+interface GroupedMember {
+  groupName: string
+  members: Array<{
+    userEmail: string
+    displayName: string
+    role: 'leader' | 'member'
+    userId: string
+    avatarSeed?: string
+    avatarStyle?: string
+  }>
+}
+
+const groupedMembers = computed<GroupedMember[]>(() => {
+  if (!projectCore.value) return []
+
+  const data = projectCore.value as any
+  const userGroups = data.userGroups || []
+  const groups = data.groups || []
+  const users = data.users || []
+
+  // Create a map of groupId to group info
+  const groupMap = new Map<string, { groupId: string; groupName: string }>()
+  for (const g of groups) {
+    groupMap.set(g.groupId, { groupId: g.groupId, groupName: g.groupName })
+  }
+
+  // Create a map of userEmail to user info
+  const userMap = new Map<string, { displayName: string; userId: string; avatarSeed?: string; avatarStyle?: string }>()
+  for (const u of users) {
+    userMap.set(u.userEmail, {
+      displayName: u.displayName,
+      userId: u.userId,
+      avatarSeed: u.avatarSeed,
+      avatarStyle: u.avatarStyle
+    })
+  }
+
+  // Group members by groupId
+  const grouped = new Map<string, GroupedMember>()
+
+  for (const ug of userGroups) {
+    if (ug.isActive !== 1) continue
+
+    const groupInfo = groupMap.get(ug.groupId)
+    if (!groupInfo) continue
+
+    const userInfo = userMap.get(ug.userEmail)
+    if (!userInfo) continue
+
+    if (!grouped.has(ug.groupId)) {
+      grouped.set(ug.groupId, {
+        groupName: groupInfo.groupName,
+        members: []
+      })
+    }
+
+    grouped.get(ug.groupId)!.members.push({
+      userEmail: ug.userEmail,
+      displayName: userInfo.displayName,
+      role: ug.role as 'leader' | 'member',
+      userId: userInfo.userId,
+      avatarSeed: userInfo.avatarSeed,
+      avatarStyle: userInfo.avatarStyle
+    })
+  }
+
+  // Sort members within each group (leaders first)
+  for (const group of grouped.values()) {
+    group.members.sort((a, b) => {
+      if (a.role === 'leader' && b.role !== 'leader') return -1
+      if (a.role !== 'leader' && b.role === 'leader') return 1
+      return a.displayName.localeCompare(b.displayName)
+    })
+  }
+
+  return Array.from(grouped.values()).sort((a, b) =>
+    a.groupName.localeCompare(b.groupName)
+  )
+})
+
+// Find member info by email
+const findMemberByEmail = (email: string): SudoTargetUser | null => {
+  for (const group of groupedMembers.value) {
+    const member = group.members.find(m => m.userEmail === email)
+    if (member) {
+      return {
+        userId: member.userId,
+        userEmail: member.userEmail,
+        displayName: member.displayName,
+        avatarSeed: member.avatarSeed,
+        avatarStyle: member.avatarStyle,
+        groupName: group.groupName,
+        role: member.role
+      }
+    }
+  }
+  return null
+}
+
+// Enter sudo mode
+const handleEnterSudo = () => {
+  if (!selectedSudoTarget.value || !drawerStore.projectId) return
+
+  const target = findMemberByEmail(selectedSudoTarget.value)
+  if (!target) return
+
+  sudoStore.enterSudo(target, drawerStore.projectId)
+  drawerStore.close()
+
+  // Reload the page to apply sudo mode
+  window.location.reload()
+}
+
+// Exit sudo mode
+const handleExitSudo = () => {
+  sudoStore.exitSudo()
+  drawerStore.close()
+
+  // Reload the page to exit sudo mode
+  window.location.reload()
+}
+
+// Reset selected target when drawer opens
+watch(() => drawerStore.isOpen, (isOpen) => {
+  if (isOpen) {
+    selectedSudoTarget.value = ''
+  }
+})
 </script>
 
 <style scoped>
@@ -315,5 +538,75 @@ const handleRoleChange = (newRole: string) => {
 /* Ensure drawer appears above everything */
 .permissions-drawer-global :deep(.el-drawer) {
   z-index: 3000 !important;
+}
+
+/* Sudo Mode Styles */
+.sudo-section {
+  border-top: 2px dashed #e6a23c;
+  padding-top: 16px;
+}
+
+.sudo-section h4 {
+  color: #e6a23c;
+}
+
+.sudo-section h4 i {
+  margin-right: 8px;
+}
+
+.sudo-active-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sudo-target-details {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+}
+
+.sudo-exit-btn {
+  align-self: flex-start;
+}
+
+.sudo-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sudo-description {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #909399;
+  padding: 8px 12px;
+  background-color: #fdf6ec;
+  border-radius: 6px;
+  border: 1px solid #faecd8;
+}
+
+.sudo-description i {
+  color: #e6a23c;
+}
+
+.sudo-select {
+  width: 100%;
+}
+
+.sudo-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.sudo-option-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

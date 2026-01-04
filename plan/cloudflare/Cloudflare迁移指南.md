@@ -8226,48 +8226,169 @@ router.beforeEach((to, from, next) => {
 
 ---
 
-## Phase 4.12 - 確認碼輸入框自動大寫轉換
+## Phase 4.12 - 確認碼輸入框共用組件 (ConfirmationInput)
 
 ### 概述
 
-為了改善手機用戶體驗，所有需要輸入確認碼的 `el-input` 元件現在會自動將輸入內容轉換為大寫。這解決了手機用戶在輸入大寫確認碼時需要手動切換鍵盤的問題。
+為了改善手機用戶體驗並統一確認碼輸入的實現方式，我們建立了 `ConfirmationInput.vue` 共用組件。此組件具有以下特性：
 
-### 實現方式
+- **自動大寫轉換**：解決手機用戶需手動切換鍵盤的問題
+- **統一樣式**：monospace 字體、置中、letter-spacing
+- **輸入驗證動畫**：輸入正確時顯示綠色邊框並有微幅放大效果
+- **支援 Enter 鍵提交**：提升操作效率
+- **可自訂提示文字**：透過 slot 或 props 客製化
 
-#### 1. 統一 CSS 樣式
+### 共用組件
 
-在 `drawer-unified.scss` 中添加了 `.confirmation-code-input` 類別：
+**檔案位置**：`packages/frontend/src/components/common/ConfirmationInput.vue`
 
-```scss
-.confirmation-code-input {
-  :deep(.el-input__inner) {
-    font-family: 'Courier New', monospace;
-    font-size: 18px;
-    font-weight: bold;
-    text-align: center;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    border: 2px solid #f56c6c;
-    background: #fff;
+#### Component API
 
-    &::placeholder {
-      text-transform: none;
-      letter-spacing: normal;
-      font-weight: normal;
-    }
+##### Props
 
-    &:focus {
-      border-color: #f56c6c;
-      box-shadow: 0 0 0 2px rgba(245, 108, 108, 0.2);
-    }
+| Prop | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `modelValue` | string | ✓ | - | v-model 綁定值 |
+| `keyword` | string | ✓ | - | 確認關鍵詞 (如 SUBMIT, REMOVE, DELETE) |
+| `placeholder` | string | - | `輸入 ${keyword} 以確認` | 輸入框 placeholder |
+| `hintAction` | string | - | `確認` | 提示文字中的動作詞 |
+| `size` | string | - | `large` | el-input size |
+| `prefixIcon` | string | - | `fas fa-keyboard` | 前綴圖示 class |
+| `disabled` | boolean | - | false | 是否禁用 |
+
+##### Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `update:modelValue` | string | v-model 更新（值已自動轉為大寫） |
+| `confirm` | - | 按下 Enter 鍵時觸發 |
+
+##### Slots
+
+| Slot | Description |
+|------|-------------|
+| `hint` | 自訂提示文字內容 |
+
+##### Expose
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `isValid` | ComputedRef\<boolean\> | 輸入是否符合關鍵詞 |
+
+### 使用範例
+
+#### 基本用法
+
+```vue
+<template>
+  <ConfirmationInput
+    v-model="confirmText"
+    keyword="DELETE"
+    hint-action="刪除"
+    @confirm="handleConfirm"
+  />
+</template>
+
+<script setup lang="ts">
+import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
+import { ref } from 'vue'
+
+const confirmText = ref('')
+
+function handleConfirm() {
+  if (confirmText.value === 'DELETE') {
+    // 執行操作
   }
 }
+</script>
 ```
 
-#### 2. 自動大寫輸入處理
+#### 自訂提示文字
 
-每個確認碼輸入框都添加了 `@input` 事件處理器：
+```vue
+<ConfirmationInput
+  v-model="confirmText"
+  keyword="SUBMIT"
+  hint-action="發布"
+>
+  <template #hint>
+    輸入 <strong>SUBMIT</strong> 發布 ｜
+    貴組組員共 {{ totalMembersCount }} 人，
+    你勾選了 {{ selectedParticipantsCount }} 名參與者
+  </template>
+</ConfirmationInput>
+```
 
+#### 搭配按鈕驗證
+
+```vue
+<ConfirmationInput v-model="confirmText" keyword="REVERSE" />
+
+<el-button
+  type="danger"
+  :disabled="confirmText !== 'REVERSE'"
+  @click="executeReverse"
+>
+  確認撤銷
+</el-button>
+```
+
+### 涉及的確認碼
+
+| 確認碼 | 檔案 | 用途 |
+|--------|------|------|
+| SUBMIT | SubmitReportModal.vue | 提交報告 |
+| REVERSE | TransactionReversalDrawer.vue | 撤銷交易 |
+| REVERSE | ReverseSettlementDrawer.vue | 撤銷結算 |
+| RESET | PasswordResetDrawer.vue | 重設密碼 |
+| RESET | VoteResultModal.vue | 重置投票 |
+| VOTING | ForceVotingDrawer.vue | 強制進入投票 |
+| SETTLE | SettlementConfirmationDrawer.vue | 確認結算 |
+| PAUSE | PauseStageDrawer.vue | 暫停階段 |
+| RESUME | ResumeStageDrawer.vue | 恢復階段 |
+| CLONE | ProjectManagement.vue (x2) | 複製專案/階段 |
+| ARCHIVE | ProjectManagement.vue | 封存專案 |
+| UNLOCK | UserManagement.vue | 解鎖帳戶 |
+| UPDATE | BatchUpdateRoleDrawer.vue | 批次更新角色 |
+| REVERT | VoteResultModal.vue | 撤回提案 |
+| ADD | AddMemberConfirmDrawer.vue | 新增成員 |
+| REMOVE | RemoveMemberConfirmDrawer.vue | 移除成員 |
+| DEACTIVE | DeactivateGroupConfirmDrawer.vue | 停用群組 |
+| DELETE | GroupSubmissionApprovalModal.vue | 刪除報告 |
+| RESTORE | GroupSubmissionApprovalModal.vue | 恢復版本 |
+| RESEND | InvitationManagementDrawer.vue | 重發邀請郵件 |
+| FORCEREVERT | ForceWithdrawSubmissionDrawer.vue | 強制撤回 |
+
+### 已更新檔案清單
+
+**共用組件**：
+1. `packages/frontend/src/components/common/ConfirmationInput.vue` - 共用組件
+
+**已套用組件的檔案**：
+1. `packages/frontend/src/components/SubmitReportModal.vue`
+2. `packages/frontend/src/components/TransactionReversalDrawer.vue`
+3. `packages/frontend/src/components/ForceWithdrawSubmissionDrawer.vue`
+4. `packages/frontend/src/components/VoteResultModal.vue`
+5. `packages/frontend/src/components/GroupSubmissionApprovalModal.vue`
+6. `packages/frontend/src/components/admin/ReverseSettlementDrawer.vue`
+7. `packages/frontend/src/components/admin/SettlementConfirmationDrawer.vue`
+8. `packages/frontend/src/components/admin/ForceVotingDrawer.vue`
+9. `packages/frontend/src/components/admin/PauseStageDrawer.vue`
+10. `packages/frontend/src/components/admin/ResumeStageDrawer.vue`
+11. `packages/frontend/src/components/admin/ProjectManagement.vue`
+12. `packages/frontend/src/components/admin/UserManagement.vue`
+13. `packages/frontend/src/components/admin/user/PasswordResetDrawer.vue`
+14. `packages/frontend/src/components/admin/invitation/InvitationManagementDrawer.vue`
+15. `packages/frontend/src/components/admin/group-management/shared/AddMemberConfirmDrawer.vue`
+16. `packages/frontend/src/components/admin/group-management/shared/RemoveMemberConfirmDrawer.vue`
+17. `packages/frontend/src/components/admin/group-management/shared/BatchUpdateRoleDrawer.vue`
+18. `packages/frontend/src/components/admin/group-management/project-groups/DeactivateGroupConfirmDrawer.vue`
+
+### 遷移指南
+
+將舊的 inline 實現替換為共用組件：
+
+**舊寫法**（已棄用）：
 ```vue
 <el-input
   v-model="confirmText"
@@ -8275,76 +8396,23 @@ router.beforeEach((to, from, next) => {
   class="confirmation-code-input"
   @input="confirmText = String($event).toUpperCase()"
 />
+<div class="field-hint">
+  輸入 <code>RESET</code> 以確認重設密碼
+</div>
 ```
 
-#### 3. 驗證邏輯更新
-
-所有驗證邏輯都使用 `.toUpperCase()` 確保一致性：
-
-```typescript
-const canConfirm = computed(() => {
-  return confirmText.value.toUpperCase() === 'RESET'
-})
-```
-
-### 涉及的確認碼
-
-| 確認碼 | 檔案 | 用途 |
-|--------|------|------|
-| REVERSE | TransactionReversalDrawer.vue | 撤銷交易 |
-| REVERSE | ReverseSettlementDrawer.vue | 撤銷結算 |
-| RESET | PasswordResetDrawer.vue | 重設密碼 |
-| VOTING | ForceVotingDrawer.vue | 強制進入投票 |
-| SETTLE | SettlementConfirmationDrawer.vue | 確認結算 |
-| CLONE | ProjectManagement.vue (x2) | 複製專案/階段 |
-| ARCHIVE | ProjectManagement.vue | 封存專案 |
-| UNLOCK | UserManagement.vue | 解鎖帳戶 |
-| UPDATE | BatchUpdateRoleDrawer.vue | 批次更新角色 |
-| REVERT | VoteResultModal.vue | 撤回提案 |
-| RESET | VoteResultModal.vue | 重置投票 |
-| ADD | AddMemberConfirmDrawer.vue | 新增成員 |
-| DELETE | GroupSubmissionApprovalModal.vue | 刪除報告 |
-| RESTORE | GroupSubmissionApprovalModal.vue | 恢復版本 |
-| RESEND | InvitationManagementDrawer.vue | 重發邀請郵件 |
-
-### 修改檔案清單
-
-1. `packages/frontend/src/styles/drawer-unified.scss` - 添加統一樣式
-2. `packages/frontend/src/components/TransactionReversalDrawer.vue`
-3. `packages/frontend/src/components/admin/ReverseSettlementDrawer.vue`
-4. `packages/frontend/src/components/admin/user/PasswordResetDrawer.vue`
-5. `packages/frontend/src/components/admin/ForceVotingDrawer.vue`
-6. `packages/frontend/src/components/admin/SettlementConfirmationDrawer.vue`
-7. `packages/frontend/src/components/admin/ProjectManagement.vue`
-8. `packages/frontend/src/components/admin/UserManagement.vue`
-9. `packages/frontend/src/components/admin/group-management/shared/BatchUpdateRoleDrawer.vue`
-10. `packages/frontend/src/components/VoteResultModal.vue`
-11. `packages/frontend/src/components/admin/group-management/shared/AddMemberConfirmDrawer.vue`
-12. `packages/frontend/src/components/GroupSubmissionApprovalModal.vue`
-
-### 使用指南
-
-創建新的確認碼輸入框時，遵循以下模式：
-
+**新寫法**：
 ```vue
-<el-input
+<ConfirmationInput
   v-model="confirmText"
-  placeholder="請輸入 YOUR_CODE"
-  class="confirmation-code-input"
-  @input="confirmText = String($event).toUpperCase()"
+  keyword="RESET"
+  hint-action="重設密碼"
+  @confirm="handleConfirm"
 />
-```
-
-驗證邏輯：
-
-```typescript
-const isValid = computed(() => {
-  return confirmText.value.toUpperCase() === 'YOUR_CODE'
-})
 ```
 
 ---
 
-**最后更新**: 2025-12-21
+**最后更新**: 2026-01-05
 **维护者**: 开发团队
 **审查周期**: 每季度审查一次优化进度

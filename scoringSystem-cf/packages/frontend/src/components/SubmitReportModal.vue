@@ -197,6 +197,19 @@
         </div>
       </div>
 
+      <!-- 確認發布區域 -->
+      <div class="confirmation-section">
+        <ConfirmationInput
+          v-model="confirmationText"
+          keyword="SUBMIT"
+          hint-action="發布"
+        >
+          <template #hint>
+            輸入 <strong>SUBMIT</strong> 發布 ｜ 貴組組員共 {{ totalMembersCount }} 人，你勾選了 {{ selectedParticipantsCount }} 名參與者（包括你自己）
+          </template>
+        </ConfirmationInput>
+      </div>
+
       <!-- 操作按鈕 -->
       <div class="drawer-actions">
         <el-button
@@ -257,6 +270,7 @@ import AllGroupsChart from './shared/ContributionChart/AllGroupsChart.vue'
 import ScoringExplanationDrawer from './shared/ScoringExplanationDrawer.vue'
 import StageDescriptionDrawer from './shared/StageDescriptionDrawer.vue'
 import DrawerAlertZone from './common/DrawerAlertZone.vue'
+import ConfirmationInput from './common/ConfirmationInput.vue'
 import MdEditorWrapper from './MdEditorWrapper.vue'
 import { usePointCalculation } from '@/composables/usePointCalculation'
 import { useAvatar } from '@/composables/useAvatar'
@@ -378,6 +392,7 @@ const selectedHistoricalVersion = ref<string>('')
 const loadingHistoricalVersions = ref<boolean>(false)
 const showScoringExplanation = ref<boolean>(false)
 const showStageDescriptionDrawer = ref<boolean>(false)
+const confirmationText = ref<string>('')
 let validationAlertId: string | null = null
 let validationDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -388,7 +403,10 @@ const localVisible = computed({
 })
 
 const canSubmit = computed<boolean>(() => {
-  return content.value.trim().length > 0 && totalPercentage.value === 100 && !submitting.value
+  return content.value.trim().length > 0
+    && totalPercentage.value === 100
+    && !submitting.value
+    && confirmationText.value === 'SUBMIT'
 })
 
 const totalPercentage = computed<number>(() => {
@@ -401,6 +419,14 @@ const selectedAuthors = computed<string[]>(() => {
   return groupMembers.value
     .filter(m => m.selected)
     .map(m => m.email)
+})
+
+const selectedParticipantsCount = computed<number>(() => {
+  return groupMembers.value.filter(m => m.selected).length
+})
+
+const totalMembersCount = computed<number>(() => {
+  return groupMembers.value.length
 })
 
 const participationProposal = computed<Record<string, number>>(() => {
@@ -491,6 +517,7 @@ watch(() => props.visible, (newVal) => {
   } else {
     content.value = ''
     submitting.value = false
+    confirmationText.value = ''
     resetParticipants()
     resetHistoricalVersions()
     clearAlerts()
@@ -1435,4 +1462,10 @@ const getSubmitterName = (submitterEmail: string): string => {
 }
 
 /* Action Buttons - Using unified .drawer-actions from drawer-unified.scss */
+
+/* 確認發布區域 */
+.confirmation-section {
+  padding: 20px 25px;
+  border-top: 1px solid #e1e8ed;
+}
 </style>

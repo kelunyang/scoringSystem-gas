@@ -181,8 +181,14 @@ export async function submitStageRankingVote(
       action: wasUpdate ? 'updated' : 'created'
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Submit stage ranking vote error:', error);
+
+    // Handle SUDO mode write blocked error (check both name and message for robustness)
+    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+      return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
+    }
+
     const errorMessage = error instanceof Error ? error.message : String(error);
     return errorResponse('VOTE_FAILED', `Failed to submit ranking vote: ${errorMessage}`);
   }

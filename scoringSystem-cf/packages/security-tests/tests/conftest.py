@@ -205,6 +205,24 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "requires_api: tests that require API to be running"
     )
+    config.addinivalue_line(
+        "markers", "sudo: tests for SUDO mode security (Observer/Teacher impersonation)"
+    )
+    config.addinivalue_line(
+        "markers", "critical: critical security tests"
+    )
+    config.addinivalue_line(
+        "markers", "high: high priority security tests"
+    )
+    config.addinivalue_line(
+        "markers", "medium: medium priority security tests"
+    )
+    config.addinivalue_line(
+        "markers", "auth: authentication/authorization tests"
+    )
+    config.addinivalue_line(
+        "markers", "bola: Broken Object Level Authorization tests"
+    )
 
 
 def pytest_collection_modifyitems(config, items):

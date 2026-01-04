@@ -161,8 +161,14 @@ export async function submitAIRankingSuggestion(
       message: 'AI ranking request queued. Listen to WebSocket for progress updates.',
       estimatedTime: '10-30 seconds'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Submit AI ranking suggestion error:', error);
+
+    // Handle SUDO mode write blocked error (check both name and message for robustness)
+    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+      return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
+    }
+
     return errorResponse(
       ERROR_CODES.INTERNAL_ERROR,
       'Failed to queue AI ranking request'
@@ -306,8 +312,14 @@ export async function submitBTRankingSuggestion(
       message: 'BT ranking request queued. Listen to WebSocket for progress updates.',
       estimatedTime
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Submit BT ranking suggestion error:', error);
+
+    // Handle SUDO mode write blocked error (check both name and message for robustness)
+    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+      return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
+    }
+
     return errorResponse(
       ERROR_CODES.INTERNAL_ERROR,
       'Failed to queue BT ranking request'
@@ -443,8 +455,14 @@ export async function submitMultiAgentRankingSuggestion(
       message: 'Multi-Agent ranking request queued. Listen to WebSocket for progress updates.',
       estimatedTime
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Submit Multi-Agent ranking suggestion error:', error);
+
+    // Handle SUDO mode write blocked error (check both name and message for robustness)
+    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+      return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
+    }
+
     return errorResponse(
       ERROR_CODES.INTERNAL_ERROR,
       'Failed to queue Multi-Agent ranking request'

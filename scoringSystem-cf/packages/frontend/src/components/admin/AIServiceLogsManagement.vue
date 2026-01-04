@@ -133,14 +133,15 @@
     </el-card>
 
     <!-- AI Service Logs Table -->
-    <div
+    <el-scrollbar
       class="table-container"
-      v-loading="loading"
-      element-loading-text="載入 AI 紀錄中..."
-      v-infinite-scroll="loadMore"
-      :infinite-scroll-disabled="scrollDisabled"
-      :infinite-scroll-distance="200"
+      @end-reached="handleEndReached"
+      :distance="200"
     >
+      <div
+        v-loading="loading"
+        element-loading-text="載入 AI 紀錄中..."
+      >
       <table class="ai-logs-table" role="table" aria-label="AI 服務紀錄列表">
         <thead>
           <tr role="row">
@@ -478,7 +479,8 @@
       <div v-if="displayedLogs.length > 0" class="count-info">
         顯示 {{ displayedLogs.length }} / {{ filteredLogs.length }} 筆 AI 紀錄
       </div>
-    </div>
+      </div>
+    </el-scrollbar>
   </div>
 </template>
 
@@ -486,6 +488,7 @@
 import { ref, computed, onMounted, watch, nextTick, inject, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import type { ScrollbarDirection } from 'element-plus'
 import { adminApi } from '@/api/admin'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
@@ -690,6 +693,12 @@ const loadMore = (): void => {
     displayCount.value += 50
     loadingMore.value = false
   }, 300)
+}
+
+// Handler for el-scrollbar end-reached event
+const handleEndReached = (direction: ScrollbarDirection): void => {
+  if (direction !== 'bottom') return
+  loadMore()
 }
 
 const handleToggleExpansion = async (log: AIServiceLog): Promise<void> => {
@@ -941,8 +950,7 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   overflow: hidden;
-  max-height: calc(100vh - 400px);
-  overflow-y: auto;
+  height: calc(100vh - 400px);
 }
 
 .ai-logs-table {
@@ -1303,21 +1311,4 @@ onBeforeUnmount(() => {
   font-weight: 500;
 }
 
-/* Custom scrollbar */
-.table-container::-webkit-scrollbar {
-  width: 8px;
-}
-
-.table-container::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-.table-container::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
-}
-
-.table-container::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
 </style>

@@ -48,20 +48,12 @@
         <!-- Confirmation Text Input -->
         <div class="form-section confirmation-section">
           <h4><i class="fas fa-shield-alt"></i> 安全確認 *</h4>
-          <div class="form-group">
-            <label>確認文字 <span class="required">*</span></label>
-            <el-input
-              v-model="confirmText"
-              placeholder="請輸入 RESUME"
-              maxlength="20"
-              class="confirmation-input"
-              @input="confirmText = String($event).toUpperCase()"
-            />
-            <div class="field-hint">
-              <i class="fas fa-info-circle"></i>
-              請輸入 <code>RESUME</code> 以確認恢復階段
-            </div>
-          </div>
+          <ConfirmationInput
+            v-model="confirmText"
+            keyword="RESUME"
+            hint-action="恢復"
+            @confirm="confirmResume"
+          />
         </div>
 
         <!-- Action Buttons -->
@@ -94,6 +86,7 @@
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
+import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { rpcClient } from '@/utils/rpc-client'
 

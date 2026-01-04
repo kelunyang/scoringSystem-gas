@@ -56,6 +56,7 @@ import {
 import { getAIProvidersForRanking, submitAIRankingSuggestion, submitBTRankingSuggestion, submitMultiAgentRankingSuggestion } from '../handlers/rankings/aiSuggestion';
 import { getAIRankingHistory, getAIRankingDetail } from '../handlers/rankings/aiHistory';
 import { aiRateLimitMiddleware } from '../middleware/rate-limit';
+import { getEffectiveUser } from '../middleware/sudo';
 
 
 const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
@@ -85,9 +86,13 @@ app.post(
       }, 403);
     }
 
+    // Use effectiveUser for SUDO mode support
+    // In SUDO mode, this returns the impersonated student's email
+    const effectiveUser = getEffectiveUser(c);
+
     const response = await getStageRankings(
       c.env,
-      user.userEmail,
+      effectiveUser.userEmail,
       body.projectId,
       body.stageId
     );

@@ -7,7 +7,7 @@
       @command="handleCommand"
       :hide-on-click="true"
     >
-      <span class="user-btn">
+      <span class="user-btn" :class="{ 'sudo-active': sudoActive }">
         <!-- User Avatar -->
         <div class="user-avatar">
           <el-avatar
@@ -136,6 +136,7 @@
 <script>
 import NotificationCenter from './NotificationCenter.vue'
 import { usePermissionsDrawerStore } from '@/stores/permissionsDrawer'
+import { useSudoStore } from '@/stores/sudo'
 import dayjs from 'dayjs'
 import duration from 'dayjs/plugin/duration'
 
@@ -216,10 +217,19 @@ export default {
       isFlipping: false,
       // Session timer animation state
       maxSessionTimeout: 86400000, // 24 hours in ms (从 KV 读取，默认值)
-      lastBlinkThreshold: 100 // 用于追踪上一次触发闪烁的阈值
+      lastBlinkThreshold: 100, // 用于追踪上一次触发闪烁的阈值
+      // Sudo store instance
+      sudoStore: null
     }
   },
   computed: {
+    // Sudo mode computed properties
+    sudoActive() {
+      return this.sudoStore?.isActive || false
+    },
+    sudoDisplayInfo() {
+      return this.sudoStore?.displayInfo || null
+    },
     displayUserEmail() {
       return this.userEmail || this.user?.userEmail || ''
     },
@@ -229,6 +239,14 @@ export default {
         return this.generateInitialsAvatar()
       }
 
+      // SUDO 模式：使用被 sudo 的學生頭像
+      if (this.sudoActive && this.sudoDisplayInfo) {
+        const seed = this.sudoDisplayInfo.avatarSeed || `${this.sudoDisplayInfo.email}_sudo`
+        const style = this.sudoDisplayInfo.avatarStyle || 'avataaars'
+        return this.generateDicebearUrl(seed, style, {})
+      }
+
+      // 正常模式：使用自己的頭像
       const seed = this.user.avatarSeed || `${this.user.userEmail}_${Date.now()}`
       const style = this.user.avatarStyle || 'avataaars'
 
@@ -250,6 +268,16 @@ export default {
       return this.generateDicebearUrl(seed, style, options)
     },
     truncatedDisplayName() {
+      // SUDO 模式：顯示被 sudo 的學生名稱
+      if (this.sudoActive && this.sudoDisplayInfo?.name) {
+        const name = this.sudoDisplayInfo.name
+        if (name.length > 5) {
+          return name.substring(0, 5) + '...'
+        }
+        return name
+      }
+
+      // 正常模式：顯示自己的名稱
       if (!this.user?.displayName) return ''
       const name = this.user.displayName
       if (name.length > 5) {
@@ -335,6 +363,16 @@ export default {
     allUserBadges() {
       const badges = []
 
+      // 0. SUDO 模式徽章（最高優先級，永遠顯示在最前面）
+      if (this.sudoActive) {
+        badges.push({
+          type: 'sudo',
+          icon: 'fas fa-user-secret',
+          color: '#e6a23c',
+          label: `正在以 ${this.sudoDisplayInfo?.name || '學生'} 的身份檢視（唯讀模式）`
+        })
+      }
+
       // 1. 全域權限徽章
       if (this.globalPermissionBadge) badges.push(this.globalPermissionBadge)
 
@@ -366,6 +404,11 @@ export default {
     },
     badgeTooltipText() {
       const messages = []
+
+      // SUDO 模式徽章提示（最高優先級）
+      if (this.sudoActive) {
+        messages.push(`正在以 ${this.sudoDisplayInfo?.name || '學生'} 的身份檢視（唯讀模式）`)
+      }
 
       if (this.globalPermissionBadge) {
         messages.push(`你的全站權限為${this.globalPermissionBadge.label}`)
@@ -468,16 +511,22 @@ export default {
   },
   mounted() {
     this.startBadgeRotation()
+    // Initialize sudo store
+    this.sudoStore = useSudoStore()
+    this.sudoStore.initFromStorage()
   },
   beforeUnmount() {
     this.stopBadgeRotation()
   },
   methods: {
+    openPermissionsDrawer() {
+      const permissionsDrawer = usePermissionsDrawerStore()
+      permissionsDrawer.open(this.projectId)
+    },
     handleCommand(command) {
       if (command === 'view-permissions') {
         // Use global permissions drawer store
-        const permissionsDrawer = usePermissionsDrawerStore()
-        permissionsDrawer.open(this.projectId)
+        this.openPermissionsDrawer()
       } else {
         this.$emit('user-command', command)
       }
@@ -512,7 +561,10 @@ export default {
     },
     
     generateInitials() {
-      const name = this.user?.displayName || 'U'
+      // SUDO 模式：使用被 sudo 的學生名稱
+      const name = (this.sudoActive && this.sudoDisplayInfo?.name)
+        ? this.sudoDisplayInfo.name
+        : (this.user?.displayName || 'U')
       return name
         .split(' ')
         .map(word => word.charAt(0))
@@ -656,7 +708,7 @@ export default {
 }
 
 .user-btn {
-  background: linear-gradient(135deg, #4ECDC4 0%, #1A9B8E 100%); /* Scheme M Primary - 土耳其藍漸層 */
+  background: linear-gradient(180deg, #1A9B8E 0%, #147A70 100%); /* 深土耳其藍漸層 - 與 Sidebar 風格一致 */
   border: none;
   color: white;
   padding: 8px 15px;
@@ -669,6 +721,16 @@ export default {
   gap: 10px;
   transition: all 0.15s ease;
   min-height: 40px;
+}
+
+/* SUDO 模式：棕橙色漸層背景 - 與 Sidebar sudo-mode 一致 */
+.user-btn.sudo-active {
+  background: linear-gradient(180deg, #8B5A2B 0%, #5D3A1A 100%);
+  box-shadow: 0 2px 8px rgba(139, 90, 43, 0.4);
+}
+
+.user-btn.sudo-active:hover {
+  box-shadow: 0 4px 12px rgba(139, 90, 43, 0.5);
 }
 
 .user-avatar {
@@ -940,4 +1002,5 @@ export default {
     min-height: 36px;
   }
 }
+
 </style>

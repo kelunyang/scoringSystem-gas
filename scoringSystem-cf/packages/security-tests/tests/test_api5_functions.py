@@ -173,10 +173,10 @@ class TestRoleBasedAccess:
 
         project_id = projects[0]['projectId']
 
-        # Teacher-only endpoints
+        # Teacher-only endpoints (note: /api/rankings has /api prefix, but /wallets doesn't)
         teacher_endpoints = [
-            ('/rankings/teacher-rankings', {'projectId': project_id, 'stageId': 'stg_test'}),
-            ('/rankings/teacher-comprehensive-vote', {'projectId': project_id, 'stageId': 'stg_test'}),
+            ('/api/rankings/teacher-rankings', {'projectId': project_id, 'stageId': 'stg_test'}),
+            ('/api/rankings/teacher-comprehensive-vote', {'projectId': project_id, 'stageId': 'stg_test'}),
             ('/wallets/award', {'projectId': project_id, 'userId': 'usr_test', 'amount': 10}),
         ]
 
@@ -550,11 +550,11 @@ class TestAIRankingFunctions:
         fake_student_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdHVkZW50Iiwicm9sZSI6InN0dWRlbnQifQ.fake"
 
         ai_endpoints = [
-            '/rankings/ai-suggestion',
-            '/rankings/ai-bt-suggestion',
-            '/rankings/ai-multi-agent-suggestion',
-            '/rankings/ai-history',
-            '/rankings/ai-detail',
+            '/api/rankings/ai-suggestion',
+            '/api/rankings/ai-bt-suggestion',
+            '/api/rankings/ai-multi-agent-suggestion',
+            '/api/rankings/ai-history',
+            '/api/rankings/ai-detail',
         ]
 
         for endpoint in ai_endpoints:
@@ -750,6 +750,747 @@ class TestHTTPMethodEnforcement:
         # Should use POST /projects/delete instead
         assert response.status_code in [404, 405], \
             f"DELETE method exposed on project"
+
+
+# ============================================================================
+# Stages Function Tests
+# ============================================================================
+
+class TestStagesFunctions:
+    """Test stages endpoint access control"""
+
+    @pytest.mark.critical
+    @pytest.mark.functions
+    def test_stage_create_requires_manage(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify stage creation requires manage permission.
+        """
+        fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
+
+        response = api_client.post('/stages/create', auth=fake_viewer_token, json={
+            'projectId': 'proj_test',
+            'stageData': {'stageName': 'Test Stage'}
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Stage creation without manage permission (status: {response.status_code})"
+
+    @pytest.mark.critical
+    @pytest.mark.functions
+    def test_stage_update_requires_manage(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify stage update requires manage permission.
+        """
+        fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
+
+        response = api_client.post('/stages/update', auth=fake_viewer_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test',
+            'stageData': {'stageName': 'Updated Stage'}
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Stage update without manage permission"
+
+    @pytest.mark.critical
+    @pytest.mark.functions
+    def test_stage_delete_requires_manage(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify stage deletion requires manage permission.
+        """
+        fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
+
+        response = api_client.post('/stages/delete', auth=fake_viewer_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Stage deletion without manage permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_stage_clone_requires_manage(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify stage clone requires manage permission.
+        """
+        fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
+
+        response = api_client.post('/stages/clone', auth=fake_viewer_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Stage clone without manage permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_stage_clone_to_projects_requires_manage(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify stage clone to multiple projects requires manage permission.
+        """
+        fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
+
+        response = api_client.post('/stages/clone-to-projects', auth=fake_viewer_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test',
+            'targetProjectIds': ['proj_target1', 'proj_target2']
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Stage clone-to-projects without manage permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_stage_config_get_requires_view(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify stage config get requires view permission.
+        """
+        fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post('/stages/config', auth=fake_outsider_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Stage config accessible without view permission"
+
+    @pytest.mark.critical
+    @pytest.mark.functions
+    def test_stage_config_update_requires_manage(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify stage config update requires manage permission.
+        """
+        fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
+
+        response = api_client.post('/stages/config/update', auth=fake_viewer_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test',
+            'config': {}
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Stage config update without manage permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_stage_config_reset_requires_manage(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify stage config reset requires manage permission.
+        """
+        fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
+
+        response = api_client.post('/stages/config/reset', auth=fake_viewer_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Stage config reset without manage permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_stage_list_requires_view(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify stage list requires view permission.
+        """
+        fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post('/stages/list', auth=fake_outsider_token, json={
+            'projectId': 'proj_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Stage list accessible without view permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_stage_get_requires_view(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify stage get requires view permission.
+        """
+        fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post('/stages/get', auth=fake_outsider_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Stage get accessible without view permission"
+
+
+# ============================================================================
+# Settlement Function Tests
+# ============================================================================
+
+class TestSettlementFunctions:
+    """Test settlement endpoint access control"""
+
+    @pytest.mark.critical
+    @pytest.mark.functions
+    def test_settlement_reverse_preview_requires_manage(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify settlement reverse preview requires manage permission.
+        """
+        fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
+
+        response = api_client.post('/settlement/reverse-preview', auth=fake_viewer_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Settlement reverse-preview without manage permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_settlement_history_requires_view(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify settlement history requires view permission.
+        """
+        fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post('/settlement/history', auth=fake_outsider_token, json={
+            'projectId': 'proj_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Settlement history accessible without view permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_settlement_details_requires_view(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify settlement details requires view permission.
+        """
+        fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post('/settlement/details', auth=fake_outsider_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Settlement details accessible without view permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_settlement_transactions_requires_view(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify settlement transactions requires view permission.
+        """
+        fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post('/settlement/transactions', auth=fake_outsider_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Settlement transactions accessible without view permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_settlement_stage_rankings_requires_view(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify settlement stage rankings requires view permission.
+        """
+        fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post('/settlement/stage-rankings', auth=fake_outsider_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Settlement stage-rankings accessible without view permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_settlement_comment_rankings_requires_view(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify settlement comment rankings requires view permission.
+        """
+        fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post('/settlement/comment-rankings', auth=fake_outsider_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Settlement comment-rankings accessible without view permission"
+
+
+# ============================================================================
+# Event Logs Function Tests
+# ============================================================================
+
+class TestEventLogsFunctions:
+    """Test event logs endpoint access control"""
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_eventlogs_project_requires_view(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify project event logs requires view permission.
+        """
+        fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post('/eventlogs/project', auth=fake_outsider_token, json={
+            'projectId': 'proj_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Project event logs accessible without view permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_eventlogs_user_requires_view(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify user event logs requires view permission.
+        """
+        fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post('/eventlogs/user', auth=fake_outsider_token, json={
+            'projectId': 'proj_test',
+            'userId': 'usr_target'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"User event logs accessible without view permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_eventlogs_resource_requires_view(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify resource event log details requires view permission.
+        """
+        fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post('/eventlogs/resource', auth=fake_outsider_token, json={
+            'projectId': 'proj_test',
+            'resourceId': 'res_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Resource event log accessible without view permission"
+
+
+# ============================================================================
+# Robot Management Function Tests
+# ============================================================================
+
+class TestRobotManagementFunctions:
+    """Test robot management endpoint access control"""
+
+    @pytest.mark.critical
+    @pytest.mark.functions
+    def test_robots_status_requires_admin(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify robot status requires system_admin permission.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyZWd1bGFyIn0.fake"
+
+        response = api_client.post('/api/admin/robots/status', auth=fake_user_token)
+
+        assert response.status_code in [401, 403], \
+            f"Robot status accessible without admin"
+
+    @pytest.mark.critical
+    @pytest.mark.functions
+    def test_robots_notification_patrol_requires_admin(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify notification patrol execution requires system_admin.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyZWd1bGFyIn0.fake"
+
+        response = api_client.post('/api/admin/robots/notification-patrol', auth=fake_user_token)
+
+        assert response.status_code in [401, 403], \
+            f"Notification patrol accessible without admin"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_robots_notification_patrol_config_requires_admin(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify notification patrol config requires system_admin.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyZWd1bGFyIn0.fake"
+
+        response = api_client.post('/api/admin/robots/notification-patrol/config', auth=fake_user_token)
+
+        assert response.status_code in [401, 403], \
+            f"Notification patrol config accessible without admin"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_robots_notification_patrol_update_config_requires_admin(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify notification patrol config update requires system_admin.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyZWd1bGFyIn0.fake"
+
+        response = api_client.post('/api/admin/robots/notification-patrol/update-config', auth=fake_user_token, json={
+            'config': {}
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Notification patrol config update accessible without admin"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_robots_notification_patrol_pending_requires_admin(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify pending notifications list requires system_admin.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyZWd1bGFyIn0.fake"
+
+        response = api_client.post('/api/admin/robots/notification-patrol/pending', auth=fake_user_token)
+
+        assert response.status_code in [401, 403], \
+            f"Pending notifications accessible without admin"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_robots_notification_patrol_statistics_requires_admin(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify notification patrol statistics requires system_admin.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyZWd1bGFyIn0.fake"
+
+        response = api_client.post('/api/admin/robots/notification-patrol/statistics', auth=fake_user_token)
+
+        assert response.status_code in [401, 403], \
+            f"Notification patrol statistics accessible without admin"
+
+
+# ============================================================================
+# AI Provider Function Tests
+# ============================================================================
+
+class TestAIProviderFunctions:
+    """Test AI provider management endpoint access control"""
+
+    @pytest.mark.critical
+    @pytest.mark.functions
+    def test_ai_providers_list_requires_admin(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify AI providers list requires system_admin permission.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyZWd1bGFyIn0.fake"
+
+        response = api_client.post('/api/system/ai-providers/list', auth=fake_user_token)
+
+        assert response.status_code in [401, 403], \
+            f"AI providers list accessible without admin"
+
+    @pytest.mark.critical
+    @pytest.mark.functions
+    def test_ai_providers_create_requires_admin(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify AI provider creation requires system_admin permission.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyZWd1bGFyIn0.fake"
+
+        response = api_client.post('/api/system/ai-providers/create', auth=fake_user_token, json={
+            'name': 'Test Provider',
+            'type': 'openai'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"AI provider creation accessible without admin"
+
+    @pytest.mark.critical
+    @pytest.mark.functions
+    def test_ai_providers_update_requires_admin(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify AI provider update requires system_admin permission.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyZWd1bGFyIn0.fake"
+
+        response = api_client.post('/api/system/ai-providers/update', auth=fake_user_token, json={
+            'providerId': 'prov_test',
+            'name': 'Updated Provider'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"AI provider update accessible without admin"
+
+    @pytest.mark.critical
+    @pytest.mark.functions
+    def test_ai_providers_delete_requires_admin(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify AI provider deletion requires system_admin permission.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyZWd1bGFyIn0.fake"
+
+        response = api_client.post('/api/system/ai-providers/delete', auth=fake_user_token, json={
+            'providerId': 'prov_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"AI provider deletion accessible without admin"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_ai_providers_test_requires_admin(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify AI provider test requires system_admin permission.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyZWd1bGFyIn0.fake"
+
+        response = api_client.post('/api/system/ai-providers/test', auth=fake_user_token, json={
+            'providerId': 'prov_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"AI provider test accessible without admin"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_ai_prompts_get_requires_admin(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify AI prompts get requires system_admin permission.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyZWd1bGFyIn0.fake"
+
+        response = api_client.post('/api/system/ai-prompts/get', auth=fake_user_token)
+
+        assert response.status_code in [401, 403], \
+            f"AI prompts get accessible without admin"
+
+    @pytest.mark.critical
+    @pytest.mark.functions
+    def test_ai_prompts_update_requires_admin(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify AI prompts update requires system_admin permission.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyZWd1bGFyIn0.fake"
+
+        response = api_client.post('/api/system/ai-prompts/update', auth=fake_user_token, json={
+            'prompts': {}
+        })
+
+        assert response.status_code in [401, 403], \
+            f"AI prompts update accessible without admin"
+
+
+# ============================================================================
+# Missing Endpoint Function Tests
+# ============================================================================
+
+class TestMissingEndpointsFunctions:
+    """Test access control for other missing endpoints"""
+
+    @pytest.mark.critical
+    @pytest.mark.functions
+    def test_projects_clone_requires_create_project(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify project clone requires create_project permission.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJub3Blcm1pc3Npb24ifQ.fake"
+
+        response = api_client.post('/projects/clone', auth=fake_user_token, json={
+            'projectId': 'proj_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Project clone without create_project permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_invitations_generate_batch_requires_permission(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify batch invitation generation requires generate_invites permission.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJub3Blcm1pc3Npb24ifQ.fake"
+
+        response = api_client.post('/invitations/generate-batch', auth=fake_user_token, json={
+            'emails': ['test1@example.com', 'test2@example.com']
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Batch invitation without permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_invitations_reactivate_requires_permission(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify invitation reactivation requires generate_invites permission.
+        """
+        fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJub3Blcm1pc3Npb24ifQ.fake"
+
+        response = api_client.post('/invitations/reactivate', auth=fake_user_token, json={
+            'invitationId': 'inv_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Invitation reactivation without permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_wallets_transactions_all_requires_manage(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify all wallet transactions requires manage permission.
+        """
+        fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
+
+        response = api_client.post('/wallets/transactions/all', auth=fake_viewer_token, json={
+            'projectId': 'proj_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"All wallet transactions without manage permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_scoring_preview_requires_manage(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify scoring preview requires manage permission.
+        """
+        fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
+
+        response = api_client.post('/scoring/preview', auth=fake_viewer_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Scoring preview without manage permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_comments_ranking_history_requires_view(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify comment ranking history requires view permission.
+        """
+        fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post('/comments/ranking-history', auth=fake_outsider_token, json={
+            'projectId': 'proj_test',
+            'stageId': 'stg_test'
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Comment ranking history without view permission"
 
 
 # ============================================================================

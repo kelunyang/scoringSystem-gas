@@ -455,11 +455,11 @@
         </div>
         <p>確定要刪除本組在「{{ stageTitle }}」階段的報告嗎？</p>
         <p class="warning-text">此操作無法撤銷，刪除後需要重新提交報告。</p>
-        <el-input
+        <ConfirmationInput
           v-model="deleteConfirmText"
-          placeholder="請輸入 DELETE 確認刪除"
-          class="confirmation-code-input"
-          @input="deleteConfirmText = String($event).toUpperCase()"
+          keyword="DELETE"
+          hint-action="刪除"
+          @confirm="confirmDelete"
         />
       </div>
 
@@ -495,11 +495,11 @@
         </div>
         <p>確定要恢復到此舊版本嗎？</p>
         <p class="warning-text">恢復舊版本無法恢復舊版本的投票結果，請把握時間盡速完成投票，否則會沒收全組本階段點數。</p>
-        <el-input
+        <ConfirmationInput
           v-model="restoreConfirmText"
-          placeholder="請輸入 RESTORE 確認恢復"
-          class="confirmation-code-input"
-          @input="restoreConfirmText = String($event).toUpperCase()"
+          keyword="RESTORE"
+          hint-action="恢復"
+          @confirm="confirmRestore"
         />
       </div>
 
@@ -562,6 +562,7 @@ import hljs from 'highlight.js'
 import markdown from 'highlight.js/lib/languages/markdown'
 import { ElMessage } from 'element-plus'
 import DrawerAlertZone from './common/DrawerAlertZone.vue'
+import ConfirmationInput from './common/ConfirmationInput.vue'
 import SimulationControls from './shared/ContributionChart/SimulationControls.vue'
 import OurGroupChart from './shared/ContributionChart/OurGroupChart.vue'
 import AllGroupsChart from './shared/ContributionChart/AllGroupsChart.vue'

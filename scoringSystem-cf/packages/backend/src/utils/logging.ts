@@ -358,6 +358,13 @@ export async function logApiAction(
       return false; // Duplicate prevented
     }
 
+    // SUDO mode - skip logging but allow operation to proceed
+    // This prevents the logging INSERT from blocking the actual operation
+    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+      console.log(`[API_DEDUP] ⏭️ Skipping log in SUDO mode: ${details.action}`);
+      return true; // Allow operation to proceed without logging
+    }
+
     // All other errors should propagate (fail-closed security model)
     console.error('[API_DEDUP] Unexpected error:', {
       action: details.action,

@@ -16,6 +16,7 @@
 
 import { computed, unref, type Ref, type ComputedRef } from 'vue'
 import type { Project, AuthUser, Group } from '@/types'
+import { useSudoStore } from '@/stores/sudo'
 
 /**
  * Permission level type
@@ -123,30 +124,45 @@ export function useProjectPermissions(
       return defaultPermissions
     }
 
-    const globalPermissions = user.permissions || []
-    const userEmail = user.email || user.userEmail
+    // 🕵️ 檢查是否為 sudo 模式
+    // 注意：projectData 結構是 { project: { projectId: ... }, groups: [...], ... }
+    const sudoStore = useSudoStore()
+    const projectIdFromData = (project as any).project?.projectId
+    const isSudoActive = sudoStore.isActive &&
+                         sudoStore.projectId === projectIdFromData &&
+                         sudoStore.targetUser
+
+    // 🕵️ 使用有效的 email（sudo target 或真實用戶）
+    const effectiveEmail = isSudoActive
+      ? sudoStore.targetUser!.userEmail
+      : (user.email || user.userEmail)
+
+    // 🕵️ 在 sudo 模式下，強制 viewerRole 為 member，清空全域權限
+    const effectiveViewerRole = isSudoActive ? 'member' as const : project.viewerRole
+    const effectiveGlobalPermissions = isSudoActive ? [] : (user.permissions || [])
 
     // Normalize project data for permission calculation
     const normalizedProject: NormalizedProject = {
-      viewerRole: project.viewerRole,
+      viewerRole: effectiveViewerRole,
       userGroups: normalizeUserGroups(
         project.userGroups || [],
         project.groups || [],
-        userEmail
+        effectiveEmail
       )
     }
 
-    // If activeRole is provided, calculate permissions based on selected role
-    const role = activeRole ? unref(activeRole) : null
+    // 🕵️ SUDO 模式下，忽略 activeRole 參數，使用被 sudo 用戶的實際權限
+    // If activeRole is provided AND NOT in sudo mode, calculate permissions based on selected role
+    const role = (!isSudoActive && activeRole) ? unref(activeRole) : null
     if (role) {
       return calculatePermissionsByRole(
         role,
         normalizedProject,
-        globalPermissions
+        effectiveGlobalPermissions
       )
     }
 
-    return calculateProjectPermissions(normalizedProject, globalPermissions)
+    return calculateProjectPermissions(normalizedProject, effectiveGlobalPermissions)
   })
 
   // Return reactive permission flags as individual computed refs

@@ -52,6 +52,9 @@ pnpm install
 # 啟動開發伺服器 (前後端)
 pnpm dev
 
+# 同步遠端資料庫後啟動 (下載遠端 D1 + KV 到本地)
+pnpm dev:sync-remote
+
 # 前端: http://localhost:5173
 # 後端: http://localhost:8787
 ```

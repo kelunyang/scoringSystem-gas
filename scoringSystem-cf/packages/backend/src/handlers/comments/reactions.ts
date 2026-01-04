@@ -58,12 +58,13 @@ export async function addReaction(
     // If latest reaction is same type, no need to insert again
     // But still return current stats for consistency
     if (latestReaction && latestReaction.reactionType === reactionType) {
-      const stats = await getReactionStatsForComment(env, commentId, userEmail);
+      const stats = await getReactionStatsForComment(env, commentId, userEmail, projectId);
       return successResponse({
         reactionType,
         reactions: stats.reactions,
         userReaction: stats.userReaction,
-        totalReactions: stats.totalReactions
+        totalReactions: stats.totalReactions,
+        canBeVoted: stats.canBeVoted
       }, 'Reaction already exists');
     }
 
@@ -112,18 +113,25 @@ export async function addReaction(
     }
 
     // Get updated reaction statistics
-    const stats = await getReactionStatsForComment(env, commentId, userEmail);
+    const stats = await getReactionStatsForComment(env, commentId, userEmail, projectId);
 
     return successResponse({
       reactionId,
       reactionType,
       reactions: stats.reactions,
       userReaction: stats.userReaction,
-      totalReactions: stats.totalReactions
+      totalReactions: stats.totalReactions,
+      canBeVoted: stats.canBeVoted
     }, 'Reaction added successfully');
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Add reaction error:', error);
+
+    // Handle SUDO mode write blocked error (check both name and message for robustness)
+    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+      return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
+    }
+
     return errorResponse('SYSTEM_ERROR', 'Failed to add reaction');
   }
 }
@@ -135,11 +143,13 @@ export async function addReaction(
 async function getReactionStatsForComment(
   env: Env,
   commentId: string,
-  userEmail: string
+  userEmail: string,
+  projectId: string
 ): Promise<{
   reactions: Array<{ type: string; count: number; users: string[] }>;
   userReaction: string | null;
   totalReactions: number;
+  canBeVoted: boolean;
 }> {
   // Get latest reactions using window function (append-only architecture)
   const reactions = await env.DB.prepare(`
@@ -183,10 +193,50 @@ async function getReactionStatsForComment(
     users: (r.users as string)?.split(',') || []
   }));
 
+  // Calculate canBeVoted: requires !isReply, hasMentions, isGroupMember, hasHelpfulReaction
+  const comment = await env.DB.prepare(`
+    SELECT c.isReply, c.mentionedGroups, c.mentionedUsers, c.authorEmail,
+           ug.role as groupRole
+    FROM comments c
+    LEFT JOIN usergroups ug ON ug.userEmail = c.authorEmail
+      AND ug.projectId = c.projectId
+      AND ug.isActive = 1
+      AND (ug.role = 'leader' OR ug.role = 'member')
+    WHERE c.commentId = ?
+  `).bind(commentId).first();
+
+  let canBeVoted = false;
+  if (comment) {
+    const isReply = !!comment.isReply;
+    const isGroupMember = !!comment.groupRole;
+
+    // Parse mentions
+    let mentionedGroups: string[] = [];
+    let mentionedUsers: string[] = [];
+    try {
+      if (comment.mentionedGroups) {
+        mentionedGroups = JSON.parse(comment.mentionedGroups as string);
+      }
+      if (comment.mentionedUsers) {
+        mentionedUsers = JSON.parse(comment.mentionedUsers as string);
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+    const hasMentions = mentionedGroups.length > 0 || mentionedUsers.length > 0;
+
+    // Check helpful reaction from stats we already have
+    const helpfulReaction = reactionStats.find(r => r.type === 'helpful');
+    const hasHelpfulReaction = helpfulReaction && helpfulReaction.count > 0;
+
+    canBeVoted = !isReply && hasMentions && isGroupMember && hasHelpfulReaction;
+  }
+
   return {
     reactions: reactionStats,
     userReaction,
-    totalReactions: reactionStats.reduce((sum, r) => sum + r.count, 0)
+    totalReactions: reactionStats.reduce((sum, r) => sum + r.count, 0),
+    canBeVoted
   };
 }
 
@@ -242,16 +292,23 @@ export async function removeReaction(
     await logProjectOperation(env, userEmail, projectId, 'reaction_removed', 'comment', commentId, {});
 
     // Get updated reaction statistics
-    const stats = await getReactionStatsForComment(env, commentId, userEmail);
+    const stats = await getReactionStatsForComment(env, commentId, userEmail, projectId);
 
     return successResponse({
       reactions: stats.reactions,
       userReaction: stats.userReaction,
-      totalReactions: stats.totalReactions
+      totalReactions: stats.totalReactions,
+      canBeVoted: stats.canBeVoted
     }, 'Reaction removed successfully');
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Remove reaction error:', error);
+
+    // Handle SUDO mode write blocked error (check both name and message for robustness)
+    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+      return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
+    }
+
     return errorResponse('SYSTEM_ERROR', 'Failed to remove reaction');
   }
 }

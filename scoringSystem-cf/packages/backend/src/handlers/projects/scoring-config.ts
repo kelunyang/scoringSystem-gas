@@ -209,6 +209,13 @@ scoringConfigRouter.put('/:projectId/scoring-config', async (c: Context<{ Bindin
       })
     }
 
+    // Handle validation errors from validateScoringConfig()
+    if (error instanceof Error && error.message) {
+      throw new HTTPException(400, {
+        message: error.message,
+      })
+    }
+
     console.error('[PUT /projects/:projectId/scoring-config] Error:', error)
     throw new HTTPException(500, { message: 'Failed to update scoring configuration' })
   }

@@ -1,5 +1,5 @@
 <template>
-  <div class="draggable-ranking-list">
+  <div class="draggable-ranking-list" :class="{ disabled: disabled }">
     <transition-group
       name="ranking-list"
       tag="div"
@@ -321,5 +321,31 @@ function updateRanks() {
 .ranking-list-leave-to {
   opacity: 0;
   transform: scale(0.8) translateY(10px);
+}
+
+/* ========== 禁用狀態（預覽模式） ========== */
+
+.draggable-ranking-list.disabled {
+  pointer-events: none;
+  opacity: 0.65;
+  position: relative;
+  user-select: none;
+}
+
+.draggable-ranking-list.disabled::after {
+  content: '唯讀預覽模式';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 28px;
+  font-weight: bold;
+  color: rgba(0, 0, 0, 0.15);
+  z-index: 101;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8),
+    0 2px 4px rgba(0, 0, 0, 0.2);
+  letter-spacing: 2px;
+  pointer-events: none;
 }
 </style>

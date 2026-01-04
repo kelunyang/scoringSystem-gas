@@ -992,19 +992,12 @@
         <!-- 確認輸入 -->
         <div class="form-section">
           <h4><i class="fas fa-shield-alt"></i> 安全確認</h4>
-          <div class="form-group">
-            <label>確認複製 *</label>
-            <el-input
-              v-model="cloneProjectForm.confirmText"
-              placeholder="請輸入 CLONE 以確認"
-              clearable
-              class="confirmation-code-input"
-              @input="cloneProjectForm.confirmText = String($event).toUpperCase()"
-            />
-            <div class="field-hint">
-              請輸入 <strong>CLONE</strong>（全大寫）以確認複製操作
-            </div>
-          </div>
+          <ConfirmationInput
+            v-model="cloneProjectForm.confirmText"
+            keyword="CLONE"
+            hint-action="複製"
+            @confirm="executeCloneProject"
+          />
         </div>
 
         <!-- 操作按鈕 -->
@@ -1086,19 +1079,12 @@
         <!-- 確認輸入 -->
         <div class="form-section">
           <h4><i class="fas fa-shield-alt"></i> 安全確認</h4>
-          <div class="form-group">
-            <label>確認複製 *</label>
-            <el-input
-              v-model="cloneStageForm.confirmText"
-              placeholder="請輸入 CLONE 以確認"
-              clearable
-              class="confirmation-code-input"
-              @input="cloneStageForm.confirmText = String($event).toUpperCase()"
-            />
-            <div class="field-hint">
-              請輸入 <strong>CLONE</strong>（全大寫）以確認複製操作
-            </div>
-          </div>
+          <ConfirmationInput
+            v-model="cloneStageForm.confirmText"
+            keyword="CLONE"
+            hint-action="複製"
+            @confirm="executeCloneStage"
+          />
         </div>
 
         <!-- 操作按鈕 -->
@@ -1205,19 +1191,12 @@
         <!-- 確認輸入 -->
         <div class="form-section">
           <h4><i class="fas fa-shield-alt"></i> 安全確認</h4>
-          <div class="form-group">
-            <label>確認封存 *</label>
-            <el-input
-              v-model="archiveProjectForm.confirmText"
-              placeholder="請輸入 ARCHIVE 以確認"
-              clearable
-              class="confirmation-code-input"
-              @input="archiveProjectForm.confirmText = String($event).toUpperCase()"
-            />
-            <div class="field-hint">
-              請輸入 <strong>ARCHIVE</strong>（全大寫）以確認封存操作
-            </div>
-          </div>
+          <ConfirmationInput
+            v-model="archiveProjectForm.confirmText"
+            keyword="ARCHIVE"
+            hint-action="封存"
+            @confirm="executeArchiveProject"
+          />
         </div>
 
         <!-- 操作按鈕 -->
@@ -1312,6 +1291,7 @@ import dayjs from 'dayjs'
 import { rpcClient } from '@/utils/rpc-client'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
+import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 
 export default {
   name: 'ProjectManagement',

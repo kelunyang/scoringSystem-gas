@@ -9,12 +9,19 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, watch } from 'vue'
 import { useWebSocketStore } from './stores/websocket'
+import { useSudoStore } from './stores/sudo'
 import { useAuth } from './composables/useAuth'
 import { useBreadcrumb } from './composables/useBreadcrumb'
 import { setCurrentUserId } from './utils/errorHandler'
 import { setGlobalCurrentUserId } from './composables/useNotificationLog'
 import { updateFavicon } from './utils/favicon'
 import PermissionsDrawer from './components/common/PermissionsDrawer.vue'
+
+// 🕵️ 在最早期同步初始化 sudo store（從 sessionStorage 恢復）
+// 必須在 script setup 頂層執行，不能放在 onMounted，
+// 確保在子元件的 composables 執行前就已經初始化
+const sudoStore = useSudoStore()
+sudoStore.initFromStorage()
 
 const websocket = useWebSocketStore()
 // Vue 3 Best Practice: Use unified useAuth() composable

@@ -158,14 +158,15 @@
     </el-card>
 
     <!-- Notification Table with Infinite Scroll -->
-    <div
+    <el-scrollbar
       class="table-container"
-      v-loading="loading"
-      element-loading-text="載入通知資料中..."
-      v-infinite-scroll="loadMore"
-      :infinite-scroll-disabled="scrollDisabled"
-      :infinite-scroll-distance="200"
+      @end-reached="handleEndReached"
+      :distance="200"
     >
+      <div
+        v-loading="loading"
+        element-loading-text="載入通知資料中..."
+      >
       <table class="notification-table" role="table" aria-label="通知列表">
         <thead>
           <tr role="row">
@@ -404,7 +405,8 @@
       <div v-if="(displayedNotifications || []).length > 0" class="count-info" role="status" aria-live="polite">
         顯示 {{ (displayedNotifications || []).length }} / {{ (filteredNotifications || []).length }} 筆通知
       </div>
-    </div>
+      </div>
+    </el-scrollbar>
 
     <!-- Progress Dialog -->
     <el-dialog
@@ -431,6 +433,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, shallowRef, inject, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { ScrollbarDirection } from 'element-plus'
 import { adminApi } from '@/api/admin'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
@@ -583,6 +586,13 @@ const {
   scrollDisabled,
   loadMore
 } = useInfiniteScroll(filteredNotifications, { pageSize: 50 })
+
+// Handler for el-scrollbar end-reached event
+function handleEndReached(direction: ScrollbarDirection) {
+  if (direction !== 'bottom') return
+  if (scrollDisabled.value) return
+  loadMore()
+}
 
 // Progress
 const showProgressDialog = ref(false)
@@ -1309,27 +1319,9 @@ onBeforeUnmount(() => {
   color: #606266;
 }
 
-/* Custom scrollbar */
+/* el-scrollbar height */
 .table-container {
-  max-height: calc(100vh - 400px);
-  overflow-y: auto;
-}
-
-.table-container::-webkit-scrollbar {
-  width: 8px;
-}
-
-.table-container::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-.table-container::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
-}
-
-.table-container::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  height: calc(100vh - 400px);
 }
 
 /* Title cell - normal text, no clickable styling */

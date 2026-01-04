@@ -181,7 +181,8 @@ class ErrorHandler {
       'USERNAME_EXISTS': '用戶名已存在',
       'EMAIL_EXISTS': '電子郵件已被使用',
       'INVITATION_INVALID': '邀請碼無效或已過期',
-      'INVITATION_USED': '邀請碼已達使用上限'
+      'INVITATION_USED': '邀請碼已達使用上限',
+      'SUDO_NO_WRITE': 'SUDO 模式為唯讀，無法進行寫入操作'
     }
 
     // 優先使用錯誤代碼映射
@@ -191,6 +192,7 @@ class ErrorHandler {
 
     // 常見錯誤訊息模式匹配
     const messagePatterns: Array<{ pattern: RegExp; message: string }> = [
+      { pattern: /SUDO_NO_WRITE/i, message: 'SUDO 模式只能看不能代操作喔！' },
       { pattern: /network\s*error/i, message: '網路連線錯誤' },
       { pattern: /timeout/i, message: '請求超時，請重試' },
       { pattern: /not\s*found/i, message: '找不到請求的資源' },

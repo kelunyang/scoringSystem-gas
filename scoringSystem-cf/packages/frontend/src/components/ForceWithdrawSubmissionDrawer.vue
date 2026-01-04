@@ -78,20 +78,12 @@
       <!-- Confirmation Text Input -->
       <div class="form-section">
         <h4><i class="fas fa-exclamation-triangle"></i> 確認撤回 *</h4>
-        <div class="form-group">
-          <label>確認文字 <span class="required">*</span></label>
-          <el-input
-            v-model="confirmText"
-            placeholder="請輸入 FORCEREVERT"
-            maxlength="20"
-            class="confirmation-code-input"
-            @input="confirmText = String($event).toUpperCase()"
-          />
-          <div class="field-hint" style="margin-top: 8px;">
-            <i class="fas fa-shield-alt"></i>
-            請輸入 <code style="background: #fff; padding: 2px 6px; border-radius: 3px; color: #f56c6c; font-weight: bold;">FORCEREVERT</code> 以確認強制撤回操作
-          </div>
-        </div>
+        <ConfirmationInput
+          v-model="confirmText"
+          keyword="FORCEREVERT"
+          hint-action="強制撤回"
+          prefix-icon="fas fa-shield-alt"
+        />
       </div>
 
       <!-- Action Buttons -->
@@ -120,6 +112,7 @@
 import { ref, computed, watch } from 'vue'
 import dayjs from 'dayjs'
 import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
+import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import { rpcClient } from '@/utils/rpc-client'

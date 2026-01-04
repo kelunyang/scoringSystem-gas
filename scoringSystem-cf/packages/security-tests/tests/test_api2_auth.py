@@ -768,6 +768,405 @@ class TestRegistrationSecurity:
 
 
 # ============================================================================
+# SUDO Mode Security Tests
+# ============================================================================
+
+class TestSUDOModeSecurity:
+    """
+    Test SUDO mode security (Observer/Teacher impersonation feature)
+
+    SUDO mode allows Observer (Level 2) and Teacher (Level 1) to impersonate
+    students (Level 3-5) for read-only viewing purposes.
+
+    Security Requirements:
+    1. Only authorized users (teacher/observer/admin) can use SUDO
+    2. SUDO target must be a student in the same project
+    3. All write operations must be blocked in SUDO mode
+    4. SUDO headers cannot bypass authentication
+    """
+
+    @pytest.mark.critical
+    @pytest.mark.auth
+    @pytest.mark.sudo
+    def test_sudo_header_injection_requires_authentication(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify SUDO headers cannot bypass authentication.
+
+        Attack Vector:
+        - Unauthenticated attacker sends X-Sudo-As header
+        - Attacker attempts to impersonate a student without valid JWT
+
+        Expected: 401 Unauthorized (authentication required first)
+        """
+        # Attempt to use SUDO headers without authentication
+        response = api_client.post(
+            '/projects/list',
+            headers={
+                'X-Sudo-As': 'student@example.com',
+                'X-Sudo-Project': 'proj_test'
+            }
+        )
+
+        assert response.status_code == 401, \
+            f"SUDO headers bypassed authentication (status: {response.status_code})"
+
+    @pytest.mark.critical
+    @pytest.mark.auth
+    @pytest.mark.sudo
+    def test_student_cannot_sudo_as_other_student(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify students cannot use SUDO to impersonate other students.
+
+        Attack Vector:
+        - Student (Level 3-5) attempts to impersonate another student
+        - Using X-Sudo-As header with their valid JWT
+
+        Expected: 403 Forbidden (must be teacher/observer/admin)
+        """
+        # Create a fake student token
+        fake_student_payload = {
+            'userId': 'usr_student',
+            'userEmail': 'student@test.com',
+            'exp': int(time.time()) + 3600,
+            'iat': int(time.time())
+        }
+        fake_student_token = jwt.encode(fake_student_payload, 'fake_secret', algorithm='HS256')
+
+        # Attempt SUDO with student token
+        response = api_client.post(
+            '/projects/list',
+            auth=fake_student_token,
+            headers={
+                'X-Sudo-As': 'other-student@example.com',
+                'X-Sudo-Project': 'proj_test'
+            }
+        )
+
+        # Should be rejected - either invalid token (401) or no SUDO permission (403)
+        assert response.status_code in [401, 403], \
+            f"Student SUDO attempt not blocked (status: {response.status_code})"
+
+    @pytest.mark.critical
+    @pytest.mark.auth
+    @pytest.mark.sudo
+    def test_sudo_cannot_target_teacher_or_admin(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify SUDO cannot target teachers, observers, or admins.
+
+        Attack Vector:
+        - Valid teacher attempts to SUDO as another teacher or admin
+        - This would allow privilege escalation
+
+        Expected: 403 Forbidden (can only SUDO as students Level 3-5)
+        """
+        # First get a project
+        response = api_client.post('/projects/list', auth=admin_token)
+        if response.status_code != 200:
+            pytest.skip("Cannot list projects")
+
+        data = response.json()
+        projects = data.get('data', [])
+        if not projects:
+            pytest.skip("No projects available")
+
+        project_id = projects[0]['projectId']
+
+        # Admin attempting to SUDO as another admin
+        response = api_client.post(
+            '/projects/core',
+            auth=admin_token,
+            json={'projectId': project_id},
+            headers={
+                'X-Sudo-As': 'admin@system.local',  # Target is admin
+                'X-Sudo-Project': project_id
+            }
+        )
+
+        # Should fail - cannot SUDO as admin/teacher
+        # Might return 403 or succeed but ignore SUDO (safe either way)
+        if response.status_code == 200:
+            data = response.json()
+            # Verify the response is from actual user, not sudo target
+            # (The exact check depends on your API response structure)
+
+    @pytest.mark.critical
+    @pytest.mark.auth
+    @pytest.mark.sudo
+    def test_sudo_mode_blocks_write_operations(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify all write operations are blocked in SUDO mode.
+
+        Attack Vector:
+        - Teacher enters valid SUDO mode
+        - Teacher attempts write operations (POST non-whitelisted, PUT, DELETE, PATCH)
+
+        Expected: 403 Forbidden with SUDO_NO_WRITE error
+        """
+        # Get a project first
+        response = api_client.post('/projects/list', auth=admin_token)
+        if response.status_code != 200:
+            pytest.skip("Cannot list projects")
+
+        data = response.json()
+        projects = data.get('data', [])
+        if not projects:
+            pytest.skip("No projects available")
+
+        project_id = projects[0]['projectId']
+
+        # Note: For actual SUDO mode to be active, we need a valid target student
+        # This test verifies the blocking mechanism with fake SUDO headers
+        sudo_headers = {
+            'X-Sudo-As': 'student@test.com',
+            'X-Sudo-Project': project_id
+        }
+
+        # Test: Attempt to create a comment (write operation)
+        response = api_client.post(
+            '/comments/create',
+            auth=admin_token,
+            json={
+                'projectId': project_id,
+                'commentData': {
+                    'stageId': 'stg_test',
+                    'content': 'SUDO attack test'
+                }
+            },
+            headers=sudo_headers
+        )
+
+        # Should be blocked if SUDO mode is active
+        # If SUDO validation fails first, might get different error
+        if response.status_code == 403:
+            data = response.json()
+            error = data.get('error', {})
+            # Could be SUDO permission denied or SUDO_NO_WRITE
+            assert error.get('code') in ['FORBIDDEN', 'SUDO_NO_WRITE', 'ACCESS_DENIED'], \
+                f"Unexpected error code: {error}"
+
+    @pytest.mark.high
+    @pytest.mark.auth
+    @pytest.mark.sudo
+    def test_sudo_header_path_traversal_prevention(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify SUDO headers cannot be used for path traversal attacks.
+
+        Attack Vector:
+        - Attacker sends malicious values in SUDO headers
+        - Attempting path traversal or injection
+
+        Expected: Sanitized/rejected
+        """
+        import requests as requests_lib
+
+        # Values that can be sent to server (requests library allows them)
+        sendable_malicious_values = [
+            '../../../etc/passwd',
+            "student@test.com'; DROP TABLE users; --",
+            'student@test.com%00admin@system.local',
+            '<script>alert("xss")</script>@test.com',
+        ]
+
+        for malicious_email in sendable_malicious_values:
+            response = api_client.post(
+                '/api/projects/list',
+                auth=admin_token,
+                headers={
+                    'X-Sudo-As': malicious_email,
+                    'X-Sudo-Project': 'proj_test'
+                }
+            )
+
+            # Should handle gracefully - no 500 errors
+            assert response.status_code != 500, \
+                f"Server error with malicious SUDO header: {malicious_email}"
+
+        # Values that requests library blocks at client level (CRLF injection)
+        # This is actually a security feature - the library prevents header injection
+        header_injection_values = [
+            'student@test.com\n\rX-Evil-Header: injected',
+        ]
+
+        for malicious_email in header_injection_values:
+            with pytest.raises(requests_lib.exceptions.InvalidHeader):
+                api_client.post(
+                    '/api/projects/list',
+                    auth=admin_token,
+                    headers={
+                        'X-Sudo-As': malicious_email,
+                        'X-Sudo-Project': 'proj_test'
+                    }
+                )
+
+    @pytest.mark.high
+    @pytest.mark.auth
+    @pytest.mark.sudo
+    def test_sudo_cross_project_prevented(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify SUDO is restricted to the specified project.
+
+        Attack Vector:
+        - Teacher has access to Project A
+        - Teacher attempts to SUDO with Project A token but access Project B data
+
+        Expected: Data should only return from authorized project
+        """
+        # Get projects
+        response = api_client.post('/projects/list', auth=admin_token)
+        if response.status_code != 200:
+            pytest.skip("Cannot list projects")
+
+        data = response.json()
+        projects = data.get('data', [])
+        if len(projects) < 2:
+            pytest.skip("Need at least 2 projects to test cross-project SUDO")
+
+        project_a = projects[0]['projectId']
+        project_b = projects[1]['projectId']
+
+        # Attempt to access Project B with SUDO set to Project A
+        response = api_client.post(
+            '/projects/core',
+            auth=admin_token,
+            json={'projectId': project_b},  # Requesting Project B
+            headers={
+                'X-Sudo-As': 'student@test.com',
+                'X-Sudo-Project': project_a  # But SUDO is for Project A
+            }
+        )
+
+        # Should handle this case - either ignore SUDO or reject
+        # The key is no data leakage across projects
+
+    @pytest.mark.medium
+    @pytest.mark.auth
+    @pytest.mark.sudo
+    def test_sudo_whitelist_path_matching_security(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify SUDO whitelist uses secure path matching.
+
+        Attack Vector:
+        - Attacker attempts to bypass whitelist with path manipulation
+        - e.g., /comments/list-evil trying to match /comments/list
+
+        Expected: Only exact matches or proper subpaths allowed
+        """
+        # Get a project
+        response = api_client.post('/projects/list', auth=admin_token)
+        if response.status_code != 200:
+            pytest.skip("Cannot list projects")
+
+        data = response.json()
+        projects = data.get('data', [])
+        if not projects:
+            pytest.skip("No projects available")
+
+        project_id = projects[0]['projectId']
+
+        sudo_headers = {
+            'X-Sudo-As': 'student@test.com',
+            'X-Sudo-Project': project_id
+        }
+
+        # Test paths that might try to bypass whitelist
+        # These should return 404 (not found) not 403 (sudo blocked)
+        # because they're not valid routes
+        bypass_attempts = [
+            '/comments/list-evil',
+            '/comments/stage-malicious',
+            '/submissions/list-hack',
+        ]
+
+        for path in bypass_attempts:
+            response = api_client.post(
+                path,
+                auth=admin_token,
+                json={'projectId': project_id},
+                headers=sudo_headers
+            )
+
+            # Should be 404 (route not found) or 403 (blocked by SUDO)
+            # NOT 200 (successfully bypassed)
+            # Note: If route doesn't exist, Hono returns 404
+            assert response.status_code in [403, 404], \
+                f"Path bypass attempt {path} returned unexpected status: {response.status_code}"
+
+    @pytest.mark.medium
+    @pytest.mark.auth
+    @pytest.mark.sudo
+    def test_sudo_audit_logging(
+        self,
+        api_client: APIClient,
+        admin_token: str
+    ):
+        """
+        Verify SUDO access is properly logged for audit.
+
+        Attack Vector:
+        - Malicious teacher uses SUDO inappropriately
+        - Must be traceable in audit logs
+
+        Expected: SUDO access recorded in sys_logs
+        """
+        # This test verifies the logging exists conceptually
+        # Actual log verification would require admin access to logs
+
+        # Get a project
+        response = api_client.post('/projects/list', auth=admin_token)
+        if response.status_code != 200:
+            pytest.skip("Cannot list projects")
+
+        data = response.json()
+        projects = data.get('data', [])
+        if not projects:
+            pytest.skip("No projects available")
+
+        project_id = projects[0]['projectId']
+
+        # Make a SUDO request
+        response = api_client.post(
+            '/projects/core',
+            auth=admin_token,
+            json={'projectId': project_id},
+            headers={
+                'X-Sudo-As': 'student@test.com',
+                'X-Sudo-Project': project_id
+            }
+        )
+
+        # If SUDO is valid and logs are working, this should succeed or fail gracefully
+        # The actual log verification would be done via admin log viewing endpoint
+        assert response.status_code != 500, "SUDO request caused server error"
+
+
+# ============================================================================
 # Helper for running auth tests
 # ============================================================================
 

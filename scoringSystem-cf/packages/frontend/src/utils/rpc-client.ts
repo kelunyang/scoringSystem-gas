@@ -46,6 +46,29 @@ const fetchWithTokenRenewal: typeof fetch = async (input, init) => {
 };
 
 /**
+ * Get sudo headers from session storage
+ * Sudo state is stored in session storage by the sudo store
+ */
+function getSudoHeaders(): Record<string, string> {
+  try {
+    const sudoActive = sessionStorage.getItem('sudo_active')
+    const sudoTarget = sessionStorage.getItem('sudo_target')
+    const sudoProject = sessionStorage.getItem('sudo_project')
+
+    if (sudoActive === 'true' && sudoTarget && sudoProject) {
+      const target = JSON.parse(sudoTarget)
+      return {
+        'X-Sudo-As': target.userEmail,
+        'X-Sudo-Project': sudoProject
+      }
+    }
+  } catch {
+    // Ignore errors
+  }
+  return {}
+}
+
+/**
  * Create RPC client
  *
  * NOTE: Due to Hono RPC type limitations (route types are lost in declaration files),
@@ -55,6 +78,7 @@ const fetchWithTokenRenewal: typeof fetch = async (input, init) => {
  * - Manual type annotations where needed in consuming code
  *
  * ✅ Includes automatic token renewal via X-New-Token header
+ * ✅ Includes automatic sudo headers when in sudo mode
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const rpcClient: any = hc<AppType>(getApiBaseUrl(), {
@@ -68,6 +92,10 @@ export const rpcClient: any = hc<AppType>(getApiBaseUrl(), {
     if (sessionId) {
       headers['Authorization'] = `Bearer ${sessionId}`;
     }
+
+    // Add sudo headers if in sudo mode
+    const sudoHeaders = getSudoHeaders();
+    Object.assign(headers, sudoHeaders);
 
     return headers;
   },

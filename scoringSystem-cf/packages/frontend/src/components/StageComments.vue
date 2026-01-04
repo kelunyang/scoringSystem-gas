@@ -16,16 +16,16 @@
         <!-- Active 階段：顯示資格狀態（三種狀態） -->
         <div v-if="stageStatus === 'active'" class="ranking-badges">
           <div class="eligibility-postit" :class="{
-            'confirmed': commentHasHelpfulReaction(comment),
-            'pending': commentHasMentions(comment),
-            'not-eligible': !commentHasHelpfulReaction(comment) && !commentHasMentions(comment)
+            'confirmed': comment.canBeVoted,
+            'pending': !comment.canBeVoted && commentHasMentions(comment),
+            'not-eligible': !comment.canBeVoted && !commentHasMentions(comment)
           }">
-            <!-- 狀態 1：已獲得 helpful reaction，確認納入排名 (綠色區塊) -->
-            <div v-if="commentHasHelpfulReaction(comment)" class="status-indicator-postit confirmed">
+            <!-- 狀態 1：符合所有條件，確認納入排名 (綠色區塊) -->
+            <div v-if="comment.canBeVoted" class="status-indicator-postit confirmed">
               <i class="fas fa-check-circle"></i>
             </div>
 
-            <!-- 狀態 2：有 mentions 但還沒 helpful，等待認可 (橙色區塊) -->
+            <!-- 狀態 2：有 mentions 但還沒符合所有條件，等待認可 (橙色區塊) -->
             <div v-else-if="commentHasMentions(comment)" class="status-indicator-postit pending">
               <i class="fas fa-clock"></i>
             </div>
@@ -37,7 +37,7 @@
 
             <!-- 文字說明 -->
             <div class="status-text-postit">
-              <span v-if="commentHasHelpfulReaction(comment)">已納入評論排名</span>
+              <span v-if="comment.canBeVoted">已納入評論排名</span>
               <span v-else-if="commentHasMentions(comment)">只要被@的人認可就會納入評論排名</span>
               <span v-else>不具有評論排名資格</span>
             </div>
@@ -45,7 +45,7 @@
         </div>
 
         <!-- Voting 階段：只對有資格的評論顯示排名 -->
-        <div v-if="stageStatus === 'voting' && commentHasHelpfulReaction(comment)" class="ranking-badges">
+        <div v-if="stageStatus === 'voting' && comment.canBeVoted" class="ranking-badges">
           <div class="status-badge settlement">
             結算第
             <i v-if="loadingRankings" class="fas fa-spinner fa-spin"></i>
@@ -77,7 +77,7 @@
         </div>
 
         <!-- Completed 階段：只對有資格的評論顯示最終結果 -->
-        <div v-if="stageStatus === 'completed' && commentHasHelpfulReaction(comment)" class="ranking-badges">
+        <div v-if="stageStatus === 'completed' && comment.canBeVoted" class="ranking-badges">
           <div class="status-badge final-rank">
             最終排名第
             <i v-if="loadingRankings" class="fas fa-spinner fa-spin"></i>
@@ -431,7 +431,9 @@ export default {
           reactions: comment.reactions || [],  // [{type, count, users[]}]
           userReaction: comment.userReaction || null,  // 'helpful' | 'disagreed' | null
           reactionUsers: comment.reactionUsers || [],  // 可以投 reaction 的用戶列表
-          replyUsers: comment.replyUsers || []  // 可以回覆的用戶列表
+          replyUsers: comment.replyUsers || [],  // 可以回覆的用戶列表
+          // 投票資格
+          canBeVoted: comment.canBeVoted || false  // 是否符合評論排名投票資格
         }
       }).sort((a, b) => {
         // 按時間排序，最新的在前
@@ -643,16 +645,6 @@ export default {
       return hasGroups || hasUsers
     },
 
-    // 檢查評論是否有至少 1 個「有幫助」reaction
-    commentHasHelpfulReaction(comment) {
-      if (!comment.reactions || !Array.isArray(comment.reactions)) {
-        return false
-      }
-
-      const helpfulReaction = comment.reactions.find(r => r.type === 'helpful')
-      return helpfulReaction && helpfulReaction.count > 0
-    },
-
     async loadCommentRankings() {
       try {
         console.log('=== StageComments.loadCommentRankings 開始 ===')
@@ -829,6 +821,10 @@ export default {
           // 使用後端返回的真實數據更新
           comment.reactions = response.data.reactions
           comment.userReaction = response.data.userReaction
+          // 更新 canBeVoted 狀態（用於評論排名資格判斷）
+          if (response.data.canBeVoted !== undefined) {
+            comment.canBeVoted = response.data.canBeVoted
+          }
           ElMessage.success(reactionType === 'helpful' ? '已標記為有幫助' : '已標記為不實用')
         } else {
           ElMessage.error(response.error || '操作失敗：後端未返回 reaction 統計數據')
@@ -854,6 +850,10 @@ export default {
           // 使用後端返回的真實數據更新
           comment.reactions = response.data.reactions
           comment.userReaction = response.data.userReaction
+          // 更新 canBeVoted 狀態（用於評論排名資格判斷）
+          if (response.data.canBeVoted !== undefined) {
+            comment.canBeVoted = response.data.canBeVoted
+          }
           ElMessage.success('已取消標記')
         } else {
           ElMessage.error(response.error || '操作失敗：後端未返回 reaction 統計數據')

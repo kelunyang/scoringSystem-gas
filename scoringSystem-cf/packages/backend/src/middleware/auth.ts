@@ -4,9 +4,11 @@
  */
 
 import type { Context, MiddlewareHandler } from 'hono';
-import type { Env, AuthUser, HonoVariables } from '../types';
+import type { Env, AuthUser, HonoVariables, SudoTargetUser } from '../types';
 import { verifyToken } from '../handlers/auth/jwt';
 import { errorResponse, ERROR_CODES, jsonResponse } from '../utils/response';
+import { processSudoHeaders } from './sudo';
+import { createSudoSafeDB } from '../utils/sudo-db-proxy';
 
 /**
  * Extract session ID from request
@@ -138,10 +140,97 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: HonoV
       c.set('newToken', newToken);
     }
 
+    // 9. Process sudo headers if present
+    const sudoResult = await processSudoHeaders(c);
+    if (sudoResult) {
+      return sudoResult;
+    }
+
+    // 10. If in sudo mode, block write operations immediately
+    if (c.get('sudoMode')) {
+      const method = c.req.method.toUpperCase();
+      const path = c.req.path;
+
+      // Whitelist of POST endpoints that are actually read operations
+      // These use POST to send query parameters in body, but don't modify data
+      const safePostPaths = [
+        // Auth
+        '/api/auth/current-user',
+        '/api/auth/validate',
+        // Notifications
+        '/api/notifications/count',
+        '/api/notifications/list',
+        // Rankings (read-only queries)
+        '/api/rankings/proposals',
+        '/api/rankings/stage-rankings',
+        '/api/rankings/teacher-vote-history',
+        '/api/rankings/voting-status',
+        '/api/rankings/teacher-rankings',
+        '/api/rankings/teacher-ranking-versions',
+        '/api/rankings/ai-providers',
+        // Projects
+        '/projects/core',
+        '/projects/content',
+        // Stages
+        '/stages/list',
+        '/stages/get',
+        // Settlement (read-only queries)
+        '/settlement/stage-rankings',
+        '/settlement/comment-rankings',
+        // Scoring (read-only queries)
+        '/scoring/submission-voting-data',
+        '/scoring/comment-voting-data',
+        // Wallets
+        '/wallets/project-ladder',
+        '/wallets/balance',
+        '/wallets/transactions',
+        // Groups
+        '/groups/list',
+        '/groups/members',
+        // Submissions
+        '/submissions/list',
+        '/submissions/detail',
+        '/submissions/participation-status',
+        // Rankings (legacy paths without /api prefix)
+        '/rankings/list',
+        '/rankings/proposals',
+        // Comments
+        '/comments/list',
+        '/comments/stage',
+        '/comments/details',
+        '/comments/voting-eligibility',
+        '/comments/ranking-history',
+        // Event logs
+        '/eventlogs/project',
+        '/eventlogs/user',
+        '/eventlogs/resource',
+      ];
+
+      // Check if this is a write operation (not in safe list)
+      // Use exact match or prefix+slash to prevent "/comments/list-evil" matching "/comments/list"
+      const isSafePost = safePostPaths.some(safePath =>
+        path === safePath || path.startsWith(safePath + '/')
+      );
+
+      // Block write operations in SUDO mode (PUT/DELETE/PATCH always, POST only if not safe)
+      if (['PUT', 'DELETE', 'PATCH'].includes(method) ||
+          (method === 'POST' && !isSafePost)) {
+        return c.json({
+          success: false,
+          error: {
+            code: 'SUDO_NO_WRITE',
+            message: 'SUDO 模式為唯讀，無法進行寫入操作'
+          }
+        }, 403);
+      }
+      // Wrap DB for reads (as a safety net for any writes that slip through)
+      (c.env as any).DB = createSudoSafeDB(c.env.DB);
+    }
+
     // Continue to next handler
     await next();
 
-    // 9. After handler completes, add new token to response header if available
+    // 11. After handler completes, add new token to response header if available
     if (newToken && c.res) {
       c.res.headers.set('X-New-Token', newToken);
     }

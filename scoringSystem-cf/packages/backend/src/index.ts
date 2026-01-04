@@ -6,6 +6,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import { HTTPException } from 'hono/http-exception';
 import type { Env } from './types';
 import type { MessageBatch } from '@cloudflare/workers-types';
 
@@ -52,7 +53,7 @@ const app = new Hono<{ Bindings: Env }>();
 app.use('*', cors({
   origin: ['https://scoring.kelunyang.online', 'http://localhost:5173', 'http://localhost:8787'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization', 'X-Session-Id'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-Session-Id', 'X-Sudo-As', 'X-Sudo-Project'],
   exposeHeaders: ['Content-Length', 'X-Request-Id', 'X-New-Token'],
   maxAge: 86400,
   credentials: true
@@ -260,11 +261,40 @@ app.notFound((c) => {
   }, 404);
 });
 
+// Import SudoWriteBlockedError for special handling
+import { SudoWriteBlockedError } from './utils/sudo-db-proxy';
+
 /**
  * Global error handler
  */
 app.onError((err, c) => {
   console.error('Unhandled error:', err);
+
+  // Special handling for SudoWriteBlockedError - return 403 with clear message
+  // Check both instanceof and error properties for robustness across module boundaries
+  if (err instanceof SudoWriteBlockedError ||
+      err.name === 'SudoWriteBlockedError' ||
+      err.message?.includes('SUDO_NO_WRITE')) {
+    return c.json({
+      success: false,
+      error: {
+        code: 'SUDO_NO_WRITE',
+        message: 'SUDO 模式為唯讀，無法進行寫入操作'
+      }
+    }, 403);
+  }
+
+  // Handle HTTPException - preserve original status code
+  // This is important for validation errors (400), auth errors (401/403), etc.
+  if (err instanceof HTTPException) {
+    return c.json({
+      success: false,
+      error: {
+        code: `HTTP_${err.status}`,
+        message: err.message
+      }
+    }, err.status);
+  }
 
   return c.json({
     success: false,
@@ -279,13 +309,21 @@ app.onError((err, c) => {
   }, 500);
 });
 
+// Note: Sudo DB proxy is now applied in auth middleware AFTER authentication
+// This allows session maintenance (lastActivityTime update) to work
+
 /**
  * Export the Worker handlers
  * - fetch: HTTP request handler (Hono app)
  * - queue: Queue message handler (routes to appropriate consumer)
  */
 export default {
-  fetch: app.fetch,
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    // Create a mutable copy of env so auth middleware can swap DB with sudo-safe proxy
+    // This allows session maintenance to work before sudo mode is activated
+    const mutableEnv = { ...env };
+    return app.fetch(request, mutableEnv, ctx);
+  },
   async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
     const queueName = batch.queue;
 

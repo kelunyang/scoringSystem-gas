@@ -95,31 +95,17 @@
       <div class="form-section confirmation-section">
         <h4><i class="fas fa-shield-alt"></i> 安全確認</h4>
 
-        <div class="confirmation-group">
-          <div class="confirmation-warning">
-            <i class="fas fa-exclamation-triangle"></i>
-            <span>此操作將變更 <strong>{{ changeCount }}</strong> 位成員的角色權限，請謹慎確認</span>
-          </div>
-
-          <div class="form-group">
-            <label class="confirmation-label">
-              請輸入 <code>UPDATE</code> 以確認執行批次更新：
-            </label>
-            <el-input
-              v-model="confirmationText"
-              placeholder="請輸入 UPDATE"
-              size="large"
-              :disabled="loading"
-              class="confirmation-code-input"
-              @input="confirmationText = String($event).toUpperCase()"
-              @keyup.enter="handleConfirm"
-            />
-            <div class="input-hint">
-              <i class="fas fa-keyboard"></i>
-              輸入完成後按 Enter 或點擊下方按鈕執行
-            </div>
-          </div>
-        </div>
+        <ConfirmationInput
+          v-model="confirmationText"
+          keyword="UPDATE"
+          hint-action="更新"
+          :disabled="loading"
+          @confirm="handleConfirm"
+        >
+          <template #hint>
+            輸入 <strong>UPDATE</strong> 更新 ｜ 此操作將變更 {{ changeCount }} 位成員的角色權限
+          </template>
+        </ConfirmationInput>
       </div>
 
       <!-- Action Buttons -->
@@ -149,6 +135,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { getAvatarUrl, generateInitialsAvatar } from '@/utils/avatar'
+import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 
 export interface MemberWithChange {
   userEmail: string

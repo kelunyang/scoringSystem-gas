@@ -51,22 +51,12 @@
       <div class="form-section">
         <h4><i class="fas fa-shield-alt"></i> 安全確認</h4>
 
-        <div class="confirmation-group">
-          <label class="confirmation-label">
-            請輸入 <code class="confirmation-code">REMOVE</code> 以確認移除操作
-            <span class="required">*</span>
-          </label>
-          <el-input
-            v-model="confirmationText"
-            placeholder="請輸入 REMOVE"
-            clearable
-            @keyup.enter="handleConfirm"
-          />
-          <div class="confirmation-hint">
-            <i class="fas fa-info-circle"></i>
-            輸入完全符合後才能執行移除操作
-          </div>
-        </div>
+        <ConfirmationInput
+          v-model="confirmationText"
+          keyword="REMOVE"
+          hint-action="移除"
+          @confirm="handleConfirm"
+        />
       </div>
 
       <!-- Action Buttons -->
@@ -95,6 +85,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 
 export interface Member {
   userEmail: string
@@ -293,57 +284,6 @@ const handleClose = () => {
 
 .member-role {
   margin-top: 4px;
-}
-
-/* ============================================================================
-   CONFIRMATION INPUT
-   ============================================================================ */
-
-.confirmation-group {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.confirmation-label {
-  font-size: 15px;
-  font-weight: 600;
-  color: #333;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.confirmation-code {
-  background: #f5f5f5;
-  padding: 4px 12px;
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
-  font-size: 14px;
-  font-weight: 700;
-  color: #d32f2f;
-  border: 2px solid #d32f2f;
-}
-
-.required {
-  color: #ff4d4f;
-  margin-left: 4px;
-}
-
-.confirmation-hint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: #666;
-  padding: 12px;
-  background: #fff3e0;
-  border-radius: 6px;
-  border-left: 4px solid #ff9800;
-}
-
-.confirmation-hint i {
-  color: #ff9800;
 }
 
 /* ============================================================================

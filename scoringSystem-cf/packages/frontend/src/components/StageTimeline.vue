@@ -86,8 +86,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch, shallowRef, toRef, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, toRef, nextTick } from 'vue'
 import { useActiveScroll } from 'vue-use-active-scroll'
+import { useViewportStageTracking } from '@/composables/useViewportStageTracking'
 import type { Stage } from '@/types'
 
 // ==================== 常量定义 ====================
@@ -303,79 +304,9 @@ function useTimelineMapping(normalizedStages: any) {
   }
 }
 
-// 滚动同步
-function useScrollSync(scrollContainer: any, onScroll: any) {
-  const scrollProgress = ref(0)
-  const rafId = shallowRef<number | null>(null)
-  const isScheduled = shallowRef(false)
-
-  const calculateScrollProgress = () => {
-    let scrollTop = 0
-    let scrollHeight = 0
-    let clientHeight = 0
-
-    if (scrollContainer.value) {
-      scrollTop = scrollContainer.value.scrollTop
-      scrollHeight = scrollContainer.value.scrollHeight
-      clientHeight = scrollContainer.value.clientHeight
-    } else {
-      const containers = [
-        document.querySelector('.content-area'),
-        document.querySelector('.main-content'),
-        document.querySelector('.project-detail'),
-        document.documentElement
-      ]
-
-      for (const container of containers) {
-        const containerScrollHeight = container?.scrollHeight ?? 0
-        const containerClientHeight = container?.clientHeight ?? 0
-        if (containerScrollHeight > containerClientHeight) {
-          scrollTop = container?.scrollTop || 0
-          scrollHeight = containerScrollHeight
-          clientHeight = containerClientHeight
-          scrollContainer.value = container
-          break
-        }
-      }
-
-      if (!scrollHeight) {
-        scrollTop = window.pageYOffset || document.documentElement.scrollTop
-        scrollHeight = document.documentElement.scrollHeight
-        clientHeight = window.innerHeight
-      }
-    }
-
-    if (scrollHeight > clientHeight) {
-      return (scrollTop / (scrollHeight - clientHeight)) * 100
-    }
-    return 0
-  }
-
-  const handleScroll = () => {
-    if (isScheduled.value) return
-
-    isScheduled.value = true
-    rafId.value = requestAnimationFrame(() => {
-      const pageProgress = calculateScrollProgress()
-      const timelineProgress = onScroll(pageProgress)
-      scrollProgress.value = timelineProgress
-      isScheduled.value = false
-    })
-  }
-
-  const cleanup = () => {
-    if (rafId.value) {
-      cancelAnimationFrame(rafId.value)
-    }
-  }
-
-  return { scrollProgress, handleScroll, cleanup }
-}
-
 // ==================== State ====================
 const hoveredStageId = ref(null)
 const activeTooltipStageId = ref(null)
-const scrollContainer = shallowRef(null)
 
 // 計時器和顯示狀態控制
 const hoverTimer = ref<ReturnType<typeof setTimeout> | null>(null)
@@ -397,24 +328,42 @@ const normalizedStages = useNormalizedStages(toRef(props, 'stages'))
 const { projectTimeRange, timelineSegments, getStagePosition, mapPageToTimeline } =
   useTimelineMapping(normalizedStages)
 
-// 滾動進度跟踪（使用基於時長的映射）
-const { scrollProgress, handleScroll, cleanup } = useScrollSync(
-  scrollContainer,
-  (pageProgress: number) => {
-    // 如果專案時長為 0，直接使用頁面百分比
-    if (!projectTimeRange.value.duration) {
-      return pageProgress
-    }
-    // 否則使用基於時長的映射
-    return mapPageToTimeline(pageProgress)
-  }
+// Stage IDs（需要在 useViewportStageTracking 之前定義）
+const stageIds = computed(() => normalizedStages.value.map((s: Stage) => s.id || ''))
+
+// 為 VueUse composable 準備資料
+const stageCumulatives = computed(() =>
+  projectTimeRange.value.stageCumulatives.map(c => ({
+    startCumulative: c.startCumulative,
+    endCumulative: c.endCumulative
+  }))
 )
+const totalDuration = computed(() => projectTimeRange.value.duration)
+
+// 使用 VueUse 響應式追蹤視窗中心所在的 stage
+const {
+  timelinePosition: viewportTimelinePosition,
+  initStageBoundings
+} = useViewportStageTracking({
+  stageIds,
+  stageCumulatives,
+  totalDuration
+})
+
+// 滾動進度：直接使用 VueUse composable 的響應式結果
+const scrollProgress = computed(() => {
+  // 如果專案時長為 0，使用簡單的頁面滾動百分比
+  if (!projectTimeRange.value.duration) {
+    return 0
+  }
+  return viewportTimelinePosition.value
+})
 
 // Active scroll tracking
-const stageIds = computed(() => normalizedStages.value.map((s: Stage) => s.id || ''))
 const { setActive, activeId: activeStageId } = useActiveScroll(stageIds)
 
 // ==================== Methods ====================
+
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
     'pending': '未開始',
@@ -523,70 +472,39 @@ const checkScrollIndicatorCollision = () => {
 }
 
 // ==================== Lifecycle ====================
-let resizeTimer: ReturnType<typeof setTimeout> | null = null
-
-const handleResize = () => {
-  if (resizeTimer) clearTimeout(resizeTimer)
-  resizeTimer = setTimeout(handleScroll, 150)
-}
+// VueUse 的 useElementBounding 會自動監聽 scroll 和 resize，
+// 不需要手動添加事件監聽器
 
 onMounted(async () => {
-  // 监听所有可能的滚动容器
-  const containers = [
-    document.querySelector('.content-area'),
-    document.querySelector('.main-content'),
-    document.querySelector('.project-detail')
-  ]
-
-  // 为所有找到的容器都添加监听器（不是只监听第一个）
-  containers.forEach(container => {
-    if (container) {
-      container.addEventListener('scroll', handleScroll, { passive: true })
-      // if (isDev) console.log('✅ 监听滚动容器:', container.className)
-    }
-  })
-
-  // 同时也监听 window
-  window.addEventListener('scroll', handleScroll, { passive: true })
-  // if (isDev) console.log('✅ 监听 window 滚动')
-
-  // Resize 处理（防抖）
-  window.addEventListener('resize', handleResize, { passive: true })
-
   // 等待 DOM 完全渲染
   await nextTick()
 
-  // 初始化
-  handleScroll()
+  // VueUse composable 會在 stageIds 變化時自動初始化
+  // 這裡手動初始化以確保首次渲染正確
+  initStageBoundings()
+
+  // 設定初始選中的 stage
   if (props.currentStageId) {
     setActive(props.currentStageId)
   }
 })
 
-// 清理函数（独立的生命周期钩子，不嵌套在 onMounted 内）
+// 清理函数（VueUse composables 會自動清理）
 onBeforeUnmount(() => {
-  cleanup()
   clearAllTimers()  // 清除所有計時器，避免內存洩漏
   clearScrollingTimer()  // 清除滾動動畫計時器
-
-  const containers = [
-    document.querySelector('.content-area'),
-    document.querySelector('.main-content'),
-    document.querySelector('.project-detail')
-  ]
-
-  containers.forEach(container => {
-    if (container) {
-      container.removeEventListener('scroll', handleScroll)
-    }
-  })
-
-  window.removeEventListener('scroll', handleScroll)
-  window.removeEventListener('resize', handleResize)
-  if (resizeTimer) clearTimeout(resizeTimer)
 })
 
 // ==================== Watchers ====================
+
+// 監聽 stages 變化，重新初始化 VueUse bounding tracking
+// 注意：useViewportStageTracking 內部也會 watch stageIds，
+// 這裡是為了確保 DOM 更新後重新初始化
+watch(() => props.stages, async () => {
+  await nextTick()
+  initStageBoundings()
+}, { deep: true })
+
 watch(activeStageId, (newStageId) => {
   if (newStageId) emit('stage-changed', newStageId)
 })

@@ -17,6 +17,7 @@ import { ElMessage } from 'element-plus'
 import type { AuthUser } from '@/types/models'
 import { getErrorMessage } from '@/utils/errorHandler'
 import { apiClient } from '@/utils/api'
+import { useSudoStore } from '@/stores/sudo'
 
 /**
  * 登出参数
@@ -144,6 +145,10 @@ export function useLogout(): UseMutationReturnType<ApiResponse, Error, void, unk
       return response
     },
     onSuccess: () => {
+      // Clear SUDO state if active
+      const sudoStore = useSudoStore()
+      sudoStore.exitSudo()
+
       // Clear all session data using apiClient method
       apiClient.clearToken()
 
@@ -157,6 +162,10 @@ export function useLogout(): UseMutationReturnType<ApiResponse, Error, void, unk
       router.push({ name: 'auth-login' })
     },
     onError: (error: Error) => {
+      // Clear SUDO state even on error
+      const sudoStore = useSudoStore()
+      sudoStore.exitSudo()
+
       // Even if API call fails, still clear local state
       apiClient.clearToken()
 
