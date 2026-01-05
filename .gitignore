@@ -121,6 +121,8 @@ temp/
 # Shell scripts (開發用)
 # ===================================
 *.sh
+# 保留 monorepo 內 pnpm 需要的 scripts
+!scoringSystem-cf/scripts/*.sh
 
 # ===================================
 # Auto-generated files

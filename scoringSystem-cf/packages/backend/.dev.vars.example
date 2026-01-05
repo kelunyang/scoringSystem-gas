@@ -22,6 +22,11 @@ SMTP_FROM_EMAIL=your-gmail@gmail.com
 TURNSTILE_SITE_KEY=your-turnstile-site-key
 TURNSTILE_SECRET_KEY=your-turnstile-secret-key
 
+# Cloudflare KV Namespace ID (OPTIONAL - for pnpm dev:sync-remote)
+# Get from: https://dash.cloudflare.com/?to=/:account/workers/kv/namespaces
+# Used by scripts/dev.sh to sync remote KV to local
+KV_NAMESPACE_ID=your-kv-namespace-id
+
 # Notes:
 # - These are for LOCAL DEVELOPMENT ONLY
 # - Use different secrets for production

@@ -72,6 +72,8 @@ temp/
 
 # Shell scripts (project-specific utility scripts)
 *.sh
+# 保留 pnpm 需要的 scripts 目錄
+!scripts/*.sh
 
 # Auto-generated theme files
 packages/frontend/src/styles/_theme-generated.scss
