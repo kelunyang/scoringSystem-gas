@@ -24,15 +24,19 @@
           @click="!props.disabled && !isItemDisabled(item) && moveToSelected(item)"
         >
           <div class="item-content">
-            <div class="content-text">
+            <div class="content-text" v-if="!isExpanded(item)">
               {{ truncateContent(item[displayFields.content]) }}
               <a
-                v-if="needsTruncation(item[displayFields.content])"
-                @click.stop="openContentDialog(item)"
+                v-if="itemNeedsTruncation(item)"
+                @click.stop="toggleExpand(item)"
                 class="show-more-link"
               >
                 點擊看更多
               </a>
+            </div>
+            <div class="content-expanded" v-else>
+              <div class="markdown-content" v-html="renderItemMarkdown(item)"></div>
+              <a @click.stop="toggleExpand(item)" class="collapse-link">摺疊評論</a>
             </div>
             <div class="item-meta">
               {{ getAuthorDisplay(item) }} · {{ formatTime(item[displayFields.timestamp]) }}
@@ -98,15 +102,19 @@
         >
           <div class="rank-badge">{{ index + 1 }}</div>
           <div class="item-content">
-            <div class="content-text">
+            <div class="content-text" v-if="!isExpanded(item)">
               {{ truncateContent(item[displayFields.content]) }}
               <a
-                v-if="needsTruncation(item[displayFields.content])"
-                @click.stop="openContentDialog(item)"
+                v-if="itemNeedsTruncation(item)"
+                @click.stop="toggleExpand(item)"
                 class="show-more-link"
               >
                 點擊看更多
               </a>
+            </div>
+            <div class="content-expanded" v-else>
+              <div class="markdown-content" v-html="renderItemMarkdown(item)"></div>
+              <a @click.stop="toggleExpand(item)" class="collapse-link">摺疊評論</a>
             </div>
             <div class="item-meta">
               {{ getAuthorDisplay(item) }} · {{ formatTime(item[displayFields.timestamp]) }}
@@ -143,23 +151,6 @@
       </transition-group>
     </div>
 
-    <!-- 評論詳情對話框 -->
-    <el-dialog
-      v-model="dialogVisible"
-      title="評論詳情"
-      width="80%"
-      :close-on-click-modal="true"
-    >
-      <div class="dialog-content" v-if="currentDialogItem">
-        <div class="dialog-header">
-          <div class="author-info">
-            <strong>{{ getAuthorDisplay(currentDialogItem) }}</strong>
-            <span class="timestamp">{{ formatTime(currentDialogItem[displayFields.timestamp]) }}</span>
-          </div>
-        </div>
-        <div class="markdown-content" v-html="renderMarkdownContent"></div>
-      </div>
-    </el-dialog>
   </div>
 </template>
 
@@ -218,8 +209,7 @@ const emit = defineEmits<{
 const availableItems = ref<CommentItem[]>([])
 const selectedItems = ref<CommentItem[]>([])
 const draggedIndex = ref<number | null>(null)
-const dialogVisible = ref(false)
-const currentDialogItem = ref<CommentItem | null>(null)
+const expandedItemIds = ref<Set<string>>(new Set())
 
 // Computed
 const hasDisabledItems = computed(() => {
@@ -229,12 +219,6 @@ const hasDisabledItems = computed(() => {
 const canMoveAnyToSelected = computed(() => {
   if (selectedItems.value.length >= props.maxSelections) return false
   return availableItems.value.some(item => !isItemDisabled(item))
-})
-
-const renderMarkdownContent = computed(() => {
-  if (!currentDialogItem.value) return ''
-  const content = currentDialogItem.value[props.displayFields.content]
-  return parseMarkdown(content)
 })
 
 // Methods
@@ -360,9 +344,34 @@ const formatTime = (timestamp: string | number | Date): string => {
   return new Date(timestamp).toLocaleString('zh-TW')
 }
 
-const openContentDialog = (item: CommentItem): void => {
-  currentDialogItem.value = item
-  dialogVisible.value = true
+/**
+ * 檢查項目是否展開
+ */
+const isExpanded = (item: CommentItem): boolean => {
+  return expandedItemIds.value.has(item[props.itemKey])
+}
+
+/**
+ * 切換項目展開/收合狀態
+ */
+const toggleExpand = (item: CommentItem): void => {
+  const itemId = item[props.itemKey]
+  if (expandedItemIds.value.has(itemId)) {
+    expandedItemIds.value.delete(itemId)
+  } else {
+    expandedItemIds.value.add(itemId)
+  }
+  // 觸發響應式更新
+  expandedItemIds.value = new Set(expandedItemIds.value)
+}
+
+/**
+ * 渲染項目的 Markdown 內容
+ * 優先使用 fullContent（完整內容），若無則使用 displayFields.content
+ */
+const renderItemMarkdown = (item: CommentItem): string => {
+  const content = item.fullContent || item[props.displayFields.content]
+  return parseMarkdown(content)
 }
 
 const truncateContent = (content: string, maxLength: number = 10): string => {
@@ -372,6 +381,20 @@ const truncateContent = (content: string, maxLength: number = 10): string => {
 
 const needsTruncation = (content: string, maxLength: number = 10): boolean => {
   return !!(content && content.length > maxLength)
+}
+
+/**
+ * 檢查項目是否需要展開（有完整內容且比截斷內容長）
+ */
+const itemNeedsTruncation = (item: CommentItem): boolean => {
+  const displayContent = item[props.displayFields.content]
+  const fullContent = item.fullContent
+  // 如果有 fullContent 且比 display 內容長，就需要展開
+  if (fullContent && fullContent.length > displayContent.length) {
+    return true
+  }
+  // 否則檢查 display 內容是否超過截斷長度
+  return needsTruncation(displayContent)
 }
 
 // Watchers
@@ -631,31 +654,23 @@ watch(() => props.initialSelected, (newSelected) => {
   text-decoration: underline;
 }
 
-/* 對話框內容樣式 */
-.dialog-content {
+/* 展開內容區域 */
+.content-expanded {
   padding: 10px 0;
 }
 
-.dialog-header {
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #e1e8ed;
-}
-
-.author-info {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-}
-
-.author-info strong {
-  font-size: 16px;
-  color: #2c3e50;
-}
-
-.author-info .timestamp {
+/* 摺疊評論連結 */
+.collapse-link {
+  color: #e74c3c;
   font-size: 12px;
-  color: #7f8c8d;
+  margin-left: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.collapse-link:hover {
+  text-decoration: underline;
 }
 
 /* Markdown 內容樣式 */

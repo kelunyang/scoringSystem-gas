@@ -987,6 +987,7 @@ import { useRouteDrawer } from '@/composables/useRouteDrawer'
 import { useAuth } from '@/composables/useAuth'
 import { useQueryClient } from '@tanstack/vue-query'
 import { getUserPreferences } from '@/utils/userPreferences'
+import { useSudoStore } from '@/stores/sudo'
 
 // ===== Constants =====
 
@@ -1044,6 +1045,9 @@ const refreshButtonRef = ref<InstanceType<typeof CountdownButton> | null>(null)
 
 // ===== Auto-Refresh Duration (from localStorage) =====
 const { userId } = useAuth()
+
+// ===== SUDO Mode Store =====
+const sudoStore = useSudoStore()
 
 // ===== TanStack Query Client =====
 // Initialize queryClient in setup stage for use in event handlers
@@ -1618,7 +1622,14 @@ const ganttChartStages = computed(() => {
  * 4. 至少有 1 個 helpful reaction
  */
 function userHasValidCommentInStage(stage: ExtendedStage) {
-  const currentUserEmail = props.user?.userEmail
+  // 檢查 SUDO 模式：使用目標用戶的 email
+  const isSudoActive = sudoStore.isActive &&
+                       sudoStore.projectId === projectId.value &&
+                       sudoStore.targetUser
+  const currentUserEmail = isSudoActive
+    ? sudoStore.targetUser!.userEmail
+    : props.user?.userEmail
+
   if (!currentUserEmail || !stage.comments || stage.comments.length === 0) {
     return false
   }

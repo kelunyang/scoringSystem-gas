@@ -133,13 +133,13 @@ export default defineConfig(function (_a) {
                             if (packageName === 'katex') {
                                 return 'katex';
                             }
-                            // Markdown Editor (md-editor-v3)
-                            if (packageName === 'md-editor-v3') {
-                                return 'md-editor';
-                            }
-                            // 物理引擎與動畫
+                            // 物理引擎
                             if (packageName === 'matter-js') {
                                 return 'physics';
+                            }
+                            // 動畫庫（@vueuse/motion, @vueuse/gesture）
+                            if (packageName.startsWith('@vueuse/motion') || packageName.startsWith('@vueuse/gesture')) {
+                                return 'animation';
                             }
                             // 其他 node_modules 分到 vendor chunk
                             return 'vendor';
