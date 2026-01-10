@@ -620,10 +620,31 @@ export async function settleStage(
       }));
 
       // Get unique comment authors for percentile calculation
-      const uniqueAuthorsSet = new Set<string>();
-      teacherCommentVotes.forEach(v => Object.keys(v.rankings).forEach(commentId => uniqueAuthorsSet.add(commentId)));
-      studentCommentVotes.forEach(v => Object.keys(v.rankings).forEach(commentId => uniqueAuthorsSet.add(commentId)));
-      const uniqueAuthors = uniqueAuthorsSet.size;
+      // 修正：應該統計有效評論的作者數（authorEmail 去重），而非 commentId
+      // 這與前端 TeacherVoteModal/CommentVoteModal 的 getUniqueCommentAuthorCount() 保持一致
+      // canBeVoted 是動態計算的，需要在 SQL 中重現計算邏輯
+      const uniqueAuthorsResult = await env.DB.prepare(`
+        SELECT COUNT(DISTINCT c.authorEmail) as count
+        FROM comments c
+        WHERE c.stageId = ? AND c.isReply = 0
+        AND (c.mentionedGroups IS NOT NULL OR c.mentionedUsers IS NOT NULL)
+        AND EXISTS (
+          SELECT 1 FROM usergroups ug
+          WHERE ug.userEmail = c.authorEmail
+          AND ug.projectId = c.projectId
+          AND ug.isActive = 1
+        )
+        AND EXISTS (
+          SELECT 1 FROM (
+            SELECT targetId, reactionType,
+                   ROW_NUMBER() OVER (PARTITION BY targetId, userEmail ORDER BY createdAt DESC) as rn
+            FROM reactions
+            WHERE targetType = 'comment'
+          ) r
+          WHERE r.targetId = c.commentId AND r.reactionType = 'helpful' AND r.rn = 1
+        )
+      `).bind(stageId).first<{ count: number }>();
+      const uniqueAuthors = uniqueAuthorsResult?.count || 0;
 
       // Calculate dynamic topN using percentile (or fixed 3 if percentile = 0)
       const commentTopN = calculateCommentRewardLimit(

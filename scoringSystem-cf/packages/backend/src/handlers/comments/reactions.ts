@@ -227,7 +227,7 @@ async function getReactionStatsForComment(
 
     // Check helpful reaction from stats we already have
     const helpfulReaction = reactionStats.find(r => r.type === 'helpful');
-    const hasHelpfulReaction = helpfulReaction && helpfulReaction.count > 0;
+    const hasHelpfulReaction = !!(helpfulReaction && helpfulReaction.count > 0);
 
     canBeVoted = !isReply && hasMentions && isGroupMember && hasHelpfulReaction;
   }

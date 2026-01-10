@@ -507,27 +507,30 @@ export async function getRankableComments(
 
 /**
  * 驗證評論排名數據的完整性
+ * @param rankingData - 排名數據陣列
+ * @param maxRankings - 最大可排名數量（支援百分比模式動態計算），默認 3
  */
 export function validateRankingData(
-  rankingData: Array<{ commentId: string; rank: number }>
+  rankingData: Array<{ commentId: string; rank: number }>,
+  maxRankings: number = 3
 ): { valid: boolean; error?: string } {
   // 1. 檢查是否為空
   if (!rankingData || rankingData.length === 0) {
     return { valid: false, error: '排名數據不能為空' };
   }
 
-  // 2. 檢查數量限制（最多只能提交前3名）
-  if (rankingData.length > 3) {
-    return { valid: false, error: '評論排名最多只能提交前3名' };
+  // 2. 檢查數量限制（根據 maxRankings 動態限制）
+  if (rankingData.length > maxRankings) {
+    return { valid: false, error: `評論排名最多只能提交前${maxRankings}名` };
   }
 
-  // 3. 檢查 rank 範圍（只允許 1-3）
+  // 3. 檢查 rank 範圍（根據 maxRankings 動態限制）
   for (const item of rankingData) {
     if (!item.commentId || !item.rank) {
       return { valid: false, error: '排名數據格式錯誤' };
     }
-    if (item.rank < 1 || item.rank > 3) {
-      return { valid: false, error: 'rank 必須在 1-3 之間（僅前三名獲得獎金）' };
+    if (item.rank < 1 || item.rank > maxRankings) {
+      return { valid: false, error: `rank 必須在 1-${maxRankings} 之間` };
     }
   }
 

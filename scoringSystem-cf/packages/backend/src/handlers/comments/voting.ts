@@ -6,6 +6,7 @@
 import type { Env } from '../../types';
 import { successResponse, errorResponse } from '../../utils/response';
 import { generateId } from '../../utils/id-generator';
+import { getEffectiveScoringConfig } from '../../utils/scoring-config';
 
 /**
  * Check if user is eligible to vote on comments
@@ -146,8 +147,39 @@ export async function submitCommentRanking(
       return errorResponse('NOT_ELIGIBLE', eligibilityData.data.message || '您不符合投票資格');
     }
 
-    // 2. Validate ranking data format using shared util
-    const validation = validateRankingData(rankingData);
+    // 1.5 Calculate effective max selections (支援百分比模式)
+    // 與前端 CommentVoteModal.dynamicMaxSelections 保持一致
+    // canBeVoted 是動態計算的，需要在 SQL 中重現計算邏輯
+    const scoringConfig = await getEffectiveScoringConfig(env.DB, env.KV, env, projectId);
+    const uniqueAuthorsResult = await env.DB.prepare(`
+      SELECT COUNT(DISTINCT c.authorEmail) as count
+      FROM comments c
+      WHERE c.stageId = ? AND c.isReply = 0
+      AND (c.mentionedGroups IS NOT NULL OR c.mentionedUsers IS NOT NULL)
+      AND EXISTS (
+        SELECT 1 FROM usergroups ug
+        WHERE ug.userEmail = c.authorEmail
+        AND ug.projectId = c.projectId
+        AND ug.isActive = 1
+      )
+      AND EXISTS (
+        SELECT 1 FROM (
+          SELECT targetId, reactionType,
+                 ROW_NUMBER() OVER (PARTITION BY targetId, userEmail ORDER BY createdAt DESC) as rn
+          FROM reactions
+          WHERE targetType = 'comment'
+        ) r
+        WHERE r.targetId = c.commentId AND r.reactionType = 'helpful' AND r.rn = 1
+      )
+    `).bind(stageId).first<{ count: number }>();
+    const uniqueAuthors = uniqueAuthorsResult?.count || 0;
+
+    const effectiveMaxSelections = scoringConfig.commentRewardPercentile > 0
+      ? Math.max(1, Math.ceil(uniqueAuthors * scoringConfig.commentRewardPercentile / 100))
+      : scoringConfig.maxCommentSelections;
+
+    // 2. Validate ranking data format using shared util (傳入動態計算的 maxRankings)
+    const validation = validateRankingData(rankingData, effectiveMaxSelections);
     if (!validation.valid) {
       return errorResponse('INVALID_RANKING', validation.error || '排名資料格式錯誤');
     }

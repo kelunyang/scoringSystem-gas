@@ -44,7 +44,36 @@ export async function submitTeacherComprehensiveVote(
 
     // Load scoring configuration (for dynamic maxCommentSelections)
     const scoringConfig = await getEffectiveScoringConfig(env.DB, env.KV, env, projectId);
-    const maxCommentSelections = scoringConfig.maxCommentSelections;
+
+    // Calculate effective max comment selections (支援百分比模式)
+    // 與前端 TeacherVoteModal.dynamicMaxCommentSelections 保持一致
+    // canBeVoted 是動態計算的，需要在 SQL 中重現計算邏輯
+    const uniqueAuthorsResult = await env.DB.prepare(`
+      SELECT COUNT(DISTINCT c.authorEmail) as count
+      FROM comments c
+      WHERE c.stageId = ? AND c.isReply = 0
+      AND (c.mentionedGroups IS NOT NULL OR c.mentionedUsers IS NOT NULL)
+      AND EXISTS (
+        SELECT 1 FROM usergroups ug
+        WHERE ug.userEmail = c.authorEmail
+        AND ug.projectId = c.projectId
+        AND ug.isActive = 1
+      )
+      AND EXISTS (
+        SELECT 1 FROM (
+          SELECT targetId, reactionType,
+                 ROW_NUMBER() OVER (PARTITION BY targetId, userEmail ORDER BY createdAt DESC) as rn
+          FROM reactions
+          WHERE targetType = 'comment'
+        ) r
+        WHERE r.targetId = c.commentId AND r.reactionType = 'helpful' AND r.rn = 1
+      )
+    `).bind(stageId).first<{ count: number }>();
+    const uniqueAuthors = uniqueAuthorsResult?.count || 0;
+
+    const effectiveMaxComments = scoringConfig.commentRewardPercentile > 0
+      ? Math.max(1, Math.ceil(uniqueAuthors * scoringConfig.commentRewardPercentile / 100))
+      : scoringConfig.maxCommentSelections;
 
     // Verify user is a teacher
     const teacherCheck = await env.DB.prepare(`
@@ -187,23 +216,24 @@ export async function submitTeacherComprehensiveVote(
 
     // === Process Comment Rankings ===
     if (commentRankings.length > 0) {
-      // Business rule: Teachers can rank maximum N comments (configurable via maxCommentSelections)
-      if (commentRankings.length > maxCommentSelections) {
-        return errorResponse('TOO_MANY_COMMENTS', `教師最多只能排名${maxCommentSelections}個評論`);
+      // Business rule: Teachers can rank maximum N comments (支援百分比模式動態計算)
+      if (commentRankings.length > effectiveMaxComments) {
+        return errorResponse('TOO_MANY_COMMENTS', `教師最多只能排名${effectiveMaxComments}個評論`);
       }
 
-      // Validate comment ranking data format
+      // Validate comment ranking data format (傳入動態計算的 maxRankings)
       const commentValidation = validateRankingData(
-        commentRankings.map(r => ({ commentId: r.targetId, rank: r.rank }))
+        commentRankings.map(r => ({ commentId: r.targetId, rank: r.rank })),
+        effectiveMaxComments
       );
       if (!commentValidation.valid) {
         return errorResponse('INVALID_COMMENT_RANKING', commentValidation.error || '評論排名資料格式錯誤');
       }
 
-      // Business rule: All comment ranks must be within top N (configurable)
+      // Business rule: All comment ranks must be within top N (支援百分比模式)
       for (const item of commentRankings) {
-        if (item.rank > maxCommentSelections) {
-          return errorResponse('INVALID_RANK', `所有評論排名必須在前${maxCommentSelections}名內（1-${maxCommentSelections}）`);
+        if (item.rank > effectiveMaxComments) {
+          return errorResponse('INVALID_RANK', `所有評論排名必須在前${effectiveMaxComments}名內（1-${effectiveMaxComments}）`);
         }
       }
 
