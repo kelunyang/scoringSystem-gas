@@ -16,6 +16,17 @@ export const GetStageRankingsRequestSchema = z.object({
 export type GetStageRankingsRequest = z.infer<typeof GetStageRankingsRequestSchema>;
 
 /**
+ * Get all stages rankings request schema (Batch API)
+ * Fetches rankings for multiple stages in a single request
+ */
+export const GetAllStagesRankingsRequestSchema = z.object({
+  projectId: z.string().min(1, 'Project ID is required'),
+  stageIds: z.array(z.string().min(1)).min(1, 'At least one stage ID is required')
+});
+
+export type GetAllStagesRankingsRequest = z.infer<typeof GetAllStagesRankingsRequestSchema>;
+
+/**
  * Get teacher vote history request schema
  */
 export const GetTeacherVoteHistoryRequestSchema = z.object({

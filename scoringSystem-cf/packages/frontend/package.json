@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
+    "@number-flow/vue": "^0.4.8",
     "@repo/backend": "workspace:*",
     "@repo/shared": "workspace:*",
     "@tanstack/vue-query": "^5.90.5",

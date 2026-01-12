@@ -1407,6 +1407,11 @@ export default {
 
 /* Portrait mode: Hide TopBarUserControls in top-bar (moved to sidebar) */
 @media screen and (orientation: portrait) and (max-width: 768px) {
+  /* 為漢堡按鈕留出左側空間 */
+  .top-bar {
+    padding-left: 60px;
+  }
+
   .top-bar :deep(.user-controls) {
     display: none !important;
   }

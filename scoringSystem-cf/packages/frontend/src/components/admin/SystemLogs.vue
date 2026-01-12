@@ -199,30 +199,18 @@
         <!-- Stats Slot: 搜尋結果統計 -->
         <template #stats>
           <!-- 🆕 后端模式：显示 API 返回的总数 -->
-          <el-statistic
+          <AnimatedStatistic
             v-if="standardLogsSearchMode === 'backend' && (totalCount ?? 0) > 0"
-            title="搜尋結果"
+            title="搜尋結果(筆)"
             :value="totalCount ?? 0"
-            suffix="筆記錄"
-          >
-            <template #prefix>
-              <i class="fas fa-database"></i>
-            </template>
-          </el-statistic>
+          />
 
           <!-- 🆕 前端模式：显示过滤后的数量 -->
-          <el-statistic
+          <AnimatedStatistic
             v-else-if="standardLogsSearchMode === 'frontend'"
-            title="顯示範圍"
+            :title="`顯示範圍(/${MAX_LOG_FETCH_LIMIT}筆)`"
             :value="displayedLogs.length"
-          >
-            <template #prefix>
-              <i class="fas fa-filter"></i>
-            </template>
-            <template #suffix>
-              <span>/ {{ MAX_LOG_FETCH_LIMIT }} 筆</span>
-            </template>
-          </el-statistic>
+          />
         </template>
       </AdminFilterToolbar>
 
@@ -247,25 +235,25 @@
 
       <!-- 统计卡片 -->
       <el-card v-if="logStats" class="stats-card">
-      <h4><i class="fas fa-chart-bar"></i> 日志统计</h4>
-      <el-row :gutter="20">
-        <el-col :span="6">
-          <el-statistic title="总日志数" :value="logStats.totalLogs || 0" />
-        </el-col>
-        <el-col :span="4">
-          <el-statistic title="Info" :value="logStats.levelCounts?.info || 0" />
-        </el-col>
-        <el-col :span="4">
-          <el-statistic title="Warning" :value="logStats.levelCounts?.warning || 0" />
-        </el-col>
-        <el-col :span="4">
-          <el-statistic title="Error" :value="logStats.levelCounts?.error || 0" />
-        </el-col>
-        <el-col :span="4">
-          <el-statistic title="Critical" :value="logStats.levelCounts?.critical || 0" />
-        </el-col>
-      </el-row>
-    </el-card>
+        <h4><i class="fas fa-chart-bar"></i> 日志统计</h4>
+        <el-row :gutter="20">
+          <el-col :span="6">
+            <AnimatedStatistic title="总日志数" :value="logStats.totalLogs || 0" />
+          </el-col>
+          <el-col :span="4">
+            <AnimatedStatistic title="Info" :value="logStats.levelCounts?.info || 0" />
+          </el-col>
+          <el-col :span="4">
+            <AnimatedStatistic title="Warning" :value="logStats.levelCounts?.warning || 0" />
+          </el-col>
+          <el-col :span="4">
+            <AnimatedStatistic title="Error" :value="logStats.levelCounts?.error || 0" />
+          </el-col>
+          <el-col :span="4">
+            <AnimatedStatistic title="Critical" :value="logStats.levelCounts?.critical || 0" />
+          </el-col>
+        </el-row>
+      </el-card>
 
     <!-- 日志列表 -->
     <div class="log-list">
@@ -905,6 +893,7 @@ import type { LogEntry, LogFilterOptions, SystemLogsRequest, EmailLog, LogStatis
 import { EmailStatus } from '@repo/shared/types/admin'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
+import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 import hljs from 'highlight.js/lib/core'
 import json from 'highlight.js/lib/languages/json'
 import 'highlight.js/styles/github.css'

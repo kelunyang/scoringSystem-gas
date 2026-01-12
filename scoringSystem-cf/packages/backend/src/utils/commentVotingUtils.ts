@@ -330,6 +330,58 @@ export async function checkCommentHasHelpfulReaction(
 }
 
 /**
+ * 批次檢查多個評論是否有「有幫助」反應
+ * 優化版：一次查詢返回所有結果，避免 N+1 問題
+ * 使用分批處理避免 SQLite 變數數量限制
+ * @returns Set of commentIds that have at least 1 helpful reaction
+ */
+export async function batchCheckCommentsHaveHelpfulReaction(
+  db: D1Database,
+  commentIds: string[]
+): Promise<Set<string>> {
+  if (commentIds.length === 0) {
+    return new Set();
+  }
+
+  const MAX_IN_PARAMS = 100; // 保守設定，確保不超過 SQLite 999 限制
+  const result = new Set<string>();
+
+  // 分批處理 commentIds
+  for (let i = 0; i < commentIds.length; i += MAX_IN_PARAMS) {
+    const batch = commentIds.slice(i, i + MAX_IN_PARAMS);
+    const placeholders = batch.map(() => '?').join(',');
+
+    // Append-only architecture: Only count latest reactions per user per comment
+    const batchResult = await db.prepare(`
+      WITH latest_reactions AS (
+        SELECT
+          targetId as commentId,
+          userEmail,
+          reactionType,
+          ROW_NUMBER() OVER (
+            PARTITION BY targetId, userEmail
+            ORDER BY createdAt DESC
+          ) as rn
+        FROM reactions
+        WHERE targetType = 'comment' AND targetId IN (${placeholders})
+      )
+      SELECT commentId
+      FROM latest_reactions
+      WHERE rn = 1 AND reactionType = 'helpful'
+      GROUP BY commentId
+      HAVING COUNT(*) > 0
+    `).bind(...batch).all();
+
+    // 合併結果
+    for (const r of batchResult.results || []) {
+      result.add(r.commentId as string);
+    }
+  }
+
+  return result;
+}
+
+/**
  * 驗證評論是否符合投票資格
  */
 export async function validateCommentEligibility(
@@ -557,4 +609,336 @@ export function validateRankingData(
   }
 
   return { valid: true };
+}
+
+/**
+ * 評論資訊結構（用於批量計算）
+ */
+export interface CommentForBatch {
+  commentId: string;
+  authorEmail: string;
+  mentionedGroups: string | null;
+  mentionedUsers: string | null;
+}
+
+/**
+ * 批量計算多個評論的 reactionUsers
+ * 優化版：一次查詢返回所有結果，避免 N+1 問題
+ *
+ * @param db - D1 Database instance
+ * @param projectId - Project ID
+ * @param comments - 評論列表
+ * @returns Map<commentId, string[]> 每個評論的 reactionUsers
+ */
+export async function batchCalculateReactionUsers(
+  db: D1Database,
+  projectId: string,
+  comments: CommentForBatch[]
+): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>();
+
+  if (comments.length === 0) {
+    return result;
+  }
+
+  // 收集所有唯一的 mentionedUsers 和 mentionedGroups
+  const allMentionedUsers = new Set<string>();
+  const allMentionedGroups = new Set<string>();
+  const authorEmails = new Set<string>();
+
+  for (const comment of comments) {
+    authorEmails.add(comment.authorEmail);
+
+    if (comment.mentionedUsers) {
+      try {
+        const users = JSON.parse(comment.mentionedUsers);
+        if (Array.isArray(users)) {
+          users.forEach(u => allMentionedUsers.add(u));
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    if (comment.mentionedGroups) {
+      try {
+        const groups = JSON.parse(comment.mentionedGroups);
+        if (Array.isArray(groups)) {
+          groups.forEach(g => allMentionedGroups.add(g));
+        }
+      } catch (e) { /* ignore */ }
+    }
+  }
+
+  // SQLite 變數限制：最多 999 個，保守設為 100 避免超限
+  const MAX_IN_PARAMS = 100;
+
+  // 批量查詢：哪些 mentionedUsers 是學生（分批處理避免 SQLite 變數限制）
+  const studentUserEmails = new Set<string>();
+  if (allMentionedUsers.size > 0) {
+    const usersArray = Array.from(allMentionedUsers);
+
+    // 分批處理
+    for (let i = 0; i < usersArray.length; i += MAX_IN_PARAMS) {
+      const batch = usersArray.slice(i, i + MAX_IN_PARAMS);
+      const userPlaceholders = batch.map(() => '?').join(',');
+
+      const studentsResult = await db.prepare(`
+        SELECT DISTINCT ug.userEmail
+        FROM usergroups ug
+        WHERE ug.projectId = ?
+          AND ug.userEmail IN (${userPlaceholders})
+          AND ug.isActive = 1
+          AND NOT EXISTS (
+            SELECT 1 FROM projectviewers pv
+            WHERE pv.projectId = ug.projectId
+              AND pv.userEmail = ug.userEmail
+              AND pv.role IN ('teacher', 'observer')
+              AND pv.isActive = 1
+          )
+      `).bind(projectId, ...batch).all<{ userEmail: string }>();
+
+      for (const row of studentsResult.results || []) {
+        studentUserEmails.add(row.userEmail);
+      }
+    }
+  }
+
+  // 批量查詢：哪些群組的成員是學生（分批處理避免 SQLite 變數限制）
+  const groupMembersMap = new Map<string, string[]>();
+  if (allMentionedGroups.size > 0) {
+    const groupsArray = Array.from(allMentionedGroups);
+
+    // 分批處理
+    for (let i = 0; i < groupsArray.length; i += MAX_IN_PARAMS) {
+      const batch = groupsArray.slice(i, i + MAX_IN_PARAMS);
+      const groupPlaceholders = batch.map(() => '?').join(',');
+
+      const membersResult = await db.prepare(`
+        SELECT ug.groupId, ug.userEmail
+        FROM usergroups ug
+        WHERE ug.projectId = ?
+          AND ug.groupId IN (${groupPlaceholders})
+          AND ug.isActive = 1
+          AND NOT EXISTS (
+            SELECT 1 FROM projectviewers pv
+            WHERE pv.projectId = ug.projectId
+              AND pv.userEmail = ug.userEmail
+              AND pv.role IN ('teacher', 'observer')
+              AND pv.isActive = 1
+          )
+      `).bind(projectId, ...batch).all<{ groupId: string; userEmail: string }>();
+
+      for (const row of membersResult.results || []) {
+        if (!groupMembersMap.has(row.groupId)) {
+          groupMembersMap.set(row.groupId, []);
+        }
+        groupMembersMap.get(row.groupId)!.push(row.userEmail);
+      }
+    }
+  }
+
+  // 為每個評論組裝結果
+  for (const comment of comments) {
+    const reactionUsers = new Set<string>();
+
+    // 處理 mentionedUsers
+    if (comment.mentionedUsers) {
+      try {
+        const users = JSON.parse(comment.mentionedUsers);
+        if (Array.isArray(users)) {
+          for (const email of users) {
+            if (email !== comment.authorEmail && studentUserEmails.has(email)) {
+              reactionUsers.add(email);
+            }
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    // 處理 mentionedGroups
+    if (comment.mentionedGroups) {
+      try {
+        const groups = JSON.parse(comment.mentionedGroups);
+        if (Array.isArray(groups)) {
+          for (const groupId of groups) {
+            const members = groupMembersMap.get(groupId) || [];
+            for (const email of members) {
+              if (email !== comment.authorEmail) {
+                reactionUsers.add(email);
+              }
+            }
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    result.set(comment.commentId, Array.from(reactionUsers));
+  }
+
+  return result;
+}
+
+/**
+ * 批量計算多個評論的 replyUsers
+ * 優化版：一次查詢返回所有結果，避免 N+1 問題
+ *
+ * @param db - D1 Database instance
+ * @param projectId - Project ID
+ * @param comments - 評論列表
+ * @returns Map<commentId, ReplyUserInfo[]> 每個評論的 replyUsers
+ */
+export async function batchCalculateReplyUsers(
+  db: D1Database,
+  projectId: string,
+  comments: CommentForBatch[]
+): Promise<Map<string, ReplyUserInfo[]>> {
+  const result = new Map<string, ReplyUserInfo[]>();
+
+  if (comments.length === 0) {
+    return result;
+  }
+
+  // 收集所有唯一的 mentionedUsers 和 mentionedGroups
+  const allMentionedUsers = new Set<string>();
+  const allMentionedGroups = new Set<string>();
+
+  for (const comment of comments) {
+    if (comment.mentionedUsers) {
+      try {
+        const users = JSON.parse(comment.mentionedUsers);
+        if (Array.isArray(users)) {
+          users.forEach(u => allMentionedUsers.add(u));
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    if (comment.mentionedGroups) {
+      try {
+        const groups = JSON.parse(comment.mentionedGroups);
+        if (Array.isArray(groups)) {
+          groups.forEach(g => allMentionedGroups.add(g));
+        }
+      } catch (e) { /* ignore */ }
+    }
+  }
+
+  // SQLite 變數限制：最多 999 個，保守設為 100 避免超限
+  const MAX_IN_PARAMS = 100;
+
+  // 批量查詢：mentionedUsers 的完整用戶資訊（分批處理避免 SQLite 變數限制）
+  const userInfoMap = new Map<string, ReplyUserInfo>();
+  if (allMentionedUsers.size > 0) {
+    const usersArray = Array.from(allMentionedUsers);
+
+    // 分批處理
+    for (let i = 0; i < usersArray.length; i += MAX_IN_PARAMS) {
+      const batch = usersArray.slice(i, i + MAX_IN_PARAMS);
+      const userPlaceholders = batch.map(() => '?').join(',');
+
+      const usersResult = await db.prepare(`
+        SELECT userEmail, displayName, avatarSeed, avatarStyle, avatarOptions
+        FROM users
+        WHERE userEmail IN (${userPlaceholders})
+      `).bind(...batch).all<{
+        userEmail: string;
+        displayName: string | null;
+        avatarSeed: string | null;
+        avatarStyle: string | null;
+        avatarOptions: string | null;
+      }>();
+
+      for (const u of usersResult.results || []) {
+        userInfoMap.set(u.userEmail, {
+          userEmail: u.userEmail,
+          displayName: u.displayName || u.userEmail.split('@')[0],
+          avatarSeed: u.avatarSeed,
+          avatarStyle: u.avatarStyle,
+          avatarOptions: u.avatarOptions,
+          role: 'member'
+        });
+      }
+    }
+  }
+
+  // 批量查詢：群組成員的完整用戶資訊（分批處理避免 SQLite 變數限制）
+  const groupMembersInfoMap = new Map<string, ReplyUserInfo[]>();
+  if (allMentionedGroups.size > 0) {
+    const groupsArray = Array.from(allMentionedGroups);
+
+    // 分批處理
+    for (let i = 0; i < groupsArray.length; i += MAX_IN_PARAMS) {
+      const batch = groupsArray.slice(i, i + MAX_IN_PARAMS);
+      const groupPlaceholders = batch.map(() => '?').join(',');
+
+      const membersResult = await db.prepare(`
+        SELECT ug.groupId, u.userEmail, u.displayName, u.avatarSeed, u.avatarStyle, u.avatarOptions
+        FROM usergroups ug
+        JOIN users u ON u.userEmail = ug.userEmail
+        WHERE ug.projectId = ?
+          AND ug.groupId IN (${groupPlaceholders})
+          AND ug.isActive = 1
+      `).bind(projectId, ...batch).all<{
+        groupId: string;
+        userEmail: string;
+        displayName: string | null;
+        avatarSeed: string | null;
+        avatarStyle: string | null;
+        avatarOptions: string | null;
+      }>();
+
+      for (const m of membersResult.results || []) {
+        if (!groupMembersInfoMap.has(m.groupId)) {
+          groupMembersInfoMap.set(m.groupId, []);
+        }
+        groupMembersInfoMap.get(m.groupId)!.push({
+          userEmail: m.userEmail,
+          displayName: m.displayName || m.userEmail.split('@')[0],
+          avatarSeed: m.avatarSeed,
+          avatarStyle: m.avatarStyle,
+          avatarOptions: m.avatarOptions,
+          role: 'member'
+        });
+      }
+    }
+  }
+
+  // 為每個評論組裝結果
+  for (const comment of comments) {
+    const replyUsersMap = new Map<string, ReplyUserInfo>();
+
+    // 處理 mentionedUsers
+    if (comment.mentionedUsers) {
+      try {
+        const users = JSON.parse(comment.mentionedUsers);
+        if (Array.isArray(users)) {
+          for (const email of users) {
+            const info = userInfoMap.get(email);
+            if (info && !replyUsersMap.has(email)) {
+              replyUsersMap.set(email, info);
+            }
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    // 處理 mentionedGroups
+    if (comment.mentionedGroups) {
+      try {
+        const groups = JSON.parse(comment.mentionedGroups);
+        if (Array.isArray(groups)) {
+          for (const groupId of groups) {
+            const members = groupMembersInfoMap.get(groupId) || [];
+            for (const member of members) {
+              if (!replyUsersMap.has(member.userEmail)) {
+                replyUsersMap.set(member.userEmail, member);
+              }
+            }
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    result.set(comment.commentId, Array.from(replyUsersMap.values()));
+  }
+
+  return result;
 }

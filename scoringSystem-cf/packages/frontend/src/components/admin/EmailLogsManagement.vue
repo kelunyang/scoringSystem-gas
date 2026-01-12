@@ -111,26 +111,10 @@
     <!-- Statistics Card -->
     <el-card class="stats-card" shadow="hover">
       <div class="stats-grid">
-        <el-statistic title="總郵件數" :value="stats.totalEmails">
-          <template #prefix>
-            <i class="fas fa-envelope"></i>
-          </template>
-        </el-statistic>
-        <el-statistic title="成功率" :value="stats.successRate" :precision="1" suffix="%">
-          <template #prefix>
-            <i class="fas fa-chart-line"></i>
-          </template>
-        </el-statistic>
-        <el-statistic title="失敗數" :value="stats.failedEmails">
-          <template #prefix>
-            <i class="fas fa-times-circle"></i>
-          </template>
-        </el-statistic>
-        <el-statistic title="24小時內" :value="stats.last24Hours">
-          <template #prefix>
-            <i class="fas fa-clock"></i>
-          </template>
-        </el-statistic>
+        <AnimatedStatistic title="總郵件數" :value="stats.totalEmails" />
+        <AnimatedStatistic title="成功率(%)" :value="Math.round(stats.successRate)" />
+        <AnimatedStatistic title="失敗數" :value="stats.failedEmails" />
+        <AnimatedStatistic title="24小時內" :value="stats.last24Hours" />
       </div>
     </el-card>
 
@@ -481,6 +465,7 @@ import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
 import DOMPurify from 'dompurify'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
+import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 
 // ================== Interfaces ==================
 

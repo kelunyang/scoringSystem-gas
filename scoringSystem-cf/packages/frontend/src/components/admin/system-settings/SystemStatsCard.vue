@@ -19,59 +19,61 @@
       class="stats-container"
     >
       <el-row :gutter="20">
-        <!-- 總用戶數 -->
-        <el-col :xs="24" :sm="12" :md="6">
+        <!-- 用戶統計 -->
+        <el-col :xs="12" :sm="8" :md="4">
           <el-card class="stat-card" shadow="hover">
-            <el-statistic title="總用戶數" :value="systemStats?.totalUsers || 0">
-              <template #suffix>
-                <div class="stat-suffix">
-                  活躍 {{ systemStats?.activeUsers || 0 }} | 停用
-                  {{ (systemStats?.totalUsers || 0) - (systemStats?.activeUsers || 0) }}
-                </div>
-              </template>
-            </el-statistic>
+            <AnimatedStatistic title="總用戶數" :value="systemStats?.totalUsers || 0" />
+          </el-card>
+        </el-col>
+        <el-col :xs="12" :sm="8" :md="4">
+          <el-card class="stat-card" shadow="hover">
+            <AnimatedStatistic title="活躍用戶" :value="systemStats?.activeUsers || 0" />
           </el-card>
         </el-col>
 
-        <!-- 總專案數 -->
-        <el-col :xs="24" :sm="12" :md="6">
+        <!-- 專案統計 -->
+        <el-col :xs="12" :sm="8" :md="4">
           <el-card class="stat-card" shadow="hover">
-            <el-statistic title="總專案數" :value="systemStats?.totalProjects || 0">
-              <template #suffix>
-                <div class="stat-suffix">
-                  進行中 {{ systemStats?.activeProjects || 0 }} | 已完成
-                  {{ (systemStats?.totalProjects || 0) - (systemStats?.activeProjects || 0) }}
-                </div>
-              </template>
-            </el-statistic>
+            <AnimatedStatistic title="總專案數" :value="systemStats?.totalProjects || 0" />
+          </el-card>
+        </el-col>
+        <el-col :xs="12" :sm="8" :md="4">
+          <el-card class="stat-card" shadow="hover">
+            <AnimatedStatistic title="進行中專案" :value="systemStats?.activeProjects || 0" />
           </el-card>
         </el-col>
 
-        <!-- 總群組數 -->
-        <el-col :xs="24" :sm="12" :md="6">
+        <!-- 群組統計 -->
+        <el-col :xs="12" :sm="8" :md="4">
           <el-card class="stat-card" shadow="hover">
-            <el-statistic title="總群組數" :value="systemStats?.totalGroups || 0">
-              <template #suffix>
-                <div class="stat-suffix">
-                  活躍 {{ systemStats?.activeGroups || 0 }}
-                </div>
-              </template>
-            </el-statistic>
+            <AnimatedStatistic title="總群組數" :value="systemStats?.totalGroups || 0" />
+          </el-card>
+        </el-col>
+        <el-col :xs="12" :sm="8" :md="4">
+          <el-card class="stat-card" shadow="hover">
+            <AnimatedStatistic title="活躍群組" :value="systemStats?.activeGroups || 0" />
           </el-card>
         </el-col>
 
-        <!-- 邀請碼總數 -->
-        <el-col :xs="24" :sm="12" :md="6">
+        <!-- 邀請碼統計 -->
+        <el-col :xs="12" :sm="8" :md="4">
           <el-card class="stat-card" shadow="hover">
-            <el-statistic title="邀請碼總數" :value="invitationStats?.total || 0">
-              <template #suffix>
-                <div class="stat-suffix">
-                  有效 {{ invitationStats?.active || 0 }} | 已用
-                  {{ invitationStats?.used || 0 }} | 過期
-                  {{ invitationStats?.expired || 0 }}
-                </div>
-              </template>
-            </el-statistic>
+            <AnimatedStatistic title="邀請碼總數" :value="invitationStats?.total || 0" />
+          </el-card>
+        </el-col>
+        <el-col :xs="12" :sm="8" :md="4">
+          <el-card class="stat-card" shadow="hover">
+            <AnimatedStatistic title="有效邀請碼" :value="invitationStats?.active || 0" />
+          </el-card>
+        </el-col>
+        <el-col :xs="12" :sm="8" :md="4">
+          <el-card class="stat-card" shadow="hover">
+            <AnimatedStatistic title="已用邀請碼" :value="invitationStats?.used || 0" />
+          </el-card>
+        </el-col>
+        <el-col :xs="12" :sm="8" :md="4">
+          <el-card class="stat-card" shadow="hover">
+            <AnimatedStatistic title="過期邀請碼" :value="invitationStats?.expired || 0" />
           </el-card>
         </el-col>
       </el-row>
@@ -81,7 +83,7 @@
 
 <script setup lang="ts">
 import type { SystemStats, InvitationStats } from '@/types/admin-stats'
-import type { Ref } from 'vue'
+import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 
 /**
  * Props
@@ -159,10 +161,4 @@ const handleRefresh = (): void => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.stat-suffix {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 8px;
-  line-height: 1.4;
-}
 </style>

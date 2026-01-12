@@ -279,7 +279,7 @@ export function useDrawerPhysics(options: DrawerPhysicsOptions): DrawerPhysicsRe
     let lastY = 0
 
     useDrag(
-      ({ movement: [, my], dragging, tap }) => {
+      ({ movement: [, my], dragging, tap }: { movement: [number, number]; dragging: boolean; tap: boolean }) => {
         // 如果是點擊（tap），不處理拖曳
         if (tap) return
 

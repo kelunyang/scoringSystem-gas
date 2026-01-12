@@ -264,6 +264,11 @@ interface Props {
   stageSubmissions?: any[]
   userEmailToDisplayName?: Record<string, string>
   stageDescription?: string
+  prefillMentionGroup?: {
+    groupId: string
+    groupName: string
+    participants: string[]
+  } | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -277,7 +282,8 @@ const props = withDefaults(defineProps<Props>(), {
   currentUser: () => ({}),
   stageSubmissions: () => [],
   userEmailToDisplayName: () => ({}),
-  stageDescription: ''
+  stageDescription: '',
+  prefillMentionGroup: null
 })
 
 // Emits
@@ -560,6 +566,34 @@ watch(() => props.visible, (newVal) => {
     mentionAlertId = null
   }
 })
+
+// Watch - prefillMentionGroup（從組別報告按鈕觸發的自動 mention）
+watch(
+  () => props.prefillMentionGroup,
+  (group) => {
+    if (group && props.visible) {
+      nextTick(() => {
+        // 建立群組 mention 文字
+        const mentionText = `${group.groupName}所有人`
+
+        // 記錄到 groupMentions（提交時展開為個別 email）
+        groupMentions.value.push({
+          groupId: group.groupId,
+          groupName: group.groupName,
+          participants: group.participants,
+          mentionText
+        })
+
+        // 插入到編輯器
+        content.value = `@${mentionText} `
+
+        // 更新 mention 計數
+        updateMentionCount(content.value)
+      })
+    }
+  },
+  { immediate: true }
+)
 
 // 監聽排名規則變化並更新 alert（當 props.totalValidCommentAuthors 異步加載完成時）
 watch(rankingAlertTitle, (newTitle) => {
@@ -853,21 +887,25 @@ function updateMentionCount(contentValue: string) {
     return
   }
 
-  let count = 0
-
-  // 1. 檢查群組 mentions（@GroupName所有人）
-  const groupMentionPattern = /@(\S+所有人)/g
-  const groupMatches = contentValue.match(groupMentionPattern) || []
-  groupMatches.forEach(match => {
-    const groupMentionText = match.substring(1) // 去掉 @
-    // 檢查是否存在於 filteredUsers 中（isGroup: true 的項目）
-    const isValid = filteredUsers.value.some(u =>
-      u.isGroup && u.name.endsWith('所有人') && groupMentionText.includes(u.groupInfo.groupName)
-    )
-    if (isValid) count++
+  // 同步清理 groupMentions：移除已被用戶刪除的群組 mention
+  groupMentions.value = groupMentions.value.filter(gm => {
+    const pattern = `@${gm.mentionText}`
+    return contentValue.includes(pattern)
   })
 
-  // 2. 檢查個別用戶 mentions（@email）
+  let count = 0
+
+  // 1. 群組 mentions：直接使用 groupMentions 元數據計數
+  //    因為 selectMention() 已經正確追蹤所有群組 mention
+  //    這樣可以正確處理含空白的群組名稱
+  groupMentions.value.forEach(groupMention => {
+    const pattern = `@${groupMention.mentionText}`
+    if (contentValue.includes(pattern)) {
+      count++
+    }
+  })
+
+  // 2. 個別用戶 mentions（@email）- 維持原有邏輯
   const emailPattern = /@([a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g
   const emailMatches = contentValue.match(emailPattern) || []
   emailMatches.forEach(match => {
@@ -880,7 +918,7 @@ function updateMentionCount(contentValue: string) {
   })
 
   mentionCount.value = count
-  console.log(`當前有效 mention 數量: ${mentionCount.value} (群組: ${groupMatches.length}, 個人: ${emailMatches.length})`)
+  console.log(`當前有效 mention 數量: ${mentionCount.value} (群組: ${groupMentions.value.length}, 個人: ${emailMatches.length})`)
 }
 </script>
 

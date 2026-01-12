@@ -22,7 +22,7 @@
             :value="value"
             :loading="loading"
             :enable-animation="enableAnimation"
-            :size="size"
+            :size="size as 'small' | 'medium' | 'large'"
           />
         </div>
       </component>

@@ -68,29 +68,10 @@
       <!-- Stats Display -->
       <template #stats>
         <div class="project-stats">
-          <el-statistic title="總專案數" :value="stats.totalProjects">
-            <template #prefix>
-              <i class="fas fa-project-diagram"></i>
-            </template>
-          </el-statistic>
-
-          <el-statistic title="進行中" :value="stats.activeProjects" class="stat-active">
-            <template #prefix>
-              <i class="fas fa-play-circle"></i>
-            </template>
-          </el-statistic>
-
-          <el-statistic title="已刪除" :value="stats.deletedProjects" class="stat-deleted">
-            <template #prefix>
-              <i class="fas fa-trash"></i>
-            </template>
-          </el-statistic>
-
-          <el-statistic title="已封存" :value="stats.archivedProjects" class="stat-archived">
-            <template #prefix>
-              <i class="fas fa-archive"></i>
-            </template>
-          </el-statistic>
+          <AnimatedStatistic title="總專案數" :value="stats.totalProjects" />
+          <AnimatedStatistic title="進行中" :value="stats.activeProjects" />
+          <AnimatedStatistic title="已刪除" :value="stats.deletedProjects" />
+          <AnimatedStatistic title="已封存" :value="stats.archivedProjects" />
         </div>
       </template>
     </AdminFilterToolbar>
@@ -1292,6 +1273,7 @@ import { rpcClient } from '@/utils/rpc-client'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
+import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 
 export default {
   name: 'ProjectManagement',

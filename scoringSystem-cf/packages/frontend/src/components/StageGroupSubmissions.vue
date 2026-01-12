@@ -10,7 +10,7 @@
     />
 
     <!-- 小組列表 -->
-    <div v-for="group in stage.groups" :key="group.id">
+    <div v-for="group in stage.groups" :key="`${group.id}-${group.teacherRank}-${group.voteRank}-${group.rankingsLoading}`">
       <div
         class="group-item"
         :class="{
@@ -33,36 +33,6 @@
             <span class="post-it-time" v-if="group.submitTime">
               {{ formatSubmissionTime(group.submitTime) }}
             </span>
-            <!-- 教師功能下拉選單 - 僅教師/管理員可見 -->
-            <el-dropdown
-              v-if="props.isTeacher"
-              trigger="click"
-              @command="(cmd: string) => handleTeacherCommand(cmd, group)"
-              @click.stop
-            >
-              <button class="teacher-menu-btn" @click.stop>
-                <i class="fas fa-chalkboard-teacher"></i>
-                教師功能
-              </button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="pin">
-                    <i class="fas fa-check" v-if="group.groupId === props.pinnedGroupId" style="margin-right: 6px; color: #67c23a;"></i>
-                    <i class="fas fa-thumbtack" style="margin-right: 6px;"></i>
-                    釘選這組的各階段報告
-                  </el-dropdown-item>
-                  <!-- 強制撤回只在 active 階段可用 -->
-                  <el-dropdown-item
-                    v-if="stage.status === 'active'"
-                    command="force-withdraw"
-                    divided
-                  >
-                    <i class="fas fa-ban" style="margin-right: 6px; color: #f56c6c;"></i>
-                    強制撤回本階段報告
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
           </div>
         </el-tooltip>
 
@@ -188,6 +158,49 @@
         </template>
 
         <div class="group-actions" @click.stop>
+          <!-- 釘選按鈕 - 所有人可見 -->
+          <el-tooltip
+            :content="group.groupId === props.pinnedGroupId ? '取消釘選' : '釘選這組的各階段報告'"
+            placement="top"
+          >
+            <button
+              class="btn btn-outline btn-sm"
+              :class="{ active: group.groupId === props.pinnedGroupId }"
+              @click="togglePinGroup(group.groupId)"
+            >
+              <i class="fas fa-thumbtack"></i>
+            </button>
+          </el-tooltip>
+
+          <!-- 評論這組報告按鈕 - 與「張貼評論」按鈕條件一致 -->
+          <el-tooltip
+            v-if="props.canComment && (stage.status === 'active' || props.isTeacher)"
+            content="評論這組的報告"
+            placement="top"
+          >
+            <button
+              class="btn btn-outline btn-sm"
+              @click="handleOpenCommentForGroup(group)"
+            >
+              <i class="fas fa-at"></i>
+            </button>
+          </el-tooltip>
+
+          <!-- 強制撤回按鈕 - 僅教師可見，且只在 active 階段 -->
+          <el-tooltip
+            v-if="props.isTeacher && stage.status === 'active'"
+            content="強制撤回本階段報告"
+            placement="top"
+          >
+            <button
+              class="btn btn-outline btn-sm btn-danger-outline"
+              @click="handleForceWithdraw(group)"
+            >
+              <i class="fas fa-ban"></i>
+            </button>
+          </el-tooltip>
+
+          <!-- 查看報告按鈕 -->
           <button
             class="btn btn-outline btn-sm"
             @click="toggleGroupReport(group)"
@@ -228,6 +241,7 @@ interface Props {
   projectUsers: any[]
   stageProposals: any[]
   isTeacher?: boolean
+  canComment?: boolean
   pinnedGroupId?: string | null
   projectId: string
 }
@@ -255,6 +269,7 @@ const emit = defineEmits<{
   'refresh-rankings': [stageId: string]
   'pin-group': [groupId: string | null]
   'force-withdraw': [submission: ForceWithdrawSubmission]
+  'open-comment-modal': [stageId: string, groupId: string, groupName: string, participants: string[]]
 }>()
 
 /**
@@ -294,43 +309,55 @@ function togglePinGroup(groupId: string) {
 }
 
 /**
- * 處理教師功能選單命令
+ * 處理強制撤回
  */
-function handleTeacherCommand(command: string, group: Group) {
-  switch (command) {
-    case 'pin':
-      togglePinGroup(group.groupId)
-      break
-    case 'force-withdraw':
-      // 檢查該組是否有 submission
-      if (!group.submissionId) {
-        // 如果沒有 submissionId，可能需要從其他地方獲取
-        console.warn('No submissionId found for group:', group.groupId)
-        return
-      }
-      // 從 participationProposal 取得作者列表
-      let authors: string[] = []
-      if (group.participationProposal) {
-        try {
-          const proposal = typeof group.participationProposal === 'string'
-            ? JSON.parse(group.participationProposal)
-            : group.participationProposal
-          authors = Object.keys(proposal)
-        } catch (e) {
-          console.warn('Failed to parse participationProposal:', e)
-        }
-      }
-      // 發射事件，讓父組件處理 Drawer 顯示
-      emit('force-withdraw', {
-        submissionId: group.submissionId,
-        groupId: group.groupId,
-        groupName: group.groupName || '未命名組別',
-        status: group.status || 'unknown',
-        submittedTime: group.submitTime,
-        authors: authors.length > 0 ? authors : undefined
-      })
-      break
+function handleForceWithdraw(group: Group) {
+  // 檢查該組是否有 submission
+  if (!group.submissionId) {
+    console.warn('No submissionId found for group:', group.groupId)
+    return
   }
+  // 從 participationProposal 取得作者列表
+  let authors: string[] = []
+  if (group.participationProposal) {
+    try {
+      const proposal = typeof group.participationProposal === 'string'
+        ? JSON.parse(group.participationProposal)
+        : group.participationProposal
+      authors = Object.keys(proposal)
+    } catch (e) {
+      console.warn('Failed to parse participationProposal:', e)
+    }
+  }
+  // 發射事件，讓父組件處理 Drawer 顯示
+  emit('force-withdraw', {
+    submissionId: group.submissionId,
+    groupId: group.groupId,
+    groupName: group.groupName || '未命名組別',
+    status: group.status || 'unknown',
+    submittedTime: group.submitTime,
+    authors: authors.length > 0 ? authors : undefined
+  })
+}
+
+/**
+ * 處理開啟評論 Modal 並預填 mention 該組
+ */
+function handleOpenCommentForGroup(group: Group) {
+  // 從 participationProposal 取得參與者列表
+  let participants: string[] = []
+  if (group.participationProposal) {
+    try {
+      const proposal = typeof group.participationProposal === 'string'
+        ? JSON.parse(group.participationProposal)
+        : group.participationProposal
+      participants = Object.keys(proposal)
+    } catch (e) {
+      console.warn('Failed to parse participationProposal:', e)
+    }
+  }
+
+  emit('open-comment-modal', props.stage.id, group.groupId, group.groupName || '未命名組別', participants)
 }
 
 /**
@@ -798,30 +825,15 @@ function truncateGroupName(name: string | undefined, maxLength: number = 5): str
   opacity: 0.9;
 }
 
-/* 教師功能下拉按鈕 - 類似「本組」標籤風格，放右邊 */
-.teacher-menu-btn {
-  background: #f39c12;  /* 糖果黃 */
-  color: #000000;       /* 黑字 */
-  border: none;
-  padding: 6px 10px;
-  font-weight: 700;
-  font-size: 12px;
-  border-radius: 0 4px 4px 0;  /* 只有右側圓角 */
-  cursor: pointer;
-  margin-left: auto;  /* 推到最右邊 */
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
+/* 危險操作按鈕樣式 */
+.btn-danger-outline {
+  color: #f56c6c !important;
+  border-color: #f56c6c !important;
 }
 
-.teacher-menu-btn:hover {
-  background: #e67e22;  /* hover 變深 */
-}
-
-.teacher-menu-btn i {
-  font-size: 11px;
+.btn-danger-outline:hover {
+  background-color: #f56c6c !important;
+  color: white !important;
 }
 
 /* 非鎖定組別淡化 */
@@ -998,14 +1010,6 @@ function truncateGroupName(name: string | undefined, maxLength: number = 5): str
     font-size: 11px;
     opacity: 0.8;
     padding: 0;
-  }
-
-  /* 教師功能按鈕 - 小螢幕調整 */
-  .group-name-post-it .teacher-menu-btn {
-    margin-left: auto;
-    margin-right: 0;
-    padding: 3px 8px;
-    font-size: 11px;
   }
 
   /* 統計 + Avatar 並排 - 需為標題列留空間 */

@@ -29,7 +29,7 @@
       </div>
 
       <!-- Stage Rewards Section -->
-      <div v-if="reportReward !== undefined || commentReward !== undefined" class="stage-rewards-section">
+      <div v-if="reportReward !== undefined || commentReward !== undefined || (stageStatus === 'active' && endTime)" class="stage-rewards-section">
         <div class="reward-item" v-if="reportReward !== undefined">
           <span class="reward-label">
             <i class="fas fa-file-alt"></i> 報告獎金
@@ -41,6 +41,12 @@
             <i class="fas fa-comment-dots"></i> 評論獎金
           </span>
           <span class="reward-value">{{ commentReward }}</span>
+        </div>
+        <div class="reward-item deadline-item" v-if="stageStatus === 'active' && endTime">
+          <span class="reward-label">
+            <i class="fas fa-clock"></i> 截止時間
+          </span>
+          <span class="reward-value deadline-value">{{ formatDate(endTime) }}</span>
         </div>
       </div>
 
@@ -69,6 +75,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import dayjs from 'dayjs'
 import MarkdownViewer from '@/components/MarkdownViewer.vue'
 import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
@@ -85,6 +92,7 @@ interface Props {
   stageStatus?: string
   reportReward?: number
   commentReward?: number
+  endTime?: number | string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -116,6 +124,15 @@ const statusText = computed(() => {
   }
   return statusMap[props.stageStatus] || props.stageStatus
 })
+
+/**
+ * 格式化日期
+ */
+function formatDate(dateString: string | number | undefined) {
+  if (!dateString) return '-'
+  const date = typeof dateString === 'string' ? dayjs(dateString) : dayjs(dateString)
+  return date.format('YYYY/MM/DD HH:mm')
+}
 </script>
 
 <style scoped>
@@ -162,6 +179,16 @@ const statusText = computed(() => {
   font-size: 20px;
   font-weight: 600;
   color: #2c3e50;
+}
+
+.stage-rewards-section .deadline-item {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  border: 1px solid #ffb74d;
+}
+
+.stage-rewards-section .deadline-value {
+  font-size: 16px;
+  color: #e65100;
 }
 
 @media (max-width: 480px) {

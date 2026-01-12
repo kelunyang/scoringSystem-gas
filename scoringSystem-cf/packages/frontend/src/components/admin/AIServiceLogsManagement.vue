@@ -95,39 +95,19 @@
     <el-card class="stats-card" v-if="statistics">
       <el-row :gutter="20">
         <el-col :xs="12" :sm="6" :md="4">
-          <el-statistic title="總請求數" :value="statistics.total || 0">
-            <template #prefix>
-              <i class="fas fa-robot"></i>
-            </template>
-          </el-statistic>
+          <AnimatedStatistic title="總請求數" :value="statistics.total || 0" />
         </el-col>
         <el-col :xs="12" :sm="6" :md="4">
-          <el-statistic title="成功" :value="getSuccessCount()">
-            <template #prefix>
-              <i class="fas fa-check-circle" style="color: #67C23A;"></i>
-            </template>
-          </el-statistic>
+          <AnimatedStatistic title="成功" :value="getSuccessCount()" />
         </el-col>
         <el-col :xs="12" :sm="6" :md="4">
-          <el-statistic title="失敗" :value="getFailedCount()">
-            <template #prefix>
-              <i class="fas fa-times-circle" style="color: #F56C6C;"></i>
-            </template>
-          </el-statistic>
+          <AnimatedStatistic title="失敗" :value="getFailedCount()" />
         </el-col>
         <el-col :xs="12" :sm="6" :md="4">
-          <el-statistic title="總 Token" :value="statistics.totalTokens || 0">
-            <template #prefix>
-              <i class="fas fa-coins" style="color: #E6A23C;"></i>
-            </template>
-          </el-statistic>
+          <AnimatedStatistic title="總 Token" :value="statistics.totalTokens || 0" />
         </el-col>
         <el-col :xs="12" :sm="6" :md="4">
-          <el-statistic title="平均回應時間" :value="statistics.avgResponseTime ? Math.round(statistics.avgResponseTime) : 0" suffix="ms">
-            <template #prefix>
-              <i class="fas fa-clock" style="color: #409EFF;"></i>
-            </template>
-          </el-statistic>
+          <AnimatedStatistic title="平均回應時間(ms)" :value="statistics.avgResponseTime ? Math.round(statistics.avgResponseTime) : 0" />
         </el-col>
       </el-row>
     </el-card>
@@ -494,6 +474,7 @@ import EmptyState from '@/components/shared/EmptyState.vue'
 import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
+import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 import type {
   AIServiceLog,
   AIServiceType,

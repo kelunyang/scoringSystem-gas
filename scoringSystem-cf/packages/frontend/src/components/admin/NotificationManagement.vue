@@ -120,39 +120,19 @@
     <el-card class="stats-card">
       <el-row :gutter="20">
         <el-col :xs="12" :sm="6" :md="4">
-          <el-statistic title="總通知數" :value="stats.totalNotifications">
-            <template #prefix>
-              <i class="fas fa-bell"></i>
-            </template>
-          </el-statistic>
+          <AnimatedStatistic title="總通知數" :value="stats.totalNotifications" />
         </el-col>
         <el-col :xs="12" :sm="6" :md="4">
-          <el-statistic title="已讀" :value="stats.readNotifications">
-            <template #prefix>
-              <i class="fas fa-envelope-open" style="color: #67C23A;"></i>
-            </template>
-          </el-statistic>
+          <AnimatedStatistic title="已讀" :value="stats.readNotifications" />
         </el-col>
         <el-col :xs="12" :sm="6" :md="4">
-          <el-statistic title="未讀" :value="stats.totalNotifications - stats.readNotifications">
-            <template #prefix>
-              <i class="fas fa-envelope" style="color: #E6A23C;"></i>
-            </template>
-          </el-statistic>
+          <AnimatedStatistic title="未讀" :value="stats.totalNotifications - stats.readNotifications" />
         </el-col>
         <el-col :xs="12" :sm="6" :md="4">
-          <el-statistic title="已發送郵件" :value="stats.emailSentNotifications">
-            <template #prefix>
-              <i class="fas fa-paper-plane" style="color: #409EFF;"></i>
-            </template>
-          </el-statistic>
+          <AnimatedStatistic title="已發送郵件" :value="stats.emailSentNotifications" />
         </el-col>
         <el-col :xs="12" :sm="6" :md="4">
-          <el-statistic title="待發送郵件" :value="stats.totalNotifications - stats.emailSentNotifications">
-            <template #prefix>
-              <i class="far fa-paper-plane" style="color: #909399;"></i>
-            </template>
-          </el-statistic>
+          <AnimatedStatistic title="待發送郵件" :value="stats.totalNotifications - stats.emailSentNotifications" />
         </el-col>
       </el-row>
     </el-card>
@@ -442,6 +422,7 @@ import { useNotificationSelection } from '@/composables/useNotificationSelection
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
+import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 
 // ================== Interfaces ==================
 

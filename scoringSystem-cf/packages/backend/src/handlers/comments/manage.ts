@@ -9,7 +9,14 @@ import { parseJSON, stringifyJSON } from '@utils/json';
 import { generateId } from '@utils/id-generator';
 import { logProjectOperation } from '@utils/logging';
 import { queueBatchNotifications } from '../../queues/notification-producer';
-import { calculateReactionUsers, calculateReplyUsers, checkCommentHasHelpfulReaction } from '@utils/commentVotingUtils';
+import {
+  calculateReactionUsers,
+  calculateReplyUsers,
+  batchCheckCommentsHaveHelpfulReaction,
+  batchCalculateReactionUsers,
+  batchCalculateReplyUsers,
+  type CommentForBatch
+} from '@utils/commentVotingUtils';
 import { SudoWriteBlockedError } from '@utils/sudo-db-proxy';
 
 /**
@@ -535,9 +542,22 @@ export async function getStageComments(
   stageId: string,
   options?: { excludeTeachers?: boolean; forVoting?: boolean }
 ): Promise<Response> {
+  const _startTime = Date.now();
+  console.log(`📊 [getStageComments] START: stageId=${stageId}`);
+
   try {
     const excludeTeachers = options?.excludeTeachers || false;
     const forVoting = options?.forVoting || false;
+
+    // Query stage status to conditionally skip unnecessary calculations
+    // reactionUsers and replyUsers are only needed in 'active' stage
+    const stageInfo = await env.DB.prepare(`
+      SELECT status FROM stages_with_status
+      WHERE projectId = ? AND stageId = ?
+    `).bind(projectId, stageId).first();
+
+    const stageStatus = (stageInfo?.status as string) || 'pending';
+    const isActiveStage = stageStatus === 'active';
 
     // Build query with authorRole from projectviewers and group membership
     let query = `
@@ -596,7 +616,7 @@ export async function getStageComments(
       });
     }
 
-    // Batch query all reactions for these comments
+    // Batch query all reactions for these comments (分批處理避免 SQLite 變數限制)
     const commentIds = comments.results.map(c => c.commentId as string);
     const reactionsByComment: Record<string, any> = {};
 
@@ -606,35 +626,44 @@ export async function getStageComments(
         SELECT userId FROM users WHERE userEmail = ?
       `).bind(userEmail).first();
 
-      const placeholders = commentIds.map(() => '?').join(',');
-      // Append-only architecture: Get latest reactions only
-      const reactionsResult = await env.DB.prepare(`
-        WITH latest_reactions AS (
+      const MAX_IN_PARAMS = 100; // 保守設定，確保不超過 SQLite 999 限制
+      const allReactionsResults: any[] = [];
+
+      // 分批查詢 reactions
+      for (let i = 0; i < commentIds.length; i += MAX_IN_PARAMS) {
+        const batch = commentIds.slice(i, i + MAX_IN_PARAMS);
+        const placeholders = batch.map(() => '?').join(',');
+        // Append-only architecture: Get latest reactions only
+        const batchResult = await env.DB.prepare(`
+          WITH latest_reactions AS (
+            SELECT
+              r.targetId as commentId,
+              r.reactionType,
+              r.userEmail,
+              ROW_NUMBER() OVER (
+                PARTITION BY r.targetId, r.userEmail
+                ORDER BY r.createdAt DESC
+              ) as rn
+            FROM reactions r
+            WHERE r.targetId IN (${placeholders})
+              AND r.targetType = 'comment'
+          )
           SELECT
-            r.targetId as commentId,
-            r.reactionType,
-            r.userEmail,
-            ROW_NUMBER() OVER (
-              PARTITION BY r.targetId, r.userEmail
-              ORDER BY r.createdAt DESC
-            ) as rn
-          FROM reactions r
-          WHERE r.targetId IN (${placeholders})
-            AND r.targetType = 'comment'
-        )
-        SELECT
-          lr.commentId,
-          lr.reactionType,
-          lr.userEmail,
-          u.displayName
-        FROM latest_reactions lr
-        JOIN users u ON lr.userEmail = u.userEmail
-        WHERE lr.rn = 1 AND lr.reactionType IS NOT NULL
-      `).bind(...commentIds).all();
+            lr.commentId,
+            lr.reactionType,
+            lr.userEmail,
+            u.displayName
+          FROM latest_reactions lr
+          JOIN users u ON lr.userEmail = u.userEmail
+          WHERE lr.rn = 1 AND lr.reactionType IS NOT NULL
+        `).bind(...batch).all();
+
+        allReactionsResults.push(...(batchResult.results || []));
+      }
 
       // Organize reactions by comment ID
       for (const commentId of commentIds) {
-        const commentReactions = reactionsResult.results?.filter(r => r.commentId === commentId) || [];
+        const commentReactions = allReactionsResults.filter(r => r.commentId === commentId);
 
         // Group by type
         const byType: Record<string, any> = {};
@@ -663,6 +692,31 @@ export async function getStageComments(
         };
       }
     }
+
+    // Batch query for helpful reactions (optimization: avoids N+1 queries in the loop)
+    const commentsWithHelpfulReaction = commentIds.length > 0
+      ? await batchCheckCommentsHaveHelpfulReaction(env.DB, commentIds)
+      : new Set<string>();
+
+    // ============ BATCH QUERIES FOR REACTION/REPLY USERS (Optimization: fixes N+1 problem) ============
+    // Prepare comments for batch processing
+    const commentsForBatch: CommentForBatch[] = (comments.results || []).map((c: any) => ({
+      commentId: c.commentId as string,
+      authorEmail: c.authorEmail as string,
+      mentionedGroups: c.mentionedGroups as string | null,
+      mentionedUsers: c.mentionedUsers as string | null
+    }));
+
+    // Batch calculate reactionUsers and replyUsers (only for active stages)
+    const batchReactionUsersMap = isActiveStage
+      ? await batchCalculateReactionUsers(env.DB, projectId, commentsForBatch)
+      : new Map<string, string[]>();
+
+    const batchReplyUsersMap = isActiveStage
+      ? await batchCalculateReplyUsers(env.DB, projectId, commentsForBatch)
+      : new Map<string, any[]>();
+
+    console.log(`🔍 [getStageComments] Batch loaded reactionUsers for ${batchReactionUsersMap.size} comments, replyUsers for ${batchReplyUsersMap.size} comments`);
 
     // Organize comments into threads
     const commentMap: Record<string, any> = {};
@@ -696,30 +750,17 @@ export async function getStageComments(
       // Check if this comment can be voted on (must have mentions AND author is group member AND has helpful reaction)
       const hasMentions = mentionedGroups.length > 0 || mentionedUsers.length > 0;
 
-      // Quality gate: Check if comment has at least 1 helpful reaction
-      const hasHelpfulReaction = await checkCommentHasHelpfulReaction(env.DB, c.commentId as string);
+      // Quality gate: Check if comment has at least 1 helpful reaction (using batch query result - O(1) lookup)
+      const hasHelpfulReaction = commentsWithHelpfulReaction.has(c.commentId as string);
 
       const canBeVoted = !c.isReply && hasMentions && isGroupMember && hasHelpfulReaction;
 
-      // Calculate reactionUsers (students who can react to this comment)
-      const reactionUsers = await calculateReactionUsers(
-        env.DB,
-        projectId,
-        c.mentionedGroups as string | null,
-        c.mentionedUsers as string | null,
-        c.authorEmail as string
-      );
-
-      // Calculate replyUsers (users who can reply to this comment)
-      const replyUsers = await calculateReplyUsers(
-        env.DB,
-        projectId,
-        c.mentionedGroups as string | null,
-        c.mentionedUsers as string | null
-      );
+      // Get reactionUsers and replyUsers from batch query result (O(1) lookup, fixes N+1 problem)
+      const commentId = c.commentId as string;
+      const reactionUsers = batchReactionUsersMap.get(commentId) || [];
+      const replyUsers = batchReplyUsersMap.get(commentId) || [];
 
       // Get reaction data from batch query
-      const commentId = c.commentId as string;
       const reactionData = reactionsByComment[commentId] || {
         reactions: [],
         userReaction: null,
@@ -824,6 +865,8 @@ export async function getStageComments(
         }
       }
     }
+
+    console.log(`📊 [getStageComments] DONE: stageId=${stageId}, totalTime=${Date.now() - _startTime}ms, comments=${rootComments.length}`);
 
     return successResponse({
       comments: rootComments,
@@ -1052,3 +1095,396 @@ export async function deleteComment(
 }
 
 // Logging is now handled by centralized utils/logging module
+
+/**
+ * Get comments for all stages in a single request (batch API)
+ * Optimizes N API calls to 1, with shared permission checks
+ *
+ * @param env - Environment bindings
+ * @param userEmail - Current user's email
+ * @param projectId - Project ID
+ * @param stageIds - Array of stage IDs to fetch comments for
+ * @param options - Optional: excludeTeachers, forVoting flags
+ * @returns Response with comments grouped by stageId
+ */
+export async function getAllStagesComments(
+  env: Env,
+  userEmail: string,
+  projectId: string,
+  stageIds: string[],
+  options?: { excludeTeachers?: boolean; forVoting?: boolean }
+): Promise<Response> {
+  const _startTime = Date.now();
+  const _metrics: Record<string, number> = {};
+
+  try {
+    const excludeTeachers = options?.excludeTeachers || false;
+    const forVoting = options?.forVoting || false;
+
+    console.log(`📊 [getAllStagesComments] START: stageCount=${stageIds.length}, excludeTeachers=${excludeTeachers}, forVoting=${forVoting}`);
+
+    // Get current user ID once for all stages
+    let _t0 = Date.now();
+    const currentUser = await env.DB.prepare(`
+      SELECT userId FROM users WHERE userEmail = ?
+    `).bind(userEmail).first();
+    _metrics['1_getCurrentUser'] = Date.now() - _t0;
+
+    // Batch query: Get all stages' status in one query
+    _t0 = Date.now();
+    const stageIdsPlaceholders = stageIds.map(() => '?').join(',');
+    const stagesStatusResult = await env.DB.prepare(`
+      SELECT stageId, status FROM stages_with_status
+      WHERE projectId = ? AND stageId IN (${stageIdsPlaceholders})
+    `).bind(projectId, ...stageIds).all();
+    _metrics['2_getStagesStatus'] = Date.now() - _t0;
+
+    const stageStatusMap: Record<string, string> = {};
+    for (const stage of stagesStatusResult.results || []) {
+      stageStatusMap[stage.stageId as string] = stage.status as string;
+    }
+
+    // Batch query: Get all comments for all stages
+    _t0 = Date.now();
+    let commentsQuery = `
+      SELECT
+        c.commentId, c.stageId, c.content,
+        c.authorEmail, c.mentionedGroups, c.mentionedUsers,
+        c.parentCommentId, c.isReply, c.replyLevel,
+        c.isAwarded, c.awardRank, c.createdTime,
+        u.displayName,
+        u.avatarSeed,
+        u.avatarStyle,
+        u.avatarOptions,
+        pv.role as authorRole,
+        ug.role as groupRole,
+        (
+          SELECT COUNT(*)
+          FROM (
+            SELECT
+              userEmail,
+              ROW_NUMBER() OVER (PARTITION BY userEmail ORDER BY createdAt DESC) as rn,
+              reactionType
+            FROM reactions r
+            WHERE r.targetId = c.commentId AND r.targetType = 'comment'
+          ) latest
+          WHERE rn = 1 AND reactionType IS NOT NULL
+        ) as reactionCount
+      FROM comments c
+      LEFT JOIN users u ON u.userEmail = c.authorEmail
+      LEFT JOIN projectviewers pv
+        ON pv.userEmail = c.authorEmail
+        AND pv.projectId = c.projectId
+        AND pv.isActive = 1
+      LEFT JOIN usergroups ug
+        ON ug.userEmail = c.authorEmail
+        AND ug.projectId = c.projectId
+        AND ug.isActive = 1
+        AND (ug.role = 'leader' OR ug.role = 'member')
+      WHERE c.projectId = ? AND c.stageId IN (${stageIdsPlaceholders})
+    `;
+
+    if (excludeTeachers) {
+      commentsQuery += `
+        AND (pv.role IS NULL OR pv.role != 'teacher')
+      `;
+    }
+
+    commentsQuery += `ORDER BY c.stageId, c.createdTime ASC`;
+
+    const allComments = await env.DB.prepare(commentsQuery).bind(projectId, ...stageIds).all();
+    _metrics['3_getAllComments'] = Date.now() - _t0;
+    console.log(`📊 [getAllStagesComments] Comments fetched: ${allComments.results?.length || 0}`);
+
+    // Collect all comment IDs for batch reactions query
+    const allCommentIds = (allComments.results || []).map(c => c.commentId as string);
+
+    // Batch query: Get all reactions for all comments (分批處理避免 SQLite 變數限制)
+    _t0 = Date.now();
+    const reactionsByComment: Record<string, any> = {};
+    if (allCommentIds.length > 0) {
+      const MAX_IN_PARAMS = 100; // 保守設定，確保不超過 SQLite 999 限制
+      const allReactionsResults: any[] = [];
+
+      // 分批查詢 reactions
+      for (let i = 0; i < allCommentIds.length; i += MAX_IN_PARAMS) {
+        const batch = allCommentIds.slice(i, i + MAX_IN_PARAMS);
+        const commentIdsPlaceholders = batch.map(() => '?').join(',');
+        const batchResult = await env.DB.prepare(`
+          WITH latest_reactions AS (
+            SELECT
+              r.targetId as commentId,
+              r.reactionType,
+              r.userEmail,
+              ROW_NUMBER() OVER (
+                PARTITION BY r.targetId, r.userEmail
+                ORDER BY r.createdAt DESC
+              ) as rn
+            FROM reactions r
+            WHERE r.targetId IN (${commentIdsPlaceholders})
+              AND r.targetType = 'comment'
+          )
+          SELECT
+            lr.commentId,
+            lr.reactionType,
+            lr.userEmail,
+            u.displayName
+          FROM latest_reactions lr
+          JOIN users u ON lr.userEmail = u.userEmail
+          WHERE lr.rn = 1 AND lr.reactionType IS NOT NULL
+        `).bind(...batch).all();
+
+        allReactionsResults.push(...(batchResult.results || []));
+      }
+
+      // Organize reactions by comment ID
+      for (const commentId of allCommentIds) {
+        const commentReactions = allReactionsResults.filter(r => r.commentId === commentId);
+
+        // Group by type
+        const byType: Record<string, any> = {};
+        for (const reaction of commentReactions) {
+          const type = reaction.reactionType as string;
+          if (!byType[type]) {
+            byType[type] = {
+              type,
+              count: 0,
+              users: []
+            };
+          }
+          byType[type].count++;
+          byType[type].users.push(reaction.displayName);
+        }
+
+        // Check user's reaction
+        const userReaction = currentUser
+          ? commentReactions.find(r => r.userEmail === userEmail)?.reactionType || null
+          : null;
+
+        reactionsByComment[commentId] = {
+          reactions: Object.values(byType),
+          userReaction,
+          totalReactions: commentReactions.length
+        };
+      }
+    }
+    _metrics['4_getReactions'] = Date.now() - _t0;
+
+    // Batch query for helpful reactions (optimization: avoids N+1 queries in the loop)
+    const commentsWithHelpfulReaction = allCommentIds.length > 0
+      ? await batchCheckCommentsHaveHelpfulReaction(env.DB, allCommentIds)
+      : new Set<string>();
+
+    // Group comments by stageId and process each stage
+    _t0 = Date.now();
+    const resultsByStage: Record<string, any> = {};
+
+    // Initialize all stages (even empty ones)
+    for (const stageId of stageIds) {
+      resultsByStage[stageId] = {
+        comments: [],
+        total: 0,
+        totalWithReplies: 0,
+        votingEligible: false,
+        stageStatus: stageStatusMap[stageId] || 'pending'
+      };
+    }
+
+    // Group raw comments by stageId
+    const commentsByStage: Record<string, any[]> = {};
+    for (const comment of allComments.results || []) {
+      const stageId = comment.stageId as string;
+      if (!commentsByStage[stageId]) {
+        commentsByStage[stageId] = [];
+      }
+      commentsByStage[stageId].push(comment);
+    }
+
+    // ============ BATCH QUERIES FOR REACTION/REPLY USERS (Optimization: fixes N+1 problem) ============
+    // Prepare ALL comments for batch processing (across all stages)
+    const allCommentsForBatch: CommentForBatch[] = (allComments.results || []).map((c: any) => ({
+      commentId: c.commentId as string,
+      authorEmail: c.authorEmail as string,
+      mentionedGroups: c.mentionedGroups as string | null,
+      mentionedUsers: c.mentionedUsers as string | null
+    }));
+
+    // Batch calculate reactionUsers and replyUsers for ALL comments at once
+    // This converts N*M queries (N stages * M comments per stage) into just 2 queries
+    const batchReactionUsersMap = await batchCalculateReactionUsers(env.DB, projectId, allCommentsForBatch);
+    const batchReplyUsersMap = await batchCalculateReplyUsers(env.DB, projectId, allCommentsForBatch);
+
+    console.log(`🔍 [getAllStagesComments] Batch loaded reactionUsers for ${batchReactionUsersMap.size} comments, replyUsers for ${batchReplyUsersMap.size} comments`);
+
+    // Process each stage's comments
+    for (const stageId of stageIds) {
+      const stageComments = commentsByStage[stageId] || [];
+      const stageStatus = stageStatusMap[stageId] || 'pending';
+      const isActiveStage = stageStatus === 'active';
+
+      const commentMap: Record<string, any> = {};
+      const rootComments: any[] = [];
+
+      // First pass: create comment objects
+      for (const c of stageComments) {
+        // Parse mentionedUsers
+        let mentionedUsers: string[] = [];
+        if (c.mentionedUsers) {
+          try {
+            mentionedUsers = JSON.parse(c.mentionedUsers as string);
+          } catch (e) {
+            console.warn('Failed to parse mentionedUsers:', e);
+          }
+        }
+
+        // Parse mentionedGroups
+        let mentionedGroups: string[] = [];
+        if (c.mentionedGroups) {
+          try {
+            mentionedGroups = JSON.parse(c.mentionedGroups as string);
+          } catch (e) {
+            console.warn('Failed to parse mentionedGroups:', e);
+          }
+        }
+
+        // Check if author is a group member
+        const isGroupMember = !!(c.groupRole);
+
+        // Check if this comment can be voted on
+        const hasMentions = mentionedGroups.length > 0 || mentionedUsers.length > 0;
+        // Quality gate: Check if comment has at least 1 helpful reaction (using batch query result - O(1) lookup)
+        const hasHelpfulReaction = commentsWithHelpfulReaction.has(c.commentId as string);
+        const canBeVoted = !c.isReply && hasMentions && isGroupMember && hasHelpfulReaction;
+
+        // Get reactionUsers and replyUsers from batch query result (O(1) lookup, fixes N+1 problem)
+        // Only use batch results for active stages (non-active stages return empty arrays)
+        const commentId = c.commentId as string;
+        const reactionUsers = isActiveStage
+          ? (batchReactionUsersMap.get(commentId) || [])
+          : [];
+        const replyUsers = isActiveStage
+          ? (batchReplyUsersMap.get(commentId) || [])
+          : [];
+
+        // Get reaction data from batch query
+        const reactionData = reactionsByComment[commentId] || {
+          reactions: [],
+          userReaction: null,
+          totalReactions: 0
+        };
+
+        const comment = {
+          commentId: c.commentId,
+          stageId: c.stageId,
+          content: c.content,
+          authorEmail: c.authorEmail,
+          authorName: c.displayName || (c.authorEmail as string).split('@')[0],
+          authorAvatarSeed: c.avatarSeed,
+          authorAvatarStyle: c.avatarStyle,
+          authorAvatarOptions: c.avatarOptions,
+          authorRole: c.authorRole || null,
+          isGroupMember,
+          mentionedUsers,
+          mentionedGroups,
+          reactionUsers,
+          replyUsers,
+          parentCommentId: c.parentCommentId,
+          isReply: !!c.isReply,
+          replyLevel: c.replyLevel || 0,
+          isAwarded: !!c.isAwarded,
+          awardRank: c.awardRank,
+          createdTime: c.createdTime,
+          reactionCount: reactionData.totalReactions,
+          reactions: reactionData.reactions,
+          userReaction: reactionData.userReaction,
+          canBeVoted,
+          replies: []
+        };
+
+        commentMap[c.commentId as string] = comment;
+
+        if (!c.isReply && !c.parentCommentId) {
+          rootComments.push(comment);
+        }
+      }
+
+      // Second pass: organize replies
+      for (const comment of Object.values(commentMap)) {
+        if (comment.parentCommentId && commentMap[comment.parentCommentId]) {
+          commentMap[comment.parentCommentId].replies.push(comment);
+        }
+      }
+
+      // Check voting eligibility for current user
+      let votingEligible = false;
+      const userCommentsInStage = stageComments.filter(
+        c => c.authorEmail === userEmail && !c.isReply
+      );
+      for (const userComment of userCommentsInStage) {
+        if (userComment.mentionedGroups) {
+          try {
+            const groups = JSON.parse(userComment.mentionedGroups as string);
+            if (Array.isArray(groups) && groups.length > 0) {
+              votingEligible = true;
+              break;
+            }
+          } catch (e) {
+            // Ignore parse errors
+          }
+        }
+      }
+
+      // Apply forVoting deduplication if needed
+      if (forVoting) {
+        const uniqueByAuthor = new Map<string, typeof rootComments[0]>();
+
+        for (const comment of rootComments) {
+          if (!comment.canBeVoted) continue;
+
+          const existing = uniqueByAuthor.get(comment.authorEmail);
+          if (!existing) {
+            uniqueByAuthor.set(comment.authorEmail, comment);
+          } else {
+            const existingHelpful = existing.reactions?.find((r: any) => r.type === 'helpful')?.count || 0;
+            const currentHelpful = comment.reactions?.find((r: any) => r.type === 'helpful')?.count || 0;
+
+            if (currentHelpful > existingHelpful ||
+                (currentHelpful === existingHelpful && comment.createdTime < existing.createdTime)) {
+              uniqueByAuthor.set(comment.authorEmail, comment);
+            }
+          }
+        }
+
+        const selectedCommentIds = new Set([...uniqueByAuthor.values()].map(c => c.commentId));
+        for (const comment of rootComments) {
+          if (comment.canBeVoted && !selectedCommentIds.has(comment.commentId)) {
+            comment.canBeVoted = false;
+          }
+        }
+      }
+
+      resultsByStage[stageId] = {
+        comments: rootComments,
+        total: rootComments.length,
+        totalWithReplies: stageComments.length,
+        votingEligible,
+        stageStatus
+      };
+    }
+    _metrics['5_processComments'] = Date.now() - _t0;
+    _metrics['TOTAL'] = Date.now() - _startTime;
+
+    // Log timing metrics
+    console.log(`📊 [getAllStagesComments] METRICS:`, JSON.stringify(_metrics));
+    console.log(`📊 [getAllStagesComments] DONE: totalTime=${_metrics['TOTAL']}ms, stages=${stageIds.length}, comments=${allCommentIds.length}`);
+
+    return successResponse({
+      stageComments: resultsByStage
+    });
+
+  } catch (error) {
+    console.error('Get all stages comments error:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return errorResponse('SYSTEM_ERROR', `Failed to get all stages comments: ${errorMessage}`);
+  }
+}

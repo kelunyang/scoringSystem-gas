@@ -9,6 +9,7 @@
 import { computed } from 'vue'
 import { handleError, getErrorMessage } from '@/utils/errorHandler'
 import { rpcClient } from '@/utils/rpc-client'
+import { dedupRequest } from '@/utils/request-dedup'
 import type { Stage, Group, Submission } from '@/types'
 
 /**
@@ -160,15 +161,21 @@ export function useStageContentManagement(projectData: any, userData: any) {
       stage.loadingComments = true
       stage.refreshing = true
 
+      const stageId = stage.id || stage.stageId
+      const dedupKey = `comments:${projectId}:${stageId}`
+
       // 使用 /api/comments/stage 獲取完整評論數據（包含 reactions 和 canBeVoted）
-      const httpResponse = await (rpcClient.comments as any).stage.$post({
-        json: {
-          projectId,
-          stageId: stage.id || stage.stageId,
-          excludeTeachers: false
-        }
+      // 使用 dedupRequest 防止重複請求
+      const response = await dedupRequest(dedupKey, async () => {
+        const httpResponse = await (rpcClient.comments as any).stage.$post({
+          json: {
+            projectId,
+            stageId,
+            excludeTeachers: false
+          }
+        })
+        return httpResponse.json()
       })
-      const response = await httpResponse.json()
 
       if (response.success && response.data?.comments) {
         // 更新階段的評論數據
@@ -340,6 +347,13 @@ export function useStageContentManagement(projectData: any, userData: any) {
 
         // 載入排名數據
         await loadStageRankings(stage as ExtendedStage, projectId)
+
+        // ✅ 強制觸發響應式更新：用展開運算符重新賦值 groups
+        // 這確保 Vue 會偵測到變化並重新渲染子組件
+        if (stage.groups) {
+          stage.groups = [...stage.groups]
+        }
+
         stage.contentLoaded = true
       }
 
@@ -369,7 +383,178 @@ export function useStageContentManagement(projectData: any, userData: any) {
   }
 
   /**
-   * 載入階段排名數據
+   * 批次載入所有階段的排名數據（優化版）
+   * 使用 /rankings/all-stages-rankings API 一次載入所有階段的排名
+   * @param {Array} stages - 階段陣列
+   * @param {string} projectId - 專案 ID
+   */
+  async function loadAllStagesRankings(stages: ExtendedStage[], projectId: string) {
+    const stageIds = stages.map(s => s.id || s.stageId).filter(Boolean)
+    if (stageIds.length === 0) {
+      console.log('⚠️ [loadAllStagesRankings] 沒有階段需要載入排名')
+      return
+    }
+
+    console.log(`📊 [loadAllStagesRankings] 批次載入 ${stageIds.length} 個階段的排名數據`)
+
+    // 設置所有組別的載入狀態
+    stages.forEach(stage => {
+      if (stage.groups && stage.groups.length > 0) {
+        stage.groups.forEach((group: Group) => {
+          if ((String(group.voteRank) === '-' || !group.voteRank) && (String(group.teacherRank) === '-' || !group.teacherRank)) {
+            group.rankingsLoading = true
+          }
+        })
+      }
+    })
+
+    try {
+      // 使用批次 API
+      const httpResponse = await (rpcClient.api.rankings as any)['all-stages-rankings'].$post({
+        json: {
+          projectId: projectId,
+          stageIds: stageIds
+        }
+      })
+      const response = await httpResponse.json()
+
+      console.log(`📊 [loadAllStagesRankings] 批次排名API回應:`, response)
+
+      if (response.success && response.data && response.data.stageRankings) {
+        const allRankings = response.data.stageRankings
+
+        // 更新每個階段的排名數據
+        stages.forEach(stage => {
+          const stageId = stage.id || stage.stageId
+          const rankings = allRankings[stageId]
+
+          if (rankings && stage.groups && stage.groups.length > 0) {
+            stage.groups.forEach((group: Group) => {
+              const groupRankings = rankings[group.groupId]
+              if (groupRankings) {
+                // Store complete ranking objects with metadata
+                if (groupRankings.voteRank) {
+                  if (typeof groupRankings.voteRank === 'object') {
+                    group.voteRankData = groupRankings.voteRank
+                    group.voteRank = groupRankings.voteRank.rank
+                  } else {
+                    group.voteRank = groupRankings.voteRank
+                    group.voteRankData = null
+                  }
+                }
+                if (groupRankings.teacherRank) {
+                  if (typeof groupRankings.teacherRank === 'object') {
+                    group.teacherRankData = groupRankings.teacherRank
+                    group.teacherRank = groupRankings.teacherRank.rank
+                  } else {
+                    group.teacherRank = groupRankings.teacherRank
+                    group.teacherRankData = null
+                  }
+                }
+                if (groupRankings.proposalStats) {
+                  group.proposalStats = groupRankings.proposalStats
+                }
+              }
+              group.rankingsLoading = false
+            })
+          } else if (stage.groups) {
+            // 沒有排名數據，清除載入狀態
+            stage.groups.forEach((group: Group) => {
+              group.rankingsLoading = false
+            })
+          }
+        })
+
+        // ✅ 強制觸發響應式更新：用展開運算符重新賦值所有階段的 groups
+        stages.forEach(stage => {
+          if (stage.groups) {
+            stage.groups = [...stage.groups]
+          }
+        })
+
+        console.log(`✅ [loadAllStagesRankings] 批次排名載入完成`)
+      } else {
+        console.warn(`⚠️ [loadAllStagesRankings] 批次排名API返回無效數據`)
+        // 清除所有載入狀態
+        stages.forEach(stage => {
+          if (stage.groups) {
+            stage.groups.forEach((group: Group) => {
+              group.rankingsLoading = false
+            })
+          }
+        })
+      }
+    } catch (error) {
+      console.error(`❌ [loadAllStagesRankings] 批次載入排名失敗:`, error)
+      // 清除所有載入狀態
+      stages.forEach(stage => {
+        if (stage.groups) {
+          stage.groups.forEach((group: Group) => {
+            group.rankingsLoading = false
+          })
+        }
+      })
+    }
+
+    // 批次載入結算排名（只對 completed 階段）
+    const completedStages = stages.filter(s => s.status === 'completed')
+    if (completedStages.length > 0) {
+      await loadAllStagesSettlementRankings(completedStages, projectId)
+    }
+  }
+
+  /**
+   * 批次載入所有已完成階段的結算排名
+   * @param {Array} stages - 已完成的階段陣列
+   * @param {string} projectId - 專案 ID
+   */
+  async function loadAllStagesSettlementRankings(stages: ExtendedStage[], projectId: string) {
+    // 目前 settlement API 沒有批次版本，所以並行載入
+    console.log(`📊 [loadAllStagesSettlementRankings] 並行載入 ${stages.length} 個已完成階段的結算排名`)
+
+    const loadPromises = stages.map(async (stage) => {
+      try {
+        const httpResponse = await rpcClient.settlement['stage-rankings'].$post({
+          json: {
+            projectId: projectId,
+            stageId: stage.id || stage.stageId
+          }
+        })
+        const settlementResponse = await httpResponse.json()
+
+        if (settlementResponse.success && settlementResponse.data && settlementResponse.data.settled) {
+          const settlementRankings = settlementResponse.data.rankings
+
+          if (stage.groups && stage.groups.length > 0) {
+            stage.groups.forEach((group: Group) => {
+              const settlementData = settlementRankings[group.groupId]
+              if (settlementData) {
+                group.settlementRank = settlementData.finalRank
+                group.finalSettlementRank = settlementData.finalRank
+                group.earnedPoints = settlementData.allocatedPoints
+              }
+            })
+          }
+        }
+      } catch (error) {
+        console.error(`❌ [loadAllStagesSettlementRankings] 載入階段 ${stage.title} 結算排名失敗:`, error)
+      }
+    })
+
+    await Promise.all(loadPromises)
+
+    // ✅ 強制觸發響應式更新：用展開運算符重新賦值所有階段的 groups
+    stages.forEach(stage => {
+      if (stage.groups) {
+        stage.groups = [...stage.groups]
+      }
+    })
+
+    console.log(`✅ [loadAllStagesSettlementRankings] 結算排名載入完成`)
+  }
+
+  /**
+   * 載入階段排名數據（單一階段版本，用於刷新）
    * @param {Object} stage - 階段對象
    * @param {string} projectId - 專案 ID
    */
@@ -648,11 +833,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
             }
           }
 
-          // 載入排名數據
-          console.log(`🎯 [loadAllStageReports] 準備載入階段 ${stage.title} 的排名數據...`)
-          await loadStageRankings(stage as ExtendedStage, projectId)
-          console.log(`🎯 [loadAllStageReports] 階段 ${stage.title} 的排名數據載入完成`)
-
+          // 排名數據將在所有報告載入完成後批次載入
           stage.contentLoaded = true
           console.log(`✅ 階段 ${stage.title} 的報告已載入，共 ${stage.groups.length} 個群組:`, stage.groups)
         } else {
@@ -680,6 +861,11 @@ export function useStageContentManagement(projectData: any, userData: any) {
       loadingReports: s.loadingReports,
       contentLoaded: s.contentLoaded
     })))
+
+    // 批次載入所有階段的排名數據（優化：使用單一 API 呼叫）
+    console.log('🎯 [loadAllStageReports] 開始批次載入所有階段的排名數據...')
+    await loadAllStagesRankings(stages, projectId)
+    console.log('🎯 [loadAllStageReports] 所有階段的排名數據載入完成')
   }
 
   /**
@@ -904,6 +1090,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
     refreshStageReports,
     refreshStageContent,
     loadAllStageReports,
+    loadAllStagesRankings, // 批次載入排名 API
 
     // 輔助函數
     processSubmissionsToGroups,

@@ -10,7 +10,12 @@
     />
     
     <!-- 評論列表 -->
-    <div v-for="comment in comments" :key="comment.id" class="comment-item">
+    <div
+      v-for="comment in comments"
+      :key="comment.id"
+      class="comment-item"
+      :class="{ 'not-pinned': pinnedAuthorEmail && comment.author !== pinnedAuthorEmail }"
+    >
       <!-- 評論排名狀態指示區 -->
       <div class="comment-status-bar" v-if="!comment.isTeacherComment">
         <!-- Active 階段：顯示資格狀態（三種狀態） -->
@@ -46,64 +51,119 @@
 
         <!-- Voting 階段：只對有資格的評論顯示排名 -->
         <div v-if="stageStatus === 'voting' && comment.canBeVoted" class="ranking-badges">
-          <div class="status-badge settlement">
-            結算第
-            <i v-if="loadingRankings" class="fas fa-spinner fa-spin"></i>
-            <span v-else>{{ comment.settlementRank || '-' }}</span>
-            名
-          </div>
-          <div class="status-badge user-vote">
+          <!-- 學生看到自己的投票 -->
+          <div v-if="numericPermissionLevel !== 1" class="status-badge user-vote">
             你投第
-            <i v-if="loadingRankings" class="fas fa-spinner fa-spin"></i>
-            <span v-else>{{ comment.userVoteRank || '-' }}</span>
+            <StatNumberContent
+              :value="comment.userVoteRank || '-'"
+              :loading="loadingRankings"
+              size="small"
+            />
             名
           </div>
+          <!-- 所有人都能看到老師的投票 -->
           <div class="status-badge teacher-vote">
             老師投第
-            <i v-if="loadingRankings" class="fas fa-spinner fa-spin"></i>
-            <span v-else>{{ comment.teacherVoteRank || '-' }}</span>
+            <StatNumberContent
+              :value="comment.teacherVoteRank || '-'"
+              :loading="loadingRankings"
+              size="small"
+            />
             名
           </div>
 
           <!-- Reaction 統計 -->
           <div class="status-badge reaction-stat helpful">
             <i class="fas fa-thumbs-up"></i>
-            {{ getReactionCount(comment, 'helpful') }}
+            <StatNumberContent
+              :value="getReactionCount(comment, 'helpful')"
+              :loading="false"
+              size="small"
+            />
           </div>
           <div class="status-badge reaction-stat disagreed">
             <i class="fas fa-thumbs-down"></i>
-            {{ getReactionCount(comment, 'disagreed') }}
+            <StatNumberContent
+              :value="getReactionCount(comment, 'disagreed')"
+              :loading="false"
+              size="small"
+            />
           </div>
         </div>
 
-        <!-- Completed 階段：只對有資格的評論顯示最終結果 -->
+        <!-- Completed 階段：所有人看到完整結果 -->
         <div v-if="stageStatus === 'completed' && comment.canBeVoted" class="ranking-badges">
           <div class="status-badge final-rank">
-            最終排名第
-            <i v-if="loadingRankings" class="fas fa-spinner fa-spin"></i>
-            <span v-else>{{ comment.finalRank || '-' }}</span>
+            結算第
+            <StatNumberContent
+              :value="comment.finalRank || '-'"
+              :loading="loadingRankings"
+              size="small"
+            />
+            名
+          </div>
+          <!-- 學生看到自己的投票 -->
+          <div v-if="numericPermissionLevel !== 1" class="status-badge user-vote">
+            你投第
+            <StatNumberContent
+              :value="comment.userVoteRank || '-'"
+              :loading="loadingRankings"
+              size="small"
+            />
+            名
+          </div>
+          <!-- 所有人看到老師的投票 -->
+          <div class="status-badge teacher-vote">
+            老師投第
+            <StatNumberContent
+              :value="comment.teacherVoteRank || '-'"
+              :loading="loadingRankings"
+              size="small"
+            />
             名
           </div>
           <div class="status-badge allocated-points">
             獲得了
-            <i v-if="loadingRankings" class="fas fa-spinner fa-spin"></i>
-            <span v-else>{{ comment.allocatedPoints || '-' }}</span>
+            <StatNumberContent
+              :value="comment.allocatedPoints || '-'"
+              :loading="loadingRankings"
+              size="small"
+            />
             點
           </div>
 
           <!-- Reaction 統計 -->
           <div class="status-badge reaction-stat helpful">
             <i class="fas fa-thumbs-up"></i>
-            {{ getReactionCount(comment, 'helpful') }}
+            <StatNumberContent
+              :value="getReactionCount(comment, 'helpful')"
+              :loading="false"
+              size="small"
+            />
           </div>
           <div class="status-badge reaction-stat disagreed">
             <i class="fas fa-thumbs-down"></i>
-            {{ getReactionCount(comment, 'disagreed') }}
+            <StatNumberContent
+              :value="getReactionCount(comment, 'disagreed')"
+              :loading="false"
+              size="small"
+            />
           </div>
         </div>
 
         <!-- 右側：合併的綠色按鈕組 -->
         <div class="action-buttons">
+          <!-- 釘選作者按鈕 -->
+          <el-tooltip content="只看這個人在這個階段的評論" placement="top">
+            <button
+              class="action-btn pin-btn"
+              :class="{ 'active': pinnedAuthorEmail === comment.author }"
+              @click="togglePinAuthor(comment.author)"
+            >
+              <i class="fas fa-thumbtack"></i>
+            </button>
+          </el-tooltip>
+
           <!-- 回覆按鈕 -->
           <button
             v-if="canReplyToComment(comment)"
@@ -209,21 +269,25 @@
   </div>
 </template>
 
-<script>
-import { computed } from 'vue'
-import { ElBadge, ElMessage } from 'element-plus'
+<script lang="ts">
+import { computed, defineComponent, type DefineComponent } from 'vue'
+import { ElBadge, ElMessage, ElTooltip } from 'element-plus'
+import StatNumberContent from '@/components/shared/StatNumberContent.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import AvatarGroup from '@/components/common/AvatarGroup.vue'
 import { useProjectRole } from '@/composables/useProjectRole'
 import { getNumericPermissionLevel } from '@/composables/useProjectPermissions'
 import { rpcClient } from '@/utils/rpc-client'
 import { generateAvatarUrl } from '@/utils/walletHelpers'
+import { handleError } from '@/utils/errorHandler'
 
-export default {
+// Explicit type annotation to avoid TS2742 error with number-flow module
+const component: DefineComponent<any, any, any> = defineComponent({
   name: 'StageComments',
   components: {
     EmptyState,
-    AvatarGroup
+    AvatarGroup,
+    StatNumberContent
   },
   props: {
     stageId: {
@@ -257,6 +321,16 @@ export default {
     projectGroups: {
       type: Array,
       default: () => []
+    },
+    // 從父組件傳入的評論資料，避免重複請求
+    initialComments: {
+      type: Array,
+      default: null  // null 表示需要自己載入，[] 表示已載入但無資料
+    },
+    // 從父組件傳入的排名資料
+    initialRankings: {
+      type: Object,
+      default: null
     }
   },
   setup(props) {
@@ -266,7 +340,8 @@ export default {
         return props.permissionLevel
       }
       if (typeof props.permissionLevel === 'string') {
-        return getNumericPermissionLevel(props.permissionLevel)
+        // Cast to PermissionLevel since we accept both number and string in props
+        return getNumericPermissionLevel(props.permissionLevel as any)
       }
       return null
     })
@@ -277,23 +352,61 @@ export default {
   },
   data() {
     return {
-      comments: [],
-      loading: true,
-      commentRankings: {},
-      loadingRankings: true
+      comments: [] as any[],
+      loading: false,  // 預設 false，只有真正載入時才設為 true
+      commentRankings: {} as Record<string, any>,
+      loadingRankings: false,
+      hasInitialized: false,  // 追蹤是否已初始化
+      totalComments: 0,
+      votingEligible: false,
+      pinnedAuthorEmail: null as string | null  // 用於篩選特定作者的評論
     }
   },
   async mounted() {
-    await this.loadStageComments()
+    // 如果有傳入初始評論資料，直接使用；否則才自己載入
+    if (this.initialComments !== null) {
+      this.comments = this.processCommentsData(this.initialComments)
+      this.hasInitialized = true
+      // 如果有傳入排名資料，也直接使用
+      if (this.initialRankings !== null) {
+        this.applyRankingsToComments(this.initialRankings)
+      } else {
+        // 只載入排名
+        await this.loadCommentRankings()
+      }
+    } else {
+      // 沒有初始資料，需要自己載入
+      await this.loadStageComments()
+      this.hasInitialized = true
+    }
   },
   watch: {
+    // 監聽 stageId 變化（用於父組件切換階段時）
     stageId: {
-      handler(newStageId) {
-        if (newStageId) {
+      handler(newStageId, oldStageId) {
+        // 只有在 stageId 真正變化時才重新載入（排除初始化）
+        if (newStageId && oldStageId && newStageId !== oldStageId) {
           this.loadStageComments()
         }
+      }
+    },
+    // 監聽父組件傳入的評論資料變化
+    initialComments: {
+      handler(newComments) {
+        if (newComments !== null && this.hasInitialized) {
+          this.comments = this.processCommentsData(newComments)
+        }
       },
-      immediate: true
+      deep: true
+    },
+    // 監聽父組件傳入的排名資料變化
+    initialRankings: {
+      handler(newRankings) {
+        if (newRankings !== null) {
+          this.applyRankingsToComments(newRankings)
+        }
+      },
+      deep: true
     }
   },
   methods: {
@@ -334,7 +447,7 @@ export default {
           console.log('排名載入完成')
         } else {
           console.error('評論載入失敗:', response)
-          this.$handleError('無法載入評論列表', {
+          handleError('無法載入評論列表', {
             action: '載入評論'
           })
         }
@@ -346,7 +459,7 @@ export default {
       }
     },
     
-    processCommentsData(rawComments) {
+    processCommentsData(rawComments: any[]) {
       if (!rawComments || !Array.isArray(rawComments)) {
         return []
       }
@@ -377,9 +490,9 @@ export default {
         }
         
         // 處理回復評論
-        let replies = []
+        let replies: any[] = []
         if (comment.replies && Array.isArray(comment.replies)) {
-          replies = comment.replies.map(reply => ({
+          replies = comment.replies.map((reply: any) => ({
             id: reply.commentId || reply.id,
             content: reply.content,
             timestamp: this.formatTime(reply.createdTime),
@@ -407,8 +520,8 @@ export default {
           avatarStyle: comment.authorAvatarStyle,
           avatarOptions: comment.authorAvatarOptions,
           authorRole: comment.authorRole || null, // 保存完整的 role 資訊
-          mentionedUsers: mentionedUsers.map(email => {
-            const displayName = this.userEmailToDisplayName[email] || email.split('@')[0]
+          mentionedUsers: mentionedUsers.map((email: string) => {
+            const displayName = (this.userEmailToDisplayName as Record<string, string>)[email] || email.split('@')[0]
             return `${displayName}(${email})`
           }),
           mentionedGroups: this.convertGroupIdsToNames(mentionedGroups),
@@ -443,36 +556,36 @@ export default {
       })
     },
     
-    parseCommentContent(content) {
+    parseCommentContent(content: string) {
       if (!content) return ''
-      
+
       // 先進行markdown解析
       let html = content
         // Headers
         .replace(/^### (.*$)/gim, '<h3>$1</h3>')
         .replace(/^## (.*$)/gim, '<h2>$1</h2>')
         .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-        
+
         // Bold
         .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
         .replace(/__(.*?)__/gim, '<strong>$1</strong>')
-        
+
         // Italic
         .replace(/\*(.*?)\*/gim, '<em>$1</em>')
         .replace(/_(.*?)_/gim, '<em>$1</em>')
-        
+
         // Code blocks
         .replace(/```([\s\S]*?)```/gim, '<pre><code>$1</code></pre>')
         .replace(/`([^`]*)`/gim, '<code>$1</code>')
-        
+
         // Links
         .replace(/\[([^\]]*)\]\(([^\)]*)\)/gim, '<a href="$2" target="_blank">$1</a>')
-        
+
         // Line breaks
         .replace(/\n/gim, '<br>')
-      
+
       // 然後解析 @email 標記，顯示為友好的用戶名稱
-      html = html.replace(/@([^\s@]+@[^\s@]+)/g, (match, email) => {
+      html = html.replace(/@([^\s@]+@[^\s@]+)/g, (_match: string, email: string) => {
         // 嘗試從項目數據中找到用戶的顯示名稱
         const friendlyName = this.getEmailDisplayName(email)
         const emailPrefix = email.split('@')[0]
@@ -489,16 +602,16 @@ export default {
       return html
     },
     
-    getEmailDisplayName(email) {
-      return this.userEmailToDisplayName[email] || email.split('@')[0]
+    getEmailDisplayName(email: string) {
+      return (this.userEmailToDisplayName as Record<string, string>)[email] || email.split('@')[0]
     },
 
-    convertGroupIdsToNames(groupIds) {
+    convertGroupIdsToNames(groupIds: string[]) {
       if (!Array.isArray(groupIds)) return []
 
-      return groupIds.map(groupId => {
+      return groupIds.map((groupId: string) => {
         // 從 prop 中獲取群組名稱
-        const group = this.projectGroups.find(g => g.groupId === groupId)
+        const group = (this.projectGroups as any[]).find((g: any) => g.groupId === groupId)
         if (group) {
           return group.groupName || group.name || groupId
         }
@@ -507,19 +620,19 @@ export default {
         return groupId
       })
     },
-    
-    formatTime(timestamp) {
+
+    formatTime(timestamp: string | number) {
       if (!timestamp) return ''
       return new Date(timestamp).toLocaleString('zh-TW')
     },
 
-    handleReply(groupId) {
+    handleReply(groupId: string) {
       console.log('回復組別:', groupId)
       // 這裡會觸發回復評論的功能
       this.$emit('reply', groupId)
     },
     
-    handleReplyClick(comment) {
+    handleReplyClick(comment: any) {
       // 發送回復評論的事件給父組件
       this.$emit('reply-comment', {
         commentId: comment.id,
@@ -529,8 +642,8 @@ export default {
         mentionedUsers: comment.mentionedUsers
       })
     },
-    
-    canReplyToComment(comment) {
+
+    canReplyToComment(comment: any) {
       if (!this.currentUserEmail) {
         return false
       }
@@ -553,10 +666,10 @@ export default {
 
       // Check if user is in replyUsers list (mentionedUsers + expanded mentionedGroups)
       // Note: replyUsers is now an array of objects with userEmail property
-      return comment.replyUsers?.some(u => u.userEmail === this.currentUserEmail) || false
+      return comment.replyUsers?.some((u: any) => u.userEmail === this.currentUserEmail) || false
     },
     
-    getReplyButtonText(comment) {
+    getReplyButtonText(comment: any) {
       if (!this.currentUserEmail) {
         return '回覆'
       }
@@ -575,7 +688,7 @@ export default {
       return '被@到‧回覆'
     },
 
-    isCommentEligible(comment) {
+    isCommentEligible(comment: any) {
       // 檢查 mentionedGroups
       let hasGroups = false
       if (comment.rawMentionedGroups) {
@@ -611,7 +724,7 @@ export default {
     },
 
     // 檢查評論是否有 mentions（被 @ 了組別或用戶）
-    commentHasMentions(comment) {
+    commentHasMentions(comment: any) {
       // 檢查 mentionedGroups
       let hasGroups = false
       if (comment.rawMentionedGroups) {
@@ -742,7 +855,7 @@ export default {
     },
 
     // 檢查用戶是否可以對此評論投 reaction
-    canReactToComment(comment) {
+    canReactToComment(comment: any) {
       console.log('[canReactToComment] 檢查權限:', {
         commentId: comment.commentId,
         currentUserEmail: this.currentUserEmail,
@@ -773,22 +886,22 @@ export default {
     },
 
     // 獲取某個 reaction 類型的數量
-    getReactionCount(comment, reactionType) {
+    getReactionCount(comment: any, reactionType: string) {
       if (!comment.reactions || !Array.isArray(comment.reactions)) {
         return 0
       }
 
-      const reaction = comment.reactions.find(r => r.type === reactionType)
+      const reaction = comment.reactions.find((r: any) => r.type === reactionType)
       return reaction ? reaction.count : 0
     },
 
     // 獲取當前用戶對此評論的 reaction
-    getCommentUserReaction(comment) {
+    getCommentUserReaction(comment: any) {
       return comment.userReaction || null
     },
 
     // 處理 reaction 點擊
-    async handleReaction(comment, reactionType) {
+    async handleReaction(comment: any, reactionType: string) {
       try {
         const currentReaction = this.getCommentUserReaction(comment)
 
@@ -806,7 +919,7 @@ export default {
     },
 
     // 添加 reaction
-    async addReaction(comment, reactionType) {
+    async addReaction(comment: any, reactionType: string) {
       try {
         const httpResponse = await rpcClient.comments.reactions.add.$post({
           json: {
@@ -836,7 +949,7 @@ export default {
     },
 
     // 移除 reaction
-    async removeReaction(comment) {
+    async removeReaction(comment: any) {
       try {
         const httpResponse = await rpcClient.comments.reactions.remove.$post({
           json: {
@@ -865,7 +978,7 @@ export default {
     },
 
     // 獲取作者 Avatar URL
-    getAuthorAvatarUrl(author) {
+    getAuthorAvatarUrl(author: any) {
       if (author.avatarSeed && author.avatarStyle) {
         return generateAvatarUrl({
           userEmail: author.author || author.authorEmail,
@@ -885,9 +998,36 @@ export default {
       await this.loadStageComments()
     },
 
-    // 移除重複的apiCall方法，統一使用$apiClient
+    // 應用排名資料到評論（用於從父組件接收排名資料時）
+    applyRankingsToComments(rankings: Record<string, any>) {
+      if (!rankings || !this.comments.length) return
+
+      this.commentRankings = rankings
+      this.comments = this.comments.map(comment => {
+        const rankingData = rankings[comment.commentId] || {}
+        return {
+          ...comment,
+          settlementRank: rankingData.settlementRank || null,
+          userVoteRank: rankingData.userVoteRank || null,
+          teacherVoteRank: rankingData.teacherVoteRank || null,
+          finalRank: rankingData.finalRank || null,
+          allocatedPoints: rankingData.allocatedPoints || null
+        }
+      })
+    },
+
+    // 切換釘選作者（用於篩選顯示特定作者的評論）
+    togglePinAuthor(authorEmail: string) {
+      if (this.pinnedAuthorEmail === authorEmail) {
+        this.pinnedAuthorEmail = null  // 取消釘選
+      } else {
+        this.pinnedAuthorEmail = authorEmail  // 釘選此作者
+      }
+    }
   }
-}
+})
+
+export default component
 </script>
 
 <style scoped>
@@ -1430,6 +1570,21 @@ export default {
   white-space: nowrap !important;
   border: 2px solid #fff !important;
   z-index: 10 !important;
+}
+
+/* 非鎖定評論淡化 (與 StageGroupSubmissions 一致) */
+.comment-item.not-pinned {
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
+}
+
+.comment-item.not-pinned:hover {
+  opacity: 0.8;
+}
+
+/* Pin 按鈕樣式 */
+.action-btn.pin-btn {
+  min-width: 40px;
 }
 
 /* ===== 小螢幕按鈕文字隱藏 (< 768px) ===== */

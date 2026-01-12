@@ -7,6 +7,7 @@ import type { Env } from '../types';
  * - POST /comments/create - Create comment
  * - POST /comments/details - Get comment details (GAS-compatible)
  * - POST /comments/stage - Get stage comments
+ * - POST /comments/all-stages - Get comments for all stages (batch API)
  * - POST /comments/reactions/add - Add reaction
  * - POST /comments/reactions/remove - Remove reaction
  * - POST /comments/reactions/get - Get comment reactions
@@ -28,7 +29,8 @@ import { checkStageAcceptsRankings } from '../utils/stage-validation';
 import {
   createComment,
   getStageComments,
-  getCommentDetails
+  getCommentDetails,
+  getAllStagesComments
 } from '../handlers/comments/manage';
 import {
   addReaction,
@@ -57,7 +59,8 @@ import {
   GetCommentRankingsRequestSchema,
   GetStageCommentRankingsRequestSchema,
   GetCommentSettlementAnalysisRequestSchema,
-  GetCommentRankingHistoryRequestSchema
+  GetCommentRankingHistoryRequestSchema,
+  GetAllStagesCommentsRequestSchema
 } from '@repo/shared/schemas/comments';
 
 
@@ -202,6 +205,42 @@ app.post(
       user.userEmail,
       body.projectId,
       body.stageId,
+      {
+        excludeTeachers: body.excludeTeachers || false,
+        forVoting: body.forVoting || false
+      }
+    );
+
+    return response;
+  }
+);
+
+/**
+ * Get comments for all stages in a single request (batch API)
+ * Body: { projectId, stageIds: string[], excludeTeachers?, forVoting? }
+ */
+app.post(
+  '/all-stages',
+  zValidator('json', GetAllStagesCommentsRequestSchema),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+
+    // Check permission
+    const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
+    if (!hasPermission) {
+      return c.json({
+        success: false,
+        error: 'Insufficient permissions to view comments',
+        errorCode: 'ACCESS_DENIED'
+      }, 403);
+    }
+
+    const response = await getAllStagesComments(
+      c.env,
+      user.userEmail,
+      body.projectId,
+      body.stageIds,
       {
         excludeTeachers: body.excludeTeachers || false,
         forVoting: body.forVoting || false

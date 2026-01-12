@@ -20,6 +20,25 @@ pnpm dev:frontend    # http://localhost:5173
 pnpm dev:backend     # http://localhost:8787
 ```
 
+### 跳過 2FA 驗證（本地開發）
+
+本地開發時，如果不想設定 SMTP 發送驗證碼，可以在 `packages/backend/.dev.vars` 中**註解掉 SMTP 相關設定**：
+
+```bash
+# packages/backend/.dev.vars
+JWT_SECRET=your-secret...
+
+# 註解掉以下 SMTP 設定，系統會在 console 顯示驗證碼
+#SMTP_HOST=smtp.gmail.com
+#SMTP_PORT=587
+#SMTP_USERNAME=your-email@gmail.com
+#SMTP_PASSWORD=your-app-password
+#SMTP_FROM_NAME=Your Name
+#SMTP_FROM_EMAIL=your-email@gmail.com
+```
+
+當 SMTP 未設定時，2FA 驗證碼會直接輸出到 backend 的 console log，你可以從那裡複製驗證碼登入。
+
 ## 測試
 
 ```bash

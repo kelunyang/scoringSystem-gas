@@ -5,6 +5,7 @@ import type { Env } from '../types';
  *
  * Endpoints:
  * - POST /rankings/stage-rankings - Get stage rankings (teacher + user group votes)
+ * - POST /rankings/all-stages-rankings - Get rankings for all stages (Batch API)
  * - POST /rankings/teacher-vote-history - Get teacher's voting history for a stage
  * - POST /rankings/teacher-ranking-versions - Get teacher ranking version history
  * - POST /rankings/proposals - Get all ranking proposals for a stage
@@ -23,7 +24,7 @@ import { zValidator } from '@hono/zod-validator';
 import { authMiddleware } from '../middleware/auth';
 import { checkProjectPermission, checkIsTeacherOrAbove } from '../middleware/permissions';
 import { checkStageAcceptsRankings } from '../utils/stage-validation';
-import { getStageRankings } from '../handlers/rankings/stage';
+import { getStageRankings, getAllStagesRankings } from '../handlers/rankings/stage';
 import { getTeacherVoteHistory } from '../handlers/rankings/teacher-history';
 import { getTeacherRankingVersions } from '../handlers/rankings/teacher-ranking-versions';
 import { getStageRankingProposals } from '../handlers/rankings/proposals';
@@ -37,6 +38,7 @@ import { getStageVotingStatus } from '../handlers/rankings/voting-status';
 import { getTeacherRankings } from '../handlers/rankings/teacher-rankings';
 import {
   GetStageRankingsRequestSchema,
+  GetAllStagesRankingsRequestSchema,
   GetTeacherVoteHistoryRequestSchema,
   GetRankingProposalsRequestSchema,
   SubmitTeacherComprehensiveVoteRequestSchema,
@@ -95,6 +97,43 @@ app.post(
       effectiveUser.userEmail,
       body.projectId,
       body.stageId
+    );
+
+    return response;
+  }
+);
+
+/**
+ * Get all stages rankings (Batch API)
+ * Returns rankings for multiple stages in a single request
+ * This significantly reduces API calls from N to 1
+ * Body: { projectId, stageIds: string[] }
+ */
+app.post(
+  '/all-stages-rankings',
+  zValidator('json', GetAllStagesRankingsRequestSchema),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+
+    // Check permission: Users with view access can see rankings
+    const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
+    if (!hasPermission) {
+      return c.json({
+        success: false,
+        error: 'Insufficient permissions to view rankings',
+        errorCode: 'ACCESS_DENIED'
+      }, 403);
+    }
+
+    // Use effectiveUser for SUDO mode support
+    const effectiveUser = getEffectiveUser(c);
+
+    const response = await getAllStagesRankings(
+      c.env,
+      effectiveUser.userEmail,
+      body.projectId,
+      body.stageIds
     );
 
     return response;

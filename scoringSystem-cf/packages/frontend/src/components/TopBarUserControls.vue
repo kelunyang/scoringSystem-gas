@@ -60,7 +60,7 @@
           placement="bottom"
           :show-after="300"
         >
-          <span class="user-name">{{ truncatedDisplayName }}</span>
+          <span class="user-name">{{ displayName }}</span>
         </el-tooltip>
         <i class="fas fa-chevron-down"></i>
       </span>
@@ -267,23 +267,13 @@ export default {
 
       return this.generateDicebearUrl(seed, style, options)
     },
-    truncatedDisplayName() {
+    displayName() {
       // SUDO 模式：顯示被 sudo 的學生名稱
       if (this.sudoActive && this.sudoDisplayInfo?.name) {
-        const name = this.sudoDisplayInfo.name
-        if (name.length > 5) {
-          return name.substring(0, 5) + '...'
-        }
-        return name
+        return this.sudoDisplayInfo.name
       }
-
       // 正常模式：顯示自己的名稱
-      if (!this.user?.displayName) return ''
-      const name = this.user.displayName
-      if (name.length > 5) {
-        return name.substring(0, 5) + '...'
-      }
-      return name
+      return this.user?.displayName || ''
     },
     globalPermissionBadge() {
       const permissions = this.user?.permissions || []
@@ -804,6 +794,10 @@ export default {
 
 .user-name {
   font-weight: 500;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .user-btn:hover {

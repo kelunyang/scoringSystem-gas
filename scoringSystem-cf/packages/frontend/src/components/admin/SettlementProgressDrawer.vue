@@ -131,8 +131,8 @@
         <el-result icon="success" title="結算完成！" sub-title="獎金已成功分配給各組成員">
           <template #extra>
             <div class="result-summary">
-              <el-statistic title="參與組數" :value="settlementResult.participantCount" />
-              <el-statistic title="總獎勵" :value="settlementResult.totalRewardDistributed" suffix="點" />
+              <AnimatedStatistic title="參與組數" :value="settlementResult.participantCount ?? 0" />
+              <AnimatedStatistic title="總獎勵(點)" :value="settlementResult.totalRewardDistributed ?? 0" />
             </div>
           </template>
         </el-result>
@@ -317,6 +317,7 @@ import AllGroupsChart from '../shared/ContributionChart/AllGroupsChart.vue'
 import OurGroupChart from '../shared/ContributionChart/OurGroupChart.vue'
 import ScoringExplanationDrawer from '../shared/ScoringExplanationDrawer.vue'
 import EmptyState from '../shared/EmptyState.vue'
+import AnimatedStatistic from '../shared/AnimatedStatistic.vue'
 
 // Drawer Breadcrumb
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()

@@ -532,32 +532,61 @@ export async function getStageSettlementRankings(
   console.log('[getStageSettlementRankings] Called with:', { userEmail, projectId, stageId });
 
   try {
-    console.log('[getStageSettlementRankings] Checking view permission (Level 0-3+: All project participants)...');
-    // Check view permission (Level 0-3+: Admin/Creator, Teacher, Observer, Students)
-    // Settlement rankings are read-only historical data that all participants should see
-    const hasViewPermission = await checkProjectPermission(
-      env,
-      userEmail,
-      projectId,
-      'view'
-    );
+    // Optimized: Combined query for permission check, stage status, and settlements
+    // This reduces 3+ queries to just 1 query
+    const combinedResult = await env.DB.prepare(`
+      WITH UserAccess AS (
+        SELECT CASE
+          WHEN EXISTS (
+            SELECT 1 FROM users u
+            JOIN globalusergroups gu ON u.userId = gu.userEmail
+            JOIN globalgroups g ON gu.globalGroupId = g.globalGroupId
+            WHERE u.userEmail = ? AND g.globalPermissions LIKE '%system_admin%'
+          ) THEN 1
+          WHEN EXISTS (
+            SELECT 1 FROM projects p
+            JOIN users u ON p.createdBy = u.userId
+            WHERE p.projectId = ? AND u.userEmail = ?
+          ) THEN 1
+          WHEN EXISTS (
+            SELECT 1 FROM projectviewers
+            WHERE userEmail = ? AND projectId = ? AND isActive = 1
+          ) THEN 1
+          WHEN EXISTS (
+            SELECT 1 FROM usergroups
+            WHERE userEmail = ? AND projectId = ? AND isActive = 1
+          ) THEN 1
+          ELSE 0
+        END as hasAccess
+      ),
+      StageInfo AS (
+        SELECT status FROM stages_with_status
+        WHERE stageId = ? AND projectId = ?
+      )
+      SELECT
+        ua.hasAccess,
+        COALESCE(si.status, 'not_found') as stageStatus
+      FROM UserAccess ua
+      LEFT JOIN StageInfo si ON 1=1
+    `).bind(
+      userEmail,              // system_admin check
+      projectId, userEmail,   // creator check
+      userEmail, projectId,   // projectviewers check
+      userEmail, projectId,   // usergroups check
+      stageId, projectId      // stage status check
+    ).first();
 
-    console.log('[getStageSettlementRankings] View permission result:', hasViewPermission);
+    const hasAccess = combinedResult?.hasAccess === 1;
+    const stageStatus = combinedResult?.stageStatus as string;
 
-    if (!hasViewPermission) {
+    console.log('[getStageSettlementRankings] Combined check result:', { hasAccess, stageStatus });
+
+    if (!hasAccess) {
       console.log('[getStageSettlementRankings] Access denied - requires project membership');
       return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view settlement rankings');
     }
 
-    console.log('[getStageSettlementRankings] Checking stage status...');
-    // Check if stage is settled (needs VIEW for status)
-    const stage = await env.DB.prepare(`
-      SELECT * FROM stages_with_status WHERE stageId = ? AND projectId = ?
-    `).bind(stageId, projectId).first();
-
-    console.log('[getStageSettlementRankings] Stage result:', stage);
-
-    if (!stage || stage.status !== 'completed') {
+    if (stageStatus !== 'completed') {
       console.log('[getStageSettlementRankings] Stage not settled, returning empty rankings');
       return successResponse({
         settled: false,
@@ -566,8 +595,8 @@ export async function getStageSettlementRankings(
       });
     }
 
+    // Only fetch settlements if stage is completed (this is the only additional query needed)
     console.log('[getStageSettlementRankings] Fetching settlements...');
-    // Get stage settlements for this stage
     const settlementsResult = await env.DB.prepare(`
       SELECT * FROM stagesettlements WHERE stageId = ? AND projectId = ?
     `).bind(stageId, projectId).all();
@@ -623,29 +652,61 @@ export async function getCommentSettlementRankings(
   console.log('[getCommentSettlementRankings] Called with:', { userEmail, projectId, stageId });
 
   try {
-    console.log('[getCommentSettlementRankings] Checking view permission (Level 0-3+: All project participants)...');
-    // Check view permission (Level 0-3+: Admin/Creator, Teacher, Observer, Students)
-    // Comment settlement rankings are read-only historical data that all participants should see
-    const hasViewPermission = await checkProjectPermission(
-      env,
-      userEmail,
-      projectId,
-      'view'
-    );
+    // Optimized: Combined query for permission check and stage status
+    // This reduces 3+ queries to just 1 query
+    const combinedResult = await env.DB.prepare(`
+      WITH UserAccess AS (
+        SELECT CASE
+          WHEN EXISTS (
+            SELECT 1 FROM users u
+            JOIN globalusergroups gu ON u.userId = gu.userEmail
+            JOIN globalgroups g ON gu.globalGroupId = g.globalGroupId
+            WHERE u.userEmail = ? AND g.globalPermissions LIKE '%system_admin%'
+          ) THEN 1
+          WHEN EXISTS (
+            SELECT 1 FROM projects p
+            JOIN users u ON p.createdBy = u.userId
+            WHERE p.projectId = ? AND u.userEmail = ?
+          ) THEN 1
+          WHEN EXISTS (
+            SELECT 1 FROM projectviewers
+            WHERE userEmail = ? AND projectId = ? AND isActive = 1
+          ) THEN 1
+          WHEN EXISTS (
+            SELECT 1 FROM usergroups
+            WHERE userEmail = ? AND projectId = ? AND isActive = 1
+          ) THEN 1
+          ELSE 0
+        END as hasAccess
+      ),
+      StageInfo AS (
+        SELECT status FROM stages_with_status
+        WHERE stageId = ? AND projectId = ?
+      )
+      SELECT
+        ua.hasAccess,
+        COALESCE(si.status, 'not_found') as stageStatus
+      FROM UserAccess ua
+      LEFT JOIN StageInfo si ON 1=1
+    `).bind(
+      userEmail,              // system_admin check
+      projectId, userEmail,   // creator check
+      userEmail, projectId,   // projectviewers check
+      userEmail, projectId,   // usergroups check
+      stageId, projectId      // stage status check
+    ).first();
 
-    console.log('[getCommentSettlementRankings] View permission result:', hasViewPermission);
+    const hasAccess = combinedResult?.hasAccess === 1;
+    const stageStatus = combinedResult?.stageStatus as string;
 
-    if (!hasViewPermission) {
+    console.log('[getCommentSettlementRankings] Combined check result:', { hasAccess, stageStatus });
+
+    if (!hasAccess) {
       console.log('[getCommentSettlementRankings] Access denied - requires project membership');
       return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view settlement rankings');
     }
 
-    // Check if stage is settled (needs VIEW for status)
-    const stage = await env.DB.prepare(`
-      SELECT * FROM stages_with_status WHERE stageId = ? AND projectId = ?
-    `).bind(stageId, projectId).first();
-
-    if (!stage || stage.status !== 'completed') {
+    if (stageStatus !== 'completed') {
       return successResponse({
         settled: false,
         rankings: {},
@@ -653,7 +714,7 @@ export async function getCommentSettlementRankings(
       });
     }
 
-    // Get comment settlements for this stage
+    // Only fetch settlements if stage is completed
     const settlementsResult = await env.DB.prepare(`
       SELECT * FROM commentsettlements WHERE stageId = ? AND projectId = ?
     `).bind(stageId, projectId).all();

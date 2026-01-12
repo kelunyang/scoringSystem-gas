@@ -314,19 +314,46 @@ const sessionPercentage = computed(() => {
 // Sidebar User Controls (Portrait Mode)
 // ========================================
 
+// Helper function to generate Dicebear URL with options
+const generateDicebearUrl = (seed: string, style: string, options: Record<string, string> = {}) => {
+  const baseUrl = `https://api.dicebear.com/7.x/${style}/svg`
+  const params = new URLSearchParams({
+    seed,
+    size: '40',
+    ...options
+  })
+  return `${baseUrl}?${params.toString()}`
+}
+
 const userAvatarUrl = computed(() => {
   // SUDO 模式：使用被 sudo 的學生頭像
   if (sudoStore.isActive && sudoStore.displayInfo) {
     const seed = sudoStore.displayInfo.avatarSeed || `${sudoStore.displayInfo.email}_sudo`
     const style = sudoStore.displayInfo.avatarStyle || 'avataaars'
-    return `https://api.dicebear.com/7.x/${style}/svg?seed=${seed}&size=40`
+    return generateDicebearUrl(seed, style, {})
   }
 
   // 正常模式：使用自己的頭像
   if (!user.value) return ''
   const seed = user.value.avatarSeed || user.value.userEmail
   const style = user.value.avatarStyle || 'avataaars'
-  return `https://api.dicebear.com/7.x/${style}/svg?seed=${seed}&size=40`
+
+  // 解析 avatarOptions
+  let options: Record<string, string> = {}
+  if (user.value.avatarOptions) {
+    if (typeof user.value.avatarOptions === 'string') {
+      try {
+        options = JSON.parse(user.value.avatarOptions)
+      } catch (e) {
+        console.warn('Failed to parse avatarOptions:', user.value.avatarOptions)
+        options = {}
+      }
+    } else {
+      options = user.value.avatarOptions as Record<string, string>
+    }
+  }
+
+  return generateDicebearUrl(seed, style, options)
 })
 
 const userInitials = computed(() => {
@@ -1093,10 +1120,6 @@ onBeforeUnmount(() => {
 
   .mobile-only {
     display: block;
-  }
-
-  .main-content {
-    padding-top: 60px;
   }
 
   .sidebar.mobile-open .sidebar-header h3 {

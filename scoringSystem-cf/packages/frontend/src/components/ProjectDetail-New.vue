@@ -7,67 +7,73 @@
     <div class="top-bar">
       <div class="page-title">
         <div class="title-with-refresh">
-          <h2>{{ projectTitle || '載入中...' }}</h2>
+          <!-- 專案標題：RWD 用 CSS 控制截斷 -->
+          <el-tooltip :content="projectTitle || '載入中...'" placement="bottom">
+            <h2 class="project-title">{{ projectTitle || '載入中...' }}</h2>
+          </el-tooltip>
 
-          <!-- 融合的重新整理按鈕（智能主題 + 翻轉動畫）-->
-          <CountdownButton
-            ref="refreshButtonRef"
-            plain
-            size="small"
-            type="primary"
-            :duration="refreshDuration"
-            :loading="loading"
-            :auto-start="!isInitialLoading"
-            :full-width="false"
-            :disabled="isInitialLoading"
-            :theme-color="'#000000'"
-            :flip-at="'end'"
-            :external-progress="loadingProgress"
-            @click="handleRefresh"
-            @complete="handleRefresh"
-          >
-            <template #default="{
-              isActive,
-              timeLeft,
-              progressPercentage,
-              loading: btnLoading,
-              disabled,
-              themeColor,
-              contrastColor
-            }">
-              <!-- 初次載入狀態（disabled=true）-->
-              <span v-if="disabled" class="blend-text">
-                {{ getLoadingText(loadingProgress) }} {{ loadingProgress }}%
-              </span>
-
-              <!-- 倒計時狀態（disabled=false）-->
-              <template v-else>
-                <!-- Loading Spinner -->
-                <template v-if="btnLoading">
-                  <i class="fa fa-spinner fa-spin"></i>
-                  <span>重新整理中...</span>
-                </template>
-
-                <!-- 正常倒計時 -->
-                <span v-else class="blend-text">
-                  <i class="fa fa-refresh" :class="{ 'fa-spin-once': isActive && timeLeft > 295 }"></i>
-                  重新整理
-                  <span v-if="isActive" class="countdown-time">
-                    ({{ formatTime(timeLeft) }})
-                  </span>
+          <!-- 按鈕群組：直屏模式靠右 -->
+          <div class="topbar-actions">
+            <!-- 融合的重新整理按鈕（智能主題 + 翻轉動畫）-->
+            <CountdownButton
+              ref="refreshButtonRef"
+              plain
+              size="small"
+              type="primary"
+              :duration="refreshDuration"
+              :loading="loading"
+              :auto-start="!isInitialLoading"
+              :full-width="false"
+              :disabled="isInitialLoading"
+              :theme-color="'#000000'"
+              :flip-at="'end'"
+              :external-progress="loadingProgress"
+              @click="handleRefresh"
+              @complete="handleRefresh"
+            >
+              <template #default="{
+                isActive,
+                timeLeft,
+                progressPercentage,
+                loading: btnLoading,
+                disabled,
+                themeColor,
+                contrastColor
+              }">
+                <!-- 初次載入狀態（disabled=true）-->
+                <span v-if="disabled" class="blend-text">
+                  {{ getLoadingText(loadingProgress) }} {{ loadingProgress }}%
                 </span>
-              </template>
-            </template>
-          </CountdownButton>
 
-          <el-button
-            plain
-            size="small"
-            @click="showEventLogDrawer = true"
-            class="project-event-log-button"
-          >
-            <i class="fa fa-history"></i> 專案事件檢視
-          </el-button>
+                <!-- 倒計時狀態（disabled=false）-->
+                <template v-else>
+                  <!-- Loading Spinner -->
+                  <template v-if="btnLoading">
+                    <i class="fa fa-spinner fa-spin"></i>
+                    <span class="refresh-text">重新整理中...</span>
+                  </template>
+
+                  <!-- 正常倒計時 -->
+                  <span v-else class="blend-text">
+                    <i class="fa fa-refresh" :class="{ 'fa-spin-once': isActive && timeLeft > 295 }"></i>
+                    <span class="refresh-text">重新整理</span>
+                    <span v-if="isActive" class="countdown-time">
+                      ({{ formatTime(timeLeft) }})
+                    </span>
+                  </span>
+                </template>
+              </template>
+            </CountdownButton>
+
+            <el-tooltip content="專案事件檢視" placement="bottom" class="event-log-tooltip">
+              <button
+                class="countdown-btn countdown-btn--primary countdown-btn--small plain project-event-log-button"
+                @click="showEventLogDrawer = true"
+              >
+                <i class="fa fa-history"></i><span class="event-log-text">專案事件檢視</span>
+              </button>
+            </el-tooltip>
+          </div>
         </div>
       </div>
       <TopBarUserControls
@@ -122,31 +128,20 @@
           </h4>
           <el-row :gutter="12" class="scoring-stats-row">
             <el-col :xs="12" :sm="8" :md="4">
-              <el-statistic title="階段報告老師評分權重" :value="teacherRankingWeight * 100" :precision="0">
-                <template #suffix>%</template>
-                <template #prefix><i class="fas fa-chalkboard-teacher"></i></template>
-              </el-statistic>
+              <AnimatedStatistic title="老師評分權重(%)" :value="Math.round(teacherRankingWeight * 100)" />
             </el-col>
             <el-col :xs="12" :sm="8" :md="4">
-              <el-statistic title="階段報告學生評分權重" :value="studentRankingWeight * 100" :precision="0">
-                <template #suffix>%</template>
-                <template #prefix><i class="fas fa-users"></i></template>
-              </el-statistic>
+              <AnimatedStatistic title="學生評分權重(%)" :value="Math.round(studentRankingWeight * 100)" />
             </el-col>
             <el-col :xs="12" :sm="8" :md="4">
-              <el-statistic title="評論獎勵模式" :value="(commentRewardModeText as any)">
-                <template #prefix><i class="fas fa-comments"></i></template>
-              </el-statistic>
+              <!-- 文字值保留 el-statistic -->
+              <el-statistic title="評論獎勵模式" :value="(commentRewardModeText as any)" />
             </el-col>
             <el-col :xs="12" :sm="8" :md="4">
-              <el-statistic title="百分制轉換最小值" :value="scoreRangeMin">
-                <template #prefix><i class="fas fa-arrow-down"></i></template>
-              </el-statistic>
+              <AnimatedStatistic title="百分制最小值" :value="scoreRangeMin" />
             </el-col>
             <el-col :xs="12" :sm="8" :md="4">
-              <el-statistic title="百分制轉換最大值" :value="scoreRangeMax">
-                <template #prefix><i class="fas fa-arrow-up"></i></template>
-              </el-statistic>
+              <AnimatedStatistic title="百分制最大值" :value="scoreRangeMax" />
             </el-col>
           </el-row>
         </div>
@@ -223,7 +218,9 @@
               <i class="fas fa-file-alt"></i>
               <span class="tile-text">
                 <span class="tile-label">報告</span>
-                <span class="tile-value">{{ currentDrawerStage?.reportReward ?? '-' }}</span>
+                <span class="tile-value">
+                  <NumberFlow :value="currentDrawerStage?.reportReward ?? 0" />
+                </span>
               </span>
             </div>
 
@@ -232,7 +229,33 @@
               <i class="fas fa-comment-dots"></i>
               <span class="tile-text">
                 <span class="tile-label">評論</span>
-                <span class="tile-value">{{ currentDrawerStage?.commentReward ?? '-' }}</span>
+                <span class="tile-value">
+                  <NumberFlow :value="currentDrawerStage?.commentReward ?? 0" />
+                </span>
+              </span>
+            </div>
+
+            <!-- Tile 5: 已繳交成果 -->
+            <el-tooltip content="點擊展開/折疊所有成果" placement="top">
+              <div class="hud-tile tile-submissions clickable" @click="toggleAllGroupReports(currentDrawerStage)">
+                <i class="fas fa-inbox"></i>
+                <span class="tile-text">
+                  <span class="tile-label">成果</span>
+                  <span class="tile-value">
+                    <NumberFlow :value="getSubmittedCount(currentDrawerStage)" />
+                  </span>
+                </span>
+              </div>
+            </el-tooltip>
+
+            <!-- Tile 6: 已發布評論 -->
+            <div class="hud-tile tile-comments-count">
+              <i class="fas fa-comments"></i>
+              <span class="tile-text">
+                <span class="tile-label">評論</span>
+                <span class="tile-value">
+                  <NumberFlow :value="currentDrawerStage?.comments?.length ?? 0" />
+                </span>
               </span>
             </div>
           </div>
@@ -693,14 +716,18 @@
               </div>
 
               <div class="stage-rewards">
-                <div class="reward-item">
-                  <span class="label">階段報告獎金</span>
-                  <span class="value">{{ stage.reportReward }}</span>
-                </div>
-                <div class="reward-item">
-                  <span class="label">階段評論獎金</span>
-                  <span class="value">{{ stage.commentReward }}</span>
-                </div>
+                <AnimatedStatistic title="階段報告獎金" :value="stage.reportReward" />
+                <AnimatedStatistic title="階段評論獎金" :value="stage.commentReward" />
+
+                <!-- 已繳交成果（可點擊展開/折疊） -->
+                <el-tooltip content="點擊展開/折疊所有成果" placement="top">
+                  <div class="clickable-stat" @click="toggleAllGroupReports(stage as ExtendedStage)">
+                    <AnimatedStatistic title="已繳交成果" :value="getSubmittedCount(stage as ExtendedStage)" />
+                  </div>
+                </el-tooltip>
+
+                <!-- 已發布評論 -->
+                <AnimatedStatistic title="已發布評論" :value="stage.comments?.length ?? 0" />
               </div>
             </div>
 
@@ -713,6 +740,7 @@
             <!-- 階段成果模式：顯示學生小組列表和報告 -->
             <StageGroupSubmissions
               v-if="!stage.viewMode"
+              :key="`groups-${stage.id}-${stage.groups?.length || 0}-${stage.contentLoaded ? 'loaded' : 'loading'}-${getStageRankingsKey(stage)}`"
               :stage="stage"
               :current-user-group-id="groupData.currentUserGroup.value?.groupId || null"
               :project-groups="projectData?.groups || []"
@@ -721,10 +749,12 @@
               :project-users="projectData?.users || []"
               :stage-proposals="stage.proposals || []"
               :is-teacher="permissions.canManageStages.value"
+              :can-comment="canComment"
               :pinned-group-id="pinnedGroupId"
               :project-id="projectId"
               @pin-group="handlePinGroup"
               @force-withdraw="(handleForceWithdraw as any)"
+              @open-comment-modal="handleOpenCommentForGroup"
             />
 
             <!-- 階段評論模式：顯示評論區域 -->
@@ -740,6 +770,7 @@
                 :stage-status="stage.status"
                 :permission-level="permissions.permissionLevel?.value ?? 'none'"
                 :project-groups="projectData?.groups || []"
+                :initial-comments="stage.comments"
                 @reply-comment="handleReplyComment"
               />
             </div>
@@ -800,7 +831,9 @@
         :user-email-to-display-name="userEmailToDisplayName"
         :current-user="props.user"
         :stage-submissions="currentStageSubmissions"
+        :prefill-mention-group="prefillMentionGroup"
         @submit="handleCommentSubmit"
+        @update:visible="(v: boolean) => { if (!v) prefillMentionGroup = null }"
       />
 
       <CommentVoteModal
@@ -898,6 +931,7 @@
       :stage-status="selectedStageForDescription?.status"
       :report-reward="selectedStageForDescription?.reportReward"
       :comment-reward="selectedStageForDescription?.commentReward"
+      :end-time="selectedStageForDescription?.endTime ?? undefined"
     />
 
     <!-- Event Log Drawer -->
@@ -957,6 +991,7 @@ import CommentVotingAnalysisModal from './CommentVotingAnalysisModal.vue'
 import ReplyCommentDrawer from './ReplyCommentDrawer.vue'
 import AvatarGroup from './common/AvatarGroup.vue'
 import StatNumberDisplay from './shared/StatNumberDisplay.vue'
+import AnimatedStatistic from './shared/AnimatedStatistic.vue'
 import EventLogDrawer from './shared/EventLogDrawer.vue'
 import StageDescriptionDrawer from './shared/StageDescriptionDrawer.vue'
 import TutorialDrawer from './TutorialDrawer.vue'
@@ -966,7 +1001,9 @@ import { showSuccess, showWarning, handleError, getErrorMessage } from '@/utils/
 import dayjs from 'dayjs'
 import { InfoFilled } from '@element-plus/icons-vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { dedupRequest } from '@/utils/request-dedup'
 import { getStageColor, getStageTextColor } from '@repo/shared'
+import NumberFlow from '@number-flow/vue'
 
 // ===== Composables =====
 import { useProjectPermissions, type ProjectDataWithGroups, type UserDataWithPermissions } from '@/composables/useProjectPermissions'
@@ -1305,6 +1342,13 @@ const stages = ref<ExtendedStage[]>([])
 
 // 鎖定組別狀態（教師專用，跨所有階段）
 const pinnedGroupId = ref<string | null>(null)
+
+// 預填 mention 群組資訊（從 StageGroupSubmissions 傳入）
+const prefillMentionGroup = ref<{
+  groupId: string
+  groupName: string
+  participants: string[]
+} | null>(null)
 
 // 監聽 stagesQuery.data 變化並更新 stages（保持對象引用）
 watch(
@@ -1869,6 +1913,42 @@ function toggleGroupReport(group: Group) {
 }
 
 /**
+ * 計算已繳交成果數
+ */
+function getSubmittedCount(stage: ExtendedStage | undefined): number {
+  if (!stage?.groups) return 0
+  return stage.groups.filter((g: any) => g.submissionId).length
+}
+
+/**
+ * 切換該階段所有成果的展開/折疊狀態
+ */
+function toggleAllGroupReports(stage: ExtendedStage | undefined) {
+  if (!stage?.groups) return
+
+  // 檢查是否有任何已展開的成果
+  const submittedGroups = stage.groups.filter((g: any) => g.submissionId)
+  const anyExpanded = submittedGroups.some((g: any) => g.showReport)
+
+  // 如果有任何展開的，則全部折疊；否則全部展開
+  const newState = !anyExpanded
+
+  submittedGroups.forEach((g: any) => {
+    g.showReport = newState
+  })
+
+  // 切換到成果視圖模式（僅在展開時）
+  if (newState && stage.viewMode) {
+    stage.viewMode = false
+  }
+
+  // 滾動到該階段（僅在展開時）
+  if (newState) {
+    scrollToStage(stage.id)
+  }
+}
+
+/**
  * 切換甘特圖抽屜
  */
 function toggleGanttDrawer() {
@@ -1910,6 +1990,28 @@ function resetStageRoad() {
 // ===== 階段訊息抽屜輔助函數 =====
 
 // getStageColor 和 getStageTextColor 已從 @repo/shared 導入，不再需要本地定義
+
+/**
+ * 獲取階段排名 key（用於強制重新渲染）
+ * 當 groups 中的排名數據變化時，生成不同的 key
+ */
+function getStageRankingsKey(stage: ExtendedStage): string {
+  if (!stage.groups || stage.groups.length === 0) return 'no-groups'
+
+  // 計算所有 group 的排名狀態總和
+  // 當任何 group 的 rankingsLoading、voteRank、teacherRank 變化時，key 會改變
+  const rankingsSum = stage.groups.reduce((acc: number, group) => {
+    const loading = group.rankingsLoading ? 1 : 0
+    const voteRank = typeof group.voteRank === 'number' ? group.voteRank : 0
+    const teacherRank = typeof group.teacherRank === 'number' ? group.teacherRank : 0
+    return acc + loading + voteRank + teacherRank
+  }, 0)
+
+  // 加入 rankingsLoading 計數，確保載入完成時 key 改變
+  const loadingCount = stage.groups.filter(g => g.rankingsLoading).length
+
+  return `r${rankingsSum}-l${loadingCount}`
+}
 
 /**
  * 獲取階段狀態文字
@@ -2293,39 +2395,120 @@ async function handleStageViewModeChange(stage: ExtendedStage, newViewMode: stri
 
 /**
  * 刷新階段內容（統一入口）
+ * 同時刷新報告和評論，並載入所有相關數據（與頂部重新整理按鈕等價）
  */
 async function refreshStageContent(stage: ExtendedStage) {
-  await stageContent.refreshStageContent(stage, projectId.value)
+  stage.refreshing = true
 
-  // 如果是 active 階段，載入共識投票狀態
-  if (stage.status === 'active' && stage.groups) {
-    const votePromises = stage.groups.map((group: Group) => {
-      if (group.submissionId) {
-        // 設置載入狀態
-        group.approvalVotesLoading = true
+  try {
+    // 0. 先刷新 projectData（確保 groups, userGroups 是最新的，用於 memberNames）
+    await projectCoreQuery.refetch()
 
-        return loadGroupApprovalVotes(
-          projectId.value,
-          stage.id,
-          group.submissionId,
-          group.groupId
-        ).finally(() => {
-          group.approvalVotesLoading = false
-        })
+    // 1. 刷新該階段在 stages 表的設定
+    await refreshSingleStageSettings(stage)
+
+    // 2. 並行刷新報告和評論（不再根據 viewMode 二選一）
+    await Promise.all([
+      stageContent.refreshStageReports(stage, projectId.value),
+      stageContent.refreshStageComments(stage, projectId.value)
+    ])
+
+    // 3. 載入該階段的提案數據
+    await loadStageProposals(stage)
+
+    // 4. 如果是 active 階段，載入共識投票狀態
+    if (stage.status === 'active' && stage.groups) {
+      const votePromises = stage.groups.map((group: Group) => {
+        if (group.submissionId) {
+          group.approvalVotesLoading = true
+          return loadGroupApprovalVotes(
+            projectId.value,
+            stage.id,
+            group.submissionId,
+            group.groupId
+          ).finally(() => {
+            group.approvalVotesLoading = false
+          })
+        }
+      })
+      await Promise.all(votePromises.filter(Boolean))
+    }
+
+    // 5. 如果是 completed 階段，載入結算排名數據
+    if (stage.status === 'completed' && stage.groups) {
+      await loadStageSettlementData(stage)
+    }
+
+    // 6. 重新載入 mention 數據
+    await loadMentionData()
+
+  } finally {
+    stage.refreshing = false
+  }
+}
+
+/**
+ * 刷新單一階段在 stages 表的設定
+ * 使用 TanStack Query 的 setQueryData 更新快取
+ */
+async function refreshSingleStageSettings(stage: ExtendedStage) {
+  try {
+    const stageId = stage.id || stage.stageId
+    const httpResponse = await rpcClient.stages.get.$post({
+      json: {
+        projectId: projectId.value,
+        stageId
       }
     })
+    const response = await httpResponse.json()
 
-    await Promise.all(votePromises.filter(Boolean))
+    if (response.success && response.data) {
+      const updatedStage = response.data
+
+      // 更新當前 stage 對象的設定欄位
+      stage.title = updatedStage.stageName || updatedStage.title || stage.title
+      stage.description = updatedStage.description ?? stage.description
+      stage.reportReward = updatedStage.reportRewardPool ?? updatedStage.reportReward ?? stage.reportReward
+      stage.commentReward = updatedStage.commentRewardPool ?? updatedStage.commentReward ?? stage.commentReward
+      stage.deadline = updatedStage.endTime ?? updatedStage.deadline ?? stage.deadline
+      stage.startTime = updatedStage.startTime ?? stage.startTime
+      stage.endTime = updatedStage.endTime ?? stage.endTime
+      stage.status = updatedStage.status ?? stage.status
+
+      // 同時更新 TanStack Query 快取（使 stagesQuery.data 保持同步）
+      queryClient.setQueryData(['stages', projectId.value], (oldData: Stage[] | undefined) => {
+        if (!oldData) return oldData
+        return oldData.map(s =>
+          (s.stageId === stageId) ? { ...s, ...updatedStage } : s
+        )
+      })
+
+      console.log(`✅ 階段 ${stage.title} 設定已刷新`)
+    }
+  } catch (error) {
+    console.error(`❌ 刷新階段設定失敗:`, error)
   }
+}
 
-  // 如果是 completed 階段，載入結算排名數據
-  if (stage.status === 'completed' && stage.groups) {
-    await loadStageSettlementData(stage)
-  }
+/**
+ * 載入單一階段的 ranking proposals
+ */
+async function loadStageProposals(stage: ExtendedStage) {
+  try {
+    const stageId = stage.id || stage.stageId
+    const httpResponse = await (rpcClient.api.rankings as any).proposals.$post({
+      json: {
+        projectId: projectId.value,
+        stageId
+      }
+    })
+    const response = await httpResponse.json()
 
-  // 如果是刷新評論模式，重新載入 mention 數據
-  if (stage.viewMode) {
-    await loadMentionData()
+    if (response.success && response.data) {
+      stage.proposals = response.data.proposals || []
+    }
+  } catch (error) {
+    console.error(`❌ 載入階段 ${stage.title} 提案失敗:`, error)
   }
 }
 
@@ -2811,6 +2994,24 @@ function handleForceWithdraw(submission: {
 }
 
 /**
+ * 處理從 StageGroupSubmissions 開啟評論 Modal 並預填 mention 該組
+ */
+function handleOpenCommentForGroup(stageId: string, groupId: string, groupName: string, participants: string[]) {
+  // 直接用 stageId 找 stage，不再用 groupId 模糊查找
+  const stage = stages.value.find(s => s.id === stageId)
+  if (!stage) {
+    console.warn('Cannot find stage:', stageId)
+    return
+  }
+
+  // 設置預填 mention 群組資訊
+  prefillMentionGroup.value = { groupId, groupName, participants }
+
+  // 開啟評論 Modal
+  handleOpenSubmitCommentModal(stage)
+}
+
+/**
  * 處理強制撤回完成事件
  * 刷新相關階段的資料
  */
@@ -2964,22 +3165,90 @@ function getCurrentGroupData(stage: ExtendedStage) {
 
 /**
  * 載入所有階段的評論（用於計算 mention badge）
+ * 優化：使用批量 API 一次獲取所有階段的評論，減少 N 次網絡往返
  */
 async function loadAllStageComments() {
-  console.log('🔄 開始載入所有階段評論...')
+  console.log('🔄 開始載入所有階段評論（使用批量 API）...')
 
-  const commentPromises = stages.value.map(async (stage: ExtendedStage) => {
-    try {
-      const httpResponse = await (rpcClient.comments as any).stage.$post({
+  // 收集所有階段 ID
+  const stageIds = stages.value.map((stage: ExtendedStage) => stage.id)
+
+  if (stageIds.length === 0) {
+    console.log('⚠️ 沒有階段需要載入評論')
+    return
+  }
+
+  try {
+    // 使用批量 API 一次獲取所有階段的評論
+    const dedupKey = `comments:all-stages:${projectId.value}:${stageIds.join(',')}`
+    const response = await dedupRequest(dedupKey, async () => {
+      const httpResponse = await (rpcClient.comments as any)['all-stages'].$post({
         json: {
           projectId: projectId.value,
-          stageId: stage.id,
+          stageIds: stageIds,
           excludeTeachers: false
         }
       })
-      const response = await httpResponse.json()
+      return httpResponse.json()
+    })
+
+    if (response.success && response.data?.stageComments) {
+      const stageComments = response.data.stageComments as Record<string, any>
+
+      // 將批量結果分配到各個階段
+      for (const stage of stages.value) {
+        const stageData = stageComments[stage.id]
+        if (stageData && stageData.comments) {
+          // 預先解析 JSON 字段，避免在 computed 中重複解析
+          stage.comments = stageData.comments.map((comment: any) => ({
+            ...comment,
+            mentionedUsers: typeof comment.mentionedUsers === 'string'
+              ? JSON.parse(comment.mentionedUsers)
+              : (comment.mentionedUsers || []),
+            mentionedGroups: typeof comment.mentionedGroups === 'string'
+              ? JSON.parse(comment.mentionedGroups)
+              : (comment.mentionedGroups || [])
+          }))
+          console.log(`✅ 階段 ${stage.id} 載入 ${stage.comments?.length ?? 0} 條評論`)
+        } else {
+          stage.comments = []
+          console.warn(`⚠️ 階段 ${stage.id} 無評論數據`)
+        }
+      }
+      console.log(`✅ 所有階段評論載入完成（批量 API，共 ${stageIds.length} 個階段）`)
+    } else {
+      // 如果批量 API 失敗，回退到逐個載入
+      console.warn('⚠️ 批量 API 返回失敗，回退到逐個載入模式')
+      await loadAllStageCommentsFallback()
+    }
+  } catch (error) {
+    console.error('❌ 批量載入評論失敗，回退到逐個載入模式:', error)
+    await loadAllStageCommentsFallback()
+  }
+}
+
+/**
+ * 回退方案：逐個階段載入評論
+ * 當批量 API 不可用時使用
+ */
+async function loadAllStageCommentsFallback() {
+  console.log('🔄 使用回退方案：逐個載入階段評論...')
+
+  const commentPromises = stages.value.map(async (stage: ExtendedStage) => {
+    try {
+      const dedupKey = `comments:${projectId.value}:${stage.id}`
+      const response = await dedupRequest(dedupKey, async () => {
+        const httpResponse = await (rpcClient.comments as any).stage.$post({
+          json: {
+            projectId: projectId.value,
+            stageId: stage.id,
+            excludeTeachers: false
+          }
+        })
+        return httpResponse.json()
+      })
+
       if (response.success && response.data) {
-        // <i class="fas fa-check-circle text-success"></i> 預先解析 JSON 字段，避免在 computed 中重複解析
         stage.comments = (response.data.comments || []).map((comment: any) => ({
           ...comment,
           mentionedUsers: typeof comment.mentionedUsers === 'string'
@@ -3001,7 +3270,7 @@ async function loadAllStageComments() {
   })
 
   await Promise.all(commentPromises)
-  console.log('✅ 所有階段評論載入完成')
+  console.log('✅ 所有階段評論載入完成（回退模式）')
 }
 
 /**
@@ -3621,6 +3890,29 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
+/* 專案標題：用 CSS 控制 RWD 截斷 */
+.project-title {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 20px;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 桌面模式：event-log-text 添加左邊距 */
+.event-log-text {
+  margin-left: 8px;
+}
+
+/* 按鈕群組容器 */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 /* 載入進度條容器 */
 .loading-progress-container {
   display: flex;
@@ -3920,31 +4212,18 @@ onBeforeUnmount(() => {
 .stage-rewards {
   display: flex;
   gap: 20px;
+  flex-wrap: wrap;
   flex-shrink: 0;
 }
 
-.reward-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 120px;
+/* 可點擊的統計項 */
+.clickable-stat {
+  cursor: pointer;
+  transition: transform 0.2s;
 }
 
-.reward-item .label {
-  font-size: 12px;
-  color: #7f8c8d;
-  margin-bottom: 6px;
-  text-align: center;
-}
-
-.reward-item .value {
-  font-size: 18px;
-  font-weight: 600;
-  color: #2c3e50;
-  background: #f8f9fa;
-  padding: 8px 16px;
-  border-radius: 4px;
-  border: 1px solid #e1e8ed;
+.clickable-stat:hover {
+  transform: scale(1.05);
 }
 
 .stage-description-wrapper {
@@ -4104,28 +4383,51 @@ onBeforeUnmount(() => {
   margin-left: 2px;
 }
 
-/* 專案事件檢視按鈕 - 與重新整理按鈕保持一致 */
-.project-event-log-button.el-button--small.is-plain {
-  border-color: #000000 !important;
-  color: #000000 !important;
-  background-color: #ffffff !important;
-  border-width: 1px !important;
-  padding: 12px 24px !important;
-  font-size: 14px !important;
-  font-weight: 600 !important;
-  height: auto !important;
-  line-height: 1 !important;
+/* ===== CountdownButton 樣式複製（供專案事件按鈕使用）===== */
+/* 基礎樣式 */
+.countdown-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 
-.project-event-log-button.el-button--small.is-plain:hover:not(:disabled) {
-  border-color: #333333 !important;
-  color: #333333 !important;
-  background-color: #f5f5f5 !important;
+/* Primary 類型 */
+.countdown-btn--primary {
+  background-color: #ffffff;
+  color: #000000;
+  border: 2px solid #000000;
 }
 
-.project-event-log-button.el-button--small.is-plain i {
-  color: #000000 !important;
-  margin-right: 8px !important;
+.countdown-btn--primary:hover:not(:disabled) {
+  border-color: #333333;
+  color: #333333;
+  background-color: #f5f5f5;
+}
+
+/* Plain 樣式變體 */
+.countdown-btn.plain {
+  background-color: #ffffff;
+  border-width: 1px;
+}
+
+/* Small 尺寸 */
+.countdown-btn--small {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+/* 專案事件按鈕圖標間距 */
+.project-event-log-button i {
+  margin-right: 0;
 }
 
 /* 專案介紹抽屜內容樣式 */
@@ -4162,7 +4464,9 @@ onBeforeUnmount(() => {
   margin: 0 -6px;
 }
 
-.scoring-stats-row :deep(.el-statistic) {
+/* 統一 el-statistic 和 AnimatedStatistic 的樣式 */
+.scoring-stats-row :deep(.el-statistic),
+.scoring-stats-row :deep(.animated-statistic) {
   text-align: center;
   padding: 12px 8px;
   background: #fafafa;
@@ -4171,16 +4475,19 @@ onBeforeUnmount(() => {
   height: 100%;
 }
 
-.scoring-stats-row :deep(.el-statistic__head) {
+.scoring-stats-row :deep(.el-statistic__head),
+.scoring-stats-row :deep(.stat-title) {
   font-size: 12px;
   color: #909399;
   margin-bottom: 8px;
 }
 
-.scoring-stats-row :deep(.el-statistic__content) {
+.scoring-stats-row :deep(.el-statistic__content),
+.scoring-stats-row :deep(.stat-value-wrapper) {
   font-size: 18px;
   font-weight: 600;
   color: #303133;
+  background: transparent;
 }
 
 .scoring-stats-row :deep(.el-statistic) i {
@@ -4200,15 +4507,18 @@ onBeforeUnmount(() => {
 
 /* 響應式優化 */
 @media (max-width: 768px) {
-  .scoring-stats-row :deep(.el-statistic) {
+  .scoring-stats-row :deep(.el-statistic),
+  .scoring-stats-row :deep(.animated-statistic) {
     padding: 10px 6px;
   }
 
-  .scoring-stats-row :deep(.el-statistic__head) {
+  .scoring-stats-row :deep(.el-statistic__head),
+  .scoring-stats-row :deep(.stat-title) {
     font-size: 11px;
   }
 
-  .scoring-stats-row :deep(.el-statistic__content) {
+  .scoring-stats-row :deep(.el-statistic__content),
+  .scoring-stats-row :deep(.stat-value-wrapper) {
     font-size: 16px;
   }
 }
@@ -4273,16 +4583,16 @@ onBeforeUnmount(() => {
   }
 }
 
-/* 統計區：2x2 Grid (手機) / 4x1 Grid (桌面) */
+/* 統計區：3x2 Grid (手機直屏) / 6x1 Grid (桌面) */
 .hud-stats-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 4px;
 }
 
 @media (min-width: 768px) {
   .hud-stats-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 6px;
   }
 }
@@ -4413,6 +4723,29 @@ onBeforeUnmount(() => {
 .tile-comment {
   background: linear-gradient(135deg, #ff922b 0%, #fd7e14 100%);
   color: #000;
+}
+
+/* 已繳交成果 Tile */
+.tile-submissions {
+  background: linear-gradient(135deg, #a8e063 0%, #56ab2f 100%);
+  color: #000;
+}
+
+/* 已發布評論數量 Tile */
+.tile-comments-count {
+  background: linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%);
+  color: #000;
+}
+
+/* 可點擊的 Tile */
+.hud-tile.clickable {
+  cursor: pointer;
+  transition: filter 0.2s, transform 0.2s;
+}
+
+.hud-tile.clickable:hover {
+  filter: brightness(1.1);
+  transform: scale(1.02);
 }
 
 /* Actions 區域（底部橫排）*/
@@ -4637,8 +4970,36 @@ onBeforeUnmount(() => {
 
 /* Portrait mode: Hide TopBarUserControls in top-bar (moved to sidebar) */
 @media screen and (orientation: portrait) and (max-width: 768px) {
+  /* 為漢堡按鈕留出左側空間 */
+  .top-bar {
+    padding-left: 60px;
+  }
+
   .top-bar :deep(.user-controls) {
     display: none !important;
+  }
+
+  /* 專案標題：縮小最大寬度和字體 */
+  .project-title {
+    max-width: 120px;
+    font-size: 16px;
+  }
+
+  /* 重新整理按鈕：隱藏文字，只保留圖示 */
+  .refresh-text,
+  .countdown-time {
+    display: none !important;
+  }
+
+  /* 專案事件檢視按鈕：隱藏文字，只保留圖示 */
+  .event-log-text {
+    display: none !important;
+  }
+
+  /* 按鈕群組靠右 */
+  .topbar-actions {
+    margin-left: auto;
+    gap: 8px;
   }
 }
 </style>

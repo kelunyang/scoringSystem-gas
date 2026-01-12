@@ -309,60 +309,20 @@
           <h4><i class="fas fa-chart-pie"></i> 邀請碼統計</h4>
 
           <el-row :gutter="16" class="statistics-row">
-          <el-col :span="4">
-            <el-statistic
-              title="總計"
-              :value="invitationStats.total"
-              :value-style="{ color: '#409EFF' }"
-            >
-              <template #prefix>
-                <i class="fas fa-envelope" style="font-size: 14px;"></i>
-              </template>
-            </el-statistic>
-          </el-col>
-          <el-col :span="4">
-            <el-statistic
-              title="有效"
-              :value="invitationStats.active"
-              :value-style="{ color: '#67C23A' }"
-            >
-              <template #prefix>
-                <i class="fas fa-check-circle" style="font-size: 14px;"></i>
-              </template>
-            </el-statistic>
-          </el-col>
-          <el-col :span="4">
-            <el-statistic
-              title="已使用"
-              :value="invitationStats.used"
-              :value-style="{ color: '#E6A23C' }"
-            >
-              <template #prefix>
-                <i class="fas fa-user-check" style="font-size: 14px;"></i>
-              </template>
-            </el-statistic>
-          </el-col>
-          <el-col :span="4">
-            <el-statistic
-              title="已停用"
-              :value="invitationStats.deactivated"
-              :value-style="{ color: '#F56C6C' }"
-            >
-              <template #prefix>
-                <i class="fas fa-ban" style="font-size: 14px;"></i>
-              </template>
-            </el-statistic>
-          </el-col>
             <el-col :span="4">
-              <el-statistic
-                title="已過期"
-                :value="invitationStats.expired"
-                :value-style="{ color: '#909399' }"
-              >
-                <template #prefix>
-                  <i class="fas fa-clock" style="font-size: 14px;"></i>
-                </template>
-              </el-statistic>
+              <AnimatedStatistic title="總計" :value="invitationStats.total" />
+            </el-col>
+            <el-col :span="4">
+              <AnimatedStatistic title="有效" :value="invitationStats.active" />
+            </el-col>
+            <el-col :span="4">
+              <AnimatedStatistic title="已使用" :value="invitationStats.used" />
+            </el-col>
+            <el-col :span="4">
+              <AnimatedStatistic title="已停用" :value="invitationStats.deactivated" />
+            </el-col>
+            <el-col :span="4">
+              <AnimatedStatistic title="已過期" :value="invitationStats.expired" />
             </el-col>
           </el-row>
         </div>
@@ -654,6 +614,7 @@ import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { rpcClient } from '@/utils/rpc-client'
 import { fetchWithAuth } from '@/utils/api-helpers'
 import AdminFilterToolbar from '@/components/admin/shared/AdminFilterToolbar.vue'
+import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 
 // Drawer Breadcrumb

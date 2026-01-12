@@ -156,7 +156,7 @@ export async function getStage(
         s.description, s.createdTime,
         (SELECT COUNT(*) FROM submissions_with_status WHERE stageId = s.stageId) as submissionCount,
         (SELECT COUNT(*) FROM comments WHERE stageId = s.stageId) as commentCount
-      FROM stages s
+      FROM stages_with_status s
       WHERE s.stageId = ? AND s.projectId = ?
     `).bind(stageId, projectId).first();
 

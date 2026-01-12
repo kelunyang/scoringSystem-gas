@@ -68,6 +68,31 @@ function supportsJsonMode(baseUrl: string): boolean {
 }
 
 /**
+ * Check if provider is Google Gemini (native API)
+ * Gemini native API uses different request/response format
+ *
+ * @param baseUrl - Provider's base URL
+ * @returns true if provider is Google Gemini native API
+ */
+function isGeminiNativeAPI(baseUrl: string): boolean {
+  const lowerUrl = baseUrl.toLowerCase();
+  return lowerUrl.includes('generativelanguage.googleapis.com');
+}
+
+/**
+ * Check if provider is Gemini (any variant - native or OpenAI-compatible)
+ *
+ * @param baseUrl - Provider's base URL
+ * @returns true if provider is Gemini
+ */
+function isGeminiProvider(baseUrl: string): boolean {
+  const lowerUrl = baseUrl.toLowerCase();
+  return lowerUrl.includes('gemini') ||
+         lowerUrl.includes('generativelanguage') ||
+         lowerUrl.includes('googleapis.com/v1beta/openai');
+}
+
+/**
  * Check if provider is DeepSeek (supports reasoning_content)
  *
  * @param baseUrl - Provider's base URL
@@ -137,6 +162,9 @@ function buildAuthHeaders(baseUrl: string, apiKey: string): Record<string, strin
 
   if (isAzureOpenAI(baseUrl)) {
     headers['api-key'] = apiKey;
+  } else if (isGeminiNativeAPI(baseUrl)) {
+    // Gemini native API uses API key in URL, not in headers
+    // Headers remain minimal
   } else {
     headers['Authorization'] = `Bearer ${apiKey}`;
   }
@@ -147,13 +175,15 @@ function buildAuthHeaders(baseUrl: string, apiKey: string): Record<string, strin
 /**
  * Build API endpoint URL based on provider type
  * Azure: parse user's full URL to extract host and api-version, then construct chat/completions endpoint
+ * Gemini Native: construct generateContent endpoint with model name
  * Standard: append /chat/completions to baseUrl
  *
  * @param baseUrl - Provider's base URL (for Azure: full URL with api-version param)
- * @param model - Model name (used as deployment name for Azure)
+ * @param model - Model name (used as deployment name for Azure, or model ID for Gemini)
+ * @param apiKey - API key (needed for Gemini native API which uses key in URL)
  * @returns Full API endpoint URL
  */
-function buildApiUrl(baseUrl: string, model?: string): string {
+function buildApiUrl(baseUrl: string, model?: string, apiKey?: string): string {
   if (isAzureOpenAI(baseUrl)) {
     // If user already included /chat/completions, use as-is (backwards compatibility)
     if (baseUrl.includes('/chat/completions')) {
@@ -165,6 +195,20 @@ function buildApiUrl(baseUrl: string, model?: string): string {
     // We construct: https://xxx.cognitiveservices.azure.com/openai/deployments/{model}/chat/completions?api-version=2025-04-01-preview
     const { host, apiVersion } = parseAzureUrl(baseUrl);
     return `${host}/openai/deployments/${model}/chat/completions?api-version=${apiVersion}`;
+  }
+
+  if (isGeminiNativeAPI(baseUrl)) {
+    // Gemini native API format:
+    // https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}
+    const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+
+    // If URL already contains model path, append generateContent
+    if (cleanBaseUrl.includes('/models/')) {
+      return `${cleanBaseUrl}:generateContent?key=${apiKey}`;
+    }
+
+    // Construct full URL with model
+    return `${cleanBaseUrl}/v1beta/models/${model}:generateContent?key=${apiKey}`;
   }
 
   // Standard OpenAI-compatible: append /chat/completions
@@ -526,6 +570,156 @@ interface SSEStreamChunk {
 }
 
 /**
+ * Gemini native API request format
+ */
+interface GeminiRequest {
+  contents: Array<{
+    role: 'user' | 'model';
+    parts: Array<{ text: string }>;
+  }>;
+  systemInstruction?: {
+    parts: Array<{ text: string }>;
+  };
+  generationConfig?: {
+    temperature?: number;
+    maxOutputTokens?: number;
+    responseMimeType?: string;
+  };
+}
+
+/**
+ * Gemini native API response format
+ */
+interface GeminiResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{ text?: string }>;
+      role?: string;
+    };
+    finishReason?: string;
+  }>;
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    totalTokenCount?: number;
+  };
+  error?: {
+    code?: number;
+    message?: string;
+    status?: string;
+  };
+}
+
+/**
+ * Call Gemini native API
+ * Uses Google's generativelanguage.googleapis.com endpoint
+ *
+ * @param baseUrl - API base URL
+ * @param apiKey - API key
+ * @param model - Model name (e.g., gemini-1.5-pro, gemini-2.0-flash-exp)
+ * @param systemPrompt - System prompt
+ * @param userPrompt - User prompt
+ * @param timeoutMs - Timeout in milliseconds
+ * @returns Parsed AI ranking response
+ */
+async function callGeminiNativeAPI(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  userPrompt: string,
+  timeoutMs: number
+): Promise<AIRankingJsonResponse> {
+  const url = buildApiUrl(baseUrl, model, apiKey);
+
+  // Build Gemini native API request body
+  const requestBody: GeminiRequest = {
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: userPrompt }]
+      }
+    ],
+    systemInstruction: {
+      parts: [{ text: systemPrompt }]
+    },
+    generationConfig: {
+      temperature: 0.3,
+      maxOutputTokens: 8192,
+      responseMimeType: 'application/json'
+    }
+  };
+
+  // Setup timeout using AbortController
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: buildAuthHeaders(baseUrl, apiKey),
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Gemini API error:', response.status, errorText);
+      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json() as GeminiResponse;
+
+    // Check for API error response
+    if (data.error) {
+      throw new Error(`Gemini API error: ${data.error.message || 'Unknown error'}`);
+    }
+
+    if (!data.candidates || data.candidates.length === 0) {
+      throw new Error('Gemini API returned no candidates');
+    }
+
+    const candidate = data.candidates[0];
+    if (!candidate.content?.parts || candidate.content.parts.length === 0) {
+      throw new Error('Gemini API returned empty content');
+    }
+
+    const content = candidate.content.parts[0].text || '';
+
+    // Parse JSON response
+    try {
+      const parsed = JSON.parse(content) as AIRankingJsonResponse;
+
+      // Validate response structure
+      if (!parsed.reason || !Array.isArray(parsed.ranking)) {
+        throw new Error('Invalid AI response structure');
+      }
+
+      // Include usage metadata if available
+      return {
+        ...parsed,
+        usage: data.usageMetadata ? {
+          prompt_tokens: data.usageMetadata.promptTokenCount || 0,
+          completion_tokens: data.usageMetadata.candidatesTokenCount || 0,
+          total_tokens: data.usageMetadata.totalTokenCount || 0
+        } : undefined
+      };
+    } catch (parseError) {
+      console.error('Failed to parse Gemini response:', content);
+      throw new Error(`Failed to parse Gemini response: ${parseError}`);
+    }
+  } catch (error) {
+    // Handle abort/timeout
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Gemini API timeout after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
  * Call OpenAI-compatible API with streaming for reasoner models
  * Uses SSE to handle long-running reasoning tasks with keep-alive support
  *
@@ -688,6 +882,11 @@ export async function callAIProvider(
     return callAIProviderStreaming(baseUrl, apiKey, model, systemPrompt, userPrompt, effectiveTimeout);
   }
 
+  // Use Gemini native API for generativelanguage.googleapis.com
+  if (isGeminiNativeAPI(baseUrl)) {
+    return callGeminiNativeAPI(baseUrl, apiKey, model, systemPrompt, userPrompt, effectiveTimeout);
+  }
+
   // Build URL (Azure vs Standard) - pass model for Azure deployment name
   const url = buildApiUrl(baseUrl, model);
 
@@ -798,6 +997,110 @@ export interface TestConnectionResult {
 }
 
 /**
+ * Test Gemini native API connection
+ *
+ * @param baseUrl - API base URL
+ * @param apiKey - API key
+ * @param model - Model name
+ * @param startTime - Start timestamp for response time calculation
+ * @returns Test result with response time or error
+ */
+async function testGeminiConnection(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  startTime: number
+): Promise<TestConnectionResult> {
+  const url = buildApiUrl(baseUrl, model, apiKey);
+
+  // Simple test prompt for Gemini
+  const requestBody: GeminiRequest = {
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: 'Say OK' }]
+      }
+    ],
+    generationConfig: {
+      maxOutputTokens: 10,
+      temperature: 0
+    }
+  };
+
+  // Setup timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TEST_CONNECTION_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: buildAuthHeaders(baseUrl, apiKey),
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
+    });
+
+    const responseTimeMs = Date.now() - startTime;
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return {
+        success: false,
+        responseTimeMs,
+        message: 'Connection failed',
+        error: `HTTP ${response.status}: ${errorText.substring(0, 200)}`
+      };
+    }
+
+    const data = await response.json() as GeminiResponse;
+
+    // Check for API error response
+    if (data.error) {
+      return {
+        success: false,
+        responseTimeMs,
+        message: 'API error',
+        error: data.error.message || 'Unknown Gemini API error'
+      };
+    }
+
+    if (!data.candidates || data.candidates.length === 0) {
+      return {
+        success: false,
+        responseTimeMs,
+        message: 'Invalid response',
+        error: 'Gemini API returned no candidates'
+      };
+    }
+
+    return {
+      success: true,
+      responseTimeMs,
+      message: 'Connection successful'
+    };
+  } catch (error) {
+    const responseTimeMs = Date.now() - startTime;
+
+    if (error instanceof Error && error.name === 'AbortError') {
+      return {
+        success: false,
+        responseTimeMs,
+        message: 'Connection timeout',
+        error: `Request timed out after ${TEST_CONNECTION_TIMEOUT_MS}ms`
+      };
+    }
+
+    return {
+      success: false,
+      responseTimeMs,
+      message: 'Connection error',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
  * Test AI provider connection with a simple prompt
  * Uses shorter timeout since we just want to verify connectivity
  *
@@ -812,6 +1115,12 @@ export async function testAIProviderConnection(
   model: string
 ): Promise<TestConnectionResult> {
   const startTime = Date.now();
+
+  // Handle Gemini native API separately
+  if (isGeminiNativeAPI(baseUrl)) {
+    return testGeminiConnection(baseUrl, apiKey, model, startTime);
+  }
+
   const url = buildApiUrl(baseUrl, model);
 
   // Simple test prompt - just verify we can get any response

@@ -209,21 +209,9 @@
           </div>
 
           <div class="voting-stats">
-            <el-statistic title="贊成票" :value="votingData.agreeVotes || 0">
-              <template #prefix>
-                <i class="fas fa-thumbs-up" style="color: #67c23a;"></i>
-              </template>
-            </el-statistic>
-            <el-statistic title="總投票" :value="votingData.totalVotes || 0">
-              <template #prefix>
-                <i class="fas fa-vote-yea" style="color: #409eff;"></i>
-              </template>
-            </el-statistic>
-            <el-statistic title="共識需求" :value="votingData.totalMembers || 0">
-              <template #prefix>
-                <i class="fas fa-users" style="color: #e6a23c;"></i>
-              </template>
-            </el-statistic>
+            <AnimatedStatistic title="贊成票" :value="votingData.agreeVotes || 0" />
+            <AnimatedStatistic title="總投票" :value="votingData.totalVotes || 0" />
+            <AnimatedStatistic title="共識需求" :value="votingData.totalMembers || 0" />
           </div>
 
           <!-- 投票進度條 -->
@@ -568,6 +556,7 @@ import OurGroupChart from './shared/ContributionChart/OurGroupChart.vue'
 import AllGroupsChart from './shared/ContributionChart/AllGroupsChart.vue'
 import ParticipationComparisonChart from './shared/ContributionChart/ParticipationComparisonChart.vue'
 import ScoringExplanationDrawer from './shared/ScoringExplanationDrawer.vue'
+import AnimatedStatistic from './shared/AnimatedStatistic.vue'
 import StageDescriptionDrawer from './shared/StageDescriptionDrawer.vue'
 import VoteTrendTsumTsumChart from './charts/VoteTrendTsumTsumChart.vue'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'

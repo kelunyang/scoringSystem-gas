@@ -19,20 +19,18 @@
         <div v-else>{{ item.label }}</div>
       </template>
     </el-segmented>
-    <el-button
-      size="small"
-      :icon="Refresh"
-      :loading="refreshing"
+    <button
+      class="refresh-btn"
       :disabled="disabled"
       @click="$emit('refresh')"
-    />
+    >
+      <i class="fa fa-refresh" :class="{ 'fa-spin': refreshing }"></i>
+    </button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-// @ts-ignore - Icon component used inline
-import { Refresh } from '@element-plus/icons-vue'
 import { ElBadge } from 'element-plus'
 
 const props = defineProps({
@@ -171,34 +169,35 @@ const viewModeValue = computed({
   box-shadow: none !important;
 }
 
-/* 調整重新整理按鈕樣式 */
-.stage-view-control :deep(.el-button) {
-  border: 1px solid currentColor !important;
-  background: transparent !important;
-  color: inherit !important;  // 强制继承父元素颜色
-  border-radius: 0 !important;
+/* 刷新按鈕樣式 */
+.refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  border-radius: 0;
   font-weight: 500;
   padding: 6px 12px;
   height: 32px;
-  line-height: 1.5;
+  min-width: 32px;
+  cursor: pointer;
   transition: all 0.2s;
-  box-shadow: none !important;
-}
 
-.stage-view-control :deep(.el-button:hover) {
-  background: rgba(0, 0, 0, 0.1) !important;
-  box-shadow: none !important;
-}
+  &:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.1);
+  }
 
-.stage-view-control :deep(.el-button.is-loading) {
-  background: rgba(0, 0, 0, 0.15) !important;
-  box-shadow: none !important;
-}
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: rgba(0, 0, 0, 0.05);
+  }
 
-.stage-view-control :deep(.el-button.is-disabled) {
-  opacity: 0.5 !important;
-  cursor: not-allowed !important;
-  background: rgba(0, 0, 0, 0.05) !important;
+  i {
+    font-size: 14px;
+  }
 }
 
 .stage-view-control :deep(.el-segmented.is-disabled) {
@@ -209,9 +208,5 @@ const viewModeValue = computed({
 .stage-view-control :deep(.el-segmented.is-disabled .el-segmented__item) {
   cursor: not-allowed !important;
   pointer-events: none !important;
-}
-
-.stage-view-control :deep(.el-button .el-icon) {
-  color: inherit !important;  // 图标也继承颜色
 }
 </style>

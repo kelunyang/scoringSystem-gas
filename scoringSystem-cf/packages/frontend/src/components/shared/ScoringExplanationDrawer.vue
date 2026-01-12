@@ -33,34 +33,31 @@
           <!-- Statistics Row -->
           <el-row :gutter="12" class="stats-row">
             <el-col :xs="12" :sm="8" :md="6" v-if="props.groupData.finalRank || props.groupData.rank">
-              <el-statistic title="排名 (r)" :value="props.groupData.finalRank || props.groupData.rank" />
+              <AnimatedStatistic title="排名 (r)" :value="(props.groupData.finalRank || props.groupData.rank)!" />
             </el-col>
             <el-col :xs="12" :sm="8" :md="6" v-if="props.groupData.totalGroups">
-              <el-statistic title="總組數 (N)" :value="props.groupData.totalGroups" />
+              <AnimatedStatistic title="總組數 (N)" :value="props.groupData.totalGroups" />
             </el-col>
             <el-col :xs="12" :sm="8" :md="6" v-if="props.groupData.allocatedPoints !== undefined">
-              <el-statistic title="組別獲得點數 (P組)" :value="props.groupData.allocatedPoints" suffix="點" />
+              <AnimatedStatistic title="組別獲得點數(點)" :value="props.groupData.allocatedPoints" />
             </el-col>
             <el-col :xs="12" :sm="8" :md="6" v-if="props.projectConfig?.rewardPool">
-              <el-statistic title="總獎金池 (P總)" :value="props.projectConfig.rewardPool" suffix="點" />
+              <AnimatedStatistic title="總獎金池(點)" :value="props.projectConfig.rewardPool" />
             </el-col>
             <el-col :xs="12" :sm="8" :md="6" v-if="props.projectConfig?.studentWeight !== undefined">
-              <el-statistic
-                title="學生權重"
-                :value="props.projectConfig.studentWeight * 100"
-                :precision="0"
-                suffix="%"
+              <AnimatedStatistic
+                title="學生權重(%)"
+                :value="Math.round(props.projectConfig.studentWeight * 100)"
               />
             </el-col>
             <el-col :xs="12" :sm="8" :md="6" v-if="props.projectConfig?.teacherWeight !== undefined">
-              <el-statistic
-                title="教師權重"
-                :value="props.projectConfig.teacherWeight * 100"
-                :precision="0"
-                suffix="%"
+              <AnimatedStatistic
+                title="教師權重(%)"
+                :value="Math.round(props.projectConfig.teacherWeight * 100)"
               />
             </el-col>
             <el-col :xs="12" :sm="8" :md="6" v-if="props.groupData.studentScore !== undefined">
+              <!-- 小數值保留 el-statistic -->
               <el-statistic
                 title="學生評分"
                 :value="props.groupData.studentScore"
@@ -68,6 +65,7 @@
               />
             </el-col>
             <el-col :xs="12" :sm="8" :md="6" v-if="props.groupData.teacherScore !== undefined">
+              <!-- 小數值保留 el-statistic -->
               <el-statistic
                 title="教師評分"
                 :value="props.groupData.teacherScore"
@@ -159,6 +157,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import AnimatedStatistic from './AnimatedStatistic.vue'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 
 // KaTeX 從 CDN 載入，使用全域變數
@@ -409,7 +408,9 @@ function handleClose() {
   margin-bottom: 15px;
 }
 
-.stats-row :deep(.el-statistic) {
+/* 統一 el-statistic 和 AnimatedStatistic 的樣式 */
+.stats-row :deep(.el-statistic),
+.stats-row :deep(.animated-statistic) {
   text-align: center;
   padding: 12px;
   background: white;
@@ -417,17 +418,20 @@ function handleClose() {
   border: 1px solid #e9ecef;
 }
 
-.stats-row :deep(.el-statistic__head) {
+.stats-row :deep(.el-statistic__head),
+.stats-row :deep(.stat-title) {
   font-size: 13px;
   color: #6c757d;
   font-weight: 500;
   margin-bottom: 8px;
 }
 
-.stats-row :deep(.el-statistic__content) {
+.stats-row :deep(.el-statistic__content),
+.stats-row :deep(.stat-value-wrapper) {
   font-size: 18px;
   color: #2c3e50;
   font-weight: 700;
+  background: transparent;
 }
 
 /* Toggle Values Button */

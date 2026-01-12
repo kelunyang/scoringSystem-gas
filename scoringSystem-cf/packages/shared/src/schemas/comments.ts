@@ -142,3 +142,16 @@ export const GetCommentRankingHistoryRequestSchema = z.object({
 });
 
 export type GetCommentRankingHistoryRequest = z.infer<typeof GetCommentRankingHistoryRequestSchema>;
+
+/**
+ * Get all stages comments request schema (batch API)
+ * Used to fetch comments for multiple stages in a single request
+ */
+export const GetAllStagesCommentsRequestSchema = z.object({
+  projectId: z.string().min(1, 'Project ID is required'),
+  stageIds: z.array(z.string().min(1)).min(1, 'At least one stage ID is required'),
+  excludeTeachers: z.boolean().optional().default(false),
+  forVoting: z.boolean().optional().default(false)
+});
+
+export type GetAllStagesCommentsRequest = z.infer<typeof GetAllStagesCommentsRequestSchema>;
