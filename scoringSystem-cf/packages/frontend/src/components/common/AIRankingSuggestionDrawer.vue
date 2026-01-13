@@ -224,7 +224,9 @@
                 <i class="fas fa-brain"></i> AI 思考過程（DeepSeek Thinking）
               </span>
             </template>
-            <pre class="thinking-content">{{ selectedQuery.thinkingProcess }}</pre>
+            <div class="thinking-content">
+              <MdPreviewWrapper :content="selectedQuery.thinkingProcess" />
+            </div>
           </el-collapse-item>
         </el-collapse>
 
@@ -319,6 +321,7 @@ import { ref, computed, watch, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
+import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { getErrorMessage } from '@/utils/errorHandler'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
@@ -1178,11 +1181,64 @@ onUnmounted(() => {
     border-radius: 6px;
     font-size: 13px;
     line-height: 1.6;
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-height: 300px;
+    max-height: 400px;
     overflow-y: auto;
-    font-family: inherit;
+
+    :deep(.md-preview-wrapper) {
+      .md-editor-preview-wrapper {
+        padding: 0;
+      }
+
+      p {
+        margin: 6px 0;
+      }
+
+      ul, ol {
+        margin: 6px 0;
+        padding-left: 18px;
+      }
+
+      li {
+        margin: 3px 0;
+      }
+
+      code {
+        background: var(--el-fill-color-light);
+        padding: 1px 4px;
+        border-radius: 3px;
+        font-size: 12px;
+      }
+
+      pre {
+        background: var(--el-fill-color-light);
+        padding: 8px;
+        border-radius: 4px;
+        overflow-x: auto;
+        margin: 8px 0;
+
+        code {
+          background: none;
+          padding: 0;
+        }
+      }
+
+      blockquote {
+        border-left: 3px solid var(--el-border-color);
+        margin: 8px 0;
+        padding: 4px 12px;
+        color: var(--el-text-color-secondary);
+        background: var(--el-fill-color);
+      }
+
+      h1, h2, h3, h4, h5, h6 {
+        margin: 12px 0 6px 0;
+        font-weight: 600;
+      }
+
+      h1 { font-size: 16px; }
+      h2 { font-size: 15px; }
+      h3 { font-size: 14px; }
+    }
   }
 }
 

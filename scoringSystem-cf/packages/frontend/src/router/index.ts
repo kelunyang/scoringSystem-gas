@@ -33,6 +33,7 @@ const UserManagement = () => import('@/components/admin/UserManagement.vue')
 const ProjectManagement = () => import('@/components/admin/ProjectManagement.vue')
 const GroupManagement = () => import('@/components/admin/GroupManagement.vue')
 const NotificationManagement = () => import('@/components/admin/NotificationManagement.vue')
+const AnnouncementManagement = () => import('@/components/admin/AnnouncementManagement.vue')
 const EmailLogsManagement = () => import('@/components/admin/EmailLogsManagement.vue')
 const AIServiceLogsManagement = () => import('@/components/admin/AIServiceLogsManagement.vue')
 const SystemSettings = () => import('@/components/admin/SystemSettings.vue')
@@ -253,6 +254,16 @@ const routes: RouteRecordRaw[] = [
         component: NotificationManagement,
         meta: {
           title: '通知管理',
+          requiresAuth: true,
+          requiresAdmin: true
+        }
+      },
+      {
+        path: 'announcements',
+        name: 'admin-announcements',
+        component: AnnouncementManagement,
+        meta: {
+          title: '公告管理',
           requiresAuth: true,
           requiresAdmin: true
         }

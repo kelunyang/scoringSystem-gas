@@ -34,7 +34,10 @@ export const GLOBAL_PERMISSIONS = {
   // MANAGE_TAGS: 'manage_tags',
 
   // Notifications
-  NOTIFICATION_MANAGER: 'notification_manager'
+  NOTIFICATION_MANAGER: 'notification_manager',
+
+  // Announcements
+  MANAGE_ANNOUNCEMENTS: 'manage_announcements'
 } as const;
 
 /**

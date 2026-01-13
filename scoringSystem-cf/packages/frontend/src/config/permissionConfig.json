@@ -45,7 +45,8 @@
             "manage_system_settings",
             "view_system_logs",
             "view_email_logs",
-            "notification_manager"
+            "notification_manager",
+            "manage_announcements"
           ],
           "logic": "OR"
         },
@@ -67,7 +68,8 @@
         "manage_system_settings",
         "view_system_logs",
         "view_email_logs",
-        "notification_manager"
+        "notification_manager",
+        "manage_announcements"
       ],
       "logic": "OR"
     },
@@ -138,6 +140,20 @@
         "visible": true,
         "order": 4
       },
+      "announcements": {
+        "id": "admin_announcements",
+        "key": "announcements",
+        "label": "公告管理",
+        "icon": "fas fa-bullhorn",
+        "component": "AnnouncementManagement",
+        "description": "管理系統公告，顯示於登入頁面",
+        "permissions": {
+          "required": ["system_admin", "manage_announcements"],
+          "logic": "OR"
+        },
+        "visible": true,
+        "order": 5
+      },
       "settings": {
         "id": "admin_settings",
         "key": "settings",
@@ -150,7 +166,7 @@
           "logic": "AND"
         },
         "visible": true,
-        "order": 5
+        "order": 6
       },
       "logs": {
         "id": "admin_logs",
@@ -164,7 +180,7 @@
           "logic": "OR"
         },
         "visible": true,
-        "order": 6
+        "order": 7
       },
       "email-logs": {
         "id": "admin_email_logs",
@@ -178,7 +194,7 @@
           "logic": "OR"
         },
         "visible": true,
-        "order": 7
+        "order": 8
       },
       "ai-service-logs": {
         "id": "admin_ai_service_logs",
@@ -192,7 +208,7 @@
           "logic": "OR"
         },
         "visible": true,
-        "order": 8
+        "order": 9
       }
     }
   },

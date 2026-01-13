@@ -47,6 +47,9 @@
       @expired="handleTurnstileExpired"
     />
 
+    <!-- Login Announcements -->
+    <LoginAnnouncementBoard />
+
     <div class="form-actions">
       <button
         class="btn btn-primary"
@@ -63,6 +66,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import TurnstileWidget from '../TurnstileWidget.vue';
+import LoginAnnouncementBoard from './LoginAnnouncementBoard.vue';
 import { useTurnstile } from '../../composables/auth/useTurnstile';
 import { rpcClient } from '@/utils/rpc-client';
 import type { LoginCredentials } from '../../types/auth';

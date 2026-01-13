@@ -34,6 +34,7 @@ import websocketRouter from './router/websocket';
 // REMOVED: Security Patrol Robot (replaced with queue-based login security)
 // import securityPatrolWsRouter from './router/security-patrol-ws';
 import rankingsRouter from './router/rankings';
+import announcementsRouter from './router/announcements';
 
 // Import queue consumers
 import emailQueue from './queues/email-consumer';
@@ -174,7 +175,8 @@ app.get('/api', (c) => {
       notifications: '/api/notifications',
       admin: '/api/admin',
       settlement: '/api/settlement',
-      maintenance: '/api/maintenance'
+      maintenance: '/api/maintenance',
+      announcements: '/api/announcements'
     }
   });
 });
@@ -241,6 +243,9 @@ app.route('/api/maintenance', maintenanceRouter);
 
 // IP detection routes (for frontend - no auth required)
 app.route('/api/ip', ipRouter);
+
+// Announcements routes (public + admin)
+app.route('/api/announcements', announcementsRouter);
 
 // WebSocket routes (real-time notifications)
 app.route('/ws', websocketRouter);

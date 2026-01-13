@@ -648,6 +648,33 @@ CREATE TABLE IF NOT EXISTS notification_idempotency (
   createdAt INTEGER NOT NULL
 );
 
+-- Announcements table (system-wide announcements displayed on login page)
+-- Added 2026-01-13 for login page announcement board feature
+CREATE TABLE IF NOT EXISTS announcements (
+  announcementId TEXT PRIMARY KEY,
+
+  -- Announcement content
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,               -- Markdown content
+
+  -- Time range
+  startTime INTEGER NOT NULL,          -- Unix timestamp (ms) - announcement start time
+  endTime INTEGER NOT NULL,            -- Unix timestamp (ms) - announcement end time
+
+  -- Announcement type (affects display priority and icon)
+  type TEXT NOT NULL DEFAULT 'info',   -- 'info' | 'warning' | 'success' | 'error'
+
+  -- Creator info
+  createdBy TEXT NOT NULL,             -- userEmail
+
+  -- Timestamps
+  createdAt INTEGER NOT NULL,
+  updatedAt INTEGER,
+
+  -- Soft delete flag
+  isActive INTEGER DEFAULT 1
+);
+
 -- ============================================
 -- TRIGGERS (Scoring Configuration Validation)
 -- ============================================
@@ -799,6 +826,11 @@ CREATE INDEX IF NOT EXISTS idx_proposalvotes_proposal_agree
   ON proposalvotes(proposalId, agree);
 CREATE INDEX IF NOT EXISTS idx_usergroups_project_group_active
   ON usergroups(projectId, groupId, isActive);
+
+-- Announcements indexes (added 2026-01-13 for announcement board feature)
+CREATE INDEX IF NOT EXISTS idx_announcements_time ON announcements(startTime, endTime, isActive);
+CREATE INDEX IF NOT EXISTS idx_announcements_created ON announcements(createdAt DESC);
+CREATE INDEX IF NOT EXISTS idx_announcements_type ON announcements(type, isActive);
 
 -- ============================================
 -- VIEWS (Status Auto-Calculation Architecture)
@@ -1010,13 +1042,15 @@ FROM invitation_codes ic;
 
 -- ============================================
 -- Schema synchronized with init-system.ts
--- Total: 31 active tables (28 original + 2 idempotency tables + 1 AI service table; 3 tags tables disabled)
--- Total: 69 indexes (60 original + 4 idempotency indexes + 5 AI service indexes)
+-- Total: 32 active tables (28 original + 2 idempotency tables + 1 AI service table + 1 announcements table; 3 tags tables disabled)
+-- Total: 72 indexes (60 original + 4 idempotency indexes + 5 AI service indexes + 3 announcements indexes)
 -- Total: 2 triggers (scoring configuration validation)
 -- Total: 5 VIEWs (status auto-calculation architecture)
--- Last updated: 2025-12-30 (added AI service calls table)
+-- Last updated: 2026-01-13 (added announcements table)
 --
 -- Recent Changes:
+--   2026-01-13: Added announcements table for login page announcement board,
+--               supports markdown content, time-based display, and priority types (error > warning > info > success)
 --   2025-12-30: Added aiservicecalls table for AI API cost tracking and history,
 --               supports ranking_direct, ranking_bt, and future AI services,
 --               enables teacher-shared AI ranking history within stages

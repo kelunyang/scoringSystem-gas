@@ -1,0 +1,193 @@
+# Cloudflare Workers configuration
+# See: https://developers.cloudflare.com/workers/wrangler/configuration/
+
+name = "scoring-system"
+main = "src/index.ts"
+compatibility_date = "2024-04-03"
+compatibility_flags = ["nodejs_compat"]
+
+# Worker settings
+workers_dev = true
+send_metrics = false
+
+# Routes for production
+# 將 /api/* 和 /ws/* 路由到此 Worker
+# IMPORTANT: routes 必須放在 [vars] section 之前，否則會被當成環境變數！
+routes = [
+  { pattern = "your-domain.example.com/api/*", zone_name = "example.com" },
+  { pattern = "your-domain.example.com/ws/*", zone_name = "example.com" }
+]
+
+# D1 Database bindings
+[[d1_databases]]
+binding = "DB"
+database_name = "scoring-system-db"
+database_id = "your-d1-database-id"
+
+# Durable Objects bindings
+[[durable_objects.bindings]]
+name = "NOTIFICATION_HUB"
+class_name = "NotificationHub"
+script_name = "scoring-system"
+
+# Durable Objects migrations
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["NotificationHub"]
+
+# KV Namespaces
+# NOTE: This system uses JWT for authentication - SESSIONS namespace is NOT needed!
+# KV namespace is REQUIRED for scoring system configuration (stores system-level defaults)
+
+[[kv_namespaces]]
+binding = "KV"
+id = "your-kv-namespace-id"
+
+# Legacy CONFIG binding (deprecated, kept for backward compatibility)
+[[kv_namespaces]]
+binding = "CONFIG"
+id = "your-config-kv-namespace-id"
+
+# R2 Buckets (for file uploads)
+# Uncomment if you need R2 storage
+# [[r2_buckets]]
+# binding = "FILES"
+# bucket_name = "scoring-system-files"
+
+# Cloudflare Queues (for async task processing)
+[[queues.producers]]
+binding = "EMAIL_QUEUE"
+queue = "email-queue"
+
+[[queues.producers]]
+binding = "NOTIFICATION_QUEUE"
+queue = "notification-queue"
+
+[[queues.producers]]
+binding = "SETTLEMENT_QUEUE"
+queue = "settlement-queue"
+
+[[queues.producers]]
+binding = "LOGIN_EVENTS"
+queue = "login-events-queue"
+
+[[queues.producers]]
+binding = "AI_RANKING_QUEUE"
+queue = "ai-ranking-queue"
+
+# Email Queue Consumer
+# - Processes invitation, password reset, 2FA, and admin notification emails
+# - Retry behavior: Cloudflare uses exponential backoff automatically
+#   * 1st retry: ~1 second delay
+#   * 2nd retry: ~2-4 seconds delay
+#   * 3rd retry: ~8-16 seconds delay
+# - After max_retries exhausted, message moves to dead_letter_queue
+# - Idempotency: Consumer checks email_idempotency table to prevent duplicates
+[[queues.consumers]]
+queue = "email-queue"
+max_batch_size = 10            # Send up to 10 emails per batch
+max_batch_timeout = 30          # Wait max 30s to accumulate batch
+max_retries = 3                 # Retry up to 3 times on failure
+dead_letter_queue = "email-dlq" # Failed messages go here
+
+# Notification Queue Consumer
+# - Creates notifications in DB and broadcasts via WebSocket (Durable Object)
+# - Retry behavior: Same exponential backoff as email queue
+# - Idempotency: Consumer checks notification_idempotency table to prevent duplicates
+[[queues.consumers]]
+queue = "notification-queue"
+max_batch_size = 100            # Process up to 100 notifications per batch
+max_batch_timeout = 30          # Wait max 30s to accumulate batch
+max_retries = 3                 # Retry up to 3 times on failure
+dead_letter_queue = "notification-dlq" # Failed messages go here
+
+[[queues.consumers]]
+queue = "settlement-queue"
+max_batch_size = 1
+max_batch_timeout = 5
+max_retries = 2
+dead_letter_queue = "settlement-dlq"
+
+[[queues.consumers]]
+queue = "login-events-queue"
+max_batch_size = 10
+max_batch_timeout = 30
+max_retries = 3
+dead_letter_queue = "login-events-dlq"
+
+# AI Ranking Queue Consumer
+# - Processes AI ranking requests (both direct and Bradley-Terry modes)
+# - Sends progress updates via WebSocket (Durable Object)
+# - Long-running task: BT mode may take several minutes with multiple AI calls
+[[queues.consumers]]
+queue = "ai-ranking-queue"
+max_batch_size = 1              # Process one task at a time (AI calls are sequential)
+max_batch_timeout = 5           # Quick start
+max_retries = 2                 # Retry on transient failures
+dead_letter_queue = "ai-ranking-dlq" # Failed requests go here
+
+# Environment Variables
+[vars]
+SYSTEM_TITLE = "評分系統" # System title for branding and emails
+SESSION_TIMEOUT = "86400000" # 24 hours in milliseconds
+INVITE_CODE_TIMEOUT = "604800000" # 7 days in milliseconds
+MAX_PROJECT_NAME_LENGTH = "100"
+TURNSTILE_ENABLED = "false"
+
+# Scoring System Configuration (added 2025-12-08)
+DEFAULT_MAX_COMMENT_SELECTIONS = "3" # Maximum comments teachers can rank
+DEFAULT_STUDENT_RANKING_WEIGHT = "0.7" # Student ranking weight (70%)
+DEFAULT_TEACHER_RANKING_WEIGHT = "0.3" # Teacher ranking weight (30%)
+DEFAULT_COMMENT_REWARD_PERCENTILE = "0" # Comment reward percentile (0 = fixed top 3)
+DEFAULT_MAX_VOTE_RESET_COUNT = "1" # Maximum times group leader can reset votes per stage
+
+# Secrets (set using: wrangler secret put SECRET_NAME)
+# These should NOT be committed to version control
+# Set them using CLI:
+#   wrangler secret put JWT_SECRET
+#   wrangler secret put TURNSTILE_SECRET_KEY
+#   wrangler secret put SMTP_USERNAME
+#   wrangler secret put SMTP_PASSWORD
+
+# Example secrets to set:
+# - JWT_SECRET: Random string for JWT signing (REQUIRED)
+# - TURNSTILE_SITE_KEY: Cloudflare Turnstile site key (optional)
+# - TURNSTILE_SECRET_KEY: Cloudflare Turnstile secret key (optional)
+# - SMTP_HOST: Gmail SMTP host (smtp.gmail.com)
+# - SMTP_PORT: SMTP port (587)
+# - SMTP_USERNAME: Gmail address (your-email@gmail.com)
+# - SMTP_PASSWORD: Gmail app password (REQUIRED for sending emails)
+# - SMTP_FROM_NAME: Sender name (e.g., "Scoring System")
+# - SMTP_FROM_EMAIL: Sender email (same as SMTP_USERNAME)
+
+# Build configuration (temporarily disabled for dev mode due to TS errors)
+# [build]
+# command = "npm run build"
+
+# Limits (outside of build section)
+# CPU limits require paid plan - commenting out for free plan
+# [limits]
+# cpu_ms = 30000  # 30 seconds (max for Workers) - needed for notification patrol robot
+
+# Cron Triggers (Scheduled Tasks)
+# Uncomment to enable automatic execution of scheduled tasks
+# Note: Cron triggers require a paid Workers plan (Workers Paid or higher)
+# Syntax: [triggers]
+#         crons = ["cron expression"]
+#
+# Examples:
+# - "0 */12 * * *"   = Every 12 hours
+# - "0 0,12 * * *"   = At midnight and noon
+# - "0 8,20 * * *"   = At 8 AM and 8 PM
+# - "0 0 * * *"      = Daily at midnight
+# - "*/30 * * * *"   = Every 30 minutes
+#
+# [triggers]
+# crons = [
+#   "0 */12 * * *",  # Notification Patrol Robot: every 12 hours
+#   "0 0 * * *"      # Security Patrol Robot: daily at midnight (configurable via settings)
+# ]
+
+# Observability
+[observability]
+enabled = true
