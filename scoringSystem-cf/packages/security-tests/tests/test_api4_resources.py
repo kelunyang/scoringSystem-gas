@@ -112,7 +112,7 @@ class TestRateLimiting:
         Expected: 429 after 10 requests per minute
         """
         # Get a project for context
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -153,7 +153,7 @@ class TestRateLimiting:
 
         Same limits as regular AI suggestion (10/min, 60/hour).
         """
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -191,7 +191,7 @@ class TestRateLimiting:
 
         Multi-agent mode is more resource-intensive, should have same limits.
         """
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -326,7 +326,7 @@ class TestBatchOperationLimits:
         Expected: Limited to reasonable batch size
         """
         # Get a project
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -340,7 +340,7 @@ class TestBatchOperationLimits:
         # Attempt to create many groups at once
         groups = [{'groupName': f'Group{i}'} for i in range(1000)]
 
-        response = api_client.post('/groups/batch-create', auth=admin_token, json={
+        response = api_client.post('/api/groups/batch-create', auth=admin_token, json={
             'projectId': project_id,
             'groups': groups
         })
@@ -367,7 +367,7 @@ class TestBatchOperationLimits:
         """
         fake_user_ids = [f'usr_fake{i}' for i in range(1000)]
 
-        response = api_client.post('/groups/batch-add-members', auth=admin_token, json={
+        response = api_client.post('/api/groups/batch-add-members', auth=admin_token, json={
             'projectId': 'proj_test',
             'groupId': 'grp_test',
             'userIds': fake_user_ids
@@ -445,7 +445,7 @@ class TestPayloadLimits:
         Verify submission content has size limit.
         """
         # Get project and stage
-        response = api_client.post('/projects/list-with-stages', auth=admin_token)
+        response = api_client.post('/api/projects/list-with-stages', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -466,7 +466,7 @@ class TestPayloadLimits:
         # Create large submission content
         large_content = 'B' * (5 * 1024 * 1024)  # 5MB
 
-        response = api_client.post('/submissions/submit', auth=admin_token, json={
+        response = api_client.post('/api/submissions/submit', auth=admin_token, json={
             'projectId': project_with_stages['projectId'],
             'stageId': stage_id,
             'content': large_content
@@ -488,7 +488,7 @@ class TestPayloadLimits:
         """
         large_comment = 'C' * (100 * 1024)  # 100KB comment
 
-        response = api_client.post('/comments/create', auth=admin_token, json={
+        response = api_client.post('/api/comments/create', auth=admin_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test',
             'targetType': 'stage',
@@ -550,7 +550,7 @@ class TestQueryComplexity:
         """
         large_array = list(range(10000))
 
-        response = api_client.post('/users/display-names', auth=admin_token, json={
+        response = api_client.post('/api/users/display-names', auth=admin_token, json={
             'projectId': 'proj_test',
             'userIds': [f'usr_{i}' for i in large_array]
         })
@@ -626,7 +626,7 @@ class TestResourceAbuse:
         # Classic ReDoS payload
         redos_payload = 'a' * 50 + '!'
 
-        response = api_client.post('/users/search', auth=admin_token, json={
+        response = api_client.post('/api/users/search', auth=admin_token, json={
             'query': redos_payload
         })
 

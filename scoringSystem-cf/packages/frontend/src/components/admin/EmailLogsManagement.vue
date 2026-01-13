@@ -379,7 +379,7 @@
                   <div class="detail-section" v-if="expandedLogDetails.emailContext">
                     <h4><i class="fas fa-code"></i> 郵件上下文</h4>
                     <div class="content-display">
-                      <pre>{{ formatJSON(expandedLogDetails.emailContext) }}</pre>
+                      <MdPreviewWrapper :content="jsonToMarkdown(expandedLogDetails.emailContext)" />
                     </div>
                   </div>
 
@@ -466,6 +466,8 @@ import DOMPurify from 'dompurify'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
+import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
+import { jsonToMarkdown } from '@/utils/json-preview'
 
 // ================== Interfaces ==================
 
@@ -920,15 +922,6 @@ const formatSize = (bytes: number | undefined): string => {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
-}
-
-const formatJSON = (jsonString: string | undefined): string => {
-  if (!jsonString) return '-'
-  try {
-    return JSON.stringify(JSON.parse(jsonString), null, 2)
-  } catch {
-    return jsonString
-  }
 }
 
 /**

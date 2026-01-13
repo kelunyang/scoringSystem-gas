@@ -1,23 +1,25 @@
 <template>
   <div class="markdown-viewer">
-    <div class="markdown-content" v-html="renderedMarkdown"></div>
+    <MdPreviewWrapper :content="content" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { renderMarkdown } from '@/utils/markdown'
+import MdPreviewWrapper from './MdPreviewWrapper.vue'
+
+/**
+ * MarkdownViewer - Markdown 唯讀顯示組件
+ *
+ * 這是一個向後相容的包裝器，內部使用 MdPreviewWrapper
+ * 保持與舊版 API 相容，現有使用處不需要修改
+ */
 
 interface Props {
   content?: string
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   content: ''
-})
-
-const renderedMarkdown = computed(() => {
-  return renderMarkdown(props.content)
 })
 </script>
 
@@ -30,46 +32,13 @@ const renderedMarkdown = computed(() => {
   margin-top: 15px;
 }
 
-.markdown-content {
-  line-height: 1.6;
-  color: #2c3e50;
+/* 覆寫 MdPreviewWrapper 的樣式以符合 MarkdownViewer 的外觀 */
+.markdown-viewer :deep(.md-preview-wrapper) {
+  /* 繼承父容器樣式 */
 }
 
-.markdown-content :deep(h1),
-.markdown-content :deep(h2),
-.markdown-content :deep(h3) {
-  margin: 20px 0 10px 0;
-  font-weight: 600;
-}
-
-.markdown-content :deep(h1) {
-  font-size: 24px;
-  color: #2c3e50;
-}
-
-.markdown-content :deep(h2) {
-  font-size: 20px;
-  color: #34495e;
-}
-
-.markdown-content :deep(h3) {
-  font-size: 16px;
-  color: #34495e;
-}
-
-.markdown-content :deep(p) {
-  margin: 10px 0;
-}
-
-.markdown-content :deep(code) {
-  background: #f1f2f6;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
-  font-size: 14px;
-}
-
-.markdown-content :deep(pre) {
+/* 調整 pre/code 樣式以符合原本的深色背景風格 */
+.markdown-viewer :deep(pre) {
   background: #2c3e50;
   color: #fff;
   padding: 15px;
@@ -78,90 +47,63 @@ const renderedMarkdown = computed(() => {
   margin: 15px 0;
 }
 
-.markdown-content :deep(pre code) {
+.markdown-viewer :deep(pre code) {
   background: none;
   padding: 0;
   color: #fff;
 }
 
-.markdown-content :deep(a) {
-  color: #3498db;
-  text-decoration: none;
-}
-
-.markdown-content :deep(a:hover) {
-  text-decoration: underline;
-}
-
-.markdown-content :deep(strong) {
-  font-weight: 600;
+/* 調整 heading 樣式 */
+.markdown-viewer :deep(h1) {
+  font-size: 24px;
   color: #2c3e50;
+  margin: 20px 0 10px 0;
 }
 
-.markdown-content :deep(em) {
+.markdown-viewer :deep(h2) {
+  font-size: 20px;
+  color: #34495e;
+  margin: 20px 0 10px 0;
+}
+
+.markdown-viewer :deep(h3) {
+  font-size: 16px;
+  color: #34495e;
+  margin: 20px 0 10px 0;
+}
+
+/* 調整連結顏色 */
+.markdown-viewer :deep(a) {
+  color: #3498db;
+}
+
+/* 調整 em 樣式 */
+.markdown-viewer :deep(em) {
   font-style: italic;
   color: #7f8c8d;
 }
 
-/* GFM: Tables */
-.markdown-content :deep(table) {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 15px 0;
-}
-
-.markdown-content :deep(th),
-.markdown-content :deep(td) {
-  border: 1px solid #ddd;
-  padding: 8px 12px;
-  text-align: left;
-}
-
-.markdown-content :deep(th) {
-  background: #f5f5f5;
-  font-weight: 600;
-}
-
-.markdown-content :deep(tr:nth-child(even)) {
-  background: #fafafa;
-}
-
 /* GFM: Strikethrough */
-.markdown-content :deep(del),
-.markdown-content :deep(s) {
+.markdown-viewer :deep(del),
+.markdown-viewer :deep(s) {
   text-decoration: line-through;
   color: #999;
 }
 
 /* GFM: Task lists */
-.markdown-content :deep(ul.contains-task-list) {
+.markdown-viewer :deep(ul.contains-task-list) {
   list-style: none;
   padding-left: 0;
 }
 
-.markdown-content :deep(li.task-list-item) {
+.markdown-viewer :deep(li.task-list-item) {
   display: flex;
   align-items: flex-start;
   gap: 8px;
 }
 
-.markdown-content :deep(input[type="checkbox"]) {
-  margin-top: 4px;
-}
-
-/* GFM: Blockquote */
-.markdown-content :deep(blockquote) {
-  border-left: 4px solid #ddd;
-  margin: 15px 0;
-  padding: 10px 20px;
-  background: #f9f9f9;
-  color: #666;
-}
-
-/* GFM: Horizontal rule */
-.markdown-content :deep(hr) {
-  border: none;
-  border-top: 1px solid #ddd;
-  margin: 20px 0;
+/* GFM: Table alternating rows */
+.markdown-viewer :deep(tr:nth-child(even)) {
+  background: #fafafa;
 }
 </style>

@@ -1,43 +1,9 @@
 /**
- * @fileoverview Markdown 解析工具
+ * @fileoverview Markdown 工具函數
  *
- * 使用 marked 進行 Markdown 到 HTML 轉換
- * 支援 GitHub Flavored Markdown (GFM)：
- * - Headers, Bold, Italic, Strikethrough
- * - Links (包含自動連結 URL)
- * - Code blocks & inline code
- * - Tables, Task lists
- * - 並使用 DOMPurify 進行 XSS 防護
+ * 注意：Markdown 渲染請使用 MdPreviewWrapper 組件
+ * 本文件僅提供不涉及渲染的工具函數
  */
-
-import { marked } from 'marked'
-import { sanitizeHtml } from './sanitize'
-
-// 設定 marked 使用 GFM
-marked.setOptions({
-  gfm: true,       // GitHub Flavored Markdown
-  breaks: true     // 換行轉 <br>
-})
-
-/**
- * 將 Markdown 文本轉換為安全的 HTML
- * @param text - Markdown 文本
- * @returns 經過 sanitize 的 HTML 字符串
- */
-export function renderMarkdown(text: string | null | undefined): string {
-  if (!text) return ''
-
-  const html = marked(text) as string
-  return sanitizeHtml(html)
-}
-
-/**
- * 將 Markdown 文本轉換為 HTML（舊版相容，建議使用 renderMarkdown）
- * @deprecated 請使用 renderMarkdown
- */
-export function parseMarkdown(text: string | null | undefined): string {
-  return renderMarkdown(text)
-}
 
 /**
  * 清理 HTML 標籤（用於預覽或搜尋）

@@ -64,7 +64,7 @@
             <span>提交時間: {{ formatDateTime(finalVersionData?.submitTime) }}</span>
           </div>
         </div>
-        <div class="submission-content" v-html="renderedFinalVersionContent"></div>
+        <MdPreviewWrapper :content="finalVersionContentMarkdown" class="submission-content" />
       </div>
 
       <!-- 歷史版本差異比較（僅在查看舊版本時顯示） -->
@@ -568,7 +568,7 @@ import { usePointCalculation } from '@/composables/usePointCalculation'
 import { useAvatar } from '@/composables/useAvatar'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { useVotingData } from '@/composables/useVotingData'
-import { parseMarkdown } from '@/utils/markdown'
+import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { getErrorMessage } from '@/utils/errorHandler'
 
@@ -815,14 +815,6 @@ const isViewingOldVersion = computed(() => {
   return result
 })
 
-const renderedSubmissionContent = computed(() => {
-  // 支持 contentMarkdown (useVotingData API) 和 content (舊版 API) 兩種字段名
-  const version = currentVersionData.value as any
-  const content = version?.contentMarkdown || version?.content
-  if (!content) return '<p class="no-content">暫無內容</p>'
-  return parseMarkdown(content)
-})
-
 const finalVersionData = computed(() => {
   // 最終版本 = 陣列最後一個元素（不論 status）
   const versions = votingDataComposable.versions.value
@@ -905,12 +897,10 @@ const safeSliderMin = computed(() => {
   return min
 })
 
-const renderedFinalVersionContent = computed(() => {
+const finalVersionContentMarkdown = computed(() => {
   // 支持 contentMarkdown (useVotingData API) 和 content (舊版 API) 兩種字段名
   const version = finalVersionData.value as any
-  const content = version?.contentMarkdown || version?.content
-  if (!content) return '<p class="no-content">暫無內容</p>'
-  return parseMarkdown(content)
+  return version?.contentMarkdown || version?.content || ''
 })
 
 // ✅ Phase 3 优化：使用 composable 提供的投票数据

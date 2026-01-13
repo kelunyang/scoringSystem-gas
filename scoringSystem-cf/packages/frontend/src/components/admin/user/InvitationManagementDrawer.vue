@@ -1167,7 +1167,7 @@ const handleResendInvite = async (invitation: Invitation): Promise<void> => {
   resendingInvites.value.add(invitation.invitationId)
   try {
     const response = await fetchWithAuth<{ success: boolean; error?: { message?: string } }>(
-      '/invitations/resend-email',
+      '/api/invitations/resend-email',
       {
         method: 'POST',
         body: {

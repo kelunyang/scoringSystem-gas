@@ -47,7 +47,7 @@ class TestInvitationCodeSecurity:
             pytest.skip("No test invitation code available")
 
         # First, verify the code (don't actually register)
-        response = api_client.post('/invitations/verify', json={
+        response = api_client.post('/api/invitations/verify', json={
             'invitationCode': config.test_invitation_code
         })
 
@@ -71,7 +71,7 @@ class TestInvitationCodeSecurity:
         """
         # Try many invalid codes
         for i in range(10):
-            response = api_client.post('/invitations/verify', json={
+            response = api_client.post('/api/invitations/verify', json={
                 'invitationCode': f'FAKE{i:06d}'
             })
 
@@ -94,7 +94,7 @@ class TestInvitationCodeSecurity:
         Verify deactivated invitation codes are rejected.
         """
         # Try to use an obviously deactivated code
-        response = api_client.post('/invitations/verify', json={
+        response = api_client.post('/api/invitations/verify', json={
             'invitationCode': 'DEACTIVATED_CODE'
         })
 
@@ -126,7 +126,7 @@ class TestScoringSettlementSecurity:
         Expected: Settlement validates prerequisites
         """
         # Get a project
-        response = api_client.post('/projects/list-with-stages', auth=admin_token)
+        response = api_client.post('/api/projects/list-with-stages', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -148,7 +148,7 @@ class TestScoringSettlementSecurity:
             pytest.skip("No projects with stages")
 
         # Attempt settlement without proper state
-        response = api_client.post('/scoring/settle', auth=admin_token, json={
+        response = api_client.post('/api/scoring/settle', auth=admin_token, json={
             'projectId': project_with_stages['projectId'],
             'stageId': stage_id
         })
@@ -169,7 +169,7 @@ class TestScoringSettlementSecurity:
         """
         Verify settlement reversal requires proper authorization.
         """
-        response = api_client.post('/settlement/reverse', auth=admin_token, json={
+        response = api_client.post('/api/settlement/reverse', auth=admin_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test'
         })
@@ -196,7 +196,7 @@ class TestScoringSettlementSecurity:
         fake_student_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdHVkZW50In0.fake"
 
         # Attempt to directly modify scoring data
-        response = api_client.post('/scoring/update-score', auth=fake_student_token, json={
+        response = api_client.post('/api/scoring/update-score', auth=fake_student_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test',
             'userId': 'usr_self',
@@ -231,7 +231,7 @@ class TestWalletTransactionSecurity:
 
         Expected: Negative amounts rejected
         """
-        response = api_client.post('/wallets/award', auth=admin_token, json={
+        response = api_client.post('/api/wallets/award', auth=admin_token, json={
             'projectId': 'proj_test',
             'userId': 'usr_test',
             'amount': -1000,
@@ -259,7 +259,7 @@ class TestWalletTransactionSecurity:
         Expected: Idempotent or reject duplicates
         """
         # Get a project
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -279,8 +279,8 @@ class TestWalletTransactionSecurity:
             'dedupKey': 'test_dedup_key_12345'
         }
 
-        response1 = api_client.post('/wallets/award', auth=admin_token, json=payload)
-        response2 = api_client.post('/wallets/award', auth=admin_token, json=payload)
+        response1 = api_client.post('/api/wallets/award', auth=admin_token, json=payload)
+        response2 = api_client.post('/api/wallets/award', auth=admin_token, json=payload)
 
         # Second request should either fail or be idempotent
         # Should not create two transactions
@@ -295,7 +295,7 @@ class TestWalletTransactionSecurity:
         """
         Verify transaction amounts have reasonable limits.
         """
-        response = api_client.post('/wallets/award', auth=admin_token, json={
+        response = api_client.post('/api/wallets/award', auth=admin_token, json={
             'projectId': 'proj_test',
             'userId': 'usr_test',
             'amount': 999999999999,  # Unreasonably large
@@ -317,7 +317,7 @@ class TestWalletTransactionSecurity:
         Verify transaction reversal maintains integrity.
         """
         # Attempt to reverse non-existent transaction
-        response = api_client.post('/wallets/reverse', auth=admin_token, json={
+        response = api_client.post('/api/wallets/reverse', auth=admin_token, json={
             'projectId': 'proj_test',
             'transactionId': 'txn_nonexistent'
         })
@@ -351,7 +351,7 @@ class TestWorkflowIntegrity:
         Expected: Workflow order enforced
         """
         # Get projects with stages
-        response = api_client.post('/projects/list-with-stages', auth=admin_token)
+        response = api_client.post('/api/projects/list-with-stages', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -381,7 +381,7 @@ class TestWorkflowIntegrity:
         fake_student_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdHVkZW50In0.fake"
 
         # Attempt to vote (may fail due to various reasons)
-        response = api_client.post('/rankings/vote', auth=fake_student_token, json={
+        response = api_client.post('/api/rankings/vote', auth=fake_student_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test',
             'proposalId': 'prop_test',
@@ -402,7 +402,7 @@ class TestWorkflowIntegrity:
         Verify submissions only accepted during active stage.
         """
         # Attempt submission to completed/pending stage
-        response = api_client.post('/submissions/submit', auth=admin_token, json={
+        response = api_client.post('/api/submissions/submit', auth=admin_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_completed',  # Assuming this is completed
             'content': 'Late submission'
@@ -430,7 +430,7 @@ class TestVotingEligibility:
         """
         fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
-        response = api_client.post('/rankings/stage-vote', auth=fake_outsider_token, json={
+        response = api_client.post('/api/rankings/stage-vote', auth=fake_outsider_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test',
             'rankings': []
@@ -496,7 +496,7 @@ class TestCommentReactionSecurity:
         """
         fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJub3RtZW50aW9uZWQifQ.fake"
 
-        response = api_client.post('/comments/reactions/add', auth=fake_user_token, json={
+        response = api_client.post('/api/comments/reactions/add', auth=fake_user_token, json={
             'commentId': 'cmt_test',
             'reaction': 'agree'
         })
@@ -517,7 +517,7 @@ class TestCommentReactionSecurity:
         """
         # Try to add many reactions rapidly
         for i in range(10):
-            response = api_client.post('/comments/reactions/add', auth=admin_token, json={
+            response = api_client.post('/api/comments/reactions/add', auth=admin_token, json={
                 'commentId': f'cmt_test_{i}',
                 'reaction': 'agree'
             })
@@ -551,7 +551,7 @@ class TestStagePauseResumeWorkflow:
         Expected: Submissions rejected during pause
         """
         # Get project with stages
-        response = api_client.post('/projects/list-with-stages', auth=admin_token)
+        response = api_client.post('/api/projects/list-with-stages', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -562,7 +562,7 @@ class TestStagePauseResumeWorkflow:
             for stage in project.get('stages', []):
                 if stage.get('status') == 'paused':
                     # Try to submit to paused stage
-                    response = api_client.post('/submissions/submit', auth=admin_token, json={
+                    response = api_client.post('/api/submissions/submit', auth=admin_token, json={
                         'projectId': project['projectId'],
                         'stageId': stage['stageId'],
                         'content': 'Test during pause'
@@ -612,7 +612,7 @@ class TestForceWithdrawWorkflow:
         """
         Verify force-withdraw requires valid submission.
         """
-        response = api_client.post('/submissions/force-withdraw', auth=admin_token, json={
+        response = api_client.post('/api/submissions/force-withdraw', auth=admin_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test',
             'submissionId': 'sub_nonexistent',
@@ -679,7 +679,7 @@ class TestVoteResetLimits:
         """
         fake_member_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJtZW1iZXIifQ.fake"
 
-        response = api_client.post('/rankings/reset-votes', auth=fake_member_token, json={
+        response = api_client.post('/api/rankings/reset-votes', auth=fake_member_token, json={
             'proposalId': 'prop_test',
             'reason': 'Member attempt'
         })
@@ -727,7 +727,7 @@ class TestDataExportSecurity:
         """
         fake_member_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJtZW1iZXIifQ.fake"
 
-        response = api_client.post('/wallets/export', auth=fake_member_token, json={
+        response = api_client.post('/api/wallets/export', auth=fake_member_token, json={
             'projectId': 'proj_test'
         })
 
@@ -744,7 +744,7 @@ class TestDataExportSecurity:
         """
         Verify exported data is properly filtered.
         """
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -755,7 +755,7 @@ class TestDataExportSecurity:
 
         project_id = projects[0]['projectId']
 
-        response = api_client.post('/wallets/export', auth=admin_token, json={
+        response = api_client.post('/api/wallets/export', auth=admin_token, json={
             'projectId': project_id
         })
 

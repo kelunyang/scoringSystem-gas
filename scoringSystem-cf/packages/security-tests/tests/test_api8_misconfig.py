@@ -199,8 +199,8 @@ class TestErrorResponses:
         """
         # Trigger various errors
         error_triggers = [
-            ('/projects/get', {'projectId': '../../../etc/passwd'}),
-            ('/users/display-names', {'projectId': 'x', 'userIds': [None]}),
+            ('/api/projects/get', {'projectId': '../../../etc/passwd'}),
+            ('/api/users/display-names', {'projectId': 'x', 'userIds': [None]}),
             ('/api/auth/login-verify-password', {'userEmail': '', 'password': ''}),
         ]
 
@@ -238,7 +238,7 @@ class TestErrorResponses:
         ]
 
         for payload in sql_payloads:
-            response = api_client.post('/projects/get', auth=admin_token, json={
+            response = api_client.post('/api/projects/get', auth=admin_token, json={
                 'projectId': payload
             })
 
@@ -266,8 +266,8 @@ class TestErrorResponses:
         """
         # Generate different error types
         errors = [
-            api_client.post('/projects/get', auth=admin_token, json={'projectId': 'nonexistent'}),
-            api_client.post('/projects/get', auth='invalid_token', json={'projectId': 'test'}),
+            api_client.post('/api/projects/get', auth=admin_token, json={'projectId': 'nonexistent'}),
+            api_client.post('/api/projects/get', auth='invalid_token', json={'projectId': 'test'}),
             api_client.post('/nonexistent-endpoint', auth=admin_token),
         ]
 
@@ -326,7 +326,7 @@ class TestDebugMode:
         Verify verbose/debug error mode is disabled.
         """
         # Trigger an error
-        response = api_client.post('/projects/get', auth=admin_token, json={
+        response = api_client.post('/api/projects/get', auth=admin_token, json={
             'projectId': 'invalid_format'
         })
 

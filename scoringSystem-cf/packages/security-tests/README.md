@@ -157,7 +157,7 @@ def test_project_access_control(api_client: APIClient, test_users: dict):
     user2 = test_users['teacher2']
 
     # User1 creates project
-    response = api_client.post('/projects/create',
+    response = api_client.post('/api/projects/create',
         auth=user1.token,
         json={'projectData': {'projectName': 'Secret Project'}}
     )
@@ -165,7 +165,7 @@ def test_project_access_control(api_client: APIClient, test_users: dict):
     project_id = response.json()['data']['projectId']
 
     # User2 attempts to access User1's project (should fail)
-    response = api_client.post('/projects/get',
+    response = api_client.post('/api/projects/get',
         auth=user2.token,
         json={'projectId': project_id}
     )

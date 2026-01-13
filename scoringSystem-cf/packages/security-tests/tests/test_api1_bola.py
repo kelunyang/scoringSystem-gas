@@ -49,7 +49,7 @@ class TestProjectBOLA:
         Expected: 403 Forbidden or 404 Not Found
         """
         # First, get a project that admin has access to
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         assert response.status_code == 200, f"Failed to list projects: {response.text}"
 
         data = response.json()
@@ -63,7 +63,7 @@ class TestProjectBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJmYWtlX3VzZXIifQ.invalid"
 
         response = api_client.post(
-            '/projects/get',
+            '/api/projects/get',
             auth=fake_token,
             json={'projectId': project_id}
         )
@@ -87,7 +87,7 @@ class TestProjectBOLA:
 
         Expected: Only user's own projects returned
         """
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         assert response.status_code == 200
 
         data = response.json()
@@ -118,7 +118,7 @@ class TestProjectBOLA:
         Expected: 403 Forbidden
         """
         # Get a project first
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -133,7 +133,7 @@ class TestProjectBOLA:
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
         response = api_client.post(
-            '/projects/update',
+            '/api/projects/update',
             auth=fake_viewer_token,
             json={
                 'projectId': project_id,
@@ -172,7 +172,7 @@ class TestProjectBOLA:
 
         for fake_id in fake_project_ids:
             response = api_client.post(
-                '/projects/get',
+                '/api/projects/get',
                 auth=admin_token,
                 json={'projectId': fake_id}
             )
@@ -214,7 +214,7 @@ class TestWalletBOLA:
         Expected: 403 Forbidden or empty results
         """
         # First get a project to test wallet access
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -227,7 +227,7 @@ class TestWalletBOLA:
 
         # Try to access wallet with fake user ID
         response = api_client.post(
-            '/wallets/transactions',
+            '/api/wallets/transactions',
             auth=admin_token,
             json={
                 'projectId': project_id,
@@ -257,7 +257,7 @@ class TestWalletBOLA:
         Expected: 403 Forbidden
         """
         # Get a project
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -272,7 +272,7 @@ class TestWalletBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdHVkZW50In0.fake"
 
         response = api_client.post(
-            '/wallets/award',
+            '/api/wallets/award',
             auth=fake_token,
             json={
                 'projectId': project_id,
@@ -303,7 +303,7 @@ class TestWalletBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhdHRhY2tlciJ9.fake"
 
         response = api_client.post(
-            '/wallets/reverse',
+            '/api/wallets/reverse',
             auth=fake_token,
             json={
                 'projectId': 'proj_test',
@@ -338,7 +338,7 @@ class TestSubmissionBOLA:
         Expected: 403 Forbidden or 404 Not Found
         """
         # Get a project and stage
-        response = api_client.post('/projects/list-with-stages', auth=admin_token)
+        response = api_client.post('/api/projects/list-with-stages', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects with stages")
 
@@ -363,7 +363,7 @@ class TestSubmissionBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
         response = api_client.post(
-            '/submissions/list',
+            '/api/submissions/list',
             auth=fake_token,
             json={
                 'projectId': project_with_stages['projectId'],
@@ -392,7 +392,7 @@ class TestSubmissionBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhdHRhY2tlciJ9.fake"
 
         response = api_client.post(
-            '/submissions/delete',
+            '/api/submissions/delete',
             auth=fake_token,
             json={
                 'submissionId': 'sub_fake-submission-id',
@@ -422,7 +422,7 @@ class TestSubmissionBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
         response = api_client.post(
-            '/comments/stage',
+            '/api/comments/stage',
             auth=fake_token,
             json={
                 'projectId': 'proj_unauthorized',
@@ -432,6 +432,62 @@ class TestSubmissionBOLA:
 
         assert response.status_code in [401, 403, 404], \
             f"Unauthorized comment access allowed (status: {response.status_code})"
+
+    @pytest.mark.critical
+    @pytest.mark.bola
+    def test_comments_all_stages_cross_project_access(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify users cannot access batch comments API from unauthorized projects.
+
+        Attack Vector:
+        - User attempts to fetch comments for multiple stages from unauthorized project
+
+        Expected: 403 Forbidden or 401 Unauthorized
+        """
+        fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post(
+            '/api/comments/all-stages',
+            auth=fake_token,
+            json={
+                'projectId': 'proj_unauthorized',
+                'stageIds': ['stg_test1', 'stg_test2']
+            }
+        )
+
+        assert response.status_code in [401, 403, 404], \
+            f"Unauthorized batch comments access allowed (status: {response.status_code})"
+
+    @pytest.mark.critical
+    @pytest.mark.bola
+    def test_rankings_all_stages_cross_project_access(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify users cannot access batch rankings API from unauthorized projects.
+
+        Attack Vector:
+        - User attempts to fetch rankings for multiple stages from unauthorized project
+
+        Expected: 403 Forbidden or 401 Unauthorized
+        """
+        fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post(
+            '/api/rankings/all-stages-rankings',
+            auth=fake_token,
+            json={
+                'projectId': 'proj_unauthorized',
+                'stageIds': ['stg_test1', 'stg_test2']
+            }
+        )
+
+        assert response.status_code in [401, 403, 404], \
+            f"Unauthorized batch rankings access allowed (status: {response.status_code})"
 
 
 # ============================================================================
@@ -460,7 +516,7 @@ class TestGroupBOLA:
 
         # Attempt to add member to a group
         response = api_client.post(
-            '/groups/add-member',
+            '/api/groups/add-member',
             auth=fake_token,
             json={
                 'projectId': 'proj_test',
@@ -489,7 +545,7 @@ class TestGroupBOLA:
         Expected: 403 Forbidden or filtered results
         """
         # Get groups from a project
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -502,7 +558,7 @@ class TestGroupBOLA:
 
         # List groups
         response = api_client.post(
-            '/groups/list',
+            '/api/groups/list',
             auth=admin_token,
             json={'projectId': project_id}
         )
@@ -532,7 +588,7 @@ class TestGroupBOLA:
         fake_member_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJtZW1iZXIifQ.fake"
 
         response = api_client.post(
-            '/groups/update',
+            '/api/groups/update',
             auth=fake_member_token,
             json={
                 'projectId': 'proj_test',
@@ -697,7 +753,7 @@ class TestIDEnumeration:
 
         for fake_id in fake_stage_ids:
             response = api_client.post(
-                '/stages/get',
+                '/api/stages/get',
                 auth=admin_token,
                 json={
                     'projectId': 'proj_test',
@@ -807,7 +863,7 @@ class TestStagesBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
         response = api_client.post(
-            '/stages/get',
+            '/api/stages/get',
             auth=fake_token,
             json={
                 'projectId': 'proj_other_project',
@@ -835,7 +891,7 @@ class TestStagesBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhdHRhY2tlciJ9.fake"
 
         response = api_client.post(
-            '/stages/update',
+            '/api/stages/update',
             auth=fake_token,
             json={
                 'projectId': 'proj_victim_project',
@@ -864,7 +920,7 @@ class TestStagesBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhdHRhY2tlciJ9.fake"
 
         response = api_client.post(
-            '/stages/delete',
+            '/api/stages/delete',
             auth=fake_token,
             json={
                 'projectId': 'proj_unauthorized',
@@ -892,7 +948,7 @@ class TestStagesBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
         response = api_client.post(
-            '/stages/config',
+            '/api/stages/config',
             auth=fake_token,
             json={
                 'projectId': 'proj_unauthorized',
@@ -920,7 +976,7 @@ class TestStagesBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhdHRhY2tlciJ9.fake"
 
         response = api_client.post(
-            '/stages/clone',
+            '/api/stages/clone',
             auth=fake_token,
             json={
                 'projectId': 'proj_source',
@@ -955,7 +1011,7 @@ class TestStagesBOLA:
 
         for fake_id in fake_stage_ids:
             response = api_client.post(
-                '/stages/get',
+                '/api/stages/get',
                 auth=admin_token,
                 json={
                     'projectId': 'proj_nonexistent',
@@ -997,7 +1053,7 @@ class TestSettlementBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
         response = api_client.post(
-            '/settlement/history',
+            '/api/settlement/history',
             auth=fake_token,
             json={
                 'projectId': 'proj_unauthorized'
@@ -1024,7 +1080,7 @@ class TestSettlementBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhdHRhY2tlciJ9.fake"
 
         response = api_client.post(
-            '/settlement/details',
+            '/api/settlement/details',
             auth=fake_token,
             json={
                 'projectId': 'proj_unauthorized',
@@ -1053,7 +1109,7 @@ class TestSettlementBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhdHRhY2tlciJ9.fake"
 
         response = api_client.post(
-            '/settlement/transactions',
+            '/api/settlement/transactions',
             auth=fake_token,
             json={
                 'projectId': 'proj_unauthorized',
@@ -1082,7 +1138,7 @@ class TestSettlementBOLA:
 
         # Test stage rankings
         response = api_client.post(
-            '/settlement/stage-rankings',
+            '/api/settlement/stage-rankings',
             auth=fake_token,
             json={
                 'projectId': 'proj_unauthorized',
@@ -1095,7 +1151,7 @@ class TestSettlementBOLA:
 
         # Test comment rankings
         response = api_client.post(
-            '/settlement/comment-rankings',
+            '/api/settlement/comment-rankings',
             auth=fake_token,
             json={
                 'projectId': 'proj_unauthorized',
@@ -1130,7 +1186,7 @@ class TestSettlementBOLA:
 
         for fake_id in fake_settlement_ids:
             response = api_client.post(
-                '/settlement/details',
+                '/api/settlement/details',
                 auth=admin_token,
                 json={
                     'projectId': 'proj_nonexistent',
@@ -1168,7 +1224,7 @@ class TestEventLogsBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
         response = api_client.post(
-            '/eventlogs/project',
+            '/api/eventlogs/project',
             auth=fake_token,
             json={
                 'projectId': 'proj_unauthorized'
@@ -1195,7 +1251,7 @@ class TestEventLogsBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhdHRhY2tlciJ9.fake"
 
         response = api_client.post(
-            '/eventlogs/user',
+            '/api/eventlogs/user',
             auth=fake_token,
             json={
                 'projectId': 'proj_test',
@@ -1223,7 +1279,7 @@ class TestEventLogsBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
         response = api_client.post(
-            '/eventlogs/resource',
+            '/api/eventlogs/resource',
             auth=fake_token,
             json={
                 'projectId': 'proj_unauthorized',
@@ -1262,7 +1318,7 @@ class TestEventLogsBOLA:
 
         # Viewer should not be able to see system-level logs
         response = api_client.post(
-            '/eventlogs/project',
+            '/api/eventlogs/project',
             auth=fake_viewer_token,
             json={
                 'projectId': 'proj_test',
@@ -1297,7 +1353,7 @@ class TestEventLogsBOLA:
 
         for fake_id in fake_log_ids:
             response = api_client.post(
-                '/eventlogs/resource',
+                '/api/eventlogs/resource',
                 auth=admin_token,
                 json={
                     'projectId': 'proj_nonexistent',

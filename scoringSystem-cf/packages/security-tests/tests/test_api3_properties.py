@@ -111,7 +111,7 @@ class TestMassAssignment:
         Expected: Project role field ignored
         """
         # Get a project
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -138,7 +138,7 @@ class TestMassAssignment:
         """
         fake_member_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJtZW1iZXIifQ.fake"
 
-        response = api_client.post('/groups/update-member-role', auth=fake_member_token, json={
+        response = api_client.post('/api/groups/update-member-role', auth=fake_member_token, json={
             'projectId': 'proj_test',
             'groupId': 'grp_test',
             'userId': 'usr_self',
@@ -168,7 +168,7 @@ class TestSensitiveDataExposure:
         """
         endpoints_to_test = [
             ('/api/auth/current-user', {}),
-            ('/projects/list', {}),
+            ('/api/projects/list', {}),
         ]
 
         sensitive_fields = [
@@ -221,7 +221,7 @@ class TestSensitiveDataExposure:
         """
         Verify other users' emails are not exposed in listings.
         """
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
 
         if response.status_code == 200:
             data = response.json()
@@ -244,7 +244,7 @@ class TestSensitiveDataExposure:
         """
         Verify wallet balances of other users are not exposed.
         """
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -256,7 +256,7 @@ class TestSensitiveDataExposure:
         project_id = projects[0]['projectId']
 
         # Get project ladder (should only show allowed data)
-        response = api_client.post('/wallets/project-ladder', auth=admin_token, json={
+        response = api_client.post('/api/wallets/project-ladder', auth=admin_token, json={
             'projectId': project_id
         })
 
@@ -308,7 +308,7 @@ class TestDataMinimization:
         """
         Verify list endpoints return summary data, not full details.
         """
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
 
         if response.status_code == 200:
             data = response.json()
@@ -333,7 +333,7 @@ class TestDataMinimization:
         Verify error responses don't leak sensitive information.
         """
         # Trigger an error
-        response = api_client.post('/projects/get', auth=admin_token, json={
+        response = api_client.post('/api/projects/get', auth=admin_token, json={
             'projectId': 'invalid_project_id'
         })
 
@@ -371,7 +371,7 @@ class TestPropertyFiltering:
         # For now, test with fake token
         fake_observer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvYnNlcnZlciIsInJvbGUiOiJvYnNlcnZlciJ9.fake"
 
-        response = api_client.post('/projects/list', auth=fake_observer_token)
+        response = api_client.post('/api/projects/list', auth=fake_observer_token)
 
         # Should either fail auth or return limited data
         assert response.status_code in [200, 401, 403]
@@ -387,7 +387,7 @@ class TestPropertyFiltering:
         Verify students cannot see detailed teacher evaluation data.
         """
         # Get a project with stages
-        response = api_client.post('/projects/list-with-stages', auth=admin_token)
+        response = api_client.post('/api/projects/list-with-stages', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -404,7 +404,7 @@ class TestPropertyFiltering:
         """
         Verify voting data is filtered based on voting status.
         """
-        response = api_client.post('/projects/list-with-stages', auth=admin_token)
+        response = api_client.post('/api/projects/list-with-stages', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -470,7 +470,7 @@ class TestModificationPrevention:
         # or that attempts to modify are rejected
 
         # If there's a transaction update endpoint, it should reject amount changes
-        response = api_client.post('/wallets/update-transaction', auth=admin_token, json={
+        response = api_client.post('/api/wallets/update-transaction', auth=admin_token, json={
             'transactionId': 'txn_test',
             'amount': 999999
         })
@@ -504,7 +504,7 @@ class TestScoringConfigProperties:
         Expected: Validation error when weights don't sum to 1.0
         """
         # Get a project
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -516,7 +516,7 @@ class TestScoringConfigProperties:
         project_id = projects[0]['projectId']
 
         # Attempt to set invalid weights (sum > 1.0)
-        response = api_client.put(f'/projects/{project_id}/scoring-config', auth=admin_token, json={
+        response = api_client.put(f'/api/projects/{project_id}/scoring-config', auth=admin_token, json={
             'studentRankingWeight': 0.8,
             'teacherRankingWeight': 0.5  # Sum = 1.3, invalid
         })
@@ -541,7 +541,7 @@ class TestScoringConfigProperties:
 
         Expected: Value limited to 1-5 range
         """
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -556,7 +556,7 @@ class TestScoringConfigProperties:
         invalid_values = [0, -1, 100, 999]
 
         for value in invalid_values:
-            response = api_client.put(f'/projects/{project_id}/scoring-config', auth=admin_token, json={
+            response = api_client.put(f'/api/projects/{project_id}/scoring-config', auth=admin_token, json={
                 'maxVoteResetCount': value
             })
 
@@ -575,7 +575,7 @@ class TestScoringConfigProperties:
         """
         fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJub2FjY2VzcyJ9.fake"
 
-        response = api_client.get('/projects/proj_test/scoring-config', auth=fake_user_token)
+        response = api_client.get('/api/projects/proj_test/scoring-config', auth=fake_user_token)
 
         assert response.status_code in [401, 403, 404], \
             f"Scoring config accessible without project access"
@@ -591,7 +591,7 @@ class TestScoringConfigProperties:
         Verify scoring config update requires manage permission.
         """
         # Get a project
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -605,7 +605,7 @@ class TestScoringConfigProperties:
         # Fake viewer token (view but not manage)
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
-        response = api_client.put(f'/projects/{project_id}/scoring-config', auth=fake_viewer_token, json={
+        response = api_client.put(f'/api/projects/{project_id}/scoring-config', auth=fake_viewer_token, json={
             'maxCommentSelections': 5
         })
 
@@ -624,12 +624,12 @@ class TestScoringConfigProperties:
         fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJyZWd1bGFyIn0.fake"
 
         # GET should require admin
-        response = api_client.get('/projects/system/scoring-defaults', auth=fake_user_token)
+        response = api_client.get('/api/projects/system/scoring-defaults', auth=fake_user_token)
         assert response.status_code in [401, 403], \
             "System scoring defaults GET accessible without admin"
 
         # PUT should require admin
-        response = api_client.put('/projects/system/scoring-defaults', auth=fake_user_token, json={
+        response = api_client.put('/api/projects/system/scoring-defaults', auth=fake_user_token, json={
             'maxCommentSelections': 10
         })
         assert response.status_code in [401, 403], \
@@ -660,7 +660,7 @@ class TestStageConfigProperties:
         Expected: System fields ignored or request rejected
         """
         # Get a project with stages
-        response = api_client.post('/projects/list-with-stages', auth=admin_token)
+        response = api_client.post('/api/projects/list-with-stages', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects with stages")
 
@@ -683,7 +683,7 @@ class TestStageConfigProperties:
         project_id = project_with_stages['projectId']
 
         # Attempt to inject system/protected fields
-        response = api_client.post('/stages/config/update', auth=admin_token, json={
+        response = api_client.post('/api/stages/config/update', auth=admin_token, json={
             'projectId': project_id,
             'stageId': stage_id,
             'config': {
@@ -700,7 +700,7 @@ class TestStageConfigProperties:
         # If request succeeded, verify protected fields were not modified
         if response.status_code == 200:
             # Get the config to verify
-            check_response = api_client.post('/stages/config', auth=admin_token, json={
+            check_response = api_client.post('/api/stages/config', auth=admin_token, json={
                 'projectId': project_id,
                 'stageId': stage_id
             })
@@ -729,7 +729,7 @@ class TestStageConfigProperties:
         """
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
-        response = api_client.post('/stages/config', auth=fake_viewer_token, json={
+        response = api_client.post('/api/stages/config', auth=fake_viewer_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test'
         })
@@ -767,7 +767,7 @@ class TestStageConfigProperties:
 
         Expected: Readonly fields ignored or request rejected
         """
-        response = api_client.post('/stages/config/update', auth=admin_token, json={
+        response = api_client.post('/api/stages/config/update', auth=admin_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test',
             'config': {
@@ -808,7 +808,7 @@ class TestSettlementProperties:
         """
         fake_student_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdHVkZW50In0.fake"
 
-        response = api_client.post('/settlement/details', auth=fake_student_token, json={
+        response = api_client.post('/api/settlement/details', auth=fake_student_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test',
             'settlementId': 'stl_test'
@@ -846,7 +846,7 @@ class TestSettlementProperties:
 
         Expected: Only UUID-format IDs exposed
         """
-        response = api_client.post('/settlement/history', auth=admin_token, json={
+        response = api_client.post('/api/settlement/history', auth=admin_token, json={
             'projectId': 'proj_test'
         })
 
@@ -892,7 +892,7 @@ class TestSettlementProperties:
         fake_student_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdHVkZW50In0.fake"
 
         # Get settlement transactions (wallet impact)
-        response = api_client.post('/settlement/transactions', auth=fake_student_token, json={
+        response = api_client.post('/api/settlement/transactions', auth=fake_student_token, json={
             'projectId': 'proj_test',
             'settlementId': 'stl_test'
         })

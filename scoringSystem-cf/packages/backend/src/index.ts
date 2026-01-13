@@ -158,23 +158,23 @@ app.get('/api', (c) => {
   return c.json({
     version: '1.0.0',
     endpoints: {
-      auth: '/auth',
-      users: '/users',
-      projects: '/projects',
-      stages: '/stages',
-      submissions: '/submissions',
-      wallets: '/wallets',
-      comments: '/comments',
-      scores: '/scores',
-      rankings: '/rankings',
-      groups: '/groups',
-      invitations: '/invitations',
-      // DISABLED: tags: '/tags',
-      eventlogs: '/eventlogs',
+      auth: '/api/auth',
+      users: '/api/users',
+      projects: '/api/projects',
+      stages: '/api/stages',
+      submissions: '/api/submissions',
+      wallets: '/api/wallets',
+      comments: '/api/comments',
+      scoring: '/api/scoring',
+      rankings: '/api/rankings',
+      groups: '/api/groups',
+      invitations: '/api/invitations',
+      // DISABLED: tags: '/api/tags',
+      eventlogs: '/api/eventlogs',
       notifications: '/api/notifications',
       admin: '/api/admin',
-      settlement: '/settlement',
-      maintenance: '/maintenance'
+      settlement: '/api/settlement',
+      maintenance: '/api/maintenance'
     }
   });
 });
@@ -195,31 +195,31 @@ app.route('/api/admin', adminRouter);
 app.route('/api/system', systemRouter);
 
 // User management routes (COMPLETED)
-app.route('/users', usersRouter);
+app.route('/api/users', usersRouter);
 
 // Invitation routes (COMPLETED)
-app.route('/invitations', invitationsRouter);
+app.route('/api/invitations', invitationsRouter);
 
 // Project management routes (COMPLETED)
-app.route('/projects', projectsRouter);
+app.route('/api/projects', projectsRouter);
 
 // Group management routes (COMPLETED)
-app.route('/groups', groupsRouter);
+app.route('/api/groups', groupsRouter);
 
 // Stage management routes (COMPLETED)
-app.route('/stages', stagesRouter);
+app.route('/api/stages', stagesRouter);
 
 // Submission management routes (COMPLETED)
-app.route('/submissions', submissionsRouter);
+app.route('/api/submissions', submissionsRouter);
 
 // Wallet management routes (COMPLETED)
-app.route('/wallets', walletsRouter);
+app.route('/api/wallets', walletsRouter);
 
 // Comment management routes (COMPLETED)
-app.route('/comments', commentsRouter);
+app.route('/api/comments', commentsRouter);
 
 // Scoring routes (COMPLETED)
-app.route('/scoring', scoringRouter);
+app.route('/api/scoring', scoringRouter);
 
 // Rankings routes (COMPLETED)
 app.route('/api/rankings', rankingsRouter);
@@ -228,16 +228,16 @@ app.route('/api/rankings', rankingsRouter);
 // app.route('/tags', tagsRouter);
 
 // Event logs routes (COMPLETED)
-app.route('/eventlogs', eventlogsRouter);
+app.route('/api/eventlogs', eventlogsRouter);
 
 // Notification routes (COMPLETED)
 app.route('/api/notifications', notificationsRouter);
 
 // Settlement routes (COMPLETED)
-app.route('/settlement', settlementRouter);
+app.route('/api/settlement', settlementRouter);
 
 // Maintenance routes (COMPLETED - admin only)
-app.route('/maintenance', maintenanceRouter);
+app.route('/api/maintenance', maintenanceRouter);
 
 // IP detection routes (for frontend - no auth required)
 app.route('/api/ip', ipRouter);

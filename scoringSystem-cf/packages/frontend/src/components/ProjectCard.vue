@@ -14,7 +14,7 @@
       </div>
     </div>
 
-    <div class="project-description" v-html="renderedDescription"></div>
+    <MdPreviewWrapper :content="project.description || ''" class="project-description" />
 
     <!-- 階段進度顯示：流程圖 or 甘特圖 -->
     <div class="stage-display-container">
@@ -128,40 +128,14 @@ import { getUserPreferences } from '@/utils/userPreferences'
 import { useCurrentUser } from '@/composables/useAuth'
 import AvatarGroup from './common/AvatarGroup.vue'
 import StageGanttChart from './charts/StageGanttChart.vue'
-import { renderMarkdown } from '@/utils/markdown'
-
-// Module-level Markdown cache (shared across all component instances)
-const markdownCache = new Map()
-const MAX_CACHE_SIZE = 100
-
-/**
- * Render Markdown with caching for performance
- * Uses marked + DOMPurify for secure rendering
- */
-function renderMarkdownWithCache(text) {
-  if (!text) return ''
-
-  if (markdownCache.has(text)) {
-    return markdownCache.get(text)
-  }
-
-  const result = renderMarkdown(text)
-
-  // LRU cache eviction
-  if (markdownCache.size >= MAX_CACHE_SIZE) {
-    const firstKey = markdownCache.keys().next().value
-    markdownCache.delete(firstKey)
-  }
-
-  markdownCache.set(text, result)
-  return result
-}
+import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 
 export default {
   name: 'ProjectCard',
   components: {
     AvatarGroup,
-    StageGanttChart
+    StageGanttChart,
+    MdPreviewWrapper
   },
   props: {
     project: {
@@ -252,11 +226,6 @@ export default {
       return getProjectStageDisplay(props.project.stages || [])
     })
 
-    // Rendered markdown description (sanitized via marked + DOMPurify)
-    const renderedDescription = computed(() => {
-      return renderMarkdownWithCache(props.project.description || '')
-    })
-    
     // 顯示的階段列表（前一個、當前、下一個）
     const displayStages = computed(() => {
       return stageDisplay.value.displayStages
@@ -457,7 +426,6 @@ export default {
       timeRemaining,
       statusDisplayText,
       votingStages,
-      renderedDescription,
       isStageActive,
       isStageCompleted,
       isStagePending,

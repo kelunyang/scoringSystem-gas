@@ -320,7 +320,7 @@
                     <div class="detail-section" v-if="expandedLogDetails.log.result">
                       <h4><i class="fas fa-list-ol"></i> 排名結果</h4>
                       <div class="content-display">
-                        <pre>{{ formatJSON(expandedLogDetails.log.result) }}</pre>
+                        <MdPreviewWrapper :content="jsonToMarkdown(expandedLogDetails.log.result)" />
                       </div>
                     </div>
 
@@ -368,7 +368,7 @@
                     <div class="detail-section" v-if="expandedLogDetails.log.serviceType === 'ranking_bt' && expandedLogDetails.log.btStrengthParams">
                       <h4><i class="fas fa-chart-bar"></i> BT 能力值</h4>
                       <div class="content-display">
-                        <pre>{{ formatJSON(expandedLogDetails.log.btStrengthParams) }}</pre>
+                        <MdPreviewWrapper :content="jsonToMarkdown(expandedLogDetails.log.btStrengthParams)" />
                       </div>
                     </div>
 
@@ -475,6 +475,8 @@ import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
+import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
+import { jsonToMarkdown } from '@/utils/json-preview'
 import type {
   AIServiceLog,
   AIServiceType,
@@ -768,15 +770,6 @@ const formatTokens = (tokens: number | undefined): string => {
   if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(2)}M`
   if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}K`
   return tokens.toString()
-}
-
-const formatJSON = (jsonString: string | undefined): string => {
-  if (!jsonString) return '-'
-  try {
-    return JSON.stringify(JSON.parse(jsonString), null, 2)
-  } catch {
-    return jsonString
-  }
 }
 
 const parseBTComparisons = (jsonString: string | undefined): Array<{ itemA: string; itemB: string; winner: string; reason?: string }> => {

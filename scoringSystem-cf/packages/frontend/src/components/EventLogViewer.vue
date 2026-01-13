@@ -176,7 +176,7 @@
                     <!-- Event Details - JSON 高亮 -->
                     <div v-if="event.details && Object.keys(event.details).length > 0" class="context-data">
                       <el-divider content-position="left">详细信息</el-divider>
-                      <pre class="context-json hljs" v-html="highlightJson(event.details)"></pre>
+                      <MdPreviewWrapper :content="jsonToMarkdown(event.details)" />
                     </div>
 
                     <!-- 无详情时显示空状态 -->
@@ -211,7 +211,7 @@
                       <el-divider />
                       <div class="resource-main-content">
                         <h5>内容：</h5>
-                        <div v-html="renderMarkdown((resourceContentMap.get(event.logId)!.content || resourceContentMap.get(event.logId)!.contentMarkdown) as string)" />
+                        <MdPreviewWrapper :content="(resourceContentMap.get(event.logId)!.content || resourceContentMap.get(event.logId)!.contentMarkdown) as string" />
                       </div>
                     </div>
 
@@ -248,20 +248,15 @@ import { ElMessage } from 'element-plus'
 // @ts-ignore - icons-vue package type issue
 import { Refresh } from '@element-plus/icons-vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
-import { renderMarkdown } from '@/utils/markdown'
 import { rpcClient } from '@/utils/rpc-client'
 import { getErrorMessage } from '@/utils/errorHandler'
 import type { EventLog } from '@/types'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import AdminFilterToolbar from './admin/shared/AdminFilterToolbar.vue'
-import hljs from 'highlight.js/lib/core'
-import json from 'highlight.js/lib/languages/json'
-import 'highlight.js/styles/github.css'
 import { sanitizeHtml, sanitizeText } from '@/utils/sanitize'
 import ExpandableTableRow from './shared/ExpandableTableRow.vue'
-
-// 注册 JSON 语言
-hljs.registerLanguage('json', json)
+import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
+import { jsonToMarkdown } from '@/utils/json-preview'
 
 // Define types for component data
 interface UserOption {
@@ -564,20 +559,6 @@ const handleToggleExpansion = async (event: EventLog) => {
     if (canExpand(event.resourceType || '') && !resourceContentMap.value.has(event.logId)) {
       await loadResourceForEvent(event)
     }
-  }
-}
-
-// JSON 高亮并清洗
-const highlightJson = (obj: any): string => {
-  if (!obj) return ''
-
-  try {
-    const jsonString = JSON.stringify(obj, null, 2)
-    const highlighted = hljs.highlight(jsonString, { language: 'json' }).value
-    return sanitizeHtml(highlighted)
-  } catch (error) {
-    console.error('JSON 高亮失败:', error)
-    return sanitizeText(JSON.stringify(obj, null, 2))
   }
 }
 

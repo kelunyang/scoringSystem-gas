@@ -78,7 +78,7 @@
               <i class="fas fa-code"></i>
               <span>事件詳細資訊 (JSON)</span>
             </div>
-            <pre class="context-json hljs" v-html="highlightedContexts.get(getEventKey(event))"></pre>
+            <MdPreviewWrapper :content="jsonToMarkdown(eventContexts.get(getEventKey(event)))" />
           </div>
         </div>
       </el-timeline-item>
@@ -92,18 +92,8 @@ import { ElMessage } from 'element-plus'
 import { rpcClient } from '@/utils/rpc-client'
 import { formatDateChinese, formatTime as formatTimestamp } from '@/utils/date'
 import EmptyState from './EmptyState.vue'
-
-// Lazy load highlight.js only when needed
-const hljsPromise = import('highlight.js/lib/core').then(async (module) => {
-  const hljs = module.default
-  const json = (await import('highlight.js/lib/languages/json')).default
-  hljs.registerLanguage('json', json)
-
-  // Import CSS
-  await import('highlight.js/styles/github.css')
-
-  return hljs
-})
+import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
+import { jsonToMarkdown } from '@/utils/json-preview'
 
 /**
  * Event interface
@@ -145,7 +135,6 @@ const isMounted = ref(true)
 const expandedEventIds = shallowRef(new Set<string>())
 const loadingContextIds = shallowRef(new Set<string>())
 const eventContexts = shallowRef(new Map<string, any>())
-const highlightedContexts = shallowRef(new Map<string, string>())
 
 /**
  * Sorted events (chronological order)
@@ -242,22 +231,6 @@ function getFailureReasonText(reason: string): string {
  */
 function getEventKey(event: Event): string {
   return `${event.timestamp}-${event.entityId || event.eventType}`
-}
-
-/**
- * Highlight JSON with syntax highlighting (lazy loaded)
- */
-async function highlightJson(obj: any): Promise<string> {
-  if (!obj) return ''
-
-  try {
-    const hljs = await hljsPromise
-    const jsonString = JSON.stringify(obj, null, 2)
-    return hljs.highlight(jsonString, { language: 'json' }).value
-  } catch (error) {
-    console.error('Error highlighting JSON:', error)
-    return JSON.stringify(obj, null, 2)
-  }
 }
 
 /**
@@ -389,15 +362,6 @@ async function toggleEventContext(event: Event): Promise<void> {
     await loadEventContext(event, eventKey)
   }
 
-  // Pre-highlight the JSON before expanding
-  const context = getEventContext(event)
-  if (context && !highlightedContexts.value.has(eventKey)) {
-    const highlighted = await highlightJson(context)
-    const newHighlightedMap = new Map(highlightedContexts.value)
-    newHighlightedMap.set(eventKey, highlighted)
-    highlightedContexts.value = newHighlightedMap
-  }
-
   // Expand
   const newExpandedIds = new Set(expandedEventIds.value)
   newExpandedIds.add(eventKey)
@@ -411,7 +375,6 @@ watch(() => props.date, () => {
   expandedEventIds.value = new Set()
   eventContexts.value = new Map()
   loadingContextIds.value = new Set()
-  highlightedContexts.value = new Map()
 })
 
 /**
@@ -426,7 +389,6 @@ onUnmounted(() => {
   expandedEventIds.value.clear()
   eventContexts.value.clear()
   loadingContextIds.value.clear()
-  highlightedContexts.value.clear()
 })
 </script>
 

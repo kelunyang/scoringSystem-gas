@@ -30,7 +30,7 @@
         <div class="section-label">回覆給：</div>
         <div class="original-comment-card">
           <div class="comment-author">{{ originalComment.authorName }}</div>
-          <div class="comment-content" v-html="renderMarkdown(originalComment.content || '')"></div>
+          <MdPreviewWrapper :content="originalComment.content || ''" class="comment-content" />
           <div class="comment-meta">
             <span v-for="group in originalComment.mentionedGroups" :key="group" class="mentioned-tag">
               @{{ group }}
@@ -70,7 +70,7 @@ import MdEditorWrapper from './MdEditorWrapper.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { rpcClient } from '@/utils/rpc-client'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
-import { renderMarkdown } from '@/utils/markdown'
+import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 
 // Drawer Breadcrumb
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()

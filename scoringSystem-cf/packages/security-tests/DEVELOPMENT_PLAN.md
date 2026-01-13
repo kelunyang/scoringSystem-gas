@@ -596,7 +596,7 @@ class TestProjectBOLA:
         user2 = test_users['user2']
 
         # User1 創建專案
-        response = api_client.post('/projects/create',
+        response = api_client.post('/api/projects/create',
             auth=user1.token,
             json={'projectData': {'projectName': 'Secret Project'}}
         )
@@ -604,7 +604,7 @@ class TestProjectBOLA:
         project_id = response.json()['data']['projectId']
 
         # User2 嘗試訪問
-        response = api_client.post('/projects/get',
+        response = api_client.post('/api/projects/get',
             auth=user2.token,
             json={'projectId': project_id}
         )

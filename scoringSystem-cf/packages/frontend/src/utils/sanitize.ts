@@ -40,7 +40,9 @@ export function sanitizeHtml(html: string | null | undefined): string {
       'table', 'thead', 'tbody', 'tr', 'th', 'td',
       'hr',
       // GFM 額外支援
-      'input' // for task lists
+      'input', // for task lists
+      // @mention 支援
+      'mention'
     ],
 
     // Allow safe attributes

@@ -523,24 +523,26 @@ const projectsWithPermissions = computed(() => {
   let cacheUpdated = false
   const newCache = new Map(cache)
 
-  const result = filteredProjects.value.map(project => {
-    const cacheKey = `${userId}_${project.projectId}`
+  const result = filteredProjects.value
+    .filter(project => project?.projectId)  // Guard against undefined projects
+    .map(project => {
+      const cacheKey = `${userId}_${project.projectId}`
 
-    // Return cached project object (with stable reference)
-    let cachedProject = cache.get(cacheKey)
+      // Return cached project object (with stable reference)
+      let cachedProject = cache.get(cacheKey)
 
-    if (!cachedProject) {
-      // Calculate permissions and create extended project object
-      const permissions = calculateProjectPermissions(project, globalPermissions) as PermissionFlags
-      cachedProject = { ...project, permissions } as ProjectWithPermissions
+      if (!cachedProject) {
+        // Calculate permissions and create extended project object
+        const permissions = calculateProjectPermissions(project, globalPermissions) as PermissionFlags
+        cachedProject = { ...project, permissions } as ProjectWithPermissions
 
-      // Add to new cache
-      newCache.set(cacheKey, cachedProject)
-      cacheUpdated = true
-    }
+        // Add to new cache
+        newCache.set(cacheKey, cachedProject)
+        cacheUpdated = true
+      }
 
-    return cachedProject  // Return stable object reference
-  })
+      return cachedProject  // Return stable object reference
+    })
 
   // Only update cache Map once if there were changes
   if (cacheUpdated) {

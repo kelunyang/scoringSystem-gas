@@ -169,7 +169,7 @@ class TestAPIDiscovery:
             '/',
             '/api/auth/login-verify-password',
             '/api/auth/current-user',
-            '/projects/list',
+            '/api/projects/list',
         ]
 
         for endpoint in endpoints:
@@ -197,7 +197,9 @@ class TestAPIDiscovery:
         post_only_endpoints = [
             '/api/auth/login-verify-password',
             '/api/auth/current-user',
-            '/projects/create',
+            '/api/projects/create',
+            '/api/comments/all-stages',
+            '/api/rankings/all-stages-rankings',
         ]
 
         for endpoint in post_only_endpoints:
@@ -514,7 +516,7 @@ class TestDataValidationFromExternal:
         Verify files from external sources are validated.
         """
         # Try to reference external file URL
-        response = api_client.post('/submissions/create', auth=admin_token, json={
+        response = api_client.post('/api/submissions/create', auth=admin_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test',
             'fileUrl': 'http://evil.com/malware.exe'

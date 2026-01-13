@@ -10,7 +10,6 @@
 
 import { useQuery } from '@tanstack/vue-query'
 import { computed } from 'vue'
-import { apiClient } from '@/utils/api'
 import { rpcClient } from '@/utils/rpc-client'
 import { useCurrentUser } from './useAuth'
 import type { Group, Member } from '@/types'

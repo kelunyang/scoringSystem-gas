@@ -195,85 +195,96 @@ export default defineConfig(({ command, mode }) => ({
       clientPort: 5173
     },
     proxy: {
+      // /api 開頭的路徑直接代理（後端已經是 /api/* 路由）
       '/api': {
         target: 'http://localhost:8787',
         changeOrigin: true,
         secure: false
       },
+      // 以下路徑需要 rewrite 加上 /api 前綴
       '/users': {
         target: 'http://localhost:8787',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        rewrite: (path) => `/api${path}`
       },
       '/projects': {
         target: 'http://localhost:8787',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        rewrite: (path) => `/api${path}`
       },
       '/submissions': {
         target: 'http://localhost:8787',
         changeOrigin: true,
-        secure: false
-      },
-      '/api/notifications': {
-        target: 'http://localhost:8787',
-        changeOrigin: true,
-        secure: false
+        secure: false,
+        rewrite: (path) => `/api${path}`
       },
       '/system': {
         target: 'http://localhost:8787',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        rewrite: (path) => `/api${path}`
       },
       '/wallets': {
         target: 'http://localhost:8787',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        rewrite: (path) => `/api${path}`
       },
       '/invitations': {
         target: 'http://localhost:8787',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        rewrite: (path) => `/api${path}`
       },
       '/groups': {
         target: 'http://localhost:8787',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        rewrite: (path) => `/api${path}`
       },
       '/stages': {
         target: 'http://localhost:8787',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        rewrite: (path) => `/api${path}`
       },
       '/rankings': {
         target: 'http://localhost:8787',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        rewrite: (path) => `/api${path}`
       },
       '/comments': {
         target: 'http://localhost:8787',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        rewrite: (path) => `/api${path}`
       },
       '/scoring': {
         target: 'http://localhost:8787',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        rewrite: (path) => `/api${path}`
       },
       '/eventlogs': {
         target: 'http://localhost:8787',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        rewrite: (path) => `/api${path}`
       },
       '/settlement': {
         target: 'http://localhost:8787',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        rewrite: (path) => `/api${path}`
       },
       '/maintenance': {
         target: 'http://localhost:8787',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        rewrite: (path) => `/api${path}`
       },
       '/ws': {
         target: 'ws://localhost:8787',

@@ -238,7 +238,10 @@
       </div>
       
       <div class="comment-content">
-        <span v-html="parseCommentContent(comment.content)"></span>
+        <MdPreviewWrapper
+          :content="comment.content"
+          :preProcess="getMentionProcessor()"
+        />
       </div>
       
       <!-- 被提及的用戶（使用 AvatarGroup 頭像顯示） -->
@@ -261,7 +264,10 @@
             <span class="reply-time">{{ reply.timestamp }}</span>
           </div>
           <div class="reply-content">
-            <span v-html="parseCommentContent(reply.content)"></span>
+            <MdPreviewWrapper
+              :content="reply.content"
+              :preProcess="getMentionProcessor()"
+            />
           </div>
         </div>
       </div>
@@ -275,6 +281,8 @@ import { ElBadge, ElMessage, ElTooltip } from 'element-plus'
 import StatNumberContent from '@/components/shared/StatNumberContent.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import AvatarGroup from '@/components/common/AvatarGroup.vue'
+import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
+import { processMentions } from '@/utils/mention-processor'
 import { useProjectRole } from '@/composables/useProjectRole'
 import { getNumericPermissionLevel } from '@/composables/useProjectPermissions'
 import { rpcClient } from '@/utils/rpc-client'
@@ -287,7 +295,8 @@ const component: DefineComponent<any, any, any> = defineComponent({
   components: {
     EmptyState,
     AvatarGroup,
-    StatNumberContent
+    StatNumberContent,
+    MdPreviewWrapper
   },
   props: {
     stageId: {
@@ -556,54 +565,12 @@ const component: DefineComponent<any, any, any> = defineComponent({
       })
     },
     
-    parseCommentContent(content: string) {
-      if (!content) return ''
-
-      // 先進行markdown解析
-      let html = content
-        // Headers
-        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-
-        // Bold
-        .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
-        .replace(/__(.*?)__/gim, '<strong>$1</strong>')
-
-        // Italic
-        .replace(/\*(.*?)\*/gim, '<em>$1</em>')
-        .replace(/_(.*?)_/gim, '<em>$1</em>')
-
-        // Code blocks
-        .replace(/```([\s\S]*?)```/gim, '<pre><code>$1</code></pre>')
-        .replace(/`([^`]*)`/gim, '<code>$1</code>')
-
-        // Links
-        .replace(/\[([^\]]*)\]\(([^\)]*)\)/gim, '<a href="$2" target="_blank">$1</a>')
-
-        // Line breaks
-        .replace(/\n/gim, '<br>')
-
-      // 然後解析 @email 標記，顯示為友好的用戶名稱
-      html = html.replace(/@([^\s@]+@[^\s@]+)/g, (_match: string, email: string) => {
-        // 嘗試從項目數據中找到用戶的顯示名稱
-        const friendlyName = this.getEmailDisplayName(email)
-        const emailPrefix = email.split('@')[0]
-
-        // 如果找到 displayName 且不同於 email 前綴，顯示完整格式
-        if (friendlyName !== emailPrefix) {
-          return `<span class="mention">@${friendlyName}(${email})</span>`
-        } else {
-          // 否則只顯示 email
-          return `<span class="mention">@${email}</span>`
-        }
-      })
-      
-      return html
-    },
-    
-    getEmailDisplayName(email: string) {
-      return (this.userEmailToDisplayName as Record<string, string>)[email] || email.split('@')[0]
+    /**
+     * 取得 mention 前處理函數
+     * 用於 MdPreviewWrapper 的 preProcess prop
+     */
+    getMentionProcessor() {
+      return (content: string) => processMentions(content, this.userEmailToDisplayName as Record<string, string>)
     },
 
     convertGroupIdsToNames(groupIds: string[]) {
@@ -1435,110 +1402,27 @@ export default component
   line-height: 1.4;
 }
 
-/* @mention 高亮樣式 */
-.comment-content :deep(.mention) {
-  background: #e8f5e8;
-  color: #2e7d2e;
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-weight: 500;
-}
-
-/* Markdown 元素樣式 */
-.comment-content :deep(h1),
-.comment-content :deep(h2),
-.comment-content :deep(h3) {
-  margin: 16px 0 8px 0;
-  color: #2c3e50;
-}
-
-.comment-content :deep(h1) {
-  font-size: 20px;
-  border-bottom: 2px solid #e1e8ed;
-  padding-bottom: 6px;
-}
-
-.comment-content :deep(h2) {
-  font-size: 18px;
-  border-bottom: 1px solid #e1e8ed;
-  padding-bottom: 4px;
-}
-
-.comment-content :deep(h3) {
-  font-size: 16px;
-}
-
-.comment-content :deep(strong) {
-  font-weight: 600;
-}
-
-.comment-content :deep(em) {
-  font-style: italic;
-}
-
-.comment-content :deep(code) {
-  background: #f5f5f5;
-  padding: 2px 4px;
-  border-radius: 3px;
-  font-family: 'Courier New', monospace;
-  font-size: 13px;
-}
-
-.comment-content :deep(pre) {
-  background: #f5f5f5;
-  padding: 12px;
-  border-radius: 6px;
-  overflow-x: auto;
-  margin: 12px 0;
-}
-
-.comment-content :deep(pre code) {
-  background: none;
-  padding: 0;
-  border-radius: 0;
-}
-
-.comment-content :deep(a) {
-  color: #007bff;
-  text-decoration: none;
-}
-
-.comment-content :deep(a:hover) {
-  text-decoration: underline;
-}
-
-/* Reply content markdown styles */
+/* @mention 高亮樣式 - 同時支援 <mention> tag 和 .mention class */
+.comment-content :deep(mention),
+.comment-content :deep(.mention),
+.reply-content :deep(mention),
 .reply-content :deep(.mention) {
   background: #e8f5e8;
   color: #2e7d2e;
   padding: 2px 6px;
   border-radius: 10px;
   font-weight: 500;
+  display: inline;
 }
 
-.reply-content :deep(strong) {
-  font-weight: 600;
-}
-
-.reply-content :deep(em) {
-  font-style: italic;
+/* MdPreviewWrapper 已處理大部分 markdown 樣式，這裡只保留必要的覆寫 */
+.comment-content :deep(.md-preview-wrapper),
+.reply-content :deep(.md-preview-wrapper) {
+  /* 移除 MdPreviewWrapper 預設的 padding */
 }
 
 .reply-content :deep(code) {
-  background: #f5f5f5;
-  padding: 2px 4px;
-  border-radius: 3px;
-  font-family: 'Courier New', monospace;
   font-size: 12px;
-}
-
-.reply-content :deep(a) {
-  color: #007bff;
-  text-decoration: none;
-}
-
-.reply-content :deep(a:hover) {
-  text-decoration: underline;
 }
 
 /* Badge 樣式 */

@@ -35,7 +35,7 @@
               </a>
             </div>
             <div class="content-expanded" v-else>
-              <div class="markdown-content" v-html="renderItemMarkdown(item)"></div>
+              <MdPreviewWrapper :content="getItemContent(item)" class="markdown-content" />
               <a @click.stop="toggleExpand(item)" class="collapse-link">摺疊評論</a>
             </div>
             <div class="item-meta">
@@ -113,7 +113,7 @@
               </a>
             </div>
             <div class="content-expanded" v-else>
-              <div class="markdown-content" v-html="renderItemMarkdown(item)"></div>
+              <MdPreviewWrapper :content="getItemContent(item)" class="markdown-content" />
               <a @click.stop="toggleExpand(item)" class="collapse-link">摺疊評論</a>
             </div>
             <div class="item-meta">
@@ -156,8 +156,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, type PropType } from 'vue'
-import { parseMarkdown } from '@/utils/markdown'
 import EmptyState from '@/components/shared/EmptyState.vue'
+import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 
 // Types
 interface DisplayFields {
@@ -366,12 +366,11 @@ const toggleExpand = (item: CommentItem): void => {
 }
 
 /**
- * 渲染項目的 Markdown 內容
+ * 取得項目的 Markdown 內容
  * 優先使用 fullContent（完整內容），若無則使用 displayFields.content
  */
-const renderItemMarkdown = (item: CommentItem): string => {
-  const content = item.fullContent || item[props.displayFields.content]
-  return parseMarkdown(content)
+const getItemContent = (item: CommentItem): string => {
+  return item.fullContent || item[props.displayFields.content] || ''
 }
 
 const truncateContent = (content: string, maxLength: number = 10): string => {

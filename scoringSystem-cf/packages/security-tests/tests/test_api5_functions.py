@@ -162,7 +162,7 @@ class TestRoleBasedAccess:
         fake_student_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdHVkZW50Iiwicm9sZSI6InN0dWRlbnQifQ.fake"
 
         # Get a project for context
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -177,7 +177,7 @@ class TestRoleBasedAccess:
         teacher_endpoints = [
             ('/api/rankings/teacher-rankings', {'projectId': project_id, 'stageId': 'stg_test'}),
             ('/api/rankings/teacher-comprehensive-vote', {'projectId': project_id, 'stageId': 'stg_test'}),
-            ('/wallets/award', {'projectId': project_id, 'userId': 'usr_test', 'amount': 10}),
+            ('/api/wallets/award', {'projectId': project_id, 'userId': 'usr_test', 'amount': 10}),
         ]
 
         for endpoint, payload in teacher_endpoints:
@@ -199,7 +199,7 @@ class TestRoleBasedAccess:
         fake_observer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvYnNlcnZlciIsInJvbGUiOiJvYnNlcnZlciJ9.fake"
 
         # Get a project
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -212,10 +212,10 @@ class TestRoleBasedAccess:
 
         # Write operations observer should not be able to do
         write_endpoints = [
-            ('/projects/update', {'projectId': project_id, 'projectData': {}}),
-            ('/stages/create', {'projectId': project_id, 'stageData': {}}),
-            ('/groups/create', {'projectId': project_id, 'groupData': {}}),
-            ('/comments/create', {'projectId': project_id, 'content': 'test'}),
+            ('/api/projects/update', {'projectId': project_id, 'projectData': {}}),
+            ('/api/stages/create', {'projectId': project_id, 'stageData': {}}),
+            ('/api/groups/create', {'projectId': project_id, 'groupData': {}}),
+            ('/api/comments/create', {'projectId': project_id, 'content': 'test'}),
         ]
 
         for endpoint, payload in write_endpoints:
@@ -244,7 +244,7 @@ class TestGlobalPermissions:
         # User without create_project permission
         fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJub3Blcm1pc3Npb24ifQ.fake"
 
-        response = api_client.post('/projects/create', auth=fake_user_token, json={
+        response = api_client.post('/api/projects/create', auth=fake_user_token, json={
             'projectData': {
                 'projectName': 'Unauthorized Project',
                 'description': 'Should not be created'
@@ -265,7 +265,7 @@ class TestGlobalPermissions:
         """
         fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJub3Blcm1pc3Npb24ifQ.fake"
 
-        response = api_client.post('/invitations/generate', auth=fake_user_token, json={
+        response = api_client.post('/api/invitations/generate', auth=fake_user_token, json={
             'email': 'test@example.com'
         })
 
@@ -309,7 +309,7 @@ class TestProjectPermissions:
         Verify project management requires manage permission.
         """
         # Get a project
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -324,11 +324,11 @@ class TestProjectPermissions:
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
         manage_endpoints = [
-            ('/projects/update', {'projectId': project_id, 'projectData': {}}),
-            ('/projects/delete', {'projectId': project_id}),
-            ('/stages/create', {'projectId': project_id, 'stageData': {}}),
-            ('/groups/create', {'projectId': project_id, 'groupData': {}}),
-            ('/wallets/award', {'projectId': project_id, 'userId': 'usr_test', 'amount': 10}),
+            ('/api/projects/update', {'projectId': project_id, 'projectData': {}}),
+            ('/api/projects/delete', {'projectId': project_id}),
+            ('/api/stages/create', {'projectId': project_id, 'stageData': {}}),
+            ('/api/groups/create', {'projectId': project_id, 'groupData': {}}),
+            ('/api/wallets/award', {'projectId': project_id, 'userId': 'usr_test', 'amount': 10}),
         ]
 
         for endpoint, payload in manage_endpoints:
@@ -348,7 +348,7 @@ class TestProjectPermissions:
         Verify project viewing requires membership.
         """
         # Get a project
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -362,7 +362,7 @@ class TestProjectPermissions:
         # User not in the project
         fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
-        response = api_client.post('/projects/get', auth=fake_outsider_token, json={
+        response = api_client.post('/api/projects/get', auth=fake_outsider_token, json={
             'projectId': project_id
         })
 
@@ -428,7 +428,7 @@ class TestPermissionEscalation:
         Verify project members cannot escalate their project role.
         """
         # Get a project
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -442,7 +442,7 @@ class TestPermissionEscalation:
         # Member trying to escalate self
         fake_member_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJtZW1iZXIifQ.fake"
 
-        response = api_client.post('/projects/viewers/update-role', auth=fake_member_token, json={
+        response = api_client.post('/api/projects/viewers/update-role', auth=fake_member_token, json={
             'projectId': project_id,
             'userId': 'usr_member',
             'role': 'teacher'
@@ -471,7 +471,7 @@ class TestSensitiveFunctions:
         """
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
-        response = api_client.post('/scoring/settle', auth=fake_viewer_token, json={
+        response = api_client.post('/api/scoring/settle', auth=fake_viewer_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test'
         })
@@ -490,7 +490,7 @@ class TestSensitiveFunctions:
         """
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
-        response = api_client.post('/settlement/reverse', auth=fake_viewer_token, json={
+        response = api_client.post('/api/settlement/reverse', auth=fake_viewer_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test'
         })
@@ -613,7 +613,7 @@ class TestStageControlFunctions:
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
         # Get a project
-        response = api_client.post('/projects/list-with-stages', auth=admin_token)
+        response = api_client.post('/api/projects/list-with-stages', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -632,7 +632,7 @@ class TestStageControlFunctions:
             pytest.skip("No projects with stages")
 
         # Viewer should not be able to pause
-        response = api_client.post('/stages/pause', auth=fake_viewer_token, json={
+        response = api_client.post('/api/stages/pause', auth=fake_viewer_token, json={
             'projectId': project_id,
             'stageId': stage_id
         })
@@ -652,7 +652,7 @@ class TestStageControlFunctions:
         """
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
-        response = api_client.post('/stages/resume', auth=fake_viewer_token, json={
+        response = api_client.post('/api/stages/resume', auth=fake_viewer_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test'
         })
@@ -679,7 +679,7 @@ class TestSubmissionControlFunctions:
         """
         fake_student_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdHVkZW50In0.fake"
 
-        response = api_client.post('/submissions/force-withdraw', auth=fake_student_token, json={
+        response = api_client.post('/api/submissions/force-withdraw', auth=fake_student_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test',
             'submissionId': 'sub_test',
@@ -700,7 +700,7 @@ class TestSubmissionControlFunctions:
         """
         fake_observer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvYnNlcnZlciIsInJvbGUiOiJvYnNlcnZlciJ9.fake"
 
-        response = api_client.post('/submissions/force-withdraw', auth=fake_observer_token, json={
+        response = api_client.post('/api/submissions/force-withdraw', auth=fake_observer_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test',
             'submissionId': 'sub_test',
@@ -770,7 +770,7 @@ class TestStagesFunctions:
         """
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
-        response = api_client.post('/stages/create', auth=fake_viewer_token, json={
+        response = api_client.post('/api/stages/create', auth=fake_viewer_token, json={
             'projectId': 'proj_test',
             'stageData': {'stageName': 'Test Stage'}
         })
@@ -789,7 +789,7 @@ class TestStagesFunctions:
         """
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
-        response = api_client.post('/stages/update', auth=fake_viewer_token, json={
+        response = api_client.post('/api/stages/update', auth=fake_viewer_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test',
             'stageData': {'stageName': 'Updated Stage'}
@@ -809,7 +809,7 @@ class TestStagesFunctions:
         """
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
-        response = api_client.post('/stages/delete', auth=fake_viewer_token, json={
+        response = api_client.post('/api/stages/delete', auth=fake_viewer_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test'
         })
@@ -828,7 +828,7 @@ class TestStagesFunctions:
         """
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
-        response = api_client.post('/stages/clone', auth=fake_viewer_token, json={
+        response = api_client.post('/api/stages/clone', auth=fake_viewer_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test'
         })
@@ -847,7 +847,7 @@ class TestStagesFunctions:
         """
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
-        response = api_client.post('/stages/clone-to-projects', auth=fake_viewer_token, json={
+        response = api_client.post('/api/stages/clone-to-projects', auth=fake_viewer_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test',
             'targetProjectIds': ['proj_target1', 'proj_target2']
@@ -867,7 +867,7 @@ class TestStagesFunctions:
         """
         fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
-        response = api_client.post('/stages/config', auth=fake_outsider_token, json={
+        response = api_client.post('/api/stages/config', auth=fake_outsider_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test'
         })
@@ -886,7 +886,7 @@ class TestStagesFunctions:
         """
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
-        response = api_client.post('/stages/config/update', auth=fake_viewer_token, json={
+        response = api_client.post('/api/stages/config/update', auth=fake_viewer_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test',
             'config': {}
@@ -906,7 +906,7 @@ class TestStagesFunctions:
         """
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
-        response = api_client.post('/stages/config/reset', auth=fake_viewer_token, json={
+        response = api_client.post('/api/stages/config/reset', auth=fake_viewer_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test'
         })
@@ -925,7 +925,7 @@ class TestStagesFunctions:
         """
         fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
-        response = api_client.post('/stages/list', auth=fake_outsider_token, json={
+        response = api_client.post('/api/stages/list', auth=fake_outsider_token, json={
             'projectId': 'proj_test'
         })
 
@@ -943,7 +943,7 @@ class TestStagesFunctions:
         """
         fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
-        response = api_client.post('/stages/get', auth=fake_outsider_token, json={
+        response = api_client.post('/api/stages/get', auth=fake_outsider_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test'
         })
@@ -970,7 +970,7 @@ class TestSettlementFunctions:
         """
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
-        response = api_client.post('/settlement/reverse-preview', auth=fake_viewer_token, json={
+        response = api_client.post('/api/settlement/reverse-preview', auth=fake_viewer_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test'
         })
@@ -989,7 +989,7 @@ class TestSettlementFunctions:
         """
         fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
-        response = api_client.post('/settlement/history', auth=fake_outsider_token, json={
+        response = api_client.post('/api/settlement/history', auth=fake_outsider_token, json={
             'projectId': 'proj_test'
         })
 
@@ -1007,7 +1007,7 @@ class TestSettlementFunctions:
         """
         fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
-        response = api_client.post('/settlement/details', auth=fake_outsider_token, json={
+        response = api_client.post('/api/settlement/details', auth=fake_outsider_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test'
         })
@@ -1026,7 +1026,7 @@ class TestSettlementFunctions:
         """
         fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
-        response = api_client.post('/settlement/transactions', auth=fake_outsider_token, json={
+        response = api_client.post('/api/settlement/transactions', auth=fake_outsider_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test'
         })
@@ -1045,7 +1045,7 @@ class TestSettlementFunctions:
         """
         fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
-        response = api_client.post('/settlement/stage-rankings', auth=fake_outsider_token, json={
+        response = api_client.post('/api/settlement/stage-rankings', auth=fake_outsider_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test'
         })
@@ -1064,7 +1064,7 @@ class TestSettlementFunctions:
         """
         fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
-        response = api_client.post('/settlement/comment-rankings', auth=fake_outsider_token, json={
+        response = api_client.post('/api/settlement/comment-rankings', auth=fake_outsider_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test'
         })
@@ -1091,7 +1091,7 @@ class TestEventLogsFunctions:
         """
         fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
-        response = api_client.post('/eventlogs/project', auth=fake_outsider_token, json={
+        response = api_client.post('/api/eventlogs/project', auth=fake_outsider_token, json={
             'projectId': 'proj_test'
         })
 
@@ -1109,7 +1109,7 @@ class TestEventLogsFunctions:
         """
         fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
-        response = api_client.post('/eventlogs/user', auth=fake_outsider_token, json={
+        response = api_client.post('/api/eventlogs/user', auth=fake_outsider_token, json={
             'projectId': 'proj_test',
             'userId': 'usr_target'
         })
@@ -1128,7 +1128,7 @@ class TestEventLogsFunctions:
         """
         fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
-        response = api_client.post('/eventlogs/resource', auth=fake_outsider_token, json={
+        response = api_client.post('/api/eventlogs/resource', auth=fake_outsider_token, json={
             'projectId': 'proj_test',
             'resourceId': 'res_test'
         })
@@ -1393,7 +1393,7 @@ class TestMissingEndpointsFunctions:
         """
         fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJub3Blcm1pc3Npb24ifQ.fake"
 
-        response = api_client.post('/projects/clone', auth=fake_user_token, json={
+        response = api_client.post('/api/projects/clone', auth=fake_user_token, json={
             'projectId': 'proj_test'
         })
 
@@ -1411,7 +1411,7 @@ class TestMissingEndpointsFunctions:
         """
         fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJub3Blcm1pc3Npb24ifQ.fake"
 
-        response = api_client.post('/invitations/generate-batch', auth=fake_user_token, json={
+        response = api_client.post('/api/invitations/generate-batch', auth=fake_user_token, json={
             'emails': ['test1@example.com', 'test2@example.com']
         })
 
@@ -1429,7 +1429,7 @@ class TestMissingEndpointsFunctions:
         """
         fake_user_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJub3Blcm1pc3Npb24ifQ.fake"
 
-        response = api_client.post('/invitations/reactivate', auth=fake_user_token, json={
+        response = api_client.post('/api/invitations/reactivate', auth=fake_user_token, json={
             'invitationId': 'inv_test'
         })
 
@@ -1447,7 +1447,7 @@ class TestMissingEndpointsFunctions:
         """
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
-        response = api_client.post('/wallets/transactions/all', auth=fake_viewer_token, json={
+        response = api_client.post('/api/wallets/transactions/all', auth=fake_viewer_token, json={
             'projectId': 'proj_test'
         })
 
@@ -1465,7 +1465,7 @@ class TestMissingEndpointsFunctions:
         """
         fake_viewer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ2aWV3ZXIifQ.fake"
 
-        response = api_client.post('/scoring/preview', auth=fake_viewer_token, json={
+        response = api_client.post('/api/scoring/preview', auth=fake_viewer_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test'
         })
@@ -1484,13 +1484,51 @@ class TestMissingEndpointsFunctions:
         """
         fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
-        response = api_client.post('/comments/ranking-history', auth=fake_outsider_token, json={
+        response = api_client.post('/api/comments/ranking-history', auth=fake_outsider_token, json={
             'projectId': 'proj_test',
             'stageId': 'stg_test'
         })
 
         assert response.status_code in [401, 403], \
             f"Comment ranking history without view permission"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_comments_all_stages_requires_view(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify batch comments endpoint requires view permission.
+        """
+        fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post('/api/comments/all-stages', auth=fake_outsider_token, json={
+            'projectId': 'proj_test',
+            'stageIds': ['stg_test1', 'stg_test2']
+        })
+
+        assert response.status_code in [401, 403], \
+            f"Batch comments without view permission (status: {response.status_code})"
+
+    @pytest.mark.high
+    @pytest.mark.functions
+    def test_rankings_all_stages_requires_view(
+        self,
+        api_client: APIClient
+    ):
+        """
+        Verify batch rankings endpoint requires view permission.
+        """
+        fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
+
+        response = api_client.post('/api/rankings/all-stages-rankings', auth=fake_outsider_token, json={
+            'projectId': 'proj_test',
+            'stageIds': ['stg_test1', 'stg_test2']
+        })
+
+        assert response.status_code in [401, 403, 404], \
+            f"Batch rankings without view permission (status: {response.status_code})"
 
 
 # ============================================================================

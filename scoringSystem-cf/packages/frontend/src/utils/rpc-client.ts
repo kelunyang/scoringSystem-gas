@@ -10,23 +10,54 @@ import type { AppType } from '../types/backend';
  * Get the API base URL based on environment
  */
 function getApiBaseUrl(): string {
-  // In development, use the Vite proxy
   if (import.meta.env.DEV) {
-    return '';  // Vite proxy will handle /auth, /projects, etc.
+    // 開發環境：空字串，Vite proxy 會處理
+    return '';
   }
 
-  // In production, use the actual API URL
-  // This should be configured based on your deployment
-  const apiUrl = import.meta.env.VITE_API_URL || '';
-  return apiUrl;
+  // 生產環境：使用 API URL
+  return import.meta.env.VITE_API_URL || '';
 }
 
 /**
- * Custom fetch wrapper with token renewal support
+ * 確保 URL 路徑包含 /api 前綴
+ * 處理前端代碼混用 rpcClient.api.* 和 rpcClient.projects.* 的情況
+ */
+function ensureApiPrefix(url: string | URL | Request): string | URL | Request {
+  if (typeof url === 'string') {
+    // 檢查是否已經有 /api 前綴
+    const urlObj = new URL(url, window.location.origin);
+    if (!urlObj.pathname.startsWith('/api/') && !urlObj.pathname.startsWith('/api')) {
+      // 加上 /api 前綴
+      urlObj.pathname = '/api' + urlObj.pathname;
+      return urlObj.toString();
+    }
+    return url;
+  }
+  if (url instanceof URL) {
+    if (!url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api')) {
+      url.pathname = '/api' + url.pathname;
+    }
+    return url;
+  }
+  if (url instanceof Request) {
+    const reqUrl = new URL(url.url);
+    if (!reqUrl.pathname.startsWith('/api/') && !reqUrl.pathname.startsWith('/api')) {
+      reqUrl.pathname = '/api' + reqUrl.pathname;
+      return new Request(reqUrl.toString(), url);
+    }
+  }
+  return url;
+}
+
+/**
+ * Custom fetch wrapper with token renewal support and API prefix handling
  * Intercepts responses to check for X-New-Token header
  */
 const fetchWithTokenRenewal: typeof fetch = async (input, init) => {
-  const response = await fetch(input, init);
+  // 確保 URL 有 /api 前綴（處理混用問題）
+  const normalizedInput = ensureApiPrefix(input);
+  const response = await fetch(normalizedInput, init);
 
   // ✅ Check for X-New-Token header (sliding expiration)
   const newToken = response.headers.get('X-New-Token');

@@ -339,7 +339,7 @@
                 <!-- Context Data -->
                 <div v-if="contextData" class="context-data">
                   <el-divider content-position="left">上下文信息</el-divider>
-                  <pre class="context-json hljs" v-html="formatJson(contextData)"></pre>
+                  <MdPreviewWrapper :content="jsonToMarkdown(contextData)" />
                 </div>
 
                 <!-- Error State -->
@@ -598,7 +598,7 @@
                   <!-- Full Context -->
                   <div class="context-data">
                     <el-divider content-position="left">完整上下文</el-divider>
-                    <pre class="context-json hljs" v-html="formatJson(parseLoginLogContext(log))"></pre>
+                    <MdPreviewWrapper :content="jsonToMarkdown(parseLoginLogContext(log))" />
                   </div>
                 </div>
               </template>
@@ -853,7 +853,7 @@
                   <!-- Email Context -->
                   <div v-if="log.emailContext" class="context-data">
                     <el-divider content-position="left">Email Context</el-divider>
-                    <pre class="context-json hljs" v-html="formatJson(parseEmailContext(log))"></pre>
+                    <MdPreviewWrapper :content="jsonToMarkdown(parseEmailContext(log))" />
                   </div>
                 </div>
               </template>
@@ -894,12 +894,8 @@ import { EmailStatus } from '@repo/shared/types/admin'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
-import hljs from 'highlight.js/lib/core'
-import json from 'highlight.js/lib/languages/json'
-import 'highlight.js/styles/github.css'
-
-// 注册 JSON 语言
-hljs.registerLanguage('json', json)
+import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
+import { jsonToMarkdown } from '@/utils/json-preview'
 
 // 获取路由
 const route = useRoute()
@@ -2167,22 +2163,6 @@ const formatFieldValue = (key: string | number, value: unknown): string => {
   }
 
   return String(value)
-}
-
-const formatJson = (data: unknown): string => {
-  try {
-    const jsonString = JSON.stringify(data, null, 2)
-    const highlighted = hljs.highlight(jsonString, { language: 'json' }).value
-    // ✅ 使用 sanitizeHtml 清洗 highlight.js 输出
-    return sanitizeHtml(highlighted)
-  } catch (error) {
-    console.error('JSON 格式化失败:', error)
-    // 降级处理：返回纯文本（已转义）
-    const jsonString = JSON.stringify(data, null, 2)
-    const div = document.createElement('div')
-    div.textContent = jsonString
-    return div.innerHTML
-  }
 }
 
 // CSV 工具函數 - 優化效能

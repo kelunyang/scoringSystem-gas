@@ -371,7 +371,7 @@
 
                   <div v-if="notification.context && Object.keys(notification.context).length > 0" class="notification-log-context">
                     <div class="context-label">上下文:</div>
-                    <pre>{{ JSON.stringify(notification.context, null, 2) }}</pre>
+                    <MdPreviewWrapper :content="jsonToMarkdown(notification.context)" />
                   </div>
 
                   <div v-if="notification.stack" class="notification-log-stack">
@@ -440,6 +440,8 @@ import {
 import type { Notification } from '@repo/shared'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import AdminFilterToolbar from '@/components/admin/shared/AdminFilterToolbar.vue'
+import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
+import { jsonToMarkdown } from '@/utils/json-preview'
 
 // ===== UI State =====
 const showDrawer = ref(false)

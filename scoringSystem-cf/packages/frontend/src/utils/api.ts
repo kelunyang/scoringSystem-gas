@@ -345,42 +345,42 @@ class APIClient {
    */
   private getActionDescription(endpoint: string, method: string): string {
     const actionMap: Record<string, string> = {
-      '/auth/login': '登入',
-      '/auth/logout': '登出',
-      '/auth/register': '註冊',
-      '/auth/change-password': '修改密碼',
-      '/auth/validate': '驗證會話',
-      '/auth/current-user': '驗證會話',
-      '/auth/session': '驗證會話',
-      '/users/profile': method === 'GET' ? '獲取個人資料' : '更新個人資料',
-      '/users/avatar/update': '更新頭像',
-      '/projects/create': '建立專案',
-      '/projects/update': '更新專案',
-      '/projects/delete': '刪除專案',
-      '/projects/core': '載入專案資料',
-      '/projects/list': '載入專案列表',
-      '/projects/list-with-stages': '載入專案列表',
-      '/submissions/submit': '提交報告',
-      '/rankings/submit': '提交排名',
-      '/rankings/stage-rankings': '獲取階段排名',
-      '/rankings/teacher-vote-history': '獲取教師投票歷史',
-      '/comments/create': '發表評論',
-      '/comments/ranking': '評論投票',
-      '/comments/rankings': '獲取評論排名',
-      '/comments/stage-rankings': '獲取階段評論排名',
-      '/comments/settlement-analysis': '獲取評論計票分析',
-      '/wallets/transactions': '載入交易記錄',
-      '/groups/create': '建立群組',
-      '/groups/update': '更新群組',
-      '/groups/details': '載入群組詳情',
-      '/groups/add-member': '新增群組成員',
-      '/groups/remove-member': '移除群組成員',
-      '/stages/create': '建立階段',
-      '/stages/update': '更新階段',
-      '/invitations/generate': '生成邀請碼',
-      '/system/logs': '獲取系統日誌',
-      '/system/logs/stats': '獲取日誌統計',
-      '/system/logs/archive': '日誌歸檔'
+      '/api/auth/login': '登入',
+      '/api/auth/logout': '登出',
+      '/api/auth/register': '註冊',
+      '/api/auth/change-password': '修改密碼',
+      '/api/auth/validate': '驗證會話',
+      '/api/auth/current-user': '驗證會話',
+      '/api/auth/session': '驗證會話',
+      '/api/users/profile': method === 'GET' ? '獲取個人資料' : '更新個人資料',
+      '/api/users/avatar/update': '更新頭像',
+      '/api/projects/create': '建立專案',
+      '/api/projects/update': '更新專案',
+      '/api/projects/delete': '刪除專案',
+      '/api/projects/core': '載入專案資料',
+      '/api/projects/list': '載入專案列表',
+      '/api/projects/list-with-stages': '載入專案列表',
+      '/api/submissions/submit': '提交報告',
+      '/api/rankings/submit': '提交排名',
+      '/api/rankings/stage-rankings': '獲取階段排名',
+      '/api/rankings/teacher-vote-history': '獲取教師投票歷史',
+      '/api/comments/create': '發表評論',
+      '/api/comments/ranking': '評論投票',
+      '/api/comments/rankings': '獲取評論排名',
+      '/api/comments/stage-rankings': '獲取階段評論排名',
+      '/api/comments/settlement-analysis': '獲取評論計票分析',
+      '/api/wallets/transactions': '載入交易記錄',
+      '/api/groups/create': '建立群組',
+      '/api/groups/update': '更新群組',
+      '/api/groups/details': '載入群組詳情',
+      '/api/groups/add-member': '新增群組成員',
+      '/api/groups/remove-member': '移除群組成員',
+      '/api/stages/create': '建立階段',
+      '/api/stages/update': '更新階段',
+      '/api/invitations/generate': '生成邀請碼',
+      '/api/system/logs': '獲取系統日誌',
+      '/api/system/logs/stats': '獲取日誌統計',
+      '/api/system/logs/archive': '日誌歸檔'
     }
 
     return actionMap[endpoint] || '操作'
@@ -391,19 +391,19 @@ class APIClient {
     if (!projectId) {
       return { success: false, error: { code: 'INVALID_PROJECT', message: 'Project ID is required' } }
     }
-    return this.callWithAuth(`/projects/${projectId}/viewers`, {}, 'GET')
+    return this.callWithAuth(`/api/projects/${projectId}/viewers`, {}, 'GET')
   }
 
   async addProjectViewer(projectId: string, targetUserEmail: string, role: string): Promise<ApiResponse> {
-    return this.callWithAuth(`/projects/${projectId}/viewers`, { targetUserEmail, role }, 'POST')
+    return this.callWithAuth(`/api/projects/${projectId}/viewers`, { targetUserEmail, role }, 'POST')
   }
 
   async removeProjectViewer(projectId: string, targetUserEmail: string): Promise<ApiResponse> {
-    return this.callWithAuth(`/projects/${projectId}/viewers/${targetUserEmail}`, {}, 'DELETE')
+    return this.callWithAuth(`/api/projects/${projectId}/viewers/${targetUserEmail}`, {}, 'DELETE')
   }
 
   async updateProjectViewerRole(projectId: string, targetUserEmail: string, newRole: string): Promise<ApiResponse> {
-    return this.callWithAuth(`/projects/${projectId}/viewers/${targetUserEmail}`, { role: newRole }, 'PUT')
+    return this.callWithAuth(`/api/projects/${projectId}/viewers/${targetUserEmail}`, { role: newRole }, 'PUT')
   }
 }
 

@@ -82,7 +82,7 @@ class TestSQLInjection:
         Verify user search is not vulnerable to SQL injection.
         """
         for payload in self.SQL_PAYLOADS[:5]:
-            response = api_client.post('/users/search', auth=admin_token, json={
+            response = api_client.post('/api/users/search', auth=admin_token, json={
                 'query': payload
             })
 
@@ -115,7 +115,7 @@ class TestSQLInjection:
         ]
 
         for payload in injection_ids:
-            response = api_client.post('/projects/get', auth=admin_token, json={
+            response = api_client.post('/api/projects/get', auth=admin_token, json={
                 'projectId': payload
             })
 
@@ -140,7 +140,7 @@ class TestSQLInjection:
         ]
 
         for payload in injection_sorts:
-            response = api_client.post('/projects/list', auth=admin_token, json={
+            response = api_client.post('/api/projects/list', auth=admin_token, json={
                 'sortBy': payload,
                 'sortOrder': 'desc'
             })
@@ -189,7 +189,7 @@ class TestXSSPrevention:
         Expected: Input sanitized or encoded
         """
         for payload in self.XSS_PAYLOADS[:5]:
-            response = api_client.post('/users/update', auth=admin_token, json={
+            response = api_client.post('/api/users/update', auth=admin_token, json={
                 'userName': payload
             })
 
@@ -215,7 +215,7 @@ class TestXSSPrevention:
         Verify project name is sanitized against XSS.
         """
         for payload in self.XSS_PAYLOADS[:3]:
-            response = api_client.post('/projects/create', auth=admin_token, json={
+            response = api_client.post('/api/projects/create', auth=admin_token, json={
                 'projectData': {
                     'projectName': payload,
                     'projectDescription': 'Test project'
@@ -229,7 +229,7 @@ class TestXSSPrevention:
 
                 if project_id:
                     # Check stored value
-                    get_response = api_client.post('/projects/get', auth=admin_token, json={
+                    get_response = api_client.post('/api/projects/get', auth=admin_token, json={
                         'projectId': project_id
                     })
 
@@ -250,7 +250,7 @@ class TestXSSPrevention:
         Verify comment content is sanitized against XSS.
         """
         for payload in self.XSS_PAYLOADS[:3]:
-            response = api_client.post('/comments/create', auth=admin_token, json={
+            response = api_client.post('/api/comments/create', auth=admin_token, json={
                 'submissionId': 'sub_test',
                 'content': payload
             })
@@ -274,7 +274,7 @@ class TestXSSPrevention:
         Verify search queries don't reflect XSS payloads.
         """
         for payload in self.XSS_PAYLOADS[:3]:
-            response = api_client.post('/users/search', auth=admin_token, json={
+            response = api_client.post('/api/users/search', auth=admin_token, json={
                 'query': payload
             })
 
@@ -323,7 +323,7 @@ class TestCommandInjection:
         """
         for payload in self.COMMAND_PAYLOADS[:5]:
             # Try to use malicious filename
-            response = api_client.post('/submissions/upload-url', auth=admin_token, json={
+            response = api_client.post('/api/submissions/upload-url', auth=admin_token, json={
                 'projectId': 'proj_test',
                 'fileName': payload,
                 'fileType': 'application/pdf'
@@ -348,7 +348,7 @@ class TestCommandInjection:
         Verify export filenames cannot be used for injection.
         """
         for payload in self.COMMAND_PAYLOADS[:3]:
-            response = api_client.post('/projects/export', auth=admin_token, json={
+            response = api_client.post('/api/projects/export', auth=admin_token, json={
                 'projectId': 'proj_test',
                 'filename': payload
             })
@@ -418,7 +418,7 @@ class TestNoSQLInjection:
         ]
 
         for query in malicious_queries:
-            response = api_client.post('/users/search', auth=admin_token, json={
+            response = api_client.post('/api/users/search', auth=admin_token, json={
                 'filters': query
             })
 
@@ -534,7 +534,7 @@ class TestTemplateInjection:
         Verify template syntax is not evaluated in user input.
         """
         for payload in self.TEMPLATE_PAYLOADS[:5]:
-            response = api_client.post('/users/update', auth=admin_token, json={
+            response = api_client.post('/api/users/update', auth=admin_token, json={
                 'userName': payload
             })
 
@@ -585,7 +585,7 @@ class TestPathTraversal:
         Expected: Path traversal blocked
         """
         for payload in self.PATH_PAYLOADS[:5]:
-            response = api_client.post('/submissions/get', auth=admin_token, json={
+            response = api_client.post('/api/submissions/get', auth=admin_token, json={
                 'filePath': payload
             })
 
@@ -609,7 +609,7 @@ class TestPathTraversal:
         Verify attachment downloads prevent path traversal.
         """
         for payload in self.PATH_PAYLOADS[:3]:
-            response = api_client.post('/submissions/download', auth=admin_token, json={
+            response = api_client.post('/api/submissions/download', auth=admin_token, json={
                 'submissionId': 'sub_test',
                 'fileName': payload
             })
@@ -650,7 +650,7 @@ class TestPrototypePollution:
         Expected: Pollution payloads rejected or ignored
         """
         for payload in self.POLLUTION_PAYLOADS:
-            response = api_client.post('/users/update', auth=admin_token, json=payload)
+            response = api_client.post('/api/users/update', auth=admin_token, json=payload)
 
             # Check that user hasn't gained admin privileges
             profile_response = api_client.post('/api/auth/current-user', auth=admin_token)
@@ -680,7 +680,7 @@ class TestPrototypePollution:
             }
         }
 
-        response = api_client.post('/users/update-settings', auth=admin_token, json=deep_payload)
+        response = api_client.post('/api/users/update-settings', auth=admin_token, json=deep_payload)
 
         # Should not pollute prototype
         if response.status_code == 200:

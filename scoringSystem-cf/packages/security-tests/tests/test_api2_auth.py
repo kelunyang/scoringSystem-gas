@@ -803,7 +803,7 @@ class TestSUDOModeSecurity:
         """
         # Attempt to use SUDO headers without authentication
         response = api_client.post(
-            '/projects/list',
+            '/api/projects/list',
             headers={
                 'X-Sudo-As': 'student@example.com',
                 'X-Sudo-Project': 'proj_test'
@@ -841,7 +841,7 @@ class TestSUDOModeSecurity:
 
         # Attempt SUDO with student token
         response = api_client.post(
-            '/projects/list',
+            '/api/projects/list',
             auth=fake_student_token,
             headers={
                 'X-Sudo-As': 'other-student@example.com',
@@ -871,7 +871,7 @@ class TestSUDOModeSecurity:
         Expected: 403 Forbidden (can only SUDO as students Level 3-5)
         """
         # First get a project
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -884,7 +884,7 @@ class TestSUDOModeSecurity:
 
         # Admin attempting to SUDO as another admin
         response = api_client.post(
-            '/projects/core',
+            '/api/projects/core',
             auth=admin_token,
             json={'projectId': project_id},
             headers={
@@ -918,7 +918,7 @@ class TestSUDOModeSecurity:
         Expected: 403 Forbidden with SUDO_NO_WRITE error
         """
         # Get a project first
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -938,7 +938,7 @@ class TestSUDOModeSecurity:
 
         # Test: Attempt to create a comment (write operation)
         response = api_client.post(
-            '/comments/create',
+            '/api/comments/create',
             auth=admin_token,
             json={
                 'projectId': project_id,
@@ -1035,7 +1035,7 @@ class TestSUDOModeSecurity:
         Expected: Data should only return from authorized project
         """
         # Get projects
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -1049,7 +1049,7 @@ class TestSUDOModeSecurity:
 
         # Attempt to access Project B with SUDO set to Project A
         response = api_client.post(
-            '/projects/core',
+            '/api/projects/core',
             auth=admin_token,
             json={'projectId': project_b},  # Requesting Project B
             headers={
@@ -1079,7 +1079,7 @@ class TestSUDOModeSecurity:
         Expected: Only exact matches or proper subpaths allowed
         """
         # Get a project
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -1099,9 +1099,9 @@ class TestSUDOModeSecurity:
         # These should return 404 (not found) not 403 (sudo blocked)
         # because they're not valid routes
         bypass_attempts = [
-            '/comments/list-evil',
-            '/comments/stage-malicious',
-            '/submissions/list-hack',
+            '/api/comments/list-evil',
+            '/api/comments/stage-malicious',
+            '/api/submissions/list-hack',
         ]
 
         for path in bypass_attempts:
@@ -1139,7 +1139,7 @@ class TestSUDOModeSecurity:
         # Actual log verification would require admin access to logs
 
         # Get a project
-        response = api_client.post('/projects/list', auth=admin_token)
+        response = api_client.post('/api/projects/list', auth=admin_token)
         if response.status_code != 200:
             pytest.skip("Cannot list projects")
 
@@ -1152,7 +1152,7 @@ class TestSUDOModeSecurity:
 
         # Make a SUDO request
         response = api_client.post(
-            '/projects/core',
+            '/api/projects/core',
             auth=admin_token,
             json={'projectId': project_id},
             headers={
