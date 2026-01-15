@@ -121,8 +121,16 @@ export async function getAllUsers(
       params.push(limit, offset);
     }
 
+    // Build count query params (without limit/offset params)
+    const countParams = options?.limit !== undefined ? params.slice(0, -2) : [...params];
+
+    // Get total count for pagination (run in parallel with main query)
+    const countQuery = env.DB.prepare(`
+      SELECT COUNT(*) as total FROM users u ${whereClause}
+    `).bind(...countParams).first<{ total: number }>();
+
     // Get users with filters applied
-    const usersResult = await env.DB.prepare(`
+    const usersQuery = env.DB.prepare(`
       SELECT
         u.userId,
         u.userEmail,
@@ -142,6 +150,10 @@ export async function getAllUsers(
       ${limitClause}
     `).bind(...params).all();
 
+    // Execute both queries in parallel
+    const [countResult, usersResult] = await Promise.all([countQuery, usersQuery]);
+
+    const totalCount = countResult?.total || 0;
     const users = usersResult.results || [];
 
     // DISABLED: Batch fetch all user tags - tags system has been disabled
@@ -197,7 +209,13 @@ export async function getAllUsers(
       globalGroups: groupsByUser.get(user.userEmail) || []
     }));
 
-    return successResponse(enrichedUsers);
+    // Return with pagination metadata
+    return successResponse({
+      users: enrichedUsers,
+      totalCount,
+      limit: options?.limit,
+      offset: options?.offset || 0
+    });
 
   } catch (error) {
     console.error('Get all users error:', error);

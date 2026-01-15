@@ -2,7 +2,7 @@
  * Admin Projects Composable using TanStack Query
  *
  * Provides:
- * - useAdminProjects() - Get all projects for admin management
+ * - useAdminProjects() - Get all projects for admin management with pagination support
  *
  * This composable is specifically for the admin ProjectManagement component
  * and waits for authentication to complete before fetching data.
@@ -10,7 +10,7 @@
 
 import type { UseQueryReturnType } from '@tanstack/vue-query'
 import { useQuery } from '@tanstack/vue-query'
-import { computed } from 'vue'
+import { computed, ref, type Ref } from 'vue'
 import type { ComputedRef } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { useAuth } from './useAuth'
@@ -26,11 +26,29 @@ interface Project {
 
 interface AdminProjectsResponse {
   success: boolean
-  data?: Project[]
+  data?: Project[] | { projects: Project[]; totalCount: number; limit?: number; offset?: number }
   error?: {
     message: string
     code?: string
   }
+}
+
+interface AdminProjectsResult {
+  projects: Project[]
+  totalCount: number
+}
+
+interface UseAdminProjectsOptions {
+  limit?: Ref<number> | number
+  offset?: Ref<number> | number
+  search?: Ref<string | undefined> | string
+  status?: Ref<string | undefined> | string
+}
+
+function getValue<T>(refOrValue: Ref<T> | T): T {
+  return (refOrValue && typeof refOrValue === 'object' && 'value' in refOrValue)
+    ? (refOrValue as Ref<T>).value
+    : refOrValue as T
 }
 
 /**
@@ -38,9 +56,10 @@ interface AdminProjectsResponse {
  *
  * Depends on: auth
  *
- * @returns Query result with projects array
+ * @param options - Optional pagination and filter options
+ * @returns Query result with projects array and metadata
  */
-export function useAdminProjects(): UseQueryReturnType<Project[], Error> {
+export function useAdminProjects(options?: UseAdminProjectsOptions): UseQueryReturnType<AdminProjectsResult, Error> {
   // Vue 3 Best Practice: Use unified useAuth() composable
   const { user, token, isAuthenticated } = useAuth()
 
@@ -56,19 +75,54 @@ export function useAdminProjects(): UseQueryReturnType<Project[], Error> {
     return enabled
   })
 
-  return useQuery<Project[], Error>({
-    queryKey: ['admin', 'projects'],
-    queryFn: async (): Promise<Project[]> => {
+  return useQuery<AdminProjectsResult, Error>({
+    queryKey: computed(() => [
+      'admin',
+      'projects',
+      getValue(options?.limit),
+      getValue(options?.offset),
+      getValue(options?.search),
+      getValue(options?.status)
+    ]),
+    queryFn: async (): Promise<AdminProjectsResult> => {
       console.log('🔍 useAdminProjects queryFn executing')
-      const httpResponse = await rpcClient.projects.list.$post({ json: {} })
+
+      const queryParams: Record<string, unknown> = {}
+      if (options?.limit !== undefined) {
+        queryParams.limit = getValue(options.limit)
+      }
+      if (options?.offset !== undefined) {
+        queryParams.offset = getValue(options.offset)
+      }
+      if (options?.search !== undefined) {
+        const searchVal = getValue(options.search)
+        if (searchVal) queryParams.search = searchVal
+      }
+      if (options?.status !== undefined) {
+        const statusVal = getValue(options.status)
+        if (statusVal) queryParams.status = statusVal
+      }
+
+      const httpResponse = await rpcClient.projects.list.$post({ json: queryParams })
       const response = await httpResponse.json() as AdminProjectsResponse
 
       if (!response.success) {
         throw new Error(response.error?.message || '載入專案列表失敗')
       }
 
-      // Return the projects data
-      return response.data || []
+      // Backend returns either:
+      // - Old format: data is directly an array
+      // - New format: data is { projects: [...], totalCount: n, ... }
+      if (Array.isArray(response.data)) {
+        return { projects: response.data, totalCount: response.data.length }
+      } else if (response.data && Array.isArray((response.data as any).projects)) {
+        return {
+          projects: (response.data as any).projects,
+          totalCount: (response.data as any).totalCount || (response.data as any).projects.length
+        }
+      } else {
+        return { projects: [], totalCount: 0 }
+      }
     },
     // Only fetch when user auth is successful
     enabled: isEnabled,

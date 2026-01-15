@@ -294,9 +294,6 @@ import EmptyState from '@/components/shared/EmptyState.vue'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import type { PropType } from 'vue'
 
-// Drawer Breadcrumb (must be outside setup() for Options API)
-const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
-
 /**
  * User data structure
  */
@@ -382,6 +379,9 @@ export default {
     'remove-from-project-group'
   ],
   setup(props, { emit }) {
+    // Drawer Breadcrumb (MUST be inside setup() for Options API)
+    const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
+
     // Two-way binding for visibility
     const localVisible = computed({
       get: () => props.visible,

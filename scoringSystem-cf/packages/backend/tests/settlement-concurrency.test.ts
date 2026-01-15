@@ -8,7 +8,7 @@
  * 4. Settlement status progression (pending → active)
  */
 
-import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 
 // TODO: Set up test environment with mock D1 database
 // TODO: Import settlement functions to test

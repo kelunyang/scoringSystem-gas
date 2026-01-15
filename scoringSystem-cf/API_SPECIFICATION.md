@@ -19,6 +19,21 @@ Authorization: Bearer <jwt_token>
 
 Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SESSION_TIMEOUT` 控制。
 
+### SUDO Mode (觀察者模式)
+
+學生可使用 SUDO 模式以觀察者身份查看專案：
+
+**Headers:**
+```
+X-Sudo-As: <target_user_id>
+X-Sudo-Project: <project_id>
+```
+
+**限制：**
+- 僅限學生使用
+- 僅限唯讀操作（寫入操作會回傳 `SUDO_NO_WRITE` 錯誤）
+- 所有 SUDO 操作會被記錄
+
 ---
 
 ## API Modules
@@ -45,7 +60,7 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 
 ---
 
-### 2. Users (`/users/`)
+### 2. Users (`/api/users/`)
 
 使用者個人資料管理。
 
@@ -54,6 +69,8 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 | POST | `/avatar/generate` | Public | - | 生成頭像資料 |
 | POST | `/profile` | Required | - | 取得使用者資料 |
 | POST | `/profile/update` | Required | - | 更新個人資料 |
+| POST | `/update` | Required | - | 更新使用者資訊 |
+| POST | `/update-settings` | Required | - | 更新使用者設定 |
 | POST | `/avatar/update` | Required | - | 更新頭像 |
 | POST | `/avatar/regenerate` | Required | - | 重新生成頭像種子 |
 | POST | `/search` | Required | - | 搜尋使用者 |
@@ -79,6 +96,7 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 | POST | `/user-global-groups` | manage_users | 取得使用者全域群組 |
 | POST | `/user-project-groups` | manage_users | 取得使用者專案群組 |
 | POST | `/users/activity` | manage_users/self | 取得使用者活動統計 |
+| POST | `/users/update-permissions` | system_admin | 更新使用者權限 |
 
 #### Global Group Management
 
@@ -167,7 +185,7 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 
 ---
 
-### 4. Projects (`/projects/`)
+### 4. Projects (`/api/projects/`)
 
 專案管理。
 
@@ -198,7 +216,7 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 
 ---
 
-### 5. Stages (`/stages/`)
+### 5. Stages (`/api/stages/`)
 
 階段管理。
 
@@ -222,7 +240,7 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 
 ---
 
-### 6. Submissions (`/submissions/`)
+### 6. Submissions (`/api/submissions/`)
 
 作業繳交管理。
 
@@ -230,8 +248,11 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 |--------|----------|------------|-------------|
 | POST | `/submit` | project:view + active stage | 繳交作業 |
 | POST | `/list` | project:view | 列出階段繳交 |
+| POST | `/get` | project:view | 取得單一繳交 |
 | POST | `/details` | project:view | 取得繳交詳情 |
 | POST | `/delete` | project:view + active stage | 刪除繳交 |
+| POST | `/upload-url` | project:view + active stage | 取得上傳 URL |
+| POST | `/download` | project:view | 下載繳交檔案 |
 | POST | `/versions` | project:view | 取得版本歷史 |
 | POST | `/restore` | project:view | 還原版本 |
 | POST | `/participation-status` | project:view | 取得參與確認狀態 |
@@ -241,13 +262,14 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 
 ---
 
-### 7. Rankings (`/rankings/`)
+### 7. Rankings (`/api/rankings/`)
 
 排名與投票管理。
 
 | Method | Endpoint | Permission | Description |
 |--------|----------|------------|-------------|
 | POST | `/stage-rankings` | project:view | 取得階段排名 |
+| POST | `/all-stages-rankings` | project:view | 批次取得多個階段排名 |
 | POST | `/teacher-vote-history` | project:view | 教師投票歷史 |
 | POST | `/teacher-ranking-versions` | teacher | 教師排名版本 |
 | POST | `/proposals` | project:view | 取得排名提案 |
@@ -268,7 +290,7 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 
 ---
 
-### 8. Comments (`/comments/`)
+### 8. Comments (`/api/comments/`)
 
 留言管理。
 
@@ -277,6 +299,7 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 | POST | `/create` | project:comment + active/voting | 建立留言 |
 | POST | `/details` | project:view | 取得留言詳情 |
 | POST | `/stage` | project:view | 取得階段留言 |
+| POST | `/all-stages` | project:view | 批次取得多個階段留言 |
 | POST | `/reactions/add` | mentioned student | 新增反應 |
 | POST | `/reactions/remove` | project:view | 移除反應 |
 | POST | `/reactions/get` | project:view | 取得反應 |
@@ -289,7 +312,7 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 
 ---
 
-### 9. Groups (`/groups/`)
+### 9. Groups (`/api/groups/`)
 
 專案群組管理。
 
@@ -315,7 +338,7 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 
 ---
 
-### 10. Wallets (`/wallets/`)
+### 10. Wallets (`/api/wallets/`)
 
 錢包與積分管理 (Ledger 架構)。
 
@@ -334,7 +357,7 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 
 ---
 
-### 11. Invitations (`/invitations/`)
+### 11. Invitations (`/api/invitations/`)
 
 邀請碼管理。
 
@@ -365,7 +388,7 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 
 ---
 
-### 13. Scoring (`/scoring/`)
+### 13. Scoring (`/api/scoring/`)
 
 評分與結算。
 
@@ -378,7 +401,7 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 
 ---
 
-### 14. Settlement (`/settlement/`)
+### 14. Settlement (`/api/settlement/`)
 
 結算歷史管理。
 
@@ -394,7 +417,7 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 
 ---
 
-### 15. Event Logs (`/eventlogs/`)
+### 15. Event Logs (`/api/eventlogs/`)
 
 專案事件日誌。
 
@@ -406,7 +429,7 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 
 ---
 
-### 16. System (`/system/`)
+### 16. System (`/api/system/`)
 
 系統資訊與設定。
 
@@ -595,9 +618,9 @@ Token 透過 `/api/auth/login-verify-2fa` 取得，有效期由系統設定 `SES
 
 | Endpoint | Limit |
 |----------|-------|
-| `/rankings/ai-suggestion` | 10/分鐘, 60/小時 |
-| `/rankings/ai-bt-suggestion` | 10/分鐘, 60/小時 |
-| `/rankings/ai-multi-agent-suggestion` | 10/分鐘, 60/小時 |
+| `/api/rankings/ai-suggestion` | 10/分鐘, 60/小時 |
+| `/api/rankings/ai-bt-suggestion` | 10/分鐘, 60/小時 |
+| `/api/rankings/ai-multi-agent-suggestion` | 10/分鐘, 60/小時 |
 | `/api/admin/notifications/send-batch` | Email 發送限制 |
 
 超過限制時回傳 HTTP 429 並包含 `Retry-After` header。

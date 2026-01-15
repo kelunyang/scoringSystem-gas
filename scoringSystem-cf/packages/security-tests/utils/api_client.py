@@ -281,3 +281,32 @@ class APIResponse:
     def assert_error(self, message: Optional[str] = None):
         """Assert that response was an error"""
         assert not self.success, message or f"Expected error but got status {self.status_code}"
+
+
+def extract_list_data(data: Dict, key: str = 'projects') -> list:
+    """
+    Extract list data from API response, supporting both old and new formats.
+
+    Old format: data['data'] is directly an array
+    New format: data['data'] is an object with array in data['data'][key]
+
+    Args:
+        data: The JSON response dictionary from the API
+        key: The key to extract the array from (e.g., 'projects', 'users')
+
+    Returns:
+        A list of items extracted from the response
+
+    Examples:
+        # For projects
+        projects = extract_list_data(data, 'projects')
+
+        # For users
+        users = extract_list_data(data, 'users')
+    """
+    response_data = data.get('data', [])
+    if isinstance(response_data, list):
+        return response_data
+    elif isinstance(response_data, dict):
+        return response_data.get(key, [])
+    return []

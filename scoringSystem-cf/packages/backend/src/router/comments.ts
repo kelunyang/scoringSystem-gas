@@ -181,7 +181,7 @@ app.post(
 
 /**
  * Get stage comments (GAS-compatible endpoint)
- * Body: { sessionId, projectId, stageId, excludeTeachers? }
+ * Body: { sessionId, projectId, stageId, excludeTeachers?, limit?, offset? }
  */
 app.post(
   '/stage',
@@ -207,7 +207,9 @@ app.post(
       body.stageId,
       {
         excludeTeachers: body.excludeTeachers || false,
-        forVoting: body.forVoting || false
+        forVoting: body.forVoting || false,
+        limit: body.limit,
+        offset: body.offset
       }
     );
 
@@ -217,7 +219,7 @@ app.post(
 
 /**
  * Get comments for all stages in a single request (batch API)
- * Body: { projectId, stageIds: string[], excludeTeachers?, forVoting? }
+ * Body: { projectId, stageIds: string[], excludeTeachers?, forVoting?, limit?, offset? }
  */
 app.post(
   '/all-stages',
@@ -243,7 +245,9 @@ app.post(
       body.stageIds,
       {
         excludeTeachers: body.excludeTeachers || false,
-        forVoting: body.forVoting || false
+        forVoting: body.forVoting || false,
+        limit: body.limit,
+        offset: body.offset
       }
     );
 

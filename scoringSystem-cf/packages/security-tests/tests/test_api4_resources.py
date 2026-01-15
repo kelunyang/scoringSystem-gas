@@ -15,7 +15,7 @@ Date: 2025-12-23
 
 import pytest
 import time
-from utils import APIClient, AuthHelper, AuthToken
+from utils import APIClient, AuthHelper, AuthToken, extract_list_data
 from config import TestConfig
 
 
@@ -117,7 +117,7 @@ class TestRateLimiting:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -158,7 +158,7 @@ class TestRateLimiting:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -196,7 +196,7 @@ class TestRateLimiting:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -248,7 +248,7 @@ class TestPaginationLimits:
 
         if response.status_code == 200:
             data = response.json()
-            users = data.get('data', {}).get('users', [])
+            users = extract_list_data(data, 'users')
 
             # Should be limited to reasonable max
             assert len(users) <= 200, \
@@ -331,7 +331,7 @@ class TestBatchOperationLimits:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -450,7 +450,7 @@ class TestPayloadLimits:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
 
         project_with_stages = None
         stage_id = None

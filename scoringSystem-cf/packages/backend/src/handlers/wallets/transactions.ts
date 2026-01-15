@@ -123,7 +123,13 @@ export async function getUserTransactions(
   stageId?: string,
   settlementId?: string,
   relatedSubmissionId?: string,
-  groupId?: string
+  groupId?: string,
+  offset: number = 0,
+  transactionTypes?: string[],
+  dateStart?: number,
+  dateEnd?: number,
+  searchDescription?: string,
+  searchUser?: string
 ): Promise<Response> {
   try {
     const queryEmail = targetUserEmail; // Don't fallback to userEmail
@@ -179,7 +185,49 @@ export async function getUserTransactions(
       query.params.push(groupId);
     }
 
+    // Add transaction types filter (multiple values)
+    if (transactionTypes && transactionTypes.length > 0) {
+      const placeholders = transactionTypes.map(() => '?').join(', ');
+      query.conditions.push(`t.transactionType IN (${placeholders})`);
+      query.params.push(...transactionTypes);
+    }
+
+    // Add date range filter
+    if (dateStart) {
+      query.conditions.push('t.timestamp >= ?');
+      query.params.push(dateStart);
+    }
+
+    if (dateEnd) {
+      // Add 1 day (86400000ms) to include the end date
+      query.conditions.push('t.timestamp <= ?');
+      query.params.push(dateEnd + 86400000);
+    }
+
+    // Add description search filter (LIKE search)
+    if (searchDescription && searchDescription.trim()) {
+      query.conditions.push('t.source LIKE ?');
+      query.params.push(`%${searchDescription.trim()}%`);
+    }
+
+    // Add user search filter (search both email and displayName)
+    if (searchUser && searchUser.trim()) {
+      const searchTerm = `%${searchUser.trim()}%`;
+      query.conditions.push('(t.userEmail LIKE ? OR u.displayName LIKE ?)');
+      query.params.push(searchTerm, searchTerm);
+    }
+
     const whereClause = query.conditions.join(' AND ');
+
+    // Get total count for pagination
+    const countQuery = `
+      SELECT COUNT(*) as totalCount
+      FROM transactions t
+      LEFT JOIN users u ON t.userEmail = u.userEmail
+      WHERE ${whereClause}
+    `;
+    const countResult = await env.DB.prepare(countQuery).bind(...query.params).first();
+    const totalCount = (countResult?.totalCount as number) || 0;
 
     // Calculate current balance using SQL SUM() with same filters
     const balanceQuery = `
@@ -209,11 +257,11 @@ export async function getUserTransactions(
       LEFT JOIN stages s ON t.stageId = s.stageId
       WHERE ${whereClause}
       ORDER BY t.timestamp DESC
-      LIMIT ?
+      LIMIT ? OFFSET ?
     `;
 
     const transactions = await env.DB.prepare(transactionsQuery)
-      .bind(...query.params, limit)
+      .bind(...query.params, limit, offset)
       .all();
 
     const transactionList = transactions.results.map(t => ({
@@ -242,7 +290,12 @@ export async function getUserTransactions(
     return successResponse({
       currentBalance,                // Overall current balance
       transactions: transactionList, // Transactions with running balance
-      total: transactionList.length
+      total: transactionList.length,
+      // Pagination metadata
+      totalCount,
+      limit,
+      offset,
+      hasMore: offset + transactionList.length < totalCount
     });
 
   } catch (error) {

@@ -15,7 +15,7 @@ Date: 2025-12-23
 import pytest
 import json
 from typing import List, Dict, Any
-from utils import APIClient, AuthHelper, AuthToken
+from utils import APIClient, AuthHelper, AuthToken, extract_list_data
 from config import TestConfig
 
 
@@ -90,10 +90,8 @@ class TestSQLInjection:
             if response.status_code == 200:
                 data = response.json()
                 # Should not return unexpected data
-                # API returns data.data as a list directly
-                users = data.get('data', [])
-                if isinstance(users, dict):
-                    users = users.get('users', [])
+                # Use helper to extract users list (supports both old and new formats)
+                users = extract_list_data(data, 'users')
                 # SQL injection shouldn't return all users
                 assert len(users) < 100, \
                     f"SQL injection may have exposed all users with payload: {payload}"

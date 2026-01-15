@@ -141,6 +141,24 @@
         </template>
       </AdminFilterToolbar>
 
+      <!-- 統計卡片 -->
+      <el-card class="stats-card">
+        <el-row :gutter="20">
+          <el-col :xs="12" :sm="6" :md="4">
+            <AnimatedStatistic title="總群組數" :value="groups.length" />
+          </el-col>
+          <el-col :xs="12" :sm="6" :md="4">
+            <AnimatedStatistic title="活躍" :value="activeGroupsCount" />
+          </el-col>
+          <el-col :xs="12" :sm="6" :md="4">
+            <AnimatedStatistic title="停用" :value="inactiveGroupsCount" />
+          </el-col>
+          <el-col v-if="filteredGroups.length !== groups.length" :xs="12" :sm="6" :md="4">
+            <AnimatedStatistic title="搜尋結果" :value="filteredGroups.length" />
+          </el-col>
+        </el-row>
+      </el-card>
+
       <!-- Groups Table -->
       <ProjectGroupsTable
         :groups="filteredGroups"
@@ -201,6 +219,7 @@ import AddMembersForm from '../members/AddMembersForm.vue'
 import { useGroupFiltering } from '@/composables/useGroupFiltering'
 import type { Project, ProjectGroup, GroupMember, User, MemberRole } from '@/types/group-management'
 import AdminFilterToolbar from '../../shared/AdminFilterToolbar.vue'
+import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 
 defineOptions({
   name: 'ProjectGroupsList'
@@ -267,6 +286,10 @@ const { filteredGroups } = useGroupFiltering(
   toRef(props, 'statusFilter'),
   toRef(props, 'showInactive')
 )
+
+// Statistics
+const activeGroupsCount = computed(() => props.groups.filter(g => g.status === 'active').length)
+const inactiveGroupsCount = computed(() => props.groups.filter(g => g.status !== 'active').length)
 
 // Export configuration
 const exportConfig = computed(() => ({
@@ -416,5 +439,20 @@ const availableUsersForGroup = (group: ProjectGroup) => {
   font-size: 16px;
   color: #6b7280;
   margin: 0;
+}
+
+/* 統計卡片 */
+.stats-card {
+  margin-bottom: 0;
+}
+
+.stats-card :deep(.el-row) {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.stats-card :deep(.el-col) {
+  display: flex;
+  justify-content: center;
 }
 </style>

@@ -45,6 +45,27 @@ interface NormalizedTransaction {
 }
 
 /**
+ * Transaction query result with pagination metadata
+ */
+interface TransactionQueryResult {
+  transactions: NormalizedTransaction[]
+  totalCount: number
+  hasMore: boolean
+  currentBalance: number
+}
+
+/**
+ * Transaction filters for backend search
+ */
+export interface TransactionFilters {
+  transactionTypes?: string[]
+  dateStart?: number
+  dateEnd?: number
+  searchDescription?: string
+  searchUser?: string
+}
+
+/**
  * Wallet leaderboard entry
  */
 interface LeaderboardEntry {
@@ -104,6 +125,9 @@ interface WalletDataResult {
   transactions: ComputedRef<NormalizedTransaction[]>
   transactionsLoading: Ref<boolean>
   transactionsError: Ref<boolean>
+  totalCount: ComputedRef<number>
+  hasMore: ComputedRef<boolean>
+  currentBalance: ComputedRef<number>
   isLoading: ComputedRef<boolean>
   isError: ComputedRef<boolean>
 }
@@ -122,12 +146,18 @@ function getValue<T>(value: T | Ref<T>): T {
  *
  * @param projectId - Reactive project ID (null for all projects)
  * @param userId - Reactive user ID (null for current user)
- * @returns Query result
+ * @param options - Optional pagination and filter options
+ * @returns Query result with pagination metadata
  */
 export function useWalletTransactions(
   projectId: Ref<string | null> | string | null = null,
-  userId: Ref<string | null> | string | null = null
-): UseQueryReturnType<NormalizedTransaction[], Error> {
+  userId: Ref<string | null> | string | null = null,
+  options?: {
+    limit?: Ref<number> | number
+    offset?: Ref<number> | number
+    filters?: Ref<TransactionFilters> | TransactionFilters
+  }
+): UseQueryReturnType<TransactionQueryResult, Error> {
   const userQuery = useCurrentUser()
 
   const isEnabled = computed(() => {
@@ -147,35 +177,50 @@ export function useWalletTransactions(
 
   return useQuery({
     queryKey: computed(() => {
+      const filters = getValue(options?.filters ?? {})
       const key = [
         'wallet',
         'transactions',
         getValue(projectId),
-        getValue(userId)
+        getValue(userId),
+        getValue(options?.limit ?? 50),
+        getValue(options?.offset ?? 0),
+        JSON.stringify(filters)
       ]
       debugLog('🔑 [useWalletTransactions] queryKey:', key)
       return key
     }),
-    queryFn: async (): Promise<NormalizedTransaction[]> => {
+    queryFn: async (): Promise<TransactionQueryResult> => {
       const pid = getValue(projectId)
       const uid = getValue(userId)
+      const limit = getValue(options?.limit ?? 50)
+      const offset = getValue(options?.offset ?? 0)
+      const filters = getValue(options?.filters ?? {})
 
       debugLog('📡 [useWalletTransactions] queryFn called:', {
         projectId: pid,
-        userId: uid
+        userId: uid,
+        limit,
+        offset,
+        filters
       })
 
       const httpResponse = await rpcClient.wallets.transactions.$post({
         json: {
           projectId: pid,
-          targetUserEmail: uid
+          targetUserEmail: uid,
+          limit,
+          offset,
+          ...filters
         }
       })
       const response = await httpResponse.json()
 
       debugLog('✅ [useWalletTransactions] API response:', {
         success: response.success,
-        transactionCount: response.data?.transactions?.length || 0
+        transactionCount: response.data?.transactions?.length || 0,
+        totalCount: response.data?.totalCount || 0,
+        hasMore: response.data?.hasMore || false
       })
 
       if (!response.success) {
@@ -185,7 +230,7 @@ export function useWalletTransactions(
       const rawTransactions = response.data.transactions || []
 
       // Normalize transactions to match expected structure
-      return rawTransactions.map((t: any) => ({
+      const normalizedTransactions = rawTransactions.map((t: any) => ({
         id: t.transactionId,              // Add 'id' for compatibility
         transactionId: t.transactionId,
         points: t.amount,                 // Map 'amount' to 'points'
@@ -202,6 +247,13 @@ export function useWalletTransactions(
         displayName: t.displayName,       // User display name from users table
         userEmail: t.userEmail            // User email for filtering
       })).sort((a: NormalizedTransaction, b: NormalizedTransaction) => b.timestamp - a.timestamp)
+
+      return {
+        transactions: normalizedTransactions,
+        totalCount: response.data?.totalCount || normalizedTransactions.length,
+        hasMore: response.data?.hasMore || false,
+        currentBalance: response.data?.currentBalance || 0
+      }
     },
     enabled: isEnabled,
     staleTime: 1000 * 60 * 2 // 2 minutes cache
@@ -501,12 +553,18 @@ export function useWalletProjectUsers(
  * @param projectId - Reactive project ID (can be null)
  * @param userEmail - Reactive user email (can be null)
  * @param canViewAllUsers - Whether user has permission to view all users
+ * @param paginationOptions - Optional pagination options
  * @returns Combined query results
  */
 export function useWalletData(
   projectId: Ref<string | null> | string | null,
   userEmail: Ref<string | null> | string | null,
-  canViewAllUsers: Ref<boolean> | boolean
+  canViewAllUsers: Ref<boolean> | boolean,
+  paginationOptions?: {
+    limit?: Ref<number> | number
+    offset?: Ref<number> | number
+    filters?: Ref<TransactionFilters> | TransactionFilters
+  }
 ): WalletDataResult {
   debugLog('🎯 [useWalletData] initialized:', {
     projectId: getValue(projectId),
@@ -549,8 +607,8 @@ export function useWalletData(
     staleTime: 1000 * 60 * 5
   })
 
-  // Transactions query (when projectId exists)
-  const transactionsQuery = useWalletTransactions(projectId as any, userEmail as any)
+  // Transactions query (when projectId exists) - with pagination support
+  const transactionsQuery = useWalletTransactions(projectId as any, userEmail as any, paginationOptions)
 
   return {
     // Projects
@@ -569,9 +627,14 @@ export function useWalletData(
     usersError: usersQuery.isError,
 
     // Transactions
-    transactions: computed(() => transactionsQuery.data?.value || []),
+    transactions: computed(() => transactionsQuery.data?.value?.transactions || []),
     transactionsLoading: transactionsQuery.isLoading,
     transactionsError: transactionsQuery.isError,
+
+    // Pagination metadata
+    totalCount: computed(() => transactionsQuery.data?.value?.totalCount || 0),
+    hasMore: computed(() => transactionsQuery.data?.value?.hasMore || false),
+    currentBalance: computed(() => transactionsQuery.data?.value?.currentBalance || 0),
 
     // Combined loading state
     isLoading: computed(() =>

@@ -831,7 +831,8 @@ export default {
         const response = await adminApi.globalGroups.list()
 
         if (response.success && response.data) {
-          globalGroups.value = response.data
+          // Handle new response format with groups array
+          globalGroups.value = response.data.groups || response.data
         }
       } catch (error) {
         console.error('Error loading global groups:', error)
@@ -1329,7 +1330,12 @@ export default {
         const response = await adminApi.users.list({})
 
         if (response.success && response.data) {
-          allUsers.value = response.data.map(user => ({
+          // Support both old format (array) and new format ({ users: [...] })
+          const usersArray = Array.isArray(response.data)
+            ? response.data
+            : response.data.users || []
+
+          allUsers.value = usersArray.map(user => ({
             userId: user.userEmail,
             userEmail: user.userEmail,
             displayName: user.displayName

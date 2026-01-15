@@ -58,23 +58,6 @@
         </el-input>
       </div>
 
-      <div class="filter-item">
-        <span class="filter-label"><i class="fas fa-list-ol"></i> 顯示數量：</span>
-        <div class="display-limit-control">
-          <el-slider
-            :model-value="displayLimit"
-            @update:model-value="(val: number | number[]) => emit('update:displayLimit', Array.isArray(val) ? val[0] : val)"
-            :min="10"
-            :max="200"
-            :step="10"
-            :show-tooltip="true"
-            :format-tooltip="(val: number) => `${val} 筆`"
-            class="display-slider"
-            style="width: 180px;"
-          />
-          <span class="limit-text">{{ displayLimit }} 筆</span>
-        </div>
-      </div>
     </template>
 
     <!-- Expanded Filters (Collapsible) -->
@@ -231,7 +214,6 @@ interface Props {
   pointsFilter: number | null
   descriptionFilter: string
   userFilter: string
-  displayLimit: number
   selectedStageIds: string[]
   selectedTransactionTypes: Transaction['transactionType'][]
 
@@ -252,7 +234,6 @@ const emit = defineEmits<{
   (e: 'update:pointsFilter', value: number | null): void
   (e: 'update:descriptionFilter', value: string): void
   (e: 'update:userFilter', value: string): void
-  (e: 'update:displayLimit', value: number): void
   (e: 'update:selectedStageIds', value: string[]): void
   (e: 'update:selectedTransactionTypes', value: Transaction['transactionType'][]): void
   (e: 'export-csv'): void
@@ -353,26 +334,6 @@ function handleClearFilters() {
   font-size: 12px;
 }
 
-/* Display Limit Control */
-.display-limit-control {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.display-slider {
-  flex: 1;
-}
-
-.limit-text {
-  color: #409eff;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  min-width: 50px;
-  text-align: center;
-}
-
 /* Responsive Design */
 @media (max-width: 1200px) {
   .filter-item {
@@ -382,10 +343,6 @@ function handleClearFilters() {
   }
 
   .filter-label {
-    width: 100%;
-  }
-
-  .display-limit-control {
     width: 100%;
   }
 }

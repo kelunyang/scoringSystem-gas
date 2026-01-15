@@ -49,7 +49,7 @@
           class="project-details-btn"
         >
           <i class="fa fa-info-circle"></i>
-          專案詳情
+          <span class="btn-text">專案詳情</span>
         </el-button>
 
         <!-- Refresh Button -->
@@ -62,7 +62,8 @@
           class="refresh-button refresh-button-with-progress"
           :style="refreshButtonStyle"
         >
-          <i class="fa fa-refresh"></i> 重新整理
+          <i class="fa fa-refresh"></i>
+          <span class="btn-text">重新整理</span>
         </el-button>
       </div>
       <TopBarUserControls
@@ -215,7 +216,6 @@
             v-model:points-filter="pointsFilter"
             v-model:description-filter="descriptionFilter"
             v-model:user-filter="userFilter"
-            v-model:display-limit="displayLimit"
             v-model:selected-stage-ids="selectedStageIds"
             v-model:selected-transaction-types="selectedTransactionTypes"
             :stage-options="stageOptions"
@@ -228,12 +228,12 @@
             @show-award-points="showAwardPointsDrawer = true"
           />
 
-          <!-- Transactions Table -->
+          <!-- Transactions Table (頁面級滾動) -->
           <TransactionTableSection
             :filtered-transactions="filteredTransactions"
             :show-user-column="showUserColumn"
             :can-manage-wallets="canManageWallets"
-            :loading="loading"
+            :loading="loading || isBackendSearching"
             :is-expanded="isExpanded"
             :is-loading-details="isLoadingDetails"
             :get-transaction-details="getTransactionDetails"
@@ -243,6 +243,17 @@
             @open-reversal="openReversalDrawer"
             @settlement-command="handleSettlementCommand"
           />
+
+          <!-- Loading More Indicator -->
+          <div v-if="loadingMore" class="loading-more-indicator">
+            <i class="fa fa-spinner fa-spin"></i>
+            載入更多交易中...
+          </div>
+
+          <!-- Scroll Status Indicator -->
+          <div v-if="hasMoreTransactions && !loading && !loadingMore && transactions && transactions.length > 0" class="scroll-hint">
+            <span>已載入 {{ transactions.length }} / {{ totalTransactions }} 筆，向下捲動載入更多</span>
+          </div>
         </div>
       </div>
 
@@ -349,6 +360,7 @@ import { useTransactionReversal } from '@/composables/useTransactionReversal'
 import { useBreadcrumb } from '@/composables/useBreadcrumb'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import { useCoordinatedDrawer } from '@/composables/useCoordinatedDrawer'
+import { useWindowInfiniteScroll } from '@/composables/useWindowInfiniteScroll'
 
 // Utilities
 import {
@@ -462,6 +474,11 @@ const showAwardPointsDrawer = ref(false)
 // ===== Export Loading State =====
 const exportingGrades = ref(false)
 
+// ===== Pagination State =====
+const currentOffset = ref(0)
+const pageSize = ref(50)
+
+
 // ===== Use Composables =====
 
 // Project Core Data - 加載群組和使用者群組資料 (for Award Points Drawer)
@@ -485,15 +502,20 @@ const canViewAllUsers = computed(() => {
   return level !== null && level <= 1
 })
 
-// Wallet Data - 使用 TanStack Query 加載所有數據
+// Wallet Data - 使用 TanStack Query 加載所有數據（支援分頁）
 const {
   projects: userProjects,
   projectsLoading: loadingProjects,
   stages: projectStages,
   users: projectUsers,
   transactions,
-  transactionsLoading: loading
-} = useWalletData(selectedProjectId, selectedUserEmail, canViewAllUsers)
+  transactionsLoading: loading,
+  totalCount: totalTransactions,
+  hasMore: hasMoreTransactions
+} = useWalletData(selectedProjectId, selectedUserEmail, canViewAllUsers, {
+  limit: pageSize,
+  offset: currentOffset
+})
 
 // Wallet Leaderboard - 使用 TanStack Query 自動管理
 const leaderboardQuery = useWalletLeaderboard(selectedProjectId)
@@ -526,18 +548,27 @@ const wealthRankings = computed(() => {
   return extractTopWealthRankings(response.walletData)
 })
 
-// Transaction Filter - 過濾交易
+// Transaction Filter - 過濾交易（支援後端搜尋）
 const {
   dateRange,
   pointsFilter,
   descriptionFilter,
   userFilter,
-  displayLimit,
   selectedStageIds,
   selectedTransactionTypes,
   filteredTransactions,
-  clearFilters
-} = useTransactionFilter(transactions)
+  clearFilters,
+  hasActiveFilters,
+  isBackendSearching
+} = useTransactionFilter(transactions, {
+  hasMore: hasMoreTransactions,
+  onBackendSearch: async (filters) => {
+    // 觸發帶過濾條件的後端搜尋
+    await queryClient.invalidateQueries({
+      queryKey: ['wallet', 'transactions', selectedProjectId.value, selectedUserEmail.value]
+    })
+  }
+})
 
 // Expandable List - 展開狀態管理
 const { toggle: toggleExpansion, isExpanded } = useExpandableList()
@@ -573,6 +604,20 @@ async function handleRefresh() {
 const { progressPercentage, remainingMinutes, resetTimer } = useAutoRefresh(handleRefresh)
 
 // ===== Computed =====
+
+/**
+ * 載入更多交易
+ */
+function loadMoreTransactions() {
+  currentOffset.value += pageSize.value
+}
+
+// 使用頁面級滾動的無限載入
+const { loadingMore } = useWindowInfiniteScroll(
+  hasMoreTransactions,
+  loading,
+  loadMoreTransactions
+)
 
 /**
  * Check if current user can manage wallets (reverse transactions, export)
@@ -644,17 +689,7 @@ const transactionTypeOptions = computed(() => {
   }))
 })
 
-/**
- * 檢查是否有啟用的篩選器
- */
-const hasActiveFilters = computed(() => {
-  return dateRange.value !== null ||
-         pointsFilter.value !== null ||
-         descriptionFilter.value !== '' ||
-         userFilter.value !== '' ||
-         selectedStageIds.value.length > 0 ||
-         selectedTransactionTypes.value.length > 0
-})
+// hasActiveFilters 現在從 useTransactionFilter 取得
 
 /**
  * 是否顯示使用者欄位
@@ -684,13 +719,23 @@ const refreshButtonStyle = computed(() => ({
  */
 function clearAllFilters() {
   clearFilters()
-  // displayLimit 保持在 clearFilters 中處理
+}
+
+/**
+ * 重置分頁（當專案或使用者變更時）
+ */
+function resetPagination() {
+  currentOffset.value = 0
+  loadingMore.value = false
 }
 
 /**
  * 當專案選擇改變時
  */
 function onProjectChange() {
+  // 重置分頁
+  resetPagination()
+
   // 更新專案名稱和描述
   const selectedProject = userProjects.value.find(p => p.projectId === selectedProjectId.value)
   selectedProjectName.value = selectedProject ? selectedProject.projectName : ''
@@ -727,6 +772,9 @@ function onProjectChange() {
  * 當使用者選擇改變時
  */
 function onUserChange() {
+  // 重置分頁
+  resetPagination()
+
   // 防止低權限用戶嘗試查看其他用戶的交易記錄
   if (!canViewAllUsers.value && selectedUserEmail.value !== props.user?.userEmail) {
     showWarning('您沒有權限查看其他使用者的交易記錄')
@@ -1542,6 +1590,17 @@ onUnmounted(() => {
   .top-bar :deep(.user-controls) {
     display: none !important;
   }
+
+  /* 直屏模式下隱藏按鈕文字，只顯示圖示 */
+  .project-details-btn .btn-text,
+  .refresh-button .btn-text {
+    display: none;
+  }
+
+  .project-details-btn i,
+  .refresh-button i {
+    margin-right: 0;
+  }
 }
 
 /* Threshold Input Section */
@@ -1591,5 +1650,31 @@ onUnmounted(() => {
   .threshold-hint {
     min-width: auto;
   }
+}
+
+
+/* Loading More Indicator */
+.loading-more-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px;
+  color: #409eff;
+  font-size: 14px;
+}
+
+.loading-more-indicator i {
+  font-size: 16px;
+}
+
+/* Scroll Hint */
+.scroll-hint {
+  text-align: center;
+  padding: 15px;
+  color: #909399;
+  font-size: 13px;
+  border-top: 1px solid #e1e8ed;
+  margin-top: 10px;
 }
 </style>

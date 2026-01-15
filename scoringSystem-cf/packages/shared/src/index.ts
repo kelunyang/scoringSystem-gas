@@ -16,7 +16,9 @@ export * from './types/ai';
 export type {
   BaseMember,
   GlobalGroupMember,
-  ProjectGroupMember
+  ProjectGroupMember,
+  GlobalGroupListRequest,
+  GlobalGroupListResponse
 } from './types/admin';
 
 // Export admin enums

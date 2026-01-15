@@ -12,21 +12,93 @@ import { queueSingleNotification } from '../../queues/notification-producer';
 
 /**
  * Get all global groups (admin function)
+ * Supports server-side filtering, searching, and pagination
  */
-export async function getGlobalGroups(env: Env): Promise<Response> {
+export async function getGlobalGroups(
+  env: Env,
+  options?: {
+    search?: string;
+    status?: 'active' | 'inactive' | 'all';
+    limit?: number;
+    offset?: number;
+  }
+): Promise<Response> {
   try {
-    // Get all global groups with member counts
-    const result = await env.DB.prepare(`
+    // Build WHERE conditions
+    const conditions: string[] = [];
+    const params: any[] = [];
+
+    // Filter by status if provided (default: all)
+    if (options?.status && options.status !== 'all') {
+      conditions.push('gg.isActive = ?');
+      params.push(options.status === 'active' ? 1 : 0);
+    }
+
+    // Search in groupName or description if provided
+    if (options?.search && options.search.trim()) {
+      const search = options.search.trim();
+
+      // Validate search string length to prevent DoS
+      if (search.length > 100) {
+        return errorResponse('INVALID_INPUT', 'Search string too long (max 100 characters)');
+      }
+
+      // Escape LIKE wildcards (%, _) to prevent SQL injection
+      const escapedSearch = search.replace(/[%_]/g, '\\$&');
+
+      conditions.push('(gg.groupName LIKE ? ESCAPE "\\" OR gg.description LIKE ? ESCAPE "\\")');
+      const searchPattern = `%${escapedSearch}%`;
+      params.push(searchPattern, searchPattern);
+    }
+
+    // Build WHERE clause
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Build LIMIT/OFFSET clause (optional pagination support)
+    let limitClause = '';
+    const countParams = [...params]; // Save params for count query (without limit/offset)
+
+    if (options?.limit !== undefined) {
+      // Hard cap at 1000 to prevent DoS attacks
+      const limit = Math.min(options.limit, 1000);
+      const offset = options.offset || 0;
+
+      if (limit <= 0) {
+        return errorResponse('INVALID_INPUT', 'Limit must be a positive integer');
+      }
+
+      if (offset < 0) {
+        return errorResponse('INVALID_INPUT', 'Offset must be a non-negative integer');
+      }
+
+      limitClause = `LIMIT ? OFFSET ?`;
+      params.push(limit, offset);
+    }
+
+    // Get total count for pagination (run in parallel with main query)
+    const countQuery = env.DB.prepare(`
+      SELECT COUNT(*) as total FROM globalgroups gg ${whereClause}
+    `).bind(...countParams).first<{ total: number }>();
+
+    // Get global groups with member counts
+    const groupsQuery = env.DB.prepare(`
       SELECT
         gg.*,
         COUNT(DISTINCT CASE WHEN gug.isActive = 1 THEN gug.userEmail END) as memberCount
       FROM globalgroups gg
       LEFT JOIN globalusergroups gug ON gg.globalGroupId = gug.globalGroupId
+      ${whereClause}
       GROUP BY gg.globalGroupId
       ORDER BY gg.createdAt DESC
-    `).all();
+      ${limitClause}
+    `).bind(...params).all();
 
-    const groups = result.results?.map((g: any) => ({
+    // Execute both queries in parallel
+    const [countResult, groupsResult] = await Promise.all([countQuery, groupsQuery]);
+
+    const totalCount = countResult?.total || 0;
+
+    const groups = groupsResult.results?.map((g: any) => ({
       groupId: g.globalGroupId,  // Use globalGroupId as groupId for frontend consistency
       globalGroupId: g.globalGroupId,  // Also include for backward compatibility
       groupName: g.groupName,
@@ -38,7 +110,13 @@ export async function getGlobalGroups(env: Env): Promise<Response> {
       memberCount: g.memberCount || 0
     })) || [];
 
-    return successResponse(groups);
+    // Return with pagination metadata
+    return successResponse({
+      groups,
+      totalCount,
+      limit: options?.limit,
+      offset: options?.offset || 0
+    });
 
   } catch (error) {
     console.error('Get global groups error:', error);

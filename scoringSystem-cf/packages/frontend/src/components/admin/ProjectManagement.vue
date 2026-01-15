@@ -12,6 +12,7 @@
       :export-filename="exportConfig.filename"
       :export-headers="exportConfig.headers"
       :export-row-mapper="exportConfig.rowMapper"
+      :loading="loading"
       @reset-filters="handleResetFilters"
     >
       <!-- Core Filters (Always Visible) -->
@@ -64,17 +65,28 @@
           />
         </div>
       </template>
-
-      <!-- Stats Display -->
-      <template #stats>
-        <div class="project-stats">
-          <AnimatedStatistic title="總專案數" :value="stats.totalProjects" />
-          <AnimatedStatistic title="進行中" :value="stats.activeProjects" />
-          <AnimatedStatistic title="已刪除" :value="stats.deletedProjects" />
-          <AnimatedStatistic title="已封存" :value="stats.archivedProjects" />
-        </div>
-      </template>
     </AdminFilterToolbar>
+
+    <!-- 統計卡片 -->
+    <el-card class="stats-card">
+      <el-row :gutter="20">
+        <el-col :xs="12" :sm="6" :md="4">
+          <AnimatedStatistic title="總專案數" :value="stats?.totalProjects ?? 0" />
+        </el-col>
+        <el-col :xs="12" :sm="6" :md="4">
+          <AnimatedStatistic title="進行中" :value="stats?.activeProjects ?? 0" />
+        </el-col>
+        <el-col :xs="12" :sm="6" :md="4">
+          <AnimatedStatistic title="已刪除" :value="stats?.deletedProjects ?? 0" />
+        </el-col>
+        <el-col :xs="12" :sm="6" :md="4">
+          <AnimatedStatistic title="已封存" :value="stats?.archivedProjects ?? 0" />
+        </el-col>
+        <el-col v-if="activeFilterCount > 0" :xs="12" :sm="6" :md="4">
+          <AnimatedStatistic title="搜尋結果" :value="filteredProjects?.length ?? 0" />
+        </el-col>
+      </el-row>
+    </el-card>
 
     <!-- Project Table -->
     <div class="table-container" v-loading="loading" element-loading-text="載入專案資料中...">
@@ -1297,7 +1309,9 @@ export default {
     PauseStageDrawer,
     ResumeStageDrawer,
     AdminFilterToolbar,
-    EmptyState
+    EmptyState,
+    AnimatedStatistic,
+    ConfirmationInput
   },
   setup() {
     const router = useRouter()
@@ -4409,6 +4423,21 @@ export default {
 <style scoped>
 .project-management {
   padding: 20px;
+}
+
+/* 統計卡片 */
+.stats-card {
+  margin-bottom: 20px;
+}
+
+.stats-card :deep(.el-row) {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.stats-card :deep(.el-col) {
+  display: flex;
+  justify-content: center;
 }
 
 .mgmt-header {

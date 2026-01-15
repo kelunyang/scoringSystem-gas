@@ -58,6 +58,8 @@ export interface UserPrefs {
   adminFilters_eventLogViewer?: Record<string, any>;
   /** 專案管理過濾器 */
   adminFilters_projectManagement?: Record<string, any>;
+  /** AI 服務日誌過濾器 */
+  adminFilters_aiServiceLogsManagement?: Record<string, any>;
 }
 
 /**
@@ -108,7 +110,8 @@ const PREF_KEYS = {
   adminFilters_globalGroupManagement: `${PREF_KEY_PREFIX}adminFilters_globalGroupManagement`,
   adminFilters_projectGroupManagement: `${PREF_KEY_PREFIX}adminFilters_projectGroupManagement`,
   adminFilters_eventLogViewer: `${PREF_KEY_PREFIX}adminFilters_eventLogViewer`,
-  adminFilters_projectManagement: `${PREF_KEY_PREFIX}adminFilters_projectManagement`
+  adminFilters_projectManagement: `${PREF_KEY_PREFIX}adminFilters_projectManagement`,
+  adminFilters_aiServiceLogsManagement: `${PREF_KEY_PREFIX}adminFilters_aiServiceLogsManagement`
 } as const;
 
 // ============================================================================

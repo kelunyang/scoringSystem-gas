@@ -112,6 +112,7 @@ interface ProjectWithDetails {
 
 /**
  * List user's projects with optional filters
+ * Supports server-side filtering, searching, and pagination
  */
 export async function listUserProjects(
   env: Env,
@@ -121,6 +122,9 @@ export async function listUserProjects(
     createdBy?: string;
     tagId?: string;
     includeStages?: boolean;
+    search?: string;
+    limit?: number;
+    offset?: number;
   } = {}
 ): Promise<Response> {
   try {
@@ -128,16 +132,27 @@ export async function listUserProjects(
     const isAdmin = await checkSystemAdmin(env, userEmail);
 
     let projects: any[];
+    let totalCount: number;
 
     if (isAdmin) {
       // Admins see all projects
-      projects = await listAllProjectsForAdmin(env, userEmail, filters);
+      const result = await listAllProjectsForAdmin(env, userEmail, filters);
+      projects = result.projects;
+      totalCount = result.totalCount;
     } else {
       // Regular users see projects based on projectviewers table (viewer role)
-      projects = await listProjectsForUser(env, userEmail, filters);
+      const result = await listProjectsForUser(env, userEmail, filters);
+      projects = result.projects;
+      totalCount = result.totalCount;
     }
 
-    return successResponse(projects);
+    // Return with pagination metadata
+    return successResponse({
+      projects,
+      totalCount,
+      limit: filters.limit,
+      offset: filters.offset || 0
+    });
   } catch (error) {
     console.error('List user projects error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to list projects');
@@ -560,16 +575,79 @@ export async function getProjectContent(
 /**
  * List projects for regular user (using project viewer role system)
  * Updated to use 4-layer permission model with optimized single query
+ * Supports server-side filtering, searching, and pagination
  */
 async function listProjectsForUser(
   env: Env,
   userEmail: string,
-  filters: { status?: string; createdBy?: string; tagId?: string; includeStages?: boolean }
-): Promise<ProjectWithDetails[]> {
+  filters: { status?: string; createdBy?: string; tagId?: string; includeStages?: boolean; search?: string; limit?: number; offset?: number }
+): Promise<{ projects: ProjectWithDetails[]; totalCount: number }> {
   try {
+    // Build WHERE conditions
+    const conditions: string[] = [
+      "p.status NOT IN ('deleted', 'archived')",
+      'pv.id IS NOT NULL'
+    ];
+    const params: any[] = [userEmail];
+
+    // Filter by status if provided
+    if (filters.status) {
+      conditions.push('p.status = ?');
+      params.push(filters.status);
+    }
+
+    // Search in projectName or description if provided
+    if (filters.search && filters.search.trim()) {
+      const search = filters.search.trim();
+
+      // Validate search string length to prevent DoS
+      if (search.length > 100) {
+        throw new Error('Search string too long (max 100 characters)');
+      }
+
+      // Escape LIKE wildcards (%, _) to prevent SQL injection
+      const escapedSearch = search.replace(/[%_]/g, '\\$&');
+
+      conditions.push('(p.projectName LIKE ? ESCAPE "\\" OR p.description LIKE ? ESCAPE "\\")');
+      const searchPattern = `%${escapedSearch}%`;
+      params.push(searchPattern, searchPattern);
+    }
+
+    const whereClause = conditions.join(' AND ');
+
+    // Build LIMIT/OFFSET clause
+    let limitClause = '';
+    const countParams = [...params];
+
+    if (filters.limit !== undefined) {
+      const limit = Math.min(filters.limit, 1000);
+      const offset = filters.offset || 0;
+
+      if (limit <= 0) {
+        throw new Error('Limit must be a positive integer');
+      }
+
+      if (offset < 0) {
+        throw new Error('Offset must be a non-negative integer');
+      }
+
+      limitClause = `LIMIT ? OFFSET ?`;
+      params.push(limit, offset);
+    }
+
+    // Get total count for pagination
+    const countQuery = env.DB.prepare(`
+      SELECT COUNT(DISTINCT p.projectId) as total
+      FROM projects p
+      LEFT JOIN projectviewers pv
+        ON p.projectId = pv.projectId
+        AND pv.userEmail = ?
+        AND pv.isActive = 1
+      WHERE ${whereClause}
+    `).bind(...countParams).first<{ total: number }>();
+
     // Single query to get all accessible projects with viewer roles
-    // This eliminates N+1 query problem
-    const projectsResult = await env.DB.prepare(`
+    const projectsQuery = env.DB.prepare(`
       SELECT DISTINCT
         p.projectId,
         p.projectName,
@@ -588,13 +666,17 @@ async function listProjectsForUser(
         AND pv.isActive = 1
       LEFT JOIN users creator
         ON p.createdBy = creator.userId
-      WHERE p.status NOT IN ('deleted', 'archived')
-        AND pv.id IS NOT NULL
-      ORDER BY p.createdTime DESC
-    `).bind(userEmail).all();
+      WHERE ${whereClause}
+      ORDER BY p.lastModified DESC
+      ${limitClause}
+    `).bind(...params).all();
+
+    const [countResult, projectsResult] = await Promise.all([countQuery, projectsQuery]);
+
+    const totalCount = countResult?.total || 0;
 
     if (!projectsResult.results || projectsResult.results.length === 0) {
-      return [];
+      return { projects: [], totalCount };
     }
 
     const projects = projectsResult.results as unknown as ProjectRow[];
@@ -633,8 +715,7 @@ async function listProjectsForUser(
       stages: filters.includeStages ? (stagesMap.get(proj.projectId) || []) : null
     }));
 
-    // Apply additional filters (status, etc.)
-    return applyFilters(userProjects, filters, null);
+    return { projects: userProjects, totalCount };
   } catch (error) {
     console.error('List projects for user error:', error);
     throw new Error(`Failed to list projects: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -795,28 +876,95 @@ async function batchGetStages(
 
 /**
  * List all projects for admin
+ * Supports server-side filtering, searching, and pagination
  */
 async function listAllProjectsForAdmin(
   env: Env,
   userEmail: string,
-  filters: any
-): Promise<any[]> {
+  filters: { status?: string; createdBy?: string; tagId?: string; includeStages?: boolean; search?: string; limit?: number; offset?: number }
+): Promise<{ projects: any[]; totalCount: number }> {
   try {
     // Get userId for createdBy comparison
     const userId = await getUserId(env, userEmail);
 
+    // Build WHERE conditions
+    const conditions: string[] = ["p.status NOT IN ('deleted', 'archived')"];
+    const params: any[] = [];
+
+    // Filter by status if provided
+    if (filters.status) {
+      conditions.push('p.status = ?');
+      params.push(filters.status);
+    }
+
+    // Filter by createdBy
+    if (filters.createdBy === 'me' && userId) {
+      conditions.push('p.createdBy = ?');
+      params.push(userId);
+    }
+
+    // Search in projectName or description if provided
+    if (filters.search && filters.search.trim()) {
+      const search = filters.search.trim();
+
+      // Validate search string length to prevent DoS
+      if (search.length > 100) {
+        throw new Error('Search string too long (max 100 characters)');
+      }
+
+      // Escape LIKE wildcards (%, _) to prevent SQL injection
+      const escapedSearch = search.replace(/[%_]/g, '\\$&');
+
+      conditions.push('(p.projectName LIKE ? ESCAPE "\\" OR p.description LIKE ? ESCAPE "\\")');
+      const searchPattern = `%${escapedSearch}%`;
+      params.push(searchPattern, searchPattern);
+    }
+
+    const whereClause = conditions.join(' AND ');
+
+    // Build LIMIT/OFFSET clause
+    let limitClause = '';
+    const countParams = [...params];
+
+    if (filters.limit !== undefined) {
+      const limit = Math.min(filters.limit, 1000);
+      const offset = filters.offset || 0;
+
+      if (limit <= 0) {
+        throw new Error('Limit must be a positive integer');
+      }
+
+      if (offset < 0) {
+        throw new Error('Offset must be a non-negative integer');
+      }
+
+      limitClause = `LIMIT ? OFFSET ?`;
+      params.push(limit, offset);
+    }
+
+    // Get total count for pagination
+    const countQuery = env.DB.prepare(`
+      SELECT COUNT(*) as total FROM projects p WHERE ${whereClause}
+    `).bind(...countParams).first<{ total: number }>();
+
     // LEFT JOIN with users table to get creator's display name
-    const allProjects = await env.DB.prepare(`
+    const projectsQuery = env.DB.prepare(`
       SELECT
         p.*,
         u.displayName as creatorDisplayName
       FROM projects p
       LEFT JOIN users u ON p.createdBy = u.userId
-      WHERE p.status NOT IN ('deleted', 'archived')
-    `).all();
+      WHERE ${whereClause}
+      ORDER BY p.lastModified DESC
+      ${limitClause}
+    `).bind(...params).all();
+
+    const [countResult, allProjects] = await Promise.all([countQuery, projectsQuery]);
+
+    const totalCount = countResult?.total || 0;
 
     if (!allProjects.results || allProjects.results.length === 0) {
-      return [];
+      return { projects: [], totalCount };
     }
 
     const projectIds = allProjects.results.map((p: any) => p.projectId);
@@ -869,10 +1017,10 @@ async function listAllProjectsForAdmin(
       };
     });
 
-    return applyFilters(userProjects, filters, userId);
+    return { projects: userProjects, totalCount };
   } catch (error) {
     console.error('List all projects for admin error:', error);
-    return [];
+    return { projects: [], totalCount: 0 };
   }
 }
 

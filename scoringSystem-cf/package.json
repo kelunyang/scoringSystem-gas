@@ -8,6 +8,9 @@
     "postinstall": "node scripts/post-install-hooks.cjs",
     "dev": "bash scripts/dev.sh",
     "dev:sync-remote": "bash scripts/dev.sh :sync-remote",
+    "dev:sync-remote:with-logs": "bash scripts/dev.sh :sync-remote :with-logs",
+    "dev:sync-remote:with-syslogs": "bash scripts/dev.sh :sync-remote :with-syslogs",
+    "dev:sync-remote:with-eventlogs": "bash scripts/dev.sh :sync-remote :with-eventlogs",
     "dev:backend": "pnpm --filter @repo/backend dev",
     "dev:frontend": "pnpm --filter @repo/frontend dev",
     "build": "pnpm --filter @repo/shared build && pnpm --parallel --filter \"!@repo/shared\" build",
@@ -18,7 +21,13 @@
     "clean": "pnpm --recursive clean && rm -rf node_modules",
     "deploy:backend": "pnpm --filter @repo/backend deploy",
     "deploy:frontend": "pnpm --filter @repo/frontend deploy",
-    "test": "pnpm --recursive test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:shared": "pnpm --filter @repo/shared test",
+    "test:frontend": "pnpm --filter @repo/frontend test",
+    "test:backend": "pnpm --filter @repo/backend test",
     "test:e2e": "pnpm --filter @repo/frontend test:e2e",
     "test:e2e:ui": "pnpm --filter @repo/frontend test:e2e:ui",
     "test:e2e:report": "pnpm --filter @repo/frontend test:e2e:report",
@@ -31,9 +40,12 @@
   },
   "devDependencies": {
     "@types/node": "^20.10.6",
+    "@vitest/coverage-v8": "^4.0.17",
+    "@vitest/ui": "^4.0.17",
     "eslint": "^8.57.0",
     "prettier": "^3.2.4",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^4.0.17"
   },
   "engines": {
     "node": ">=18.0.0",

@@ -4,19 +4,37 @@
 # Automatically kills processes on ports 8787 and 5173 before starting
 #
 # Usage:
-#   ./dev.sh              - Normal dev startup
-#   ./dev.sh :sync-remote - Sync remote D1 to local before starting
+#   ./dev.sh                       - Normal dev startup
+#   ./dev.sh :sync-remote          - Sync remote D1 to local (filter logs by default)
+#   ./dev.sh :sync-remote :with-logs    - Sync with ALL logs (eventlogs + sys_logs)
+#   ./dev.sh :sync-remote :with-eventlogs - Sync with eventlogs only
+#   ./dev.sh :sync-remote :with-syslogs   - Sync with sys_logs only
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 BACKEND_DIR="$PROJECT_ROOT/packages/backend"
 
-# Check for :sync-remote argument
+# Check for arguments
 SYNC_REMOTE=false
+INCLUDE_EVENTLOGS=false
+INCLUDE_SYSLOGS=false
+
 for arg in "$@"; do
-  if [ "$arg" = ":sync-remote" ]; then
-    SYNC_REMOTE=true
-  fi
+  case "$arg" in
+    ":sync-remote")
+      SYNC_REMOTE=true
+      ;;
+    ":with-logs")
+      INCLUDE_EVENTLOGS=true
+      INCLUDE_SYSLOGS=true
+      ;;
+    ":with-eventlogs")
+      INCLUDE_EVENTLOGS=true
+      ;;
+    ":with-syslogs")
+      INCLUDE_SYSLOGS=true
+      ;;
+  esac
 done
 
 # Sync remote D1 and KV to local if requested
@@ -41,12 +59,31 @@ if [ "$SYNC_REMOTE" = true ]; then
 
   echo "📦 Exported to $TEMP_SQL ($(du -h "$TEMP_SQL" | cut -f1))"
 
-  # Filter out large log tables (eventlogs, sys_logs) to reduce size
+  # Filter out large log tables based on user preferences
   # Note: wrangler exports use quoted table names like INSERT INTO "eventlogs"
-  echo "🔧 Filtering out log tables (eventlogs, sys_logs)..."
   FILTERED_SQL="/tmp/remote-d1-filtered-$(date +%Y%m%d%H%M%S).sql"
-  grep -v 'INSERT INTO "eventlogs"' "$TEMP_SQL" | grep -v 'INSERT INTO "sys_logs"' > "$FILTERED_SQL"
-  echo "📦 Filtered SQL: $(du -h "$FILTERED_SQL" | cut -f1) (was $(du -h "$TEMP_SQL" | cut -f1))"
+  FILTER_CMD="cat"
+
+  if [ "$INCLUDE_EVENTLOGS" = false ]; then
+    echo "🔧 Filtering out eventlogs table..."
+    FILTER_CMD="$FILTER_CMD | grep -v 'INSERT INTO \"eventlogs\"'"
+  else
+    echo "📋 Including eventlogs table"
+  fi
+
+  if [ "$INCLUDE_SYSLOGS" = false ]; then
+    echo "🔧 Filtering out sys_logs table..."
+    FILTER_CMD="$FILTER_CMD | grep -v 'INSERT INTO \"sys_logs\"'"
+  else
+    echo "📋 Including sys_logs table"
+  fi
+
+  # Apply filters
+  eval "$FILTER_CMD" < "$TEMP_SQL" > "$FILTERED_SQL"
+
+  ORIGINAL_SIZE=$(du -h "$TEMP_SQL" | cut -f1)
+  FILTERED_SIZE=$(du -h "$FILTERED_SQL" | cut -f1)
+  echo "📦 Final SQL: $FILTERED_SIZE (original: $ORIGINAL_SIZE)"
   rm -f "$TEMP_SQL"
   TEMP_SQL="$FILTERED_SQL"
 

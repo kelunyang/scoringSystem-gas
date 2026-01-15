@@ -35,6 +35,11 @@ import {
   getUserDisplayNames
 } from '../handlers/users/display-names';
 import {
+  getCommentPageSize,
+  updateCommentPageSize,
+  getAllUserSettings
+} from '../handlers/users/settings';
+import {
   GetUserProfileRequestSchema,
   UpdateUserProfileRequestSchema,
   UpdateUserAvatarRequestSchema,
@@ -216,5 +221,45 @@ app.post(
     return response;
   }
 );
+
+// ============ User Settings Endpoints ============
+
+/**
+ * Get all user settings
+ * Body: { sessionId }
+ */
+app.get('/settings', async (c) => {
+  const user = c.get('user');
+  return getAllUserSettings(c.env, user.userEmail);
+});
+
+/**
+ * Get comment page size setting
+ * Body: { sessionId }
+ */
+app.get('/settings/comment-page-size', async (c) => {
+  const user = c.get('user');
+  return getCommentPageSize(c.env, user.userEmail);
+});
+
+/**
+ * Update comment page size setting
+ * Body: { sessionId, pageSize: number (3-10) }
+ */
+app.put('/settings/comment-page-size', async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json();
+  const pageSize = body.pageSize;
+
+  if (typeof pageSize !== 'number') {
+    return c.json({
+      success: false,
+      error: 'pageSize must be a number',
+      errorCode: 'INVALID_INPUT'
+    }, 400);
+  }
+
+  return updateCommentPageSize(c.env, user.userEmail, pageSize);
+});
 
 export default app;

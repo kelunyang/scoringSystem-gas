@@ -109,15 +109,14 @@
         <el-col :xs="12" :sm="6" :md="4">
           <AnimatedStatistic title="平均回應時間(ms)" :value="statistics.avgResponseTime ? Math.round(statistics.avgResponseTime) : 0" />
         </el-col>
+        <el-col v-if="hasActiveFilters" :xs="12" :sm="6" :md="4">
+          <AnimatedStatistic title="搜尋結果" :value="filteredLogs.length" />
+        </el-col>
       </el-row>
     </el-card>
 
     <!-- AI Service Logs Table -->
-    <el-scrollbar
-      class="table-container"
-      @end-reached="handleEndReached"
-      :distance="200"
-    >
+    <div class="table-container">
       <div
         v-loading="loading"
         element-loading-text="載入 AI 紀錄中..."
@@ -449,6 +448,8 @@
         :enable-animation="false"
       />
 
+      <!-- 🆕 移除自動搜尋提示，因為現在 filter 變化會直接觸發後端搜尋 -->
+
       <!-- Loading indicator for infinite scroll -->
       <div v-if="loadingMore" class="loading-more">
         <i class="el-icon-loading"></i>
@@ -457,10 +458,11 @@
 
       <!-- Show count info -->
       <div v-if="displayedLogs.length > 0" class="count-info">
-        顯示 {{ displayedLogs.length }} / {{ filteredLogs.length }} 筆 AI 紀錄
+        顯示 {{ displayedLogs.length }} / {{ totalCount }} 筆 AI 紀錄
+        <span v-if="hasMore" class="has-more-hint">（滾動載入更多）</span>
       </div>
       </div>
-    </el-scrollbar>
+    </div>
   </div>
 </template>
 
@@ -468,7 +470,8 @@
 import { ref, computed, onMounted, watch, nextTick, inject, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import type { ScrollbarDirection } from 'element-plus'
+import { useDebounceFn } from '@vueuse/core'
+import { useWindowInfiniteScroll } from '@/composables/useWindowInfiniteScroll'
 import { adminApi } from '@/api/admin'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
@@ -499,6 +502,13 @@ const logs = ref<(AIServiceLog & { selected?: boolean })[]>([])
 const statistics = ref<AIServiceStatisticsResponse | null>(null)
 const loading = ref<boolean>(false)
 
+// Server pagination state
+const BATCH_SIZE = 50
+const totalCount = ref<number>(0)
+const currentOffset = ref<number>(0)
+const hasMore = computed(() => logs.value.length < totalCount.value)
+const autoSearchingBackend = ref<boolean>(false)
+
 // Expanded row state
 const expandedLogId = ref<string | null>(null)
 const expandedLogDetails = ref<{
@@ -520,7 +530,6 @@ const { filters, isLoaded: filtersLoaded } = useFilterPersistence('aiServiceLogs
 
 // Infinite scroll
 const displayCount = ref<number>(50)
-const loadingMore = ref<boolean>(false)
 
 // ================== Computed Properties ==================
 
@@ -533,6 +542,8 @@ const activeFilterCount = computed(() => {
   if (filters.value.dateRange) count++
   return count
 })
+
+const hasActiveFilters = computed(() => activeFilterCount.value > 0)
 
 const filteredLogs = computed(() => {
   let filtered = logs.value
@@ -574,17 +585,23 @@ const filteredLogs = computed(() => {
     }
   }
 
-  // Display limit
-  return filtered.slice(0, filters.value.displayLimit)
+  // 注意：不再在這裡做 displayLimit 切片
+  // 分頁由 displayedLogs + displayCount 控制（infinite scroll）
+  return filtered
 })
 
 const displayedLogs = computed(() => {
   return filteredLogs.value.slice(0, displayCount.value)
 })
 
-const scrollDisabled = computed(() => {
-  return loading.value || loadingMore.value || displayedLogs.value.length >= filteredLogs.value.length
+// 🆕 canLoadMore 計算（用於無限滾動）
+const canLoadMore = computed(() => {
+  return displayedLogs.value.length < filteredLogs.value.length || hasMore.value
 })
+
+// 🆕 loadingMore 狀態（用於 loadAIServiceLogs 和 useWindowInfiniteScroll）
+// 必須在 loadAIServiceLogs 之前定義，避免 hoisting 問題
+const loadingMore = ref(false)
 
 // Export configuration
 const exportConfig = computed(() => ({
@@ -604,30 +621,149 @@ const exportConfig = computed(() => ({
 
 // ================== Watchers ==================
 
-watch([
-  () => filters.value.searchText,
-  () => filters.value.serviceType,
-  () => filters.value.statusFilter,
-  () => filters.value.rankingType,
-  () => filters.value.dateRange
-], () => {
+// 🆕 後端搜尋函數（提取出來方便 onMounted 呼叫）
+const searchWithBackendFilters = async () => {
+  console.log('🤖 [Backend Search] Triggering with filters...')
+
+  // Build query filters for backend search
+  const queryFilters: Record<string, unknown> = {
+    limit: BATCH_SIZE,
+    offset: 0
+  }
+
+  // Add search text
+  if (filters.value.searchText) {
+    queryFilters.search = filters.value.searchText
+  }
+
+  // Add service type filter
+  if (filters.value.serviceType && filters.value.serviceType !== 'all') {
+    queryFilters.serviceType = filters.value.serviceType
+  }
+
+  // Add status filter
+  if (filters.value.statusFilter && filters.value.statusFilter !== 'all') {
+    queryFilters.status = filters.value.statusFilter
+  }
+
+  // Add ranking type filter
+  if (filters.value.rankingType && filters.value.rankingType !== 'all') {
+    queryFilters.rankingType = filters.value.rankingType
+  }
+
+  // Add date range filter
+  if (filters.value.dateRange && filters.value.dateRange.length === 2) {
+    const start = filters.value.dateRange[0]
+    const end = filters.value.dateRange[1]
+    if (start instanceof Date && end instanceof Date) {
+      queryFilters.startDate = start.getTime()
+      queryFilters.endDate = end.getTime()
+    }
+  }
+
+  console.log('🤖 [Backend Search] Query filters:', queryFilters)
+
+  loading.value = true
+  try {
+    const response = await adminApi.aiServiceLogs.query({ filters: queryFilters })
+
+    if (response.success && response.data) {
+      logs.value = response.data.logs || []
+      totalCount.value = response.data.totalCount || logs.value.length
+      currentOffset.value = logs.value.length
+      displayCount.value = logs.value.length
+    }
+  } catch (error) {
+    console.error('Backend search failed:', error)
+  } finally {
+    loading.value = false
+  }
+}
+
+// 🆕 直接監聽 filter 變化（取代原本的間接觸發）
+const debouncedFilterChange = useDebounceFn(async () => {
+  // 正在載入中，不要再觸發
+  if (loading.value || loadingMore.value) return
+
+  // 重設 displayCount
   displayCount.value = 50
-})
+
+  // 🆕 有 filter 時，直接觸發後端搜尋
+  if (hasActiveFilters.value) {
+    await searchWithBackendFilters()
+  }
+}, 300)
+
+// 追蹤是否已初始化完成（用於避免 watch 在掛載時觸發）
+const isFilterWatchReady = ref(false)
+
+// 🆕 簡化邏輯：監聽 filter 變化，debounce 後直接發送後端請求
+const debouncedFilterSearch = useDebounceFn(() => {
+  if (!isFilterWatchReady.value) {
+    console.log('🤖 [Filter Watch] Skipping - not ready yet')
+    return
+  }
+
+  console.log('🤖 [Filter Changed] Triggering backend search with filters:', {
+    serviceType: filters.value.serviceType,
+    status: filters.value.statusFilter,
+    rankingType: filters.value.rankingType,
+    search: filters.value.searchText,
+    dateRange: filters.value.dateRange
+  })
+
+  // 直接發送後端請求（帶 filter 參數）
+  searchWithBackendFilters()
+}, 500) // 500ms debounce，等待用戶停止操作
+
+// 監聽所有 filter 變化
+watch(
+  [
+    () => filters.value.searchText,
+    () => filters.value.serviceType,
+    () => filters.value.statusFilter,
+    () => filters.value.rankingType,
+    () => filters.value.dateRange
+  ],
+  () => {
+    debouncedFilterSearch()
+  },
+  { deep: true }
+)
 
 // ================== Methods ==================
 
-const loadAIServiceLogs = async (): Promise<void> => {
-  loading.value = true
+const loadAIServiceLogs = async (append: boolean = false): Promise<void> => {
+  if (append) {
+    loadingMore.value = true
+  } else {
+    loading.value = true
+    currentOffset.value = 0
+  }
+
   try {
     const queryFilters: any = {
-      limit: 1000,
-      offset: 0
+      limit: BATCH_SIZE,
+      offset: append ? currentOffset.value : 0
     }
 
     const response = await adminApi.aiServiceLogs.query({ filters: queryFilters })
 
     if (response.success && response.data) {
-      logs.value = response.data.logs || []
+      const logsList = response.data.logs || []
+
+      if (append) {
+        // Append new logs, avoiding duplicates
+        const existingIds = new Set(logs.value.map(l => l.callId))
+        const uniqueNewLogs = logsList.filter((l: AIServiceLog) => !existingIds.has(l.callId))
+        logs.value = [...logs.value, ...uniqueNewLogs]
+        currentOffset.value += logsList.length
+      } else {
+        logs.value = logsList
+        currentOffset.value = logsList.length
+      }
+
+      totalCount.value = response.data.totalCount || logsList.length
     } else {
       const errorMessage = response.error?.message || '無法載入 AI 紀錄'
       ElMessage.error(errorMessage)
@@ -638,6 +774,7 @@ const loadAIServiceLogs = async (): Promise<void> => {
     ElMessage.error(errorMessage)
   } finally {
     loading.value = false
+    loadingMore.value = false
   }
 }
 
@@ -669,20 +806,40 @@ const resetFilters = (): void => {
   ElMessage.success('已清除所有篩選條件')
 }
 
-const loadMore = (): void => {
-  if (scrollDisabled.value) return
-  loadingMore.value = true
-  setTimeout(() => {
+const loadMore = async (): Promise<void> => {
+  console.log('🤖 [AIServiceLogs] loadMore called:', {
+    displayCount: displayCount.value,
+    filteredLogsLength: filteredLogs.value.length,
+    logsLength: logs.value.length,
+    hasMore: hasMore.value,
+    totalCount: totalCount.value,
+    currentOffset: currentOffset.value
+  })
+
+  // First, try to display more from locally loaded data
+  if (displayCount.value < filteredLogs.value.length) {
+    console.log('🤖 [AIServiceLogs] Increasing displayCount from', displayCount.value, 'to', displayCount.value + 50)
     displayCount.value += 50
-    loadingMore.value = false
-  }, 300)
+    return
+  }
+
+  // If we've displayed all local data but server has more, fetch from backend
+  if (hasMore.value) {
+    console.log('🤖 [AIServiceLogs] Calling loadAIServiceLogs(true) to fetch more from backend')
+    await loadAIServiceLogs(true)
+    displayCount.value = logs.value.length
+  } else {
+    console.log('🤖 [AIServiceLogs] No more data to load (hasMore is false)')
+  }
 }
 
-// Handler for el-scrollbar end-reached event
-const handleEndReached = (direction: ScrollbarDirection): void => {
-  if (direction !== 'bottom') return
-  loadMore()
-}
+// 🆕 使用頁面級無限滾動（必須在 loadMore 定義後呼叫）
+// 不解構 loadingMore，因為我們在 loadAIServiceLogs 之前已經定義了本地的 loadingMore
+useWindowInfiniteScroll(
+  canLoadMore,
+  computed(() => loading.value || loadingMore.value),
+  loadMore
+)
 
 const handleToggleExpansion = async (log: AIServiceLog): Promise<void> => {
   if (expandedLogId.value === log.callId) {
@@ -867,7 +1024,8 @@ const getStatusColor = (status: AIServiceStatus): string => {
 // ================== Lifecycle Hooks ==================
 
 onMounted(async () => {
-  await Promise.all([loadAIServiceLogs(), loadStatistics()])
+  // 🆕 簡化：初始載入直接使用後端搜尋（帶 filter 參數）
+  await Promise.all([searchWithBackendFilters(), loadStatistics()])
 
   // Auto-expand detail if callId parameter exists in URL
   if (route.params.callId && typeof route.params.callId === 'string') {
@@ -883,6 +1041,13 @@ onMounted(async () => {
 
   // Register refresh function with parent SystemAdmin
   registerRefresh(refreshLogs)
+
+  // 🆕 在初始載入完成後啟用 filter watch
+  // 使用 setTimeout 確保在 useFilterPersistence 載入完成後才啟用 watch
+  setTimeout(() => {
+    isFilterWatchReady.value = true
+    console.log('🤖 [Init] Filter watch is now ready (after initial load)')
+  }, 100)
 })
 
 onBeforeUnmount(() => {
@@ -918,13 +1083,12 @@ onBeforeUnmount(() => {
   font-size: 16px;
 }
 
-/* Table Container */
+/* Table Container - 移除固定高度，改用頁面級滾動 */
 .table-container {
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   overflow: hidden;
-  height: calc(100vh - 400px);
 }
 
 .ai-logs-table {
@@ -1077,6 +1241,26 @@ onBeforeUnmount(() => {
   font-size: 13px;
   background: #f8f9fa;
   border-top: 1px solid #eee;
+}
+
+.has-more-hint {
+  color: #409EFF;
+  font-size: 12px;
+}
+
+/* Auto backend search indicator */
+.auto-search-indicator {
+  padding: 20px;
+  text-align: center;
+  color: #409EFF;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #ecf5ff;
+  border-radius: 4px;
+  margin: 10px 0;
 }
 
 /* AI Log Expanded Detail */

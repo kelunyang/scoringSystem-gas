@@ -726,8 +726,8 @@
                   </div>
                 </el-tooltip>
 
-                <!-- 已發布評論 -->
-                <AnimatedStatistic title="已發布評論" :value="stage.comments?.length ?? 0" />
+                <!-- 已發布評論（顯示總數，非分頁後的數量） -->
+                <AnimatedStatistic title="已發布評論" :value="stageCommentPagination.get(stage.id)?.total ?? stage.comments?.length ?? 0" />
               </div>
             </div>
 
@@ -771,6 +771,9 @@
                 :permission-level="permissions.permissionLevel?.value ?? 'none'"
                 :project-groups="projectData?.groups || []"
                 :initial-comments="stage.comments"
+                :initial-has-more="stageCommentPagination.get(stage.id)?.hasMore || false"
+                :initial-total-comments="stageCommentPagination.get(stage.id)?.total || 0"
+                :comment-page-size="userCommentPageSize"
                 @reply-comment="handleReplyComment"
               />
             </div>
@@ -1187,6 +1190,16 @@ const loadingMilestones = reactive(new Map<string, boolean>())
 
 // ===== Mention 相關數據 =====
 const userEmailToDisplayName = ref<Record<string, string>>({})
+
+// ===== 評論分頁設定 =====
+/** 用戶的評論分頁設定（預設 3 則/頁） */
+const userCommentPageSize = ref(3)
+/** 各階段的評論分頁狀態 */
+const stageCommentPagination = reactive(new Map<string, {
+  hasMore: boolean
+  total: number
+  offset: number
+}>())
 
 // ===== Loading 狀態 =====
 // loadingVoteData 已移除 - VoteResultModal 現在使用 TanStack Query 內部管理載入狀態
@@ -3179,14 +3192,16 @@ async function loadAllStageComments() {
   }
 
   try {
-    // 使用批量 API 一次獲取所有階段的評論
-    const dedupKey = `comments:all-stages:${projectId.value}:${stageIds.join(',')}`
+    // 使用批量 API 一次獲取所有階段的評論（帶分頁參數）
+    const dedupKey = `comments:all-stages:${projectId.value}:${stageIds.join(',')}:limit${userCommentPageSize.value}`
     const response = await dedupRequest(dedupKey, async () => {
       const httpResponse = await (rpcClient.comments as any)['all-stages'].$post({
         json: {
           projectId: projectId.value,
           stageIds: stageIds,
-          excludeTeachers: false
+          excludeTeachers: false,
+          limit: userCommentPageSize.value,
+          offset: 0
         }
       })
       return httpResponse.json()
@@ -3209,13 +3224,26 @@ async function loadAllStageComments() {
               ? JSON.parse(comment.mentionedGroups)
               : (comment.mentionedGroups || [])
           }))
-          console.log(`✅ 階段 ${stage.id} 載入 ${stage.comments?.length ?? 0} 條評論`)
+
+          // 儲存分頁狀態
+          stageCommentPagination.set(stage.id, {
+            hasMore: stageData.hasMore || false,
+            total: stageData.total || 0,
+            offset: stageData.comments.length
+          })
+
+          console.log(`✅ 階段 ${stage.id} 載入 ${stage.comments?.length ?? 0} 條評論，總數 ${stageData.total}，hasMore: ${stageData.hasMore}`)
         } else {
           stage.comments = []
+          stageCommentPagination.set(stage.id, {
+            hasMore: false,
+            total: 0,
+            offset: 0
+          })
           console.warn(`⚠️ 階段 ${stage.id} 無評論數據`)
         }
       }
-      console.log(`✅ 所有階段評論載入完成（批量 API，共 ${stageIds.length} 個階段）`)
+      console.log(`✅ 所有階段評論載入完成（批量 API，共 ${stageIds.length} 個階段，limit=${userCommentPageSize.value}）`)
     } else {
       // 如果批量 API 失敗，回退到逐個載入
       console.warn('⚠️ 批量 API 返回失敗，回退到逐個載入模式')
@@ -3236,13 +3264,15 @@ async function loadAllStageCommentsFallback() {
 
   const commentPromises = stages.value.map(async (stage: ExtendedStage) => {
     try {
-      const dedupKey = `comments:${projectId.value}:${stage.id}`
+      const dedupKey = `comments:${projectId.value}:${stage.id}:limit${userCommentPageSize.value}`
       const response = await dedupRequest(dedupKey, async () => {
         const httpResponse = await (rpcClient.comments as any).stage.$post({
           json: {
             projectId: projectId.value,
             stageId: stage.id,
-            excludeTeachers: false
+            excludeTeachers: false,
+            limit: userCommentPageSize.value,
+            offset: 0
           }
         })
         return httpResponse.json()
@@ -3258,14 +3288,32 @@ async function loadAllStageCommentsFallback() {
             ? JSON.parse(comment.mentionedGroups)
             : (comment.mentionedGroups || [])
         }))
-        console.log(`✅ 階段 ${stage.id} 載入 ${stage.comments?.length ?? 0} 條評論`)
+
+        // 儲存分頁狀態
+        stageCommentPagination.set(stage.id, {
+          hasMore: response.data.hasMore || false,
+          total: response.data.total || 0,
+          offset: (response.data.comments || []).length
+        })
+
+        console.log(`✅ 階段 ${stage.id} 載入 ${stage.comments?.length ?? 0} 條評論，總數 ${response.data.total}，hasMore: ${response.data.hasMore}`)
       } else {
         stage.comments = []
+        stageCommentPagination.set(stage.id, {
+          hasMore: false,
+          total: 0,
+          offset: 0
+        })
         console.warn(`⚠️ 階段 ${stage.id} 無評論數據`)
       }
     } catch (error) {
       console.error(`❌ 載入階段 ${stage.id} 評論失敗:`, error)
       stage.comments = []
+      stageCommentPagination.set(stage.id, {
+        hasMore: false,
+        total: 0,
+        offset: 0
+      })
     }
   })
 
@@ -3533,6 +3581,18 @@ const stopDataLoadWatcher = watchEffect(async () => {
     if (stages.value.length > 0) {
       currentStageId.value = stages.value[0].id
       // 用戶從頁面頂部（第一個階段）開始瀏覽
+    }
+
+    // 載入用戶評論分頁設定（從 KV）
+    try {
+      const settingsResponse = await rpcClient.users.settings.$get()
+      const settingsData = await settingsResponse.json()
+      if (settingsData.success && settingsData.data?.commentPageSize) {
+        userCommentPageSize.value = settingsData.data.commentPageSize
+        console.log(`✅ 載入用戶評論分頁設定: ${userCommentPageSize.value} 則/頁`)
+      }
+    } catch (error) {
+      console.warn('⚠️ 載入用戶評論分頁設定失敗，使用預設值:', error)
     }
 
     // 標記 projectCore 載入完成

@@ -15,7 +15,7 @@ Date: 2025-12-23
 
 import pytest
 import time
-from utils import APIClient, AuthHelper, AuthToken
+from utils import APIClient, AuthHelper, AuthToken, extract_list_data
 from config import TestConfig
 
 
@@ -131,7 +131,7 @@ class TestScoringSettlementSecurity:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -264,7 +264,7 @@ class TestWalletTransactionSecurity:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -356,7 +356,7 @@ class TestWorkflowIntegrity:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
 
         for project in projects:
             stages = project.get('stages', [])
@@ -556,7 +556,7 @@ class TestStagePauseResumeWorkflow:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
 
         for project in projects:
             for stage in project.get('stages', []):
@@ -749,7 +749,7 @@ class TestDataExportSecurity:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 

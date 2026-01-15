@@ -516,7 +516,13 @@
 // ============================================================================
 
 .filter-stats {
-  // 由 slot 內容決定樣式
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+  margin-top: 12px;
 }
 
 // ============================================================================

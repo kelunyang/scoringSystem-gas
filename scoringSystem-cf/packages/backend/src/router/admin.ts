@@ -653,7 +653,16 @@ app.post('/global-groups/list', async (c) => {
 // POST version for direct /global-groups endpoint
 app.post('/global-groups', async (c) => {
   try {
-    const response = await getGlobalGroups(c.env);
+    // Parse request body for filtering options
+    const body = await c.req.json().catch(() => ({}));
+    const options = {
+      search: body.search,
+      status: body.status,
+      limit: body.limit,
+      offset: body.offset
+    };
+
+    const response = await getGlobalGroups(c.env, options);
     return response;
   } catch (error) {
     console.error('Get global groups error:', error);

@@ -263,6 +263,39 @@
                 </div>
               </div>
             </div>
+
+            <!-- 第五欄：評論分頁設定 -->
+            <div class="preference-card">
+              <div class="preference-header">
+                <i class="fas fa-comments"></i>
+                <h4>評論載入設定</h4>
+              </div>
+              <p class="preference-description">設定專案詳情頁每次載入的評論數量（3-10則）</p>
+
+              <div class="slider-control">
+                <div class="slider-with-value">
+                  <el-slider
+                    v-model="commentPageSize"
+                    :min="3"
+                    :max="10"
+                    :step="1"
+                    :marks="commentPageSizeMarks"
+                    show-stops
+                    :disabled="savingCommentPageSize"
+                    @change="handleCommentPageSizeChange"
+                    class="comment-page-slider"
+                  />
+                  <div class="comment-value-display">
+                    <span class="value-number">{{ commentPageSize }}</span>
+                    <span class="value-unit">則</span>
+                  </div>
+                </div>
+              </div>
+
+              <el-button type="warning" size="small" @click="resetCommentPageSize" :loading="savingCommentPageSize">
+                <i class="fas fa-undo"></i> 重置 (3則)
+              </el-button>
+            </div>
           </div>
         </div>
 
@@ -350,10 +383,20 @@ export default {
       // Auto-open notification center preference
       autoOpenNotification: true,
 
+      // Comment page size setting (stored in KV)
+      commentPageSize: 3,
+      savingCommentPageSize: false,
+
       sliderMarks: {
         10: '10分',
         30: '30分',
         60: '60分'
+      },
+
+      commentPageSizeMarks: {
+        3: '3',
+        5: '5',
+        10: '10'
       },
 
       // Profile and password editing states
@@ -575,6 +618,57 @@ export default {
       }))
     },
 
+    // Comment page size preference methods (stored in KV)
+    async loadCommentPageSizePreference() {
+      try {
+        const httpResponse = await rpcClient.users.settings.$get()
+        const response = await httpResponse.json()
+        if (response.success && response.data?.commentPageSize) {
+          this.commentPageSize = response.data.commentPageSize
+          console.log(`✅ 載入評論分頁設定: ${this.commentPageSize}`)
+        }
+      } catch (error) {
+        console.warn('⚠️ 載入評論分頁設定失敗，使用預設值:', error)
+      }
+    },
+
+    async handleCommentPageSizeChange(value) {
+      if (this.savingCommentPageSize) return
+
+      this.savingCommentPageSize = true
+      try {
+        const httpResponse = await rpcClient.users.settings['comment-page-size'].$put({
+          json: { pageSize: value }
+        })
+        const response = await httpResponse.json()
+
+        if (response.success) {
+          this.$message.success(`每次載入評論數量已設定為 ${value} 則`)
+
+          // Trigger custom event for potential listeners
+          window.dispatchEvent(new CustomEvent('userPreferencesChanged', {
+            detail: { userId: this.user?.userId, commentPageSize: value }
+          }))
+        } else {
+          this.$message.error('儲存設定失敗：' + (response.error || '未知錯誤'))
+          // Revert to previous value
+          await this.loadCommentPageSizePreference()
+        }
+      } catch (error) {
+        console.error('Save comment page size error:', error)
+        this.$message.error('儲存設定失敗')
+        // Revert to previous value
+        await this.loadCommentPageSizePreference()
+      } finally {
+        this.savingCommentPageSize = false
+      }
+    },
+
+    resetCommentPageSize() {
+      this.commentPageSize = 3
+      this.handleCommentPageSizeChange(3)
+    },
+
     // Activity methods
     handleDayClick({ date, events }) {
       this.selectedDate = date
@@ -780,6 +874,7 @@ export default {
     this.loadRefreshTimer()
     this.loadStageDisplayPreference()
     this.loadAutoOpenNotificationPreference()
+    this.loadCommentPageSizePreference()
 
     const { setPageTitle, clearProjectTitle } = useBreadcrumb()
     setPageTitle('用戶設置')
@@ -1403,6 +1498,68 @@ export default {
 .refresh-timer-slider :deep(.el-slider__marks-text) {
   color: #909399;
   font-size: 11px;
+}
+
+/* Comment page size slider */
+.comment-page-slider {
+  flex: 1;
+}
+
+.comment-page-slider :deep(.el-slider__runway) {
+  height: 6px;
+  background: #e4e7ed;
+}
+
+.comment-page-slider :deep(.el-slider__bar) {
+  height: 6px;
+  background: linear-gradient(90deg, #409eff 0%, #66b1ff 100%);
+}
+
+.comment-page-slider :deep(.el-slider__button) {
+  width: 18px;
+  height: 18px;
+  border: 3px solid #409eff;
+  background: white;
+}
+
+.comment-page-slider :deep(.el-slider__button:hover) {
+  transform: scale(1.2);
+}
+
+.comment-page-slider :deep(.el-slider__stop) {
+  width: 4px;
+  height: 4px;
+  background: #c0c4cc;
+}
+
+.comment-page-slider :deep(.el-slider__marks-text) {
+  color: #909399;
+  font-size: 11px;
+}
+
+.comment-value-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 70px;
+  height: 70px;
+  background: linear-gradient(135deg, #409eff 0%, #66b1ff 100%);
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.25);
+}
+
+.comment-value-display .value-number {
+  font-size: 24px;
+  font-weight: 700;
+  color: white;
+  line-height: 1;
+}
+
+.comment-value-display .value-unit {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-top: 2px;
 }
 
 /* Portrait mode: Hide TopBarUserControls in top-bar (moved to sidebar) */

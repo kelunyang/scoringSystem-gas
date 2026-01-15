@@ -167,22 +167,8 @@
           </div>
         </template>
 
-        <!-- 🆕 Actions Slot: 搜索和刷新按钮 -->
+        <!-- 🆕 Actions Slot: 刷新按钮（後端搜尋改為自動觸發） -->
         <template #actions>
-          <!-- 后端搜索按钮 -->
-          <el-tooltip content="后端搜索（全部记录）" placement="top">
-            <el-button
-              type="primary"
-              size="small"
-              :icon="Search"
-              @click="searchSystemLogsBackend"
-              :loading="loading"
-              :disabled="!hasActiveStandardFilters"
-            >
-              <span class="btn-text">后端搜索</span>
-            </el-button>
-          </el-tooltip>
-
           <!-- 重新整理按钮 -->
           <el-tooltip content="重新整理（最近 500 条）" placement="top">
             <el-button
@@ -196,61 +182,29 @@
           </el-tooltip>
         </template>
 
-        <!-- Stats Slot: 搜尋結果統計 -->
-        <template #stats>
-          <!-- 🆕 后端模式：显示 API 返回的总数 -->
-          <AnimatedStatistic
-            v-if="standardLogsSearchMode === 'backend' && (totalCount ?? 0) > 0"
-            title="搜尋結果(筆)"
-            :value="totalCount ?? 0"
-          />
-
-          <!-- 🆕 前端模式：显示过滤后的数量 -->
-          <AnimatedStatistic
-            v-else-if="standardLogsSearchMode === 'frontend'"
-            :title="`顯示範圍(/${MAX_LOG_FETCH_LIMIT}筆)`"
-            :value="displayedLogs.length"
-          />
-        </template>
       </AdminFilterToolbar>
 
-      <!-- 🆕 搜索模式提示 -->
-      <div v-if="standardLogsSearchMode === 'backend' && (totalCount ?? 0) > 0" class="search-result-info" style="margin-top: 10px;">
-        <el-alert type="success" :closable="false">
-          <template #title>
-            <i class="fas fa-database"></i>
-            后端搜索完成：找到 {{ totalCount }} 条匹配记录
-          </template>
-        </el-alert>
-      </div>
-      <div v-else-if="standardLogsSearchMode === 'frontend' && displayedLogs.length === 0 && hasActiveStandardFilters" class="search-result-info" style="margin-top: 10px;">
-        <el-alert type="warning" :closable="false">
-          <template #title>
-            在最近 500 条中未找到匹配记录，尝试
-            <el-button type="text" @click="searchSystemLogsBackend">后端搜索</el-button>
-            查找全部历史记录
-          </template>
-        </el-alert>
-      </div>
-
-      <!-- 统计卡片 -->
+      <!-- 统计卡片（合併搜尋結果與日志统计） -->
       <el-card v-if="logStats" class="stats-card">
-        <h4><i class="fas fa-chart-bar"></i> 日志统计</h4>
         <el-row :gutter="20">
-          <el-col :span="6">
+          <el-col :xs="12" :sm="6" :md="4">
             <AnimatedStatistic title="总日志数" :value="logStats.totalLogs || 0" />
           </el-col>
-          <el-col :span="4">
+          <el-col :xs="12" :sm="6" :md="4">
             <AnimatedStatistic title="Info" :value="logStats.levelCounts?.info || 0" />
           </el-col>
-          <el-col :span="4">
+          <el-col :xs="12" :sm="6" :md="4">
             <AnimatedStatistic title="Warning" :value="logStats.levelCounts?.warning || 0" />
           </el-col>
-          <el-col :span="4">
+          <el-col :xs="12" :sm="6" :md="4">
             <AnimatedStatistic title="Error" :value="logStats.levelCounts?.error || 0" />
           </el-col>
-          <el-col :span="4">
+          <el-col :xs="12" :sm="6" :md="4">
             <AnimatedStatistic title="Critical" :value="logStats.levelCounts?.critical || 0" />
+          </el-col>
+          <!-- 搜尋結果（僅在有篩選時顯示） -->
+          <el-col v-if="hasActiveStandardFilters && (totalCount ?? 0) > 0" :xs="12" :sm="6" :md="4">
+            <AnimatedStatistic title="搜尋結果" :value="totalCount ?? 0" />
           </el-col>
         </el-row>
       </el-card>
@@ -878,7 +832,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watchEffect, inject, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watchEffect, inject, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 // @ts-ignore - Icon component used inline
@@ -934,8 +888,11 @@ const totalCount = ref<number | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(100)
 
-// 🆕 Standard Logs 搜索模式状态
+// Standard Logs 搜索模式状态
 const standardLogsSearchMode = ref<'frontend' | 'backend'>('frontend')
+
+// 自動後端搜尋狀態（用於顯示「正在自動搜尋後端」提示）
+const autoSearchingBackend = ref(false)
 
 // ==================== LoginLogsView 狀態 (Declared Early to Avoid TDZ) ====================
 const loadingLoginLogs = ref(false)
@@ -1084,12 +1041,16 @@ const searchSystemLogsBackend = async () => {
   try {
     console.log('🔍 [Backend Search] System logs searching with filters:', {
       level: selectedLevel.value,
+      levelTruthy: !!selectedLevel.value,
       users: selectedUsers.value,
+      usersLength: selectedUsers.value?.length,
       actions: selectedActions.value,
+      actionsLength: selectedActions.value?.length,
       entityTypes: selectedEntityTypes.value,
       projects: selectedProjects.value,
       keyword: searchKeyword.value,
-      dateRange: dateRange.value
+      dateRange: dateRange.value,
+      filtersRaw: JSON.stringify(filters.value)
     })
 
     const params: SystemLogsRequest = {
@@ -1100,16 +1061,37 @@ const searchSystemLogsBackend = async () => {
     }
 
     // 🆕 后端模式：发送所有过滤器
-    if (selectedLevel.value) params.options.level = selectedLevel.value
-    if (selectedUsers.value.length > 0) params.options.userId = selectedUsers.value
-    if (selectedActions.value.length > 0) params.options.action = selectedActions.value
-    if (selectedEntityTypes.value.length > 0) params.options.entityType = selectedEntityTypes.value
-    if (selectedProjects.value.length > 0) params.options.projectId = selectedProjects.value
-    if (searchKeyword.value) params.options.message = searchKeyword.value
+    if (selectedLevel.value) {
+      console.log('🔍 Adding level filter:', selectedLevel.value)
+      params.options.level = selectedLevel.value
+    }
+    if (selectedUsers.value && selectedUsers.value.length > 0) {
+      console.log('🔍 Adding userId filter:', selectedUsers.value)
+      params.options.userId = selectedUsers.value
+    }
+    if (selectedActions.value && selectedActions.value.length > 0) {
+      console.log('🔍 Adding action filter:', selectedActions.value)
+      params.options.action = selectedActions.value
+    }
+    if (selectedEntityTypes.value && selectedEntityTypes.value.length > 0) {
+      console.log('🔍 Adding entityType filter:', selectedEntityTypes.value)
+      params.options.entityType = selectedEntityTypes.value
+    }
+    if (selectedProjects.value && selectedProjects.value.length > 0) {
+      console.log('🔍 Adding projectId filter:', selectedProjects.value)
+      params.options.projectId = selectedProjects.value
+    }
+    if (searchKeyword.value) {
+      console.log('🔍 Adding message filter:', searchKeyword.value)
+      params.options.message = searchKeyword.value
+    }
     if (dateRange.value?.length === 2) {
+      console.log('🔍 Adding date range filter:', dateRange.value)
       params.options.startTime = parseInt(dateRange.value[0])
       params.options.endTime = parseInt(dateRange.value[1])
     }
+
+    console.log('🔍 Final params to send:', JSON.stringify(params))
 
     const response = await adminApi.system.logs(params, searchAbortController.value.signal)
 
@@ -1418,6 +1400,8 @@ const searchEmailLogsBackend = async () => {
 }
 
 // 監聽路由變化以設置正確的模式（使用 watchEffect 自動追蹤依賴）
+// 注意：此 watchEffect 只負責設置模式和載入非 standard 的 logs
+// standard logs 的載入由 onMounted 中的 searchSystemLogsBackend 處理
 watchEffect(() => {
   // Check route.meta.logMode first, then fall back to query parameters
   const mode = route.meta.logMode || route.query.mode as LogMode || 'standard'
@@ -1433,10 +1417,8 @@ watchEffect(() => {
   } else if (mode === 'email') {
     // 自動載入 Email 記錄
     loadEmailLogs()
-  } else {
-    // 載入標準 Log
-    loadSystemLogs()
   }
+  // standard mode 的載入由 onMounted 處理，這裡不需要重複載入
 })
 
 // LogStatistics type is now imported from @repo/shared/types/admin
@@ -1836,6 +1818,47 @@ const exportConfig = computed(() => ({
     ]
   }
 }))
+
+// 追蹤是否已初始化完成（用於避免 watch 在掛載時觸發）
+const isFilterWatchReady = ref(false)
+
+// 🆕 簡化邏輯：監聽 filter 變化，debounce 後直接發送後端請求
+const debouncedFilterSearch = useDebounceFn(() => {
+  if (!isFilterWatchReady.value) {
+    console.log('🔍 [Filter Watch] Skipping - not ready yet')
+    return
+  }
+
+  console.log('🔍 [Filter Changed] Triggering backend search with filters:', {
+    level: selectedLevel.value,
+    users: selectedUsers.value,
+    actions: selectedActions.value,
+    entityTypes: selectedEntityTypes.value,
+    projects: selectedProjects.value,
+    keyword: searchKeyword.value,
+    dateRange: dateRange.value
+  })
+
+  // 直接發送後端請求（帶 filter 參數）
+  searchSystemLogsBackend()
+}, 500) // 500ms debounce，等待用戶停止操作
+
+// 監聽所有 filter 變化
+watch(
+  [
+    () => selectedLevel.value,
+    () => selectedUsers.value,
+    () => selectedActions.value,
+    () => selectedEntityTypes.value,
+    () => selectedProjects.value,
+    () => dateRange.value,
+    () => searchKeyword.value
+  ],
+  () => {
+    debouncedFilterSearch()
+  },
+  { deep: true }
+)
 
 const loadLogStats = async () => {
   try {
@@ -2384,7 +2407,15 @@ onMounted(() => {
   }
 
   // Load data after setting up watchers
-  loadSystemLogs()
+  // 🔧 改回前端模式：初始載入使用 loadSystemLogs（載入最新 500 筆）
+  // 只有在用戶明確設置 filter 且本地無結果時才觸發後端搜尋
+  loadSystemLogs().then(() => {
+    // 使用 setTimeout 確保在 useFilterPersistence 載入完成後才啟用 watch
+    setTimeout(() => {
+      isFilterWatchReady.value = true
+      console.log('🔍 [Init] Filter watch is now ready (after initial load)')
+    }, 100)
+  })
   loadLogStats()
 })
 

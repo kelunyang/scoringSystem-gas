@@ -47,19 +47,18 @@
         </el-badge>
 
         <!-- Export Dropdown (if export config provided) -->
+        <!-- 注意：el-tooltip 不能直接包裹 el-dropdown 觸發器，會造成 role 屬性衝突 -->
         <el-dropdown
           v-if="showExport && exportData && exportData.length > 0"
           trigger="click"
           @command="handleExportCommand"
           class="export-dropdown"
         >
-          <el-tooltip content="匯出" placement="top">
-            <el-button type="primary" size="small">
-              <i class="fas fa-download"></i>
-              <span class="btn-text">匯出</span>
-              <i class="fas fa-chevron-down arrow"></i>
-            </el-button>
-          </el-tooltip>
+          <el-button type="primary" size="small" title="匯出">
+            <i class="fas fa-download"></i>
+            <span class="btn-text">匯出</span>
+            <i class="fas fa-chevron-down arrow"></i>
+          </el-button>
           <template #dropdown>
             <el-dropdown-menu class="export-dropdown-menu">
               <el-dropdown-item command="csv">

@@ -18,7 +18,7 @@ import pytest
 import time
 import jwt
 from typing import Dict
-from utils import APIClient, AuthHelper, AuthToken
+from utils import APIClient, AuthHelper, AuthToken, extract_list_data
 from config import TestConfig
 
 
@@ -876,7 +876,7 @@ class TestSUDOModeSecurity:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -923,7 +923,7 @@ class TestSUDOModeSecurity:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -1040,7 +1040,7 @@ class TestSUDOModeSecurity:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if len(projects) < 2:
             pytest.skip("Need at least 2 projects to test cross-project SUDO")
 
@@ -1084,7 +1084,7 @@ class TestSUDOModeSecurity:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -1144,7 +1144,7 @@ class TestSUDOModeSecurity:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 

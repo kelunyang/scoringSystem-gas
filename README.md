@@ -76,6 +76,88 @@ pnpm dev:sync-remote
 | [database/README.md](database/README.md) | 資料庫結構說明 |
 | [CLAUDE.md](CLAUDE.md) | AI 輔助開發規範 |
 
+## 單元測試 (Unit Testing)
+
+本專案使用 Vitest 進行單元測試，涵蓋三個套件：
+
+| 套件 | 環境 | 測試範圍 |
+|------|------|----------|
+| `@repo/shared` | Node.js | 共用工具函數、Schema 驗證 |
+| `@repo/frontend` | happy-dom | Vue Composables、工具函數 |
+| `@repo/backend` | Cloudflare Workers | API Handlers（計畫中） |
+
+### 運行測試
+
+```bash
+cd scoringSystem-cf
+
+# 執行所有測試
+pnpm test
+
+# 開啟 Vitest UI（互動式介面）
+pnpm test:ui
+
+# 產生覆蓋率報告
+pnpm test:coverage
+```
+
+### 測試狀態
+
+- **測試數量**: 201+ 個測試案例
+- **覆蓋範圍**: 工具函數、Composables、Schema 驗證
+- **配置檔案**: `vitest.workspace.ts`（monorepo 配置）
+
+## 安全測試 (OWASP API Security)
+
+本專案包含基於 OWASP API Security Top 10 (2023) 的自動化安全測試。
+
+### 首次設定
+
+```bash
+cd scoringSystem-cf/packages/security-tests
+
+# 建立虛擬環境
+python3 -m venv venv
+
+# 啟動虛擬環境
+source venv/bin/activate    # Linux/Mac
+venv\Scripts\activate       # Windows
+
+# 安裝依賴
+pip install -r requirements.txt
+
+# 複製環境設定
+cp .env.example .env
+```
+
+### 運行測試
+
+```bash
+# 1. 先啟動後端 (另開終端)
+cd scoringSystem-cf && pnpm dev:backend
+
+# 2. 運行安全測試
+cd scoringSystem-cf/packages/security-tests
+source venv/bin/activate
+pytest -v
+
+# 或從專案根目錄
+cd scoringSystem-cf
+pnpm test:security
+```
+
+### 常用命令
+
+| 命令 | 說明 |
+|------|------|
+| `pytest -v` | 運行所有測試 |
+| `pytest -m critical` | 只運行關鍵測試 |
+| `pytest -m bola` | BOLA 測試 (API1) |
+| `pytest -m auth` | 認證測試 (API2) |
+| `pnpm test:security:report` | 產生 HTML 報告 |
+
+詳細說明請參考 [security-tests/README.md](scoringSystem-cf/packages/security-tests/README.md)
+
 ## 部署
 
 ### 線上環境

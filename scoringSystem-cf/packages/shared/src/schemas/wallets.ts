@@ -12,10 +12,17 @@ export const GetUserTransactionsRequestSchema = z.object({
   projectId: z.string().min(1, 'Project ID is required'),
   targetUserEmail: z.string().nullish(),
   limit: z.number().int().positive().optional().default(50),
+  offset: z.number().int().nonnegative().optional().default(0),
   stageId: z.string().optional(),
   settlementId: z.string().optional(),
   relatedSubmissionId: z.string().optional(),
-  groupId: z.string().optional()
+  groupId: z.string().optional(),
+  // Backend search filters
+  transactionTypes: z.array(z.string()).optional(),
+  dateStart: z.number().optional(),
+  dateEnd: z.number().optional(),
+  searchDescription: z.string().optional(),
+  searchUser: z.string().optional()
 });
 
 export type GetUserTransactionsRequest = z.infer<typeof GetUserTransactionsRequestSchema>;

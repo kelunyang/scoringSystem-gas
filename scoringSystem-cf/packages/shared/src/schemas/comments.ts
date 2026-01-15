@@ -31,12 +31,17 @@ export type GetCommentDetailsRequest = z.infer<typeof GetCommentDetailsRequestSc
 
 /**
  * Get stage comments request schema
+ * Supports pagination for root comments (replies are loaded with their parent)
  */
 export const GetStageCommentsRequestSchema = z.object({
   projectId: z.string().min(1, 'Project ID is required'),
   stageId: z.string().min(1, 'Stage ID is required'),
   excludeTeachers: z.boolean().optional().default(false),
-  forVoting: z.boolean().optional().default(false)  // 用于投票时按作者去重
+  forVoting: z.boolean().optional().default(false),  // 用于投票时按作者去重
+  /** Number of root comments to load per page (3-10, default 3) */
+  limit: z.number().int().min(3).max(10).optional().default(3),
+  /** Offset for pagination (default 0) */
+  offset: z.number().int().nonnegative().optional().default(0)
 });
 
 export type GetStageCommentsRequest = z.infer<typeof GetStageCommentsRequestSchema>;
@@ -146,12 +151,17 @@ export type GetCommentRankingHistoryRequest = z.infer<typeof GetCommentRankingHi
 /**
  * Get all stages comments request schema (batch API)
  * Used to fetch comments for multiple stages in a single request
+ * Supports pagination for root comments (same limit/offset applied to all stages)
  */
 export const GetAllStagesCommentsRequestSchema = z.object({
   projectId: z.string().min(1, 'Project ID is required'),
   stageIds: z.array(z.string().min(1)).min(1, 'At least one stage ID is required'),
   excludeTeachers: z.boolean().optional().default(false),
-  forVoting: z.boolean().optional().default(false)
+  forVoting: z.boolean().optional().default(false),
+  /** Number of root comments to load per stage (3-10, default 3) */
+  limit: z.number().int().min(3).max(10).optional().default(3),
+  /** Offset for pagination (default 0) */
+  offset: z.number().int().nonnegative().optional().default(0)
 });
 
 export type GetAllStagesCommentsRequest = z.infer<typeof GetAllStagesCommentsRequestSchema>;

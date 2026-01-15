@@ -52,7 +52,7 @@ app.use('*', authMiddleware);
 
 /**
  * Get user transaction history
- * Body: { sessionId, projectId, targetUserEmail?, limit? }
+ * Body: { sessionId, projectId, targetUserEmail?, limit?, offset?, transactionTypes?, dateStart?, dateEnd?, searchDescription?, searchUser? }
  */
 app.post(
   '/transactions',
@@ -64,10 +64,16 @@ app.post(
       projectId,
       targetUserEmail,
       limit = 50,
+      offset = 0,
       stageId,
       settlementId,
       relatedSubmissionId,
-      groupId
+      groupId,
+      transactionTypes,
+      dateStart,
+      dateEnd,
+      searchDescription,
+      searchUser
     } = body;
 
     // Determine actual target email for query
@@ -141,7 +147,13 @@ app.post(
       stageId,
       settlementId,
       relatedSubmissionId,
-      groupId
+      groupId,
+      offset,
+      transactionTypes,
+      dateStart,
+      dateEnd,
+      searchDescription,
+      searchUser
     );
 
     return response;

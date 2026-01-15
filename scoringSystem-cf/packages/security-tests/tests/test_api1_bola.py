@@ -20,7 +20,7 @@ Date: 2025-12-23
 
 import pytest
 from typing import Dict, Optional
-from utils import APIClient, AuthHelper, AuthToken
+from utils import APIClient, AuthHelper, AuthToken, extract_list_data
 from config import TestConfig
 
 
@@ -53,10 +53,11 @@ class TestProjectBOLA:
         assert response.status_code == 200, f"Failed to list projects: {response.text}"
 
         data = response.json()
-        if not data.get('success') or not data.get('data'):
+        projects = extract_list_data(data, 'projects')
+        if not data.get('success') or not projects:
             pytest.skip("No projects available for testing")
 
-        project_id = data['data'][0]['projectId']
+        project_id = projects[0]['projectId']
 
         # Now test with an invalid/forged token to simulate another user
         # Using a completely invalid token should return 401
@@ -94,7 +95,7 @@ class TestProjectBOLA:
         assert data.get('success'), "Project listing failed"
 
         # Verify response structure - should only contain user's projects
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
 
         # Each project should have proper structure
         for project in projects:
@@ -123,7 +124,7 @@ class TestProjectBOLA:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -219,7 +220,7 @@ class TestWalletBOLA:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -262,7 +263,7 @@ class TestWalletBOLA:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -343,7 +344,7 @@ class TestSubmissionBOLA:
             pytest.skip("Cannot list projects with stages")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -550,7 +551,7 @@ class TestGroupBOLA:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 

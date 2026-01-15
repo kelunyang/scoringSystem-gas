@@ -272,12 +272,28 @@
         </div>
       </div>
     </div>
+
+    <!-- 載入更多評論按鈕 -->
+    <div v-if="hasMore" class="load-more-section">
+      <el-tooltip content="想一次看更多評論？可以到「使用者設定」調整" placement="bottom">
+        <el-badge :value="remainingCount" :max="99" class="load-more-badge">
+          <el-button
+            type="primary"
+            :loading="loadingMore"
+            @click="loadMoreComments"
+            class="load-more-btn"
+          >
+            再載入 {{ commentPageSize }} 條評論
+          </el-button>
+        </el-badge>
+      </el-tooltip>
+    </div>
   </div>
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, type DefineComponent } from 'vue'
-import { ElBadge, ElMessage, ElTooltip } from 'element-plus'
+import { computed, defineComponent, ref, type DefineComponent } from 'vue'
+import { ElBadge, ElButton, ElMessage, ElTooltip } from 'element-plus'
 import StatNumberContent from '@/components/shared/StatNumberContent.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import AvatarGroup from '@/components/common/AvatarGroup.vue'
@@ -340,6 +356,20 @@ const component: DefineComponent<any, any, any> = defineComponent({
     initialRankings: {
       type: Object,
       default: null
+    },
+    // 分頁相關 props
+    initialHasMore: {
+      type: Boolean,
+      default: false
+    },
+    initialTotalComments: {
+      type: Number,
+      default: 0
+    },
+    // 用戶評論分頁設定
+    commentPageSize: {
+      type: Number,
+      default: 3
     }
   },
   setup(props) {
@@ -355,18 +385,36 @@ const component: DefineComponent<any, any, any> = defineComponent({
       return null
     })
 
+    // 分頁相關狀態 (使用 ref 避免 Options API TypeScript 推斷問題)
+    const comments = ref<any[]>([])
+    const totalComments = ref(0)
+    const hasMore = ref(false)
+    const currentOffset = ref(0)
+    const loadingMore = ref(false)
+
+    // 計算剩餘未載入的評論數量
+    const remainingCount = computed(() => {
+      return Math.max(0, totalComments.value - comments.value.length)
+    })
+
     return {
-      numericPermissionLevel
+      numericPermissionLevel,
+      // 分頁狀態
+      comments,
+      totalComments,
+      hasMore,
+      currentOffset,
+      loadingMore,
+      remainingCount
     }
   },
   data() {
     return {
-      comments: [] as any[],
+      // comments, totalComments, hasMore, currentOffset, loadingMore 已移至 setup()
       loading: false,  // 預設 false，只有真正載入時才設為 true
       commentRankings: {} as Record<string, any>,
       loadingRankings: false,
       hasInitialized: false,  // 追蹤是否已初始化
-      totalComments: 0,
       votingEligible: false,
       pinnedAuthorEmail: null as string | null  // 用於篩選特定作者的評論
     }
@@ -375,6 +423,10 @@ const component: DefineComponent<any, any, any> = defineComponent({
     // 如果有傳入初始評論資料，直接使用；否則才自己載入
     if (this.initialComments !== null) {
       this.comments = this.processCommentsData(this.initialComments)
+      // 初始化分頁狀態
+      this.hasMore = this.initialHasMore
+      this.totalComments = this.initialTotalComments
+      this.currentOffset = this.comments.length
       this.hasInitialized = true
       // 如果有傳入排名資料，也直接使用
       if (this.initialRankings !== null) {
@@ -416,8 +468,20 @@ const component: DefineComponent<any, any, any> = defineComponent({
         }
       },
       deep: true
+    },
+    // 監聽分頁狀態變化
+    initialHasMore: {
+      handler(newVal) {
+        this.hasMore = newVal
+      }
+    },
+    initialTotalComments: {
+      handler(newVal) {
+        this.totalComments = newVal
+      }
     }
   },
+  // computed: remainingCount 已移至 setup()
   methods: {
     async loadStageComments() {
       try {
@@ -965,6 +1029,54 @@ const component: DefineComponent<any, any, any> = defineComponent({
       await this.loadStageComments()
     },
 
+    // 載入更多評論（分頁）
+    async loadMoreComments() {
+      if (this.loadingMore || !this.hasMore) return
+
+      try {
+        this.loadingMore = true
+        const projectId = this.projectId
+
+        console.log(`[loadMoreComments] 載入更多評論: offset=${this.currentOffset}, limit=${this.commentPageSize}`)
+
+        const httpResponse = await rpcClient.comments.stage.$post({
+          json: {
+            projectId: projectId,
+            stageId: this.stageId,
+            excludeTeachers: false,
+            limit: this.commentPageSize,
+            offset: this.currentOffset
+          }
+        })
+        const response = await httpResponse.json()
+
+        if (response.success && response.data) {
+          const newComments = this.processCommentsData(response.data.comments || [])
+
+          // 追加新評論到列表
+          this.comments = [...this.comments, ...newComments]
+
+          // 更新分頁狀態
+          this.currentOffset += newComments.length
+          this.hasMore = response.data.hasMore || false
+          this.totalComments = response.data.total || this.totalComments
+
+          console.log(`[loadMoreComments] 載入了 ${newComments.length} 則評論，hasMore=${this.hasMore}`)
+
+          // 載入新評論的排名
+          await this.loadCommentRankings()
+        } else {
+          console.error('載入更多評論失敗:', response)
+          ElMessage.error('載入更多評論失敗')
+        }
+      } catch (error) {
+        console.error('載入更多評論錯誤:', error)
+        ElMessage.error('載入更多評論失敗')
+      } finally {
+        this.loadingMore = false
+      }
+    },
+
     // 應用排名資料到評論（用於從父組件接收排名資料時）
     applyRankingsToComments(rankings: Record<string, any>) {
       if (!rankings || !this.comments.length) return
@@ -1469,6 +1581,41 @@ export default component
 /* Pin 按鈕樣式 */
 .action-btn.pin-btn {
   min-width: 40px;
+}
+
+/* ===== 載入更多評論區塊 ===== */
+.load-more-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 0;
+  margin-top: 10px;
+}
+
+.load-more-btn {
+  min-width: 180px;
+}
+
+.load-more-badge :deep(.el-badge__content) {
+  background-color: var(--el-color-danger);
+}
+
+.load-more-hint {
+  color: #909399;
+  font-size: 14px;
+  cursor: help;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.load-more-hint i {
+  font-size: 14px;
+}
+
+.load-more-hint:hover {
+  color: #606266;
 }
 
 /* ===== 小螢幕按鈕文字隱藏 (< 768px) ===== */

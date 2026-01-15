@@ -1,10 +1,11 @@
 <template>
-  <el-drawer
-    v-model="localVisible"
-    direction="btt"
-    size="100%"
-    class="invite-drawer drawer-navy"
-  >
+  <div class="invitation-management-wrapper">
+    <el-drawer
+      v-model="localVisible"
+      direction="btt"
+      size="100%"
+      class="invite-drawer drawer-navy"
+    >
     <template #header>
       <el-breadcrumb separator=">">
         <el-breadcrumb-item>
@@ -214,17 +215,16 @@
                 active-color="#f56c6c"
               />
 
-              <el-tooltip content="重新載入" placement="top">
-                <el-button
-                  type="default"
-                  size="small"
-                  :icon="Refresh"
-                  @click="loadInvitations"
-                  :loading="invitationsLoading"
-                >
-                  <span class="btn-text">重新載入</span>
-                </el-button>
-              </el-tooltip>
+              <el-button
+                type="default"
+                size="small"
+                :icon="Refresh"
+                @click="loadInvitations"
+                :loading="invitationsLoading"
+                title="重新載入"
+              >
+                <span class="btn-text">重新載入</span>
+              </el-button>
             </template>
           </AdminFilterToolbar>
 
@@ -247,7 +247,7 @@
 
             <el-table-column label="狀態" align="center" width="140">
               <template #default="{ row }">
-                <el-tooltip :content="getSwitchTooltip(row)" placement="top">
+                <span :title="getSwitchTooltip(row)">
                   <el-switch
                     :model-value="row.status === 'active'"
                     :disabled="!canToggleStatus(row)"
@@ -258,7 +258,7 @@
                     inactive-color="#909399"
                     @change="() => handleToggleInviteStatus(row)"
                   />
-                </el-tooltip>
+                </span>
               </template>
             </el-table-column>
 
@@ -603,6 +603,7 @@
       </div>
     </div>
   </el-drawer>
+  </div>
 </template>
 
 <script setup lang="ts">

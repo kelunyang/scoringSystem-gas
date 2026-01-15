@@ -36,6 +36,8 @@ import type {
 
   // Global Groups
   GlobalGroup,
+  GlobalGroupListRequest,
+  GlobalGroupListResponse,
   GlobalGroupMembersResponse,
   CreateGlobalGroupRequest,
   UpdateGlobalGroupRequest,
@@ -209,12 +211,12 @@ export const adminApi = {
   // ============================================================================
   globalGroups: {
     /**
-     * Get all global groups
+     * Get all global groups with optional filtering and pagination
      */
-    list: (signal?: AbortSignal) =>
-      fetchWithAuth<ApiResponse<GlobalGroup[]>>(
+    list: (params?: GlobalGroupListRequest, signal?: AbortSignal) =>
+      fetchWithAuth<ApiResponse<GlobalGroupListResponse>>(
         '/api/admin/global-groups',
-        { method: 'POST', body: {}, signal }
+        { method: 'POST', body: params || {}, signal }
       ),
 
     /**

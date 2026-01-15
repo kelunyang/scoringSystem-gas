@@ -14,7 +14,7 @@ Date: 2025-12-23
 """
 
 import pytest
-from utils import APIClient, AuthHelper, AuthToken
+from utils import APIClient, AuthHelper, AuthToken, extract_list_data
 from config import TestConfig
 
 
@@ -167,7 +167,7 @@ class TestRoleBasedAccess:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -204,7 +204,7 @@ class TestRoleBasedAccess:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -314,7 +314,7 @@ class TestProjectPermissions:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -353,7 +353,7 @@ class TestProjectPermissions:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -433,7 +433,7 @@ class TestPermissionEscalation:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -618,7 +618,7 @@ class TestStageControlFunctions:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
 
         project_id = None
         stage_id = None

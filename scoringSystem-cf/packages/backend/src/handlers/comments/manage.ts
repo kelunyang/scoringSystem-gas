@@ -534,13 +534,14 @@ export async function getTargetComments(
 /**
  * Get stage comments (GAS-compatible implementation)
  * Uses actual DB schema: stageId, authorEmail, mentionedGroups
+ * Supports pagination for root comments (replies are loaded with their parent)
  */
 export async function getStageComments(
   env: Env,
   userEmail: string,
   projectId: string,
   stageId: string,
-  options?: { excludeTeachers?: boolean; forVoting?: boolean }
+  options?: { excludeTeachers?: boolean; forVoting?: boolean; limit?: number; offset?: number }
 ): Promise<Response> {
   const _startTime = Date.now();
   console.log(`📊 [getStageComments] START: stageId=${stageId}`);
@@ -548,6 +549,8 @@ export async function getStageComments(
   try {
     const excludeTeachers = options?.excludeTeachers || false;
     const forVoting = options?.forVoting || false;
+    const limit = options?.limit ?? 3;  // Default: 3 root comments per page
+    const offset = options?.offset ?? 0;
 
     // Query stage status to conditionally skip unnecessary calculations
     // reactionUsers and replyUsers are only needed in 'active' stage
@@ -559,8 +562,26 @@ export async function getStageComments(
     const stageStatus = (stageInfo?.status as string) || 'pending';
     const isActiveStage = stageStatus === 'active';
 
-    // Build query with authorRole from projectviewers and group membership
-    let query = `
+    // ============ TWO-STEP PAGINATION: Root comments first, then replies ============
+
+    // Step 1: Get total count of root comments (for pagination info)
+    let countQuery = `
+      SELECT COUNT(*) as totalRootComments
+      FROM comments c
+      LEFT JOIN projectviewers pv
+        ON pv.userEmail = c.authorEmail
+        AND pv.projectId = c.projectId
+        AND pv.isActive = 1
+      WHERE c.projectId = ? AND c.stageId = ? AND c.isReply = 0
+    `;
+    if (excludeTeachers) {
+      countQuery += ` AND (pv.role IS NULL OR pv.role != 'teacher')`;
+    }
+    const countResult = await env.DB.prepare(countQuery).bind(projectId, stageId).first();
+    const totalRootComments = (countResult?.totalRootComments as number) || 0;
+
+    // Step 2: Get paginated root comments (sorted by createdTime DESC - newest first)
+    let rootQuery = `
       SELECT
         c.commentId, c.stageId, c.content,
         c.authorEmail, c.mentionedGroups, c.mentionedUsers,
@@ -595,26 +616,82 @@ export async function getStageComments(
         AND ug.projectId = c.projectId
         AND ug.isActive = 1
         AND (ug.role = 'leader' OR ug.role = 'member')
-      WHERE c.projectId = ? AND c.stageId = ?
+      WHERE c.projectId = ? AND c.stageId = ? AND c.isReply = 0
     `;
 
     if (excludeTeachers) {
-      query += `
-        AND (pv.role IS NULL OR pv.role != 'teacher')
-      `;
+      rootQuery += ` AND (pv.role IS NULL OR pv.role != 'teacher')`;
     }
 
-    query += `ORDER BY c.createdTime ASC`;
+    // Sort by createdTime DESC (newest first) with pagination
+    rootQuery += ` ORDER BY c.createdTime DESC LIMIT ? OFFSET ?`;
 
-    const comments = await env.DB.prepare(query).bind(projectId, stageId).all();
+    const rootComments = await env.DB.prepare(rootQuery).bind(projectId, stageId, limit, offset).all();
 
-    if (!comments.results) {
+    if (!rootComments.results || rootComments.results.length === 0) {
       return successResponse({
         comments: [],
-        total: 0,
-        totalWithReplies: 0
+        total: totalRootComments,
+        totalWithReplies: 0,
+        limit,
+        offset,
+        hasMore: offset < totalRootComments,
+        votingEligible: false
       });
     }
+
+    // Step 3: Get all replies for these root comments (no pagination on replies)
+    const rootCommentIds = rootComments.results.map(c => c.commentId as string);
+    let repliesResult: any = { results: [] };
+
+    if (rootCommentIds.length > 0) {
+      const placeholders = rootCommentIds.map(() => '?').join(',');
+      let repliesQuery = `
+        SELECT
+          c.commentId, c.stageId, c.content,
+          c.authorEmail, c.mentionedGroups, c.mentionedUsers,
+          c.parentCommentId, c.isReply, c.replyLevel,
+          c.isAwarded, c.awardRank, c.createdTime,
+          u.displayName,
+          u.avatarSeed,
+          u.avatarStyle,
+          u.avatarOptions,
+          pv.role as authorRole,
+          ug.role as groupRole,
+          (
+            SELECT COUNT(*)
+            FROM (
+              SELECT
+                userEmail,
+                ROW_NUMBER() OVER (PARTITION BY userEmail ORDER BY createdAt DESC) as rn,
+                reactionType
+              FROM reactions r
+              WHERE r.targetId = c.commentId AND r.targetType = 'comment'
+            ) latest
+            WHERE rn = 1 AND reactionType IS NOT NULL
+          ) as reactionCount
+        FROM comments c
+        LEFT JOIN users u ON u.userEmail = c.authorEmail
+        LEFT JOIN projectviewers pv
+          ON pv.userEmail = c.authorEmail
+          AND pv.projectId = c.projectId
+          AND pv.isActive = 1
+        LEFT JOIN usergroups ug
+          ON ug.userEmail = c.authorEmail
+          AND ug.projectId = c.projectId
+          AND ug.isActive = 1
+          AND (ug.role = 'leader' OR ug.role = 'member')
+        WHERE c.projectId = ? AND c.parentCommentId IN (${placeholders})
+        ORDER BY c.createdTime ASC
+      `;
+
+      repliesResult = await env.DB.prepare(repliesQuery).bind(projectId, ...rootCommentIds).all();
+    }
+
+    // Combine root comments and replies for processing
+    const comments = {
+      results: [...rootComments.results, ...(repliesResult.results || [])]
+    };
 
     // Batch query all reactions for these comments (分批處理避免 SQLite 變數限制)
     const commentIds = comments.results.map(c => c.commentId as string);
@@ -720,7 +797,7 @@ export async function getStageComments(
 
     // Organize comments into threads
     const commentMap: Record<string, any> = {};
-    const rootComments: any[] = [];
+    const rootCommentsArray: any[] = [];
 
     // First pass: create comment objects with voting metadata
     for (const c of comments.results) {
@@ -798,7 +875,7 @@ export async function getStageComments(
       commentMap[c.commentId as string] = comment;
 
       if (!c.isReply && !c.parentCommentId) {
-        rootComments.push(comment);
+        rootCommentsArray.push(comment);
       }
     }
 
@@ -837,9 +914,9 @@ export async function getStageComments(
     // 当 forVoting=true 时，按作者去重：每位作者只保留一篇代表评论
     // 规则：helpful reaction 最多 > createdTime 最早
     if (forVoting) {
-      const uniqueByAuthor = new Map<string, typeof rootComments[0]>();
+      const uniqueByAuthor = new Map<string, typeof rootCommentsArray[0]>();
 
-      for (const comment of rootComments) {
+      for (const comment of rootCommentsArray) {
         if (!comment.canBeVoted) continue;
 
         const existing = uniqueByAuthor.get(comment.authorEmail);
@@ -859,20 +936,27 @@ export async function getStageComments(
 
       // 将未被选中的评论标记为 canBeVoted = false
       const selectedCommentIds = new Set([...uniqueByAuthor.values()].map(c => c.commentId));
-      for (const comment of rootComments) {
+      for (const comment of rootCommentsArray) {
         if (comment.canBeVoted && !selectedCommentIds.has(comment.commentId)) {
           comment.canBeVoted = false;
         }
       }
     }
 
-    console.log(`📊 [getStageComments] DONE: stageId=${stageId}, totalTime=${Date.now() - _startTime}ms, comments=${rootComments.length}`);
+    // Calculate hasMore based on pagination
+    const loadedRootCount = offset + rootCommentsArray.length;
+    const hasMore = loadedRootCount < totalRootComments;
+
+    console.log(`📊 [getStageComments] DONE: stageId=${stageId}, totalTime=${Date.now() - _startTime}ms, rootComments=${rootCommentsArray.length}, total=${totalRootComments}, hasMore=${hasMore}`);
 
     return successResponse({
-      comments: rootComments,
-      total: rootComments.length,
-      totalWithReplies: comments.results.length,
-      votingEligible  // Add voting eligibility for current user
+      comments: rootCommentsArray,
+      total: totalRootComments,  // Total root comments (for pagination)
+      totalWithReplies: comments.results.length,  // All comments including replies in this batch
+      votingEligible,  // Add voting eligibility for current user
+      limit,
+      offset,
+      hasMore
     });
 
   } catch (error) {
@@ -1099,12 +1183,13 @@ export async function deleteComment(
 /**
  * Get comments for all stages in a single request (batch API)
  * Optimizes N API calls to 1, with shared permission checks
+ * Supports pagination for root comments (same limit/offset applied to all stages)
  *
  * @param env - Environment bindings
  * @param userEmail - Current user's email
  * @param projectId - Project ID
  * @param stageIds - Array of stage IDs to fetch comments for
- * @param options - Optional: excludeTeachers, forVoting flags
+ * @param options - Optional: excludeTeachers, forVoting, limit, offset flags
  * @returns Response with comments grouped by stageId
  */
 export async function getAllStagesComments(
@@ -1112,7 +1197,7 @@ export async function getAllStagesComments(
   userEmail: string,
   projectId: string,
   stageIds: string[],
-  options?: { excludeTeachers?: boolean; forVoting?: boolean }
+  options?: { excludeTeachers?: boolean; forVoting?: boolean; limit?: number; offset?: number }
 ): Promise<Response> {
   const _startTime = Date.now();
   const _metrics: Record<string, number> = {};
@@ -1120,8 +1205,10 @@ export async function getAllStagesComments(
   try {
     const excludeTeachers = options?.excludeTeachers || false;
     const forVoting = options?.forVoting || false;
+    const limit = options?.limit ?? 3;  // Default: 3 root comments per stage
+    const offset = options?.offset ?? 0;
 
-    console.log(`📊 [getAllStagesComments] START: stageCount=${stageIds.length}, excludeTeachers=${excludeTeachers}, forVoting=${forVoting}`);
+    console.log(`📊 [getAllStagesComments] START: stageCount=${stageIds.length}, excludeTeachers=${excludeTeachers}, forVoting=${forVoting}, limit=${limit}, offset=${offset}`);
 
     // Get current user ID once for all stages
     let _t0 = Date.now();
@@ -1144,57 +1231,143 @@ export async function getAllStagesComments(
       stageStatusMap[stage.stageId as string] = stage.status as string;
     }
 
-    // Batch query: Get all comments for all stages
+    // ============ TWO-STEP PAGINATION PER STAGE ============
+
+    // Step 1: Get total count of root comments per stage
     _t0 = Date.now();
-    let commentsQuery = `
-      SELECT
-        c.commentId, c.stageId, c.content,
-        c.authorEmail, c.mentionedGroups, c.mentionedUsers,
-        c.parentCommentId, c.isReply, c.replyLevel,
-        c.isAwarded, c.awardRank, c.createdTime,
-        u.displayName,
-        u.avatarSeed,
-        u.avatarStyle,
-        u.avatarOptions,
-        pv.role as authorRole,
-        ug.role as groupRole,
-        (
-          SELECT COUNT(*)
-          FROM (
-            SELECT
-              userEmail,
-              ROW_NUMBER() OVER (PARTITION BY userEmail ORDER BY createdAt DESC) as rn,
-              reactionType
-            FROM reactions r
-            WHERE r.targetId = c.commentId AND r.targetType = 'comment'
-          ) latest
-          WHERE rn = 1 AND reactionType IS NOT NULL
-        ) as reactionCount
+    let countQuery = `
+      SELECT c.stageId, COUNT(*) as totalRootComments
       FROM comments c
-      LEFT JOIN users u ON u.userEmail = c.authorEmail
       LEFT JOIN projectviewers pv
         ON pv.userEmail = c.authorEmail
         AND pv.projectId = c.projectId
         AND pv.isActive = 1
-      LEFT JOIN usergroups ug
-        ON ug.userEmail = c.authorEmail
-        AND ug.projectId = c.projectId
-        AND ug.isActive = 1
-        AND (ug.role = 'leader' OR ug.role = 'member')
-      WHERE c.projectId = ? AND c.stageId IN (${stageIdsPlaceholders})
+      WHERE c.projectId = ? AND c.stageId IN (${stageIdsPlaceholders}) AND c.isReply = 0
+    `;
+    if (excludeTeachers) {
+      countQuery += ` AND (pv.role IS NULL OR pv.role != 'teacher')`;
+    }
+    countQuery += ` GROUP BY c.stageId`;
+
+    const countsResult = await env.DB.prepare(countQuery).bind(projectId, ...stageIds).all();
+    const totalRootCommentsByStage: Record<string, number> = {};
+    for (const row of countsResult.results || []) {
+      totalRootCommentsByStage[row.stageId as string] = row.totalRootComments as number;
+    }
+    _metrics['2b_getRootCounts'] = Date.now() - _t0;
+
+    // Step 2: Get paginated root comments for all stages using ROW_NUMBER()
+    // This approach gets the N-th through M-th root comments per stage in a single query
+    _t0 = Date.now();
+    let rootCommentsQuery = `
+      WITH ranked_root_comments AS (
+        SELECT
+          c.commentId, c.stageId, c.content,
+          c.authorEmail, c.mentionedGroups, c.mentionedUsers,
+          c.parentCommentId, c.isReply, c.replyLevel,
+          c.isAwarded, c.awardRank, c.createdTime,
+          u.displayName,
+          u.avatarSeed,
+          u.avatarStyle,
+          u.avatarOptions,
+          pv.role as authorRole,
+          ug.role as groupRole,
+          ROW_NUMBER() OVER (PARTITION BY c.stageId ORDER BY c.createdTime DESC) as rn,
+          (
+            SELECT COUNT(*)
+            FROM (
+              SELECT
+                userEmail,
+                ROW_NUMBER() OVER (PARTITION BY userEmail ORDER BY createdAt DESC) as rn2,
+                reactionType
+              FROM reactions r
+              WHERE r.targetId = c.commentId AND r.targetType = 'comment'
+            ) latest
+            WHERE rn2 = 1 AND reactionType IS NOT NULL
+          ) as reactionCount
+        FROM comments c
+        LEFT JOIN users u ON u.userEmail = c.authorEmail
+        LEFT JOIN projectviewers pv
+          ON pv.userEmail = c.authorEmail
+          AND pv.projectId = c.projectId
+          AND pv.isActive = 1
+        LEFT JOIN usergroups ug
+          ON ug.userEmail = c.authorEmail
+          AND ug.projectId = c.projectId
+          AND ug.isActive = 1
+          AND (ug.role = 'leader' OR ug.role = 'member')
+        WHERE c.projectId = ? AND c.stageId IN (${stageIdsPlaceholders}) AND c.isReply = 0
     `;
 
     if (excludeTeachers) {
-      commentsQuery += `
-        AND (pv.role IS NULL OR pv.role != 'teacher')
-      `;
+      rootCommentsQuery += ` AND (pv.role IS NULL OR pv.role != 'teacher')`;
     }
 
-    commentsQuery += `ORDER BY c.stageId, c.createdTime ASC`;
+    rootCommentsQuery += `
+      )
+      SELECT * FROM ranked_root_comments
+      WHERE rn > ? AND rn <= ?
+      ORDER BY stageId, createdTime DESC
+    `;
 
-    const allComments = await env.DB.prepare(commentsQuery).bind(projectId, ...stageIds).all();
+    // offset+1 to limit+offset for ROW_NUMBER (1-based)
+    const rootCommentsResult = await env.DB.prepare(rootCommentsQuery)
+      .bind(projectId, ...stageIds, offset, offset + limit)
+      .all();
+
+    // Step 3: Get all replies for these root comments
+    const paginatedRootCommentIds = (rootCommentsResult.results || []).map(c => c.commentId as string);
+    let repliesResult: any = { results: [] };
+
+    if (paginatedRootCommentIds.length > 0) {
+      const replyPlaceholders = paginatedRootCommentIds.map(() => '?').join(',');
+      const repliesQuery = `
+        SELECT
+          c.commentId, c.stageId, c.content,
+          c.authorEmail, c.mentionedGroups, c.mentionedUsers,
+          c.parentCommentId, c.isReply, c.replyLevel,
+          c.isAwarded, c.awardRank, c.createdTime,
+          u.displayName,
+          u.avatarSeed,
+          u.avatarStyle,
+          u.avatarOptions,
+          pv.role as authorRole,
+          ug.role as groupRole,
+          (
+            SELECT COUNT(*)
+            FROM (
+              SELECT
+                userEmail,
+                ROW_NUMBER() OVER (PARTITION BY userEmail ORDER BY createdAt DESC) as rn,
+                reactionType
+              FROM reactions r
+              WHERE r.targetId = c.commentId AND r.targetType = 'comment'
+            ) latest
+            WHERE rn = 1 AND reactionType IS NOT NULL
+          ) as reactionCount
+        FROM comments c
+        LEFT JOIN users u ON u.userEmail = c.authorEmail
+        LEFT JOIN projectviewers pv
+          ON pv.userEmail = c.authorEmail
+          AND pv.projectId = c.projectId
+          AND pv.isActive = 1
+        LEFT JOIN usergroups ug
+          ON ug.userEmail = c.authorEmail
+          AND ug.projectId = c.projectId
+          AND ug.isActive = 1
+          AND (ug.role = 'leader' OR ug.role = 'member')
+        WHERE c.projectId = ? AND c.parentCommentId IN (${replyPlaceholders})
+        ORDER BY c.createdTime ASC
+      `;
+      repliesResult = await env.DB.prepare(repliesQuery).bind(projectId, ...paginatedRootCommentIds).all();
+    }
+
+    // Combine root comments and replies
+    const allComments = {
+      results: [...(rootCommentsResult.results || []), ...(repliesResult.results || [])]
+    };
     _metrics['3_getAllComments'] = Date.now() - _t0;
-    console.log(`📊 [getAllStagesComments] Comments fetched: ${allComments.results?.length || 0}`);
+    console.log(`📊 [getAllStagesComments] Comments fetched: root=${paginatedRootCommentIds.length}, replies=${repliesResult.results?.length || 0}`);
 
     // Collect all comment IDs for batch reactions query
     const allCommentIds = (allComments.results || []).map(c => c.commentId as string);
@@ -1279,14 +1452,18 @@ export async function getAllStagesComments(
     _t0 = Date.now();
     const resultsByStage: Record<string, any> = {};
 
-    // Initialize all stages (even empty ones)
+    // Initialize all stages (even empty ones) with pagination info
     for (const stageId of stageIds) {
+      const totalRoot = totalRootCommentsByStage[stageId] || 0;
       resultsByStage[stageId] = {
         comments: [],
-        total: 0,
+        total: totalRoot,
         totalWithReplies: 0,
         votingEligible: false,
-        stageStatus: stageStatusMap[stageId] || 'pending'
+        stageStatus: stageStatusMap[stageId] || 'pending',
+        limit,
+        offset,
+        hasMore: (offset + limit) < totalRoot
       };
     }
 
@@ -1463,12 +1640,20 @@ export async function getAllStagesComments(
         }
       }
 
+      // Calculate hasMore for this stage
+      const totalRoot = totalRootCommentsByStage[stageId] || 0;
+      const loadedRootCount = offset + rootComments.length;
+      const hasMore = loadedRootCount < totalRoot;
+
       resultsByStage[stageId] = {
         comments: rootComments,
-        total: rootComments.length,
-        totalWithReplies: stageComments.length,
+        total: totalRoot,  // Total root comments in this stage
+        totalWithReplies: stageComments.length,  // Comments + replies in this batch
         votingEligible,
-        stageStatus
+        stageStatus,
+        limit,
+        offset,
+        hasMore
       };
     }
     _metrics['5_processComments'] = Date.now() - _t0;
@@ -1479,7 +1664,9 @@ export async function getAllStagesComments(
     console.log(`📊 [getAllStagesComments] DONE: totalTime=${_metrics['TOTAL']}ms, stages=${stageIds.length}, comments=${allCommentIds.length}`);
 
     return successResponse({
-      stageComments: resultsByStage
+      stageComments: resultsByStage,
+      limit,
+      offset
     });
 
   } catch (error) {

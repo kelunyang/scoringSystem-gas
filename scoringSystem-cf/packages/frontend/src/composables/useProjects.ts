@@ -124,9 +124,19 @@ export function useProjectsWithStages(): UseQueryReturnType<ProjectWithStages[],
         throw new Error(response.error?.message || '載入專案列表失敗')
       }
 
-      // Backend returns { success: true, data: ProjectWithStages[] }
-      // Standardized format: data is always an array
-      const projects: ProjectWithStages[] = Array.isArray(response.data) ? response.data : []
+      // Backend returns either:
+      // - Old format: { success: true, data: ProjectWithStages[] }
+      // - New format: { success: true, data: { projects: ProjectWithStages[], totalCount: n, ... } }
+      let projects: ProjectWithStages[]
+      if (Array.isArray(response.data)) {
+        // Old format: data is directly an array
+        projects = response.data
+      } else if (response.data && Array.isArray((response.data as any).projects)) {
+        // New format: data is an object with projects array
+        projects = (response.data as any).projects
+      } else {
+        projects = []
+      }
 
       console.log('🔍 useProjectsWithStages queryFn result:', { projects, count: projects.length })
 

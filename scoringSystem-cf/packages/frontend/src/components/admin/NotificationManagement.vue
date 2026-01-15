@@ -100,16 +100,15 @@
         >
           <template #reference>
             <el-badge :value="(selectedNotifications || []).length" :hidden="((selectedNotifications || []).length) === 0">
-              <el-tooltip content="發送選中的通知" placement="top">
-                <el-button
-                  type="primary"
-                  size="small"
-                  :disabled="((selectedNotifications || []).length) === 0 || sendingEmails"
-                >
-                  <i class="fas fa-paper-plane"></i>
-                  <span class="btn-text">發送通知</span>
-                </el-button>
-              </el-tooltip>
+              <el-button
+                type="primary"
+                size="small"
+                :disabled="((selectedNotifications || []).length) === 0 || sendingEmails"
+                title="發送選中的通知"
+              >
+                <i class="fas fa-paper-plane"></i>
+                <span class="btn-text">發送通知</span>
+              </el-button>
             </el-badge>
           </template>
         </el-popconfirm>
@@ -134,15 +133,14 @@
         <el-col :xs="12" :sm="6" :md="4">
           <AnimatedStatistic title="待發送郵件" :value="stats.totalNotifications - stats.emailSentNotifications" />
         </el-col>
+        <el-col v-if="activeFilterCount > 0" :xs="12" :sm="6" :md="4">
+          <AnimatedStatistic title="搜尋結果" :value="filteredNotifications.length" />
+        </el-col>
       </el-row>
     </el-card>
 
-    <!-- Notification Table with Infinite Scroll -->
-    <el-scrollbar
-      class="table-container"
-      @end-reached="handleEndReached"
-      :distance="200"
-    >
+    <!-- Notification Table (頁面級滾動) -->
+    <div class="table-container">
       <div
         v-loading="loading"
         element-loading-text="載入通知資料中..."
@@ -199,20 +197,18 @@
                 <td>{{ notification.projectName || '-' }}</td>
                 <td>
                   <div class="status-indicators">
-                    <el-tooltip content="閱讀狀態" placement="top">
-                      <i
-                        :class="notification.isRead ? 'fas fa-envelope-open' : 'fas fa-envelope'"
-                        :style="{ color: notification.isRead ? '#67C23A' : '#909399' }"
-                        :aria-label="notification.isRead ? '已讀' : '未讀'"
-                      ></i>
-                    </el-tooltip>
-                    <el-tooltip content="郵件發送狀態" placement="top">
-                      <i
-                        :class="notification.emailSent ? 'fas fa-paper-plane' : 'far fa-paper-plane'"
-                        :style="{ color: notification.emailSent ? '#409EFF' : '#909399' }"
-                        :aria-label="notification.emailSent ? '已發送' : '未發送'"
-                      ></i>
-                    </el-tooltip>
+                    <i
+                      :class="notification.isRead ? 'fas fa-envelope-open' : 'fas fa-envelope'"
+                      :style="{ color: notification.isRead ? '#67C23A' : '#909399' }"
+                      :title="notification.isRead ? '已讀' : '未讀'"
+                      :aria-label="notification.isRead ? '已讀' : '未讀'"
+                    ></i>
+                    <i
+                      :class="notification.emailSent ? 'fas fa-paper-plane' : 'far fa-paper-plane'"
+                      :style="{ color: notification.emailSent ? '#409EFF' : '#909399' }"
+                      :title="notification.emailSent ? '已發送郵件' : '未發送郵件'"
+                      :aria-label="notification.emailSent ? '已發送' : '未發送'"
+                    ></i>
                   </div>
                 </td>
                 <td>{{ formatTime(notification.createdTime) }}</td>
@@ -225,17 +221,15 @@
                     :disabled="notification.emailSent || sendingEmails"
                   >
                     <template #reference>
-                      <el-tooltip :content="notification.emailSent ? '已發送' : '發送郵件'" placement="top">
-                        <el-button
-                          type="primary"
-                          size="small"
-                          circle
-                          :disabled="notification.emailSent || sendingEmails"
-                          :aria-label="`發送郵件給 ${notification.targetUserEmail}`"
-                        >
-                          <i class="fas fa-paper-plane"></i>
-                        </el-button>
-                      </el-tooltip>
+                      <el-button
+                        type="primary"
+                        size="small"
+                        circle
+                        :disabled="notification.emailSent || sendingEmails"
+                        :title="notification.emailSent ? '已發送' : '發送郵件'"
+                      >
+                        <i class="fas fa-paper-plane"></i>
+                      </el-button>
                     </template>
                   </el-popconfirm>
                   <el-popconfirm
@@ -245,16 +239,14 @@
                     @confirm="deleteNotification(notification)"
                   >
                     <template #reference>
-                      <el-tooltip content="刪除通知" placement="top">
-                        <el-button
-                          type="danger"
-                          size="small"
-                          circle
-                          :aria-label="`刪除通知: ${notification.title}`"
-                        >
-                          <i class="fas fa-trash"></i>
-                        </el-button>
-                      </el-tooltip>
+                      <el-button
+                        type="danger"
+                        size="small"
+                        circle
+                        title="刪除通知"
+                      >
+                        <i class="fas fa-trash"></i>
+                      </el-button>
                     </template>
                   </el-popconfirm>
                 </td>
@@ -386,7 +378,7 @@
         顯示 {{ (displayedNotifications || []).length }} / {{ (filteredNotifications || []).length }} 筆通知
       </div>
       </div>
-    </el-scrollbar>
+    </div>
 
     <!-- Progress Dialog -->
     <el-dialog
@@ -413,7 +405,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, shallowRef, inject, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
-import type { ScrollbarDirection } from 'element-plus'
 import { adminApi } from '@/api/admin'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
@@ -421,6 +412,7 @@ import { useNotificationFilters, type Notification, type NotificationType } from
 import { useNotificationSelection } from '@/composables/useNotificationSelection'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
+import { useWindowInfiniteScroll } from '@/composables/useWindowInfiniteScroll'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 
@@ -447,6 +439,7 @@ const registerRefresh = inject<(fn: (() => void) | null) => void>('registerRefre
 const notifications = shallowRef<Notification[]>([])
 const loading = ref(false)
 const sendingEmails = ref(false)
+
 
 // Filter persistence (localStorage)
 const { filters, isLoaded: filtersLoaded } = useFilterPersistence('notificationManagement', {
@@ -560,20 +553,20 @@ const {
   toggleSelection
 } = useNotificationSelection(filteredNotifications)
 
-// Infinite scroll (using composable)
+// Infinite scroll (using composable for client-side pagination)
 const {
   displayedItems: displayedNotifications,
-  loadingMore,
+  loadingMore: clientLoadingMore,
   scrollDisabled,
   loadMore
 } = useInfiniteScroll(filteredNotifications, { pageSize: 50 })
 
-// Handler for el-scrollbar end-reached event
-function handleEndReached(direction: ScrollbarDirection) {
-  if (direction !== 'bottom') return
-  if (scrollDisabled.value) return
-  loadMore()
-}
+// 使用頁面級滾動的無限載入
+const { loadingMore } = useWindowInfiniteScroll(
+  computed(() => !scrollDisabled.value),
+  loading,
+  loadMore
+)
 
 // Progress
 const showProgressDialog = ref(false)

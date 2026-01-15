@@ -44,7 +44,9 @@ export interface UserListRequest {
 
 export interface UserListResponse {
   users: User[]
-  total?: number
+  totalCount: number
+  limit?: number
+  offset?: number
 }
 
 export interface UpdateUserStatusRequest {
@@ -106,6 +108,20 @@ export interface GlobalGroup {
   isActive: boolean
   createdTime?: number
   memberCount?: number
+}
+
+export interface GlobalGroupListRequest {
+  search?: string
+  status?: 'active' | 'inactive' | 'all'
+  limit?: number
+  offset?: number
+}
+
+export interface GlobalGroupListResponse {
+  groups: GlobalGroup[]
+  totalCount: number
+  limit?: number
+  offset?: number
 }
 
 export interface GlobalGroupMembership {

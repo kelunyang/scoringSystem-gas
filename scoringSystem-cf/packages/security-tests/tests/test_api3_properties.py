@@ -13,7 +13,7 @@ Date: 2025-12-23
 """
 
 import pytest
-from utils import APIClient, AuthHelper, AuthToken
+from utils import APIClient, AuthHelper, AuthToken, extract_list_data
 from config import TestConfig
 
 
@@ -116,7 +116,7 @@ class TestMassAssignment:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -225,7 +225,7 @@ class TestSensitiveDataExposure:
 
         if response.status_code == 200:
             data = response.json()
-            projects = data.get('data', [])
+            projects = extract_list_data(data, 'projects')
 
             for project in projects:
                 # Members list should not expose full emails of other users
@@ -249,7 +249,7 @@ class TestSensitiveDataExposure:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -312,7 +312,7 @@ class TestDataMinimization:
 
         if response.status_code == 200:
             data = response.json()
-            projects = data.get('data', [])
+            projects = extract_list_data(data, 'projects')
 
             for project in projects:
                 # List should contain summary fields
@@ -409,7 +409,7 @@ class TestPropertyFiltering:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
 
         for project in projects:
             for stage in project.get('stages', []):
@@ -509,7 +509,7 @@ class TestScoringConfigProperties:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -546,7 +546,7 @@ class TestScoringConfigProperties:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -596,7 +596,7 @@ class TestScoringConfigProperties:
             pytest.skip("Cannot list projects")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 
@@ -665,7 +665,7 @@ class TestStageConfigProperties:
             pytest.skip("Cannot list projects with stages")
 
         data = response.json()
-        projects = data.get('data', [])
+        projects = extract_list_data(data, 'projects')
         if not projects:
             pytest.skip("No projects available")
 

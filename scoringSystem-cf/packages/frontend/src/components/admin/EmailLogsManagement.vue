@@ -92,21 +92,22 @@
         >
           <template #reference>
             <el-badge :value="selectedLogs.length" :hidden="selectedLogs.length === 0">
-              <el-tooltip content="重送選中的郵件" placement="top">
-                <el-button
-                  type="primary"
-                  size="small"
-                  :disabled="selectedLogs.length === 0 || resending"
-                >
-                  <i class="fas fa-redo"></i>
-                  <span class="btn-text">重送郵件</span>
-                </el-button>
-              </el-tooltip>
+              <el-button
+                type="primary"
+                size="small"
+                :disabled="selectedLogs.length === 0 || resending"
+                title="重送選中的郵件"
+              >
+                <i class="fas fa-redo"></i>
+                <span class="btn-text">重送郵件</span>
+              </el-button>
             </el-badge>
           </template>
         </el-popconfirm>
       </template>
     </AdminFilterToolbar>
+
+    <!-- 🆕 移除自動搜尋提示，因為現在 filter 變化會直接觸發載入更多 -->
 
     <!-- Statistics Card -->
     <el-card class="stats-card" shadow="hover">
@@ -115,15 +116,12 @@
         <AnimatedStatistic title="成功率(%)" :value="Math.round(stats.successRate)" />
         <AnimatedStatistic title="失敗數" :value="stats.failedEmails" />
         <AnimatedStatistic title="24小時內" :value="stats.last24Hours" />
+        <AnimatedStatistic v-if="hasActiveFilters" title="搜尋結果" :value="filteredLogs.length" />
       </div>
     </el-card>
 
-    <!-- Email Logs Table -->
-    <el-scrollbar
-      class="table-container"
-      @end-reached="handleEndReached"
-      :distance="200"
-    >
+    <!-- Email Logs Table (頁面級滾動) -->
+    <div class="table-container">
       <div
         v-loading="loading"
         element-loading-text="載入郵件紀錄中..."
@@ -174,36 +172,34 @@
                   </el-tag>
                 </td>
                 <td class="status-cell">
-                  <el-tooltip :content="log.status === 'sent' ? '發送成功' : '發送失敗'" placement="top">
-                    <i
-                      :class="log.status === 'sent' ? 'fas fa-check-circle' : 'fas fa-times-circle'"
-                      class="status-icon"
-                      :style="{ color: log.status === 'sent' ? '#67C23A' : '#F56C6C' }"
-                    ></i>
-                  </el-tooltip>
+                  <i
+                    :class="log.status === 'sent' ? 'fas fa-check-circle' : 'fas fa-times-circle'"
+                    class="status-icon"
+                    :style="{ color: log.status === 'sent' ? '#67C23A' : '#F56C6C' }"
+                    :title="log.status === 'sent' ? '發送成功' : '發送失敗'"
+                  ></i>
                 </td>
                 <td>{{ formatTime(log.timestamp) }}</td>
                 <td class="actions" @click.stop>
-                  <el-tooltip content="重送郵件" placement="top">
-                    <el-popconfirm
-                      :title="`確定要重送郵件給 ${log.recipient} 嗎？`"
-                      confirm-button-text="確定"
-                      cancel-button-text="取消"
-                      @confirm="resendSingleEmail(log)"
-                      :disabled="resending"
-                    >
-                      <template #reference>
-                        <el-button
-                          type="primary"
-                          size="small"
-                          :disabled="resending"
-                          circle
-                        >
-                          <i class="fas fa-redo"></i>
-                        </el-button>
-                      </template>
-                    </el-popconfirm>
-                  </el-tooltip>
+                  <el-popconfirm
+                    :title="`確定要重送郵件給 ${log.recipient} 嗎？`"
+                    confirm-button-text="確定"
+                    cancel-button-text="取消"
+                    @confirm="resendSingleEmail(log)"
+                    :disabled="resending"
+                  >
+                    <template #reference>
+                      <el-button
+                        type="primary"
+                        size="small"
+                        :disabled="resending"
+                        circle
+                        title="重送郵件"
+                      >
+                        <i class="fas fa-redo"></i>
+                      </el-button>
+                    </template>
+                  </el-popconfirm>
                 </td>
               </template>
 
@@ -228,13 +224,12 @@
                         </el-tag>
                       </span>
                       <span class="stat-item">
-                        <el-tooltip :content="log.status === 'sent' ? '發送成功' : '發送失敗'" placement="top">
-                          <i
-                            :class="log.status === 'sent' ? 'fas fa-check-circle' : 'fas fa-times-circle'"
-                            class="status-icon"
-                            :style="{ color: log.status === 'sent' ? '#67C23A' : '#F56C6C' }"
-                          ></i>
-                        </el-tooltip>
+                        <i
+                          :class="log.status === 'sent' ? 'fas fa-check-circle' : 'fas fa-times-circle'"
+                          class="status-icon"
+                          :style="{ color: log.status === 'sent' ? '#67C23A' : '#F56C6C' }"
+                          :title="log.status === 'sent' ? '發送成功' : '發送失敗'"
+                        ></i>
                       </span>
                       <span class="stat-item time">{{ formatTime(log.timestamp) }}</span>
                     </div>
@@ -429,7 +424,7 @@
         顯示 {{ displayedLogs.length }} / {{ filteredLogs.length }} 筆郵件紀錄
       </div>
       </div>
-    </el-scrollbar>
+    </div>
 
     <!-- Progress Dialog -->
     <el-dialog
@@ -455,15 +450,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick, inject, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, watch, inject, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import type { ScrollbarDirection } from 'element-plus'
+import { useDebounceFn } from '@vueuse/core'
 import { adminApi } from '@/api/admin'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
 import DOMPurify from 'dompurify'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
+import { useWindowInfiniteScroll } from '@/composables/useWindowInfiniteScroll'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
@@ -521,6 +517,12 @@ const statistics = ref<EmailStatistics | null>(null)
 const loading = ref<boolean>(false)
 const resending = ref<boolean>(false)
 
+// Server pagination state
+const totalCount = ref<number>(0)
+const currentOffset = ref<number>(0)
+const hasMore = computed(() => logs.value.length < totalCount.value)
+const autoSearchingBackend = ref<boolean>(false)
+
 // Filters
 // Filter persistence (localStorage)
 const { filters, isLoaded: filtersLoaded } = useFilterPersistence('emailLogsManagement', {
@@ -563,13 +565,15 @@ const activeFilterCount = computed(() => {
   return count
 })
 
+// 檢查是否有任何篩選條件
+const hasActiveFilters = computed(() => activeFilterCount.value > 0)
+
 // Selection
 const selectAll = ref<boolean>(false)
 const isIndeterminate = ref<boolean>(false)
 
 // Infinite scroll
 const displayCount = ref<number>(50)
-const loadingMore = ref<boolean>(false)
 
 // Progress
 const showProgressDialog = ref<boolean>(false)
@@ -637,8 +641,9 @@ const filteredLogs = computed<EmailLog[]>(() => {
     }
   }
 
-  // Display limit
-  return filtered.slice(0, displayLimit.value)
+  // 注意：不再在這裡做 displayLimit 切片
+  // 分頁由 displayedLogs + displayCount 控制（infinite scroll）
+  return filtered
 })
 
 // Export configuration
@@ -665,8 +670,16 @@ const displayedLogs = computed<EmailLog[]>(() => {
 })
 
 const scrollDisabled = computed<boolean>(() => {
-  return loading.value || loadingMore.value || displayedLogs.value.length >= filteredLogs.value.length
+  // Disable scroll if loading, or if we've displayed all local data AND there's no more on server
+  return loading.value || (displayedLogs.value.length >= filteredLogs.value.length && !hasMore.value)
 })
+
+// 🆕 canLoadMore 計算（用於無限滾動）
+const canLoadMore = computed(() => !scrollDisabled.value)
+
+// 🆕 loadingMore 狀態（用於 loadEmailLogs 和 useWindowInfiniteScroll）
+// 必須在 loadEmailLogs 之前定義，避免 hoisting 問題
+const loadingMore = ref(false)
 
 const selectedLogs = computed<EmailLog[]>(() => {
   return logs.value.filter(l => l.selected)
@@ -693,9 +706,55 @@ watch(selectedLogs, (newVal: EmailLog[]) => {
   }
 })
 
-watch([searchText, triggerFilter, statusFilter, dateRange], () => {
+// 🆕 直接監聽 filter 變化，觸發後端搜尋
+const debouncedFilterChange = useDebounceFn(() => {
+  // 正在載入中，不要再觸發
+  if (loading.value || loadingMore.value) return
+
+  // 重設 displayCount
   displayCount.value = 50
-})
+
+  // 如果有 filter，直接觸發後端搜尋
+  if (hasActiveFilters.value) {
+    console.log('📧 [Filter Change] Triggering backend search with filters...')
+    loadEmailLogs(false, true) // withFilters = true
+  }
+}, 300)
+
+// 追蹤是否已初始化完成（用於避免 watch 在掛載時觸發）
+const isFilterWatchReady = ref(false)
+
+// 🆕 簡化邏輯：監聽 filter 變化，debounce 後直接發送後端請求
+const debouncedFilterSearch = useDebounceFn(() => {
+  if (!isFilterWatchReady.value) {
+    console.log('📧 [Filter Watch] Skipping - not ready yet')
+    return
+  }
+
+  console.log('📧 [Filter Changed] Triggering backend search with filters:', {
+    trigger: triggerFilter.value,
+    status: statusFilter.value,
+    search: searchText.value,
+    dateRange: dateRange.value
+  })
+
+  // 直接發送後端請求（帶 filter 參數）
+  loadEmailLogs(false, true)  // withFilters = true
+}, 500) // 500ms debounce，等待用戶停止操作
+
+// 監聽所有 filter 變化
+watch(
+  [
+    () => searchText.value,
+    () => triggerFilter.value,
+    () => statusFilter.value,
+    () => dateRange.value
+  ],
+  () => {
+    debouncedFilterSearch()
+  },
+  { deep: true }
+)
 
 // ================== Methods ==================
 
@@ -705,34 +764,84 @@ const calculateLast24Hours = (): number => {
   return logs.value.filter(l => l.timestamp >= yesterday).length
 }
 
-const loadEmailLogs = async (): Promise<void> => {
-  loading.value = true
+const loadEmailLogs = async (append: boolean = false, withFilters: boolean = false): Promise<void> => {
+  if (append) {
+    loadingMore.value = true
+  } else {
+    loading.value = true
+    currentOffset.value = 0
+  }
+
   try {
-    const filters: any = {
-      limit: 1000,
-      offset: 0
+    const queryFilters: any = {
+      limit: BATCH_SIZE,
+      offset: append ? currentOffset.value : 0
     }
 
-    const response = await adminApi.emailLogs.query({ filters })
+    // 🆕 如果 withFilters 為 true，加入 filter 參數給後端
+    if (withFilters) {
+      // trigger filter (後端欄位是 trigger)
+      if (triggerFilter.value && triggerFilter.value !== 'all') {
+        queryFilters.trigger = triggerFilter.value
+      }
+      // status filter (後端欄位是 status: 'sent' | 'failed')
+      if (statusFilter.value && statusFilter.value !== 'all') {
+        queryFilters.status = statusFilter.value
+      }
+      // recipient search (後端欄位是 recipient)
+      if (searchText.value) {
+        queryFilters.recipient = searchText.value
+      }
+      // date range (後端欄位是 startDate, endDate - 需要是 timestamp)
+      if (dateRange.value && dateRange.value.length === 2) {
+        const start = dateRange.value[0]
+        const end = dateRange.value[1]
+        if (start instanceof Date) {
+          queryFilters.startDate = start.getTime()
+        } else if (typeof start === 'number') {
+          queryFilters.startDate = start
+        }
+        if (end instanceof Date) {
+          queryFilters.endDate = end.getTime()
+        } else if (typeof end === 'number') {
+          queryFilters.endDate = end
+        }
+      }
+      console.log('📧 [Backend Search] Query filters:', queryFilters)
+    }
+
+    const response = await adminApi.emailLogs.query({ filters: queryFilters })
 
     if (response.success && response.data) {
       const logsList = response.data.logs || []
-      logs.value = logsList.map((l: any) => ({
+      const newLogs = logsList.map((l: any) => ({
         ...l,
         selected: false
       }))
+
+      if (append) {
+        // Append new logs, avoiding duplicates
+        const existingIds = new Set(logs.value.map(l => l.logId))
+        const uniqueNewLogs = newLogs.filter((l: EmailLog) => !existingIds.has(l.logId))
+        logs.value = [...logs.value, ...uniqueNewLogs]
+        currentOffset.value += logsList.length
+      } else {
+        logs.value = newLogs
+        currentOffset.value = logsList.length
+      }
+
+      totalCount.value = response.data.totalCount || logsList.length
     } else {
-      // Display actual error message from API if available
       const errorMessage = response.error?.message || '無法載入郵件紀錄'
       ElMessage.error(errorMessage)
     }
   } catch (error: any) {
     console.error('Error loading email logs:', error)
-    // Try to extract validation error message from response
     const errorMessage = error?.response?.error?.message || error?.message || '載入郵件紀錄失敗'
     ElMessage.error(errorMessage)
   } finally {
     loading.value = false
+    loadingMore.value = false
   }
 }
 
@@ -778,21 +887,39 @@ const handleSelectionChange = (): void => {
   // This will trigger the watch on selectedLogs
 }
 
-const loadMore = (): void => {
-  if (scrollDisabled.value) return
+const loadMore = async (): Promise<void> => {
+  console.log('📧 [EmailLogs] loadMore called:', {
+    displayCount: displayCount.value,
+    filteredLogsLength: filteredLogs.value.length,
+    logsLength: logs.value.length,
+    hasMore: hasMore.value,
+    totalCount: totalCount.value,
+    currentOffset: currentOffset.value
+  })
 
-  loadingMore.value = true
-  setTimeout(() => {
-    displayCount.value += 50
-    loadingMore.value = false
-  }, 300)
+  // 如果本地還有更多資料可顯示，先顯示本地資料
+  if (displayCount.value < filteredLogs.value.length) {
+    console.log('📧 [EmailLogs] Increasing displayCount from', displayCount.value, 'to', displayCount.value + BATCH_SIZE)
+    displayCount.value += BATCH_SIZE
+    return
+  }
+
+  // 如果本地資料已全部顯示但後端還有更多，從後端載入
+  if (hasMore.value) {
+    console.log('📧 [EmailLogs] Calling loadEmailLogs(true) to fetch more from backend')
+    await loadEmailLogs(true)
+  } else {
+    console.log('📧 [EmailLogs] No more data to load (hasMore is false)')
+  }
 }
 
-// Handler for el-scrollbar end-reached event
-const handleEndReached = (direction: ScrollbarDirection): void => {
-  if (direction !== 'bottom') return
-  loadMore()
-}
+// 🆕 使用頁面級無限滾動（必須在 loadMore 定義後呼叫）
+// 不解構 loadingMore，因為我們在 loadEmailLogs 之前已經定義了本地的 loadingMore
+useWindowInfiniteScroll(
+  canLoadMore,
+  computed(() => loading.value || loadingMore.value),
+  loadMore
+)
 
 const handleToggleExpansion = (log: EmailLog): void => {
   if (expandedLogId.value === log.logId) {
@@ -1007,7 +1134,8 @@ const getTriggerTagType = (trigger: string): 'success' | 'warning' | 'info' | 'd
 // ================== Lifecycle Hooks ==================
 
 onMounted(async () => {
-  await Promise.all([loadEmailLogs(), loadStatistics()])
+  // 🆕 簡化：初始載入直接使用後端搜尋（帶 filter 參數）
+  await Promise.all([loadEmailLogs(false, true), loadStatistics()])
 
   // Auto-expand email detail if emailId parameter exists in URL
   if (route.params.emailId && typeof route.params.emailId === 'string') {
@@ -1027,6 +1155,13 @@ onMounted(async () => {
 
   // Register refresh function with parent SystemAdmin
   registerRefresh(refreshLogs)
+
+  // 🆕 在初始載入完成後啟用 filter watch
+  // 使用 setTimeout 確保在 useFilterPersistence 載入完成後才啟用 watch
+  setTimeout(() => {
+    isFilterWatchReady.value = true
+    console.log('📧 [Init] Filter watch is now ready (after initial load)')
+  }, 100)
 })
 
 onBeforeUnmount(() => {
@@ -1185,13 +1320,13 @@ onBeforeUnmount(() => {
   min-width: 50px;
 }
 
-/* Table */
+/* Table Container - 移除固定高度，改用頁面級滾動 */
 .table-container {
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   overflow: hidden;
-  height: calc(100vh - 450px);
+  /* 注意：不設置固定高度，讓 table 自然撐開，由 .main-content 處理滾動 */
 }
 
 /* Expand cell */

@@ -11,6 +11,9 @@
     "type-check": "vue-tsc --noEmit",
     "lint": "eslint . --fix",
     "deploy": "npm run build && wrangler pages deploy dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
@@ -54,10 +57,13 @@
     "@types/papaparse": "^5.5.1",
     "@vitejs/plugin-vue": "^4.5.2",
     "@vue/eslint-config-standard": "^8.0.1",
+    "@vue/test-utils": "^2.4.6",
     "eslint": "^8.57.0",
+    "happy-dom": "^20.3.0",
     "sass-embedded": "^1.93.3",
     "typescript": "^5.7.2",
     "vite": "^5.4.21",
+    "vitest": "^4.0.17",
     "vue-tsc": "^2.2.0",
     "wrangler": "^3.0.0"
   }

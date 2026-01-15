@@ -262,10 +262,19 @@ pnpm dev              # Start both frontend & backend
 pnpm dev:backend      # Backend only
 pnpm dev:frontend     # Frontend only
 
-# Testing
-pnpm test:backend     # Backend tests
-pnpm test:e2e         # E2E tests (Playwright)
-pnpm type-check       # TypeScript checking
+# Unit Testing (Vitest)
+pnpm test             # 執行所有單元測試 (shared + frontend + backend)
+pnpm test:ui          # 開啟 Vitest UI 介面
+pnpm test:coverage    # 執行測試並產生覆蓋率報告
+
+# E2E Testing (Playwright)
+pnpm test:e2e         # E2E 測試
+
+# Security Testing (OWASP)
+pnpm test:security    # OWASP API 安全測試 (需先啟動 backend)
+
+# Code Quality
+pnpm type-check       # TypeScript 類型檢查
 pnpm lint             # ESLint
 
 # Database

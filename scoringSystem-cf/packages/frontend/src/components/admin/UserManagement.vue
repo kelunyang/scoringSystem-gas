@@ -28,6 +28,7 @@
       :export-filename="exportConfig.filename"
       :export-headers="exportConfig.headers"
       :export-row-mapper="exportConfig.rowMapper"
+      :loading="loading"
       @reset-filters="handleResetFilters"
     >
       <!-- Core Filters (Always Visible) -->
@@ -114,18 +115,36 @@
         </el-badge>
 
         <!-- Clear Selection -->
-        <el-tooltip content="取消選擇" placement="top">
-          <el-button
-            v-if="selectedUserEmails.size > 0"
-            size="small"
-            @click="clearSelection"
-          >
-            <i class="fas fa-times"></i>
-            <span class="btn-text">取消選擇</span>
-          </el-button>
-        </el-tooltip>
+        <el-button
+          v-if="selectedUserEmails.size > 0"
+          size="small"
+          @click="clearSelection"
+          title="取消選擇"
+        >
+          <i class="fas fa-times"></i>
+          <span class="btn-text">取消選擇</span>
+        </el-button>
       </template>
+
     </AdminFilterToolbar>
+
+    <!-- 統計卡片 -->
+    <el-card class="stats-card">
+      <el-row :gutter="20">
+        <el-col :xs="12" :sm="6" :md="4">
+          <AnimatedStatistic title="總使用者" :value="getStatValue('totalUsers')" />
+        </el-col>
+        <el-col :xs="12" :sm="6" :md="4">
+          <AnimatedStatistic title="活躍" :value="getStatValue('activeUsers')" />
+        </el-col>
+        <el-col :xs="12" :sm="6" :md="4">
+          <AnimatedStatistic title="停用" :value="getStatValue('inactiveUsers')" />
+        </el-col>
+        <el-col v-if="activeFilterCount > 0" :xs="12" :sm="6" :md="4">
+          <AnimatedStatistic title="搜尋結果" :value="filteredUsers.length" />
+        </el-col>
+      </el-row>
+    </el-card>
 
     <!-- User Table -->
     <div class="table-container" v-loading="loading" element-loading-text="載入使用者資料中...">
@@ -353,6 +372,18 @@
         title="沒有找到符合條件的使用者"
         :enable-animation="false"
       />
+
+      <!-- 🆕 Loading indicator for infinite scroll -->
+      <div v-if="loadingMore" class="loading-more">
+        <i class="fas fa-spinner fa-spin"></i>
+        <span>載入更多使用者...</span>
+      </div>
+
+      <!-- 🆕 Show count info -->
+      <div v-if="filteredUsers.length > 0" class="count-info">
+        顯示 {{ filteredUsers.length }} / {{ totalCount }} 位使用者
+        <span v-if="hasMore" class="has-more-hint">（滾動載入更多）</span>
+      </div>
     </div>
     </div>
     <!-- End of Full User Management View -->
@@ -612,6 +643,7 @@ import { usePermissions } from '@/composables/usePermissions'
 import { useAuth } from '@/composables/useAuth'
 import { useExpandable } from '@/composables/useExpandable'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
+import { useWindowInfiniteScroll } from '@/composables/useWindowInfiniteScroll'
 import { rpcClient } from '@/utils/rpc-client'
 import { adminApi } from '@/api/admin'
 import { getAvatarUrl, parseAvatarOptions, generateDicebearUrl } from '@/utils/avatar'
@@ -683,6 +715,7 @@ import UserEditorDrawer from './user/UserEditorDrawer.vue'
 import PasswordResetDrawer from './user/PasswordResetDrawer.vue'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
+import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 
 export default {
   name: 'UserManagement',
@@ -695,7 +728,9 @@ export default {
     UserEditorDrawer,
     PasswordResetDrawer,
     EmptyState,
-    AdminFilterToolbar
+    AdminFilterToolbar,
+    AnimatedStatistic,
+    ConfirmationInput
   },
   setup() {
     const route = useRoute()
@@ -730,6 +765,13 @@ export default {
     const registerAction = inject<(fn: (() => void) | null) => void>('registerAction', () => {})
 
     const users = ref<ExtendedUser[]>([])
+
+    // 🆕 Pagination state for lazy loading
+    const BATCH_SIZE = 50
+    const totalCount = ref<number>(0)
+    const currentOffset = ref<number>(0)
+    const hasMore = computed(() => users.value.length < totalCount.value)
+
     // 過濾器持久化
     const { filters, resetFilters, isLoaded } = useFilterPersistence('userManagement', {
       searchText: '',
@@ -1329,55 +1371,102 @@ export default {
       }
     }
 
-    const loadUsers = async () => {
-      console.log('=== loadUsers called ===')
-      loading.value = true
+    // 🆕 loadingMore state for infinite scroll
+    const loadingMore = ref(false)
+
+    const loadUsers = async (append: boolean = false) => {
+      console.log('=== loadUsers called ===', { append })
+
+      if (append) {
+        loadingMore.value = true
+      } else {
+        loading.value = true
+        currentOffset.value = 0
+      }
+
       try {
-        ElMessage.info('開始更新使用者列表')
+        if (!append) {
+          ElMessage.info('開始更新使用者列表')
+        }
 
         // Vue 3 Best Practice: rpcClient automatically handles authentication
-
-        // <i class="fas fa-check-circle text-success"></i> 使用管理員專用API獲取所有用戶 - with server-side filtering
-        console.log('Calling API: /admin/users/list with filters:', {
-          search: searchText.value || undefined,
-          status: statusFilter.value || undefined,
-          groupIds: groupFilter.value.length > 0 ? groupFilter.value : undefined,
-          sortBy: 'registrationTime',
-          sortOrder: 'desc'
-        })
-
-        const response = await adminApi.users.list({
+        const queryParams = {
           search: searchText.value || undefined,
           status: (statusFilter.value || undefined) as any,
           groupIds: groupFilter.value.length > 0 ? groupFilter.value : undefined,
           sortBy: 'registrationTime',
-          sortOrder: 'desc'
-        })
+          sortOrder: 'desc',
+          limit: BATCH_SIZE,
+          offset: append ? currentOffset.value : 0
+        }
+
+        console.log('Calling API: /admin/users/list with filters:', queryParams)
+
+        const response = await adminApi.users.list(queryParams as any)
 
         console.log('API Response:', response)
 
         if (response.success && response.data) {
-          users.value = response.data as unknown as ExtendedUser[]
-          console.log('Users loaded:', users.value.length, 'users')
-          ElMessage.success('使用者列表資料下載完成')
+          // Backend returns either:
+          // - Old format: data is directly an array
+          // - New format: data is { users: [...], totalCount: n, ... }
+          const data = response.data as any
+          const usersList = (Array.isArray(data) ? data : data.users || []) as ExtendedUser[]
+
+          if (append) {
+            // Append new users, avoiding duplicates
+            const existingEmails = new Set(users.value.map(u => u.userEmail))
+            const uniqueNewUsers = usersList.filter(u => !existingEmails.has(u.userEmail))
+            users.value = [...users.value, ...uniqueNewUsers]
+            currentOffset.value += usersList.length
+          } else {
+            users.value = usersList
+            currentOffset.value = usersList.length
+          }
+
+          // Update totalCount from response
+          totalCount.value = data.totalCount || usersList.length
+
+          console.log('Users loaded:', users.value.length, 'users, total:', totalCount.value)
+          if (!append) {
+            ElMessage.success('使用者列表資料下載完成')
+          }
         } else {
           console.error('Failed to load users:', response.error)
-          users.value = [] // 確保有預設值
+          if (!append) {
+            users.value = [] // 確保有預設值
+          }
           ElMessage.error(`無法載入使用者資料: ${response.error?.message || '未知錯誤'}`)
         }
       } catch (error) {
         console.error('Error loading users:', error)
-        users.value = [] // 確保在錯誤情況下也有預設值
+        if (!append) {
+          users.value = [] // 確保在錯誤情況下也有預設值
+        }
         ElMessage.error('載入使用者資料失敗，請重試')
       } finally {
         loading.value = false
+        loadingMore.value = false
         console.log('loadUsers completed, loading:', loading.value)
       }
     }
 
+    // 🆕 Load more function for infinite scroll
+    const loadMore = () => {
+      if (hasMore.value && !loading.value && !loadingMore.value) {
+        loadUsers(true)
+      }
+    }
+
+    // 🆕 使用頁面級無限滾動
+    useWindowInfiniteScroll(
+      hasMore,
+      computed(() => loading.value || loadingMore.value),
+      loadMore
+    )
 
     const refreshUsers = () => {
-      loadUsers()
+      loadUsers(false)
     }
 
     const openInviteManagement = () => {
@@ -2182,9 +2271,12 @@ export default {
             limit: 1
           })
 
-          if (response.success && response.data && (response.data as any).length > 0) {
+          // Backend returns either array or { users: [...], totalCount: n }
+          const data = response.data as any
+          const usersList = Array.isArray(data) ? data : data.users || []
+          if (response.success && usersList.length > 0) {
             // Use fresh data from backend
-            userData = (response.data as any)[0] as ExtendedUser
+            userData = usersList[0] as ExtendedUser
             console.log('Using fresh user data from backend for editing')
 
             // Update the user in the users list with fresh data
@@ -2779,8 +2871,9 @@ export default {
       try {
         const response = await adminApi.globalGroups.list()
         
-        if (response.success && response.data) {
-          globalGroups.value = response.data.filter(group => group.isActive) as unknown as GlobalGroup[]
+        if (response.success && response.data && response.data.groups) {
+          // Cast to GlobalGroup[] since the admin API returns groups with isActive as boolean
+          globalGroups.value = response.data.groups.filter((group) => group.isActive) as unknown as GlobalGroup[]
         } else {
           console.error('Failed to load global groups:', response.error)
           globalGroups.value = []
@@ -3083,6 +3176,10 @@ export default {
       generating,
       generatedInvite,
       loading,
+      // 🆕 Pagination state
+      loadingMore,
+      hasMore,
+      totalCount,
       invitationsLoading,
       processingStatus,
       inviteForm,
@@ -3277,6 +3374,21 @@ export default {
 <style scoped>
 .user-management {
   padding: 20px;
+}
+
+/* 統計卡片 */
+.stats-card {
+  margin-bottom: 20px;
+}
+
+.stats-card :deep(.el-row) {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.stats-card :deep(.el-col) {
+  display: flex;
+  justify-content: center;
 }
 
 /* Loading and permission states */
@@ -5161,5 +5273,32 @@ export default {
   margin-top: 30px;
   padding-top: 20px;
   border-top: 1px solid #ebeef5;
+}
+
+/* 🆕 Infinite Scroll Loading & Count */
+.loading-more {
+  padding: 20px;
+  text-align: center;
+  color: #909399;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.count-info {
+  padding: 15px 20px;
+  text-align: center;
+  color: #909399;
+  font-size: 13px;
+  background: #f8f9fa;
+  border-top: 1px solid #eee;
+  border-radius: 0 0 8px 8px;
+}
+
+.has-more-hint {
+  color: #409EFF;
+  font-size: 12px;
 }
 </style>
