@@ -250,7 +250,7 @@ import IconSelector from '@/components/common/IconSelector.vue'
 /**
  * Props
  */
-interface Props {
+export interface Props {
   /** 配置分類 */
   categories: ConfigCategory[]
   /** 配置值（響應式對象） */

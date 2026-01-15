@@ -53,7 +53,7 @@ import RegisterForm from './auth/RegisterForm.vue';
 import ForgotPasswordForm from './auth/ForgotPasswordForm.vue';
 
 // Props
-interface Props {
+export interface Props {
   visible?: boolean;
 }
 

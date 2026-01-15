@@ -58,7 +58,7 @@ import {
 // Props
 // ============================================================================
 
-interface Props {
+export interface Props {
   page: TutorialPage;
 }
 

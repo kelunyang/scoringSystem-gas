@@ -76,7 +76,7 @@ import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 
 // Props
-interface Props {
+export interface Props {
   visible: boolean
   originalComment: any | null
   projectId: string

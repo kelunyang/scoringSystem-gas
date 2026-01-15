@@ -106,7 +106,7 @@ import TurnstileWidget from '../TurnstileWidget.vue';
 import { useTurnstile } from '../../composables/auth/useTurnstile';
 
 // Props
-interface Props {
+export interface Props {
   targetEmail?: string;
   loading?: boolean;
 }

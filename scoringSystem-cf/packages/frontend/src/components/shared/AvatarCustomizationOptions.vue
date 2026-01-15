@@ -321,7 +321,7 @@
 <script setup lang="ts">
 import * as AvatarConfig from '@/utils/avatarConfig'
 
-interface Props {
+export interface Props {
   style: string
   options: Record<string, any>
   layout?: 'dropdown' | 'inline'

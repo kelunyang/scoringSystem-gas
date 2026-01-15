@@ -240,7 +240,7 @@ interface User {
 
 // ========== Props & Emits ==========
 
-interface Props {
+export interface Props {
   visible: boolean
   projectId: string
   stageId: string

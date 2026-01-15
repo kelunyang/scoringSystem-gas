@@ -57,7 +57,7 @@ import ForgotPasswordForm from './auth/ForgotPasswordForm.vue';
 import { rpcClient } from '@/utils/rpc-client';
 
 // Props
-interface Props {
+export interface Props {
   visible?: boolean;
 }
 

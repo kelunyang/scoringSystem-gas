@@ -72,7 +72,7 @@ import { rpcClient } from '@/utils/rpc-client';
 import type { LoginCredentials } from '../../types/auth';
 
 // Props
-interface Props {
+export interface Props {
   loading?: boolean;
 }
 

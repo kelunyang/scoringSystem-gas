@@ -69,7 +69,7 @@ import PinCodeInput from './PinCodeInput.vue';
 import { useTurnstile } from '../../composables/auth/useTurnstile';
 
 // Props
-interface Props {
+export interface Props {
   loading?: boolean;
   checkingInvitation?: boolean;
   invitationStatus?: 'idle' | 'checking' | 'valid' | 'invalid' | 'used' | 'expired';

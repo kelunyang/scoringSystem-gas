@@ -30,7 +30,7 @@ interface User {
   [key: string]: any
 }
 
-interface Props {
+export interface Props {
   title: string
   description: string
   user?: User | null

@@ -187,7 +187,7 @@ interface GroupData {
   members?: MemberData[]
 }
 
-interface Props {
+export interface Props {
   visible: boolean
   groupData?: GroupData
   projectConfig?: {

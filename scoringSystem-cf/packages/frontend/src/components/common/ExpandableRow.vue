@@ -40,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-interface Props {
+export interface Props {
   /** 是否已展開 */
   isExpanded?: boolean
   /** 是否載入中 */

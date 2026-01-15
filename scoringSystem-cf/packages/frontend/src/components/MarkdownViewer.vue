@@ -14,7 +14,7 @@ import MdPreviewWrapper from './MdPreviewWrapper.vue'
  * 保持與舊版 API 相容，現有使用處不需要修改
  */
 
-interface Props {
+export interface Props {
   content?: string
 }
 

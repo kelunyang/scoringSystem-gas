@@ -88,7 +88,7 @@ import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 /**
  * Props
  */
-interface Props {
+export interface Props {
   /** 系統統計數據 */
   systemStats?: SystemStats
   /** 邀請碼統計數據 */

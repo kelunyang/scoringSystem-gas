@@ -143,7 +143,7 @@ import {
   Message
 } from '@element-plus/icons-vue'
 
-interface Props {
+export interface Props {
   selectedCount: number
   batchUpdatingStatus: boolean
   batchResettingPassword: boolean

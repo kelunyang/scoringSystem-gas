@@ -175,7 +175,7 @@ import type { AIProviderPublic } from '@repo/shared'
 
 // ========== Props ==========
 
-interface Props {
+export interface Props {
   /**
    * When true, renders in embedded mode (inside ConfigPanel slot)
    * with simplified styling

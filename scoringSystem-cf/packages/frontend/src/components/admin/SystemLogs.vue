@@ -213,7 +213,7 @@
     <div class="log-list">
       <!-- 表格（僅在有資料時顯示） -->
       <table
-        v-if="displayedLogs.length > 0"
+        v-if="paginatedLogs.length > 0"
         v-loading="loading"
         class="custom-table"
       >
@@ -228,7 +228,7 @@
           </tr>
         </thead>
         <tbody>
-          <template v-for="log in displayedLogs" :key="log.logId">
+          <template v-for="log in paginatedLogs" :key="log.logId">
           <ExpandableTableRow
             :is-expanded="expandedLogId === log.logId"
             :expansion-colspan="6"
@@ -846,6 +846,7 @@ import { useDebounceFn } from '@vueuse/core'
 import type { LogEntry, LogFilterOptions, SystemLogsRequest, EmailLog, LogStatistics } from '@repo/shared/types/admin'
 import { EmailStatus } from '@repo/shared/types/admin'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
+import { useWindowInfiniteScroll } from '@/composables/useWindowInfiniteScroll'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
@@ -883,6 +884,16 @@ const allLogs = ref<LogEntry[]>([])
 const logStats = ref<LogStatistics | null>(null)
 const displayLimit = ref(DEFAULT_DISPLAY_LIMIT)
 const searchAbortController = ref<AbortController | null>(null)
+
+// Infinite scroll 狀態（必須在使用它們的函式之前定義）
+const loadingMore = ref(false)
+const displayCount = ref(50)
+
+// 重置 displayCount（當篩選條件改變時）- 必須在 load functions 之前定義
+const resetDisplayCount = () => {
+  displayCount.value = 50
+}
+
 const searchKeyword = ref('') // Debounced 值
 const totalCount = ref<number | null>(null)
 const currentPage = ref(1)
@@ -975,6 +986,7 @@ const loadSystemLogs = async () => {
   loading.value = true
   standardLogsSearchMode.value = 'frontend'  // 🆕 设置为前端模式
   totalCount.value = 0  // 🆕 重置总计数
+  resetDisplayCount()  // 重置 infinite scroll
 
   // Cancel previous search request
   if (searchAbortController.value) {
@@ -1778,10 +1790,8 @@ const displayedLogs = computed(() => {
     // 通過所有檢查，加入結果
     result.push(log)
 
-    // 早期退出優化：達到顯示限制時停止
-    if (result.length >= displayLimit.value) {
-      break
-    }
+    // 注意：不再在這裡做 displayLimit 限制
+    // 分頁由 infinite scroll + displayCount 控制
   }
 
   console.log('🔍 [Debug] Frontend filtering results:', {
@@ -1798,6 +1808,16 @@ const displayedLogs = computed(() => {
   })
 
   return result
+})
+
+// Infinite scroll 分頁顯示
+const paginatedLogs = computed(() => {
+  return displayedLogs.value.slice(0, displayCount.value)
+})
+
+// 計算是否還有更多資料可載入
+const hasMoreLogs = computed(() => {
+  return displayCount.value < displayedLogs.value.length
 })
 
 // Export configuration
@@ -1880,6 +1900,9 @@ const refreshLogs = () => {
 }
 
 const applyFilters = () => {
+  // 重置 infinite scroll 的 displayCount
+  resetDisplayCount()
+
   if (useBackendSearch.value) {
     // 後端模式：重新載入資料
     currentPage.value = 1 // 重置到第一頁
@@ -1898,6 +1921,9 @@ const handleResetFilters = () => {
   selectedProjects.value = []
   searchKeywordRaw.value = ''
   searchKeyword.value = ''
+
+  // 重置 infinite scroll 的 displayCount
+  resetDisplayCount()
 
   // 明確清除 localStorage（防止過期篩選器殘留）
   localStorage.removeItem('filters:systemLogs')
@@ -2368,6 +2394,32 @@ watch(() => route.params.logId, async (newLogId) => {
     }
   }
 })
+
+// ==================== Infinite Scroll 設定 ====================
+const loadMore = async () => {
+  if (loadingMore.value) return
+  loadingMore.value = true
+
+  // 增加顯示數量
+  displayCount.value = Math.min(
+    displayCount.value + 50,
+    displayedLogs.value.length
+  )
+
+  loadingMore.value = false
+}
+
+// 設定頁面級無限滾動
+// SystemAdmin 使用 .content-area 作為滾動容器
+useWindowInfiniteScroll(
+  hasMoreLogs,
+  computed(() => loading.value || loadingMore.value),
+  loadMore,
+  {
+    debounceDelay: 150,
+    scrollContainerSelector: '.content-area'
+  }
+)
 
 // 生命周期
 onMounted(() => {

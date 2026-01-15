@@ -232,7 +232,7 @@ import dayjs from 'dayjs'
 /**
  * Props interface
  */
-interface Props {
+export interface Props {
   stage: ExtendedStage
   currentUserGroupId: string | null
   projectGroups: Group[]

@@ -168,7 +168,7 @@ interface TransactionDetail {
   commentError?: string
 }
 
-interface Props {
+export interface Props {
   filteredTransactions: Transaction[]
   showUserColumn: boolean
   canManageWallets: boolean

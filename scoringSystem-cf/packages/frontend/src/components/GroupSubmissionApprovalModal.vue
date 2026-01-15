@@ -578,7 +578,7 @@ hljs.registerLanguage('markdown', markdown)
 /**
  * Props Interface
  */
-interface Props {
+export interface Props {
   visible: boolean
   projectId: string
   stageId: string

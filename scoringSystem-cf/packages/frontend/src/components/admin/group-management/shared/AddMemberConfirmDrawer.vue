@@ -126,7 +126,7 @@ interface Member {
   avatarOptions?: string | Record<string, any>
 }
 
-interface Props {
+export interface Props {
   visible: boolean
   members: Member[]
   groupName: string

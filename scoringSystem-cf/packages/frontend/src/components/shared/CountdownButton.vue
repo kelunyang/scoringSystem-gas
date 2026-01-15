@@ -41,7 +41,7 @@ import { computed, onMounted, useSlots } from 'vue';
 import { useVerificationTimer } from '../../composables/auth/useVerificationTimer';
 import { getContrastColorHex } from '@/utils/color';
 
-interface Props {
+export interface Props {
   label?: string;             // 按鈕文字（如 "重新發送驗證碼"）- 使用 slot 時可選
   duration?: number;          // 倒數秒數（預設 60）
   loading?: boolean;          // 外部 loading 狀態

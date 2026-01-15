@@ -320,7 +320,7 @@ interface CurrentGroup {
 }
 
 // Props
-interface Props {
+export interface Props {
   visible: boolean
   stageId: string
   projectTitle?: string

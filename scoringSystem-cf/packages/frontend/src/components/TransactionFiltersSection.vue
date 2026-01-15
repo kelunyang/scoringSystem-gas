@@ -197,7 +197,7 @@ interface SelectOption {
   label: string
 }
 
-interface Props {
+export interface Props {
   // Permission flags
   canViewAllUsers: boolean
   canManageWallets: boolean

@@ -46,7 +46,7 @@
 import { computed } from 'vue'
 import type { ComputedRef } from 'vue'
 
-interface Props {
+export interface Props {
   simulatedRank: number
   simulatedGroupCount: number
   totalActiveGroups: number

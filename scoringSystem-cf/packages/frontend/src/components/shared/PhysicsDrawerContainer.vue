@@ -94,7 +94,7 @@
 import { ref, computed, watch } from 'vue'
 import { useDrawerPhysics, type DrawerPhysicsOptions } from '@/composables/useDrawerPhysics'
 
-interface Props {
+export interface Props {
   modelValue: boolean              // v-model for open/close state
   drawerName: string               // Drawer name (used in default trigger/handle text)
   themeColor?: string              // Theme color (CSS color value)

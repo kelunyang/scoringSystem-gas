@@ -32,7 +32,7 @@ interface GroupMember {
   [key: string]: any
 }
 
-interface Props {
+export interface Props {
   participationChanges: ParticipationChange[]
   groupMembers?: GroupMember[]
 }

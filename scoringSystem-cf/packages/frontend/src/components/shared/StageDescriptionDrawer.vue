@@ -85,7 +85,7 @@ import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 
 // Props
-interface Props {
+export interface Props {
   visible: boolean
   stageName: string
   stageDescription?: string

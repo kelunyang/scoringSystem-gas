@@ -60,7 +60,7 @@ import { useTurnstile } from '../../composables/auth/useTurnstile';
 import type { Project } from '../../types/auth';
 
 // Props
-interface Props {
+export interface Props {
   projects: Project[];
   loading?: boolean;
 }

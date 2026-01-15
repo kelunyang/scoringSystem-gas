@@ -354,7 +354,7 @@ import type { PermissionFlags } from '@/composables/useProjectPermissions'
 // Props & Emits
 // ========================================
 
-interface Props {
+export interface Props {
   user: AuthUser | null
   sessionPercentage?: number
   remainingTime?: number

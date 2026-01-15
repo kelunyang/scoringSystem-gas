@@ -25,7 +25,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-interface Props {
+export interface Props {
   modelValue: string
   keyword: string              // 必填：確認關鍵詞 (SUBMIT, REMOVE, DELETE 等)
   placeholder?: string         // 可選：自訂 placeholder

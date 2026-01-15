@@ -62,7 +62,7 @@ import { useTurnstile } from '../../composables/auth/useTurnstile';
 import type { TwoFactorData } from '../../types/auth';
 
 // Props
-interface Props {
+export interface Props {
   userEmail: string;
   loading?: boolean;
   resendLoading?: boolean;

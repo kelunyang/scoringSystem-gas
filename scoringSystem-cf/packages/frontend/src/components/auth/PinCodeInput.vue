@@ -38,7 +38,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 
 // Props
-interface Props {
+export interface Props {
   length?: number;
   modelValue?: string;
   disabled?: boolean;

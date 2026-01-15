@@ -39,7 +39,7 @@ interface VoteDataEntry {
 
 type VoteData = Record<string, VoteDataEntry>
 
-interface Props {
+export interface Props {
   voteData: VoteData
   versionLabels: string[]
   versionStatuses: RankingProposalStatus[]
