@@ -29,6 +29,7 @@ export type ExtendedStage = Omit<Stage, 'viewMode'> & {
   loadingComments?: boolean
   refreshing?: boolean
   commentsRefreshKey?: number
+  votingEligible?: boolean  // Whether current user has any valid comment (canBeVoted) in this stage
 }
 
 /**

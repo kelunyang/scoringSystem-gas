@@ -1670,7 +1670,7 @@ const ganttChartStages = computed(() => {
 
 /**
  * 檢查用戶在指定階段是否有合格的評論（用於顯示評論投票按鈕）
- * 使用 Backend 預計算的 canBeVoted 標誌位，確保與 API 驗證邏輯一致
+ * 使用 Backend 預計算的 votingEligible 標誌，不受分頁影響
  *
  * canBeVoted 條件（由 Backend 計算）：
  * 1. 不是回覆評論（isReply = 0）
@@ -1683,18 +1683,21 @@ function userHasValidCommentInStage(stage: ExtendedStage) {
   const isSudoActive = sudoStore.isActive &&
                        sudoStore.projectId === projectId.value &&
                        sudoStore.targetUser
-  const currentUserEmail = isSudoActive
-    ? sudoStore.targetUser!.userEmail
-    : props.user?.userEmail
 
-  if (!currentUserEmail || !stage.comments || stage.comments.length === 0) {
-    return false
+  // SUDO 模式下，votingEligible 是基於登入用戶（管理員）計算的，
+  // 需要 fallback 到檢查 stage.comments（可能受分頁影響，但 SUDO 模式較少用）
+  if (isSudoActive) {
+    const targetUserEmail = sudoStore.targetUser!.userEmail
+    if (!targetUserEmail || !stage.comments || stage.comments.length === 0) {
+      return false
+    }
+    return stage.comments.some((comment: any) => {
+      return comment.canBeVoted === true && comment.authorEmail === targetUserEmail
+    })
   }
 
-  // 使用 Backend 預計算的 canBeVoted 標誌位
-  return stage.comments.some((comment: any) => {
-    return comment.canBeVoted === true && comment.authorEmail === currentUserEmail
-  })
+  // 非 SUDO 模式：使用後端預計算的 votingEligible（不受分頁影響）
+  return stage.votingEligible === true
 }
 
 // Modal 相關計算屬性（使用 composable 工廠函數）
@@ -3225,6 +3228,9 @@ async function loadAllStageComments() {
               : (comment.mentionedGroups || [])
           }))
 
+          // 保存後端預計算的投票資格（不受分頁影響）
+          stage.votingEligible = stageData.votingEligible || false
+
           // 儲存分頁狀態
           stageCommentPagination.set(stage.id, {
             hasMore: stageData.hasMore || false,
@@ -3232,9 +3238,10 @@ async function loadAllStageComments() {
             offset: stageData.comments.length
           })
 
-          console.log(`✅ 階段 ${stage.id} 載入 ${stage.comments?.length ?? 0} 條評論，總數 ${stageData.total}，hasMore: ${stageData.hasMore}`)
+          console.log(`✅ 階段 ${stage.id} 載入 ${stage.comments?.length ?? 0} 條評論，總數 ${stageData.total}，hasMore: ${stageData.hasMore}，votingEligible: ${stage.votingEligible}`)
         } else {
           stage.comments = []
+          stage.votingEligible = false
           stageCommentPagination.set(stage.id, {
             hasMore: false,
             total: 0,
@@ -3289,6 +3296,9 @@ async function loadAllStageCommentsFallback() {
             : (comment.mentionedGroups || [])
         }))
 
+        // 保存後端預計算的投票資格（不受分頁影響）
+        stage.votingEligible = response.data.votingEligible || false
+
         // 儲存分頁狀態
         stageCommentPagination.set(stage.id, {
           hasMore: response.data.hasMore || false,
@@ -3296,9 +3306,10 @@ async function loadAllStageCommentsFallback() {
           offset: (response.data.comments || []).length
         })
 
-        console.log(`✅ 階段 ${stage.id} 載入 ${stage.comments?.length ?? 0} 條評論，總數 ${response.data.total}，hasMore: ${response.data.hasMore}`)
+        console.log(`✅ 階段 ${stage.id} 載入 ${stage.comments?.length ?? 0} 條評論，總數 ${response.data.total}，hasMore: ${response.data.hasMore}，votingEligible: ${stage.votingEligible}`)
       } else {
         stage.comments = []
+        stage.votingEligible = false
         stageCommentPagination.set(stage.id, {
           hasMore: false,
           total: 0,
@@ -3309,6 +3320,7 @@ async function loadAllStageCommentsFallback() {
     } catch (error) {
       console.error(`❌ 載入階段 ${stage.id} 評論失敗:`, error)
       stage.comments = []
+      stage.votingEligible = false
       stageCommentPagination.set(stage.id, {
         hasMore: false,
         total: 0,
@@ -3433,7 +3445,7 @@ async function loadStageComments(stage: ExtendedStage) {
     })
     const response = await httpResponse.json()
     if (response.success && response.data) {
-      // <i class="fas fa-check-circle text-success"></i> 預先解析 JSON 字段，避免在 computed 中重複解析
+      // 預先解析 JSON 字段，避免在 computed 中重複解析
       stage.comments = (response.data.comments || []).map((comment: any) => ({
         ...comment,
         mentionedUsers: typeof comment.mentionedUsers === 'string'
@@ -3443,7 +3455,9 @@ async function loadStageComments(stage: ExtendedStage) {
           ? JSON.parse(comment.mentionedGroups)
           : (comment.mentionedGroups || [])
       }))
-      console.log(`✅ 階段 ${stage.id} 評論已更新：${stage.comments?.length ?? 0} 條`)
+      // 保存後端預計算的投票資格（不受分頁影響）
+      stage.votingEligible = response.data.votingEligible || false
+      console.log(`✅ 階段 ${stage.id} 評論已更新：${stage.comments?.length ?? 0} 條，votingEligible: ${stage.votingEligible}`)
     }
   } catch (error) {
     console.error(`載入階段 ${stage.id} 評論失敗:`, error)

@@ -549,8 +549,9 @@ export async function getStageComments(
   try {
     const excludeTeachers = options?.excludeTeachers || false;
     const forVoting = options?.forVoting || false;
-    const limit = options?.limit ?? 3;  // Default: 3 root comments per page
-    const offset = options?.offset ?? 0;
+    // forVoting 模式需要所有評論（投票候選人列表不能分頁），否則使用默認分頁
+    const limit = forVoting ? 999999 : (options?.limit ?? 3);  // forVoting: 返回所有評論
+    const offset = forVoting ? 0 : (options?.offset ?? 0);
 
     // Query stage status to conditionally skip unnecessary calculations
     // reactionUsers and replyUsers are only needed in 'active' stage
@@ -1256,6 +1257,42 @@ export async function getAllStagesComments(
     }
     _metrics['2b_getRootCounts'] = Date.now() - _t0;
 
+    // Step 2c: Check user's voting eligibility per stage (independent of pagination)
+    // This query checks if the current user has ANY valid comment (canBeVoted) in each stage
+    // canBeVoted conditions: !isReply && hasMentions && isGroupMember && hasHelpfulReaction
+    _t0 = Date.now();
+    const userVotingEligibilityResult = await env.DB.prepare(`
+      SELECT DISTINCT c.stageId
+      FROM comments c
+      -- Check if author is a group member (leader or member)
+      INNER JOIN usergroups ug
+        ON ug.projectId = c.projectId
+        AND ug.userEmail = c.authorEmail
+        AND ug.isActive = 1
+        AND (ug.role = 'leader' OR ug.role = 'member')
+      -- Check if comment has helpful reaction
+      INNER JOIN (
+        SELECT DISTINCT targetId as commentId
+        FROM reactions
+        WHERE targetType = 'comment' AND reactionType = 'helpful'
+      ) helpful ON helpful.commentId = c.commentId
+      WHERE c.projectId = ?
+        AND c.stageId IN (${stageIdsPlaceholders})
+        AND c.authorEmail = ?
+        AND c.isReply = 0
+        -- Check has mentions (mentionedGroups or mentionedUsers not empty)
+        AND (
+          (c.mentionedGroups IS NOT NULL AND c.mentionedGroups != '' AND c.mentionedGroups != '[]')
+          OR (c.mentionedUsers IS NOT NULL AND c.mentionedUsers != '' AND c.mentionedUsers != '[]')
+        )
+    `).bind(projectId, ...stageIds, userEmail).all();
+
+    const userVotingEligibleStages = new Set<string>(
+      (userVotingEligibilityResult.results || []).map(r => r.stageId as string)
+    );
+    _metrics['2c_checkVotingEligibility'] = Date.now() - _t0;
+    console.log(`📊 [getAllStagesComments] User voting eligible in stages: [${[...userVotingEligibleStages].join(', ')}]`);
+
     // Step 2: Get paginated root comments for all stages using ROW_NUMBER()
     // This approach gets the N-th through M-th root comments per stage in a single query
     _t0 = Date.now();
@@ -1592,24 +1629,9 @@ export async function getAllStagesComments(
         }
       }
 
-      // Check voting eligibility for current user
-      let votingEligible = false;
-      const userCommentsInStage = stageComments.filter(
-        c => c.authorEmail === userEmail && !c.isReply
-      );
-      for (const userComment of userCommentsInStage) {
-        if (userComment.mentionedGroups) {
-          try {
-            const groups = JSON.parse(userComment.mentionedGroups as string);
-            if (Array.isArray(groups) && groups.length > 0) {
-              votingEligible = true;
-              break;
-            }
-          } catch (e) {
-            // Ignore parse errors
-          }
-        }
-      }
+      // Use pre-calculated voting eligibility (from Step 2c query, not affected by pagination)
+      // This checks if user has ANY comment with canBeVoted === true in this stage
+      const votingEligible = userVotingEligibleStages.has(stageId);
 
       // Apply forVoting deduplication if needed
       if (forVoting) {

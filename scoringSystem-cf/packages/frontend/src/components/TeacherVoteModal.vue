@@ -1106,13 +1106,12 @@ async function loadTeacherVoteData(): Promise<void> {
     loading.value = true
 
     // Vue 3 Best Practice: rpcClient automatically handles authentication
+    // 投票需要完整數據，始終從 API 獲取 submissions 和 comments（不使用可能被分頁的快取數據）
     console.log('🎯 [TeacherVoteModal] 載入教師投票數據:', {
       projectId: props.projectId,
       stageId: props.stageId,
       stageGroupsCount: props.stageGroups.length,
-      hasCachedGroups: props.cachedProjectGroups.length > 0,
-      hasCachedSubmissions: props.cachedSubmissions.length > 0,
-      hasCachedComments: props.cachedComments.length > 0
+      hasCachedGroups: props.cachedProjectGroups.length > 0
     })
 
     // ===== 1. 載入專案 Groups 數據 =====
@@ -1140,14 +1139,22 @@ async function loadTeacherVoteData(): Promise<void> {
     }
 
     // ===== 2. 載入成果提交數據 =====
-    // 優化：優先使用 cachedSubmissions，避免冗餘 API 調用
-    if (props.cachedSubmissions.length > 0) {
-      console.log('📊 [TeacherVoteModal] 使用快取 Submissions 數據:', props.cachedSubmissions.length, '個提交')
+    // 投票需要完整數據，始終調用 API（不依賴父組件可能被分頁的快取數據）
+    const httpResponse1 = await rpcClient.projects.content.$post({
+      json: {
+        projectId: props.projectId,
+        stageId: props.stageId,
+        contentType: 'submissions',
+        excludeUserGroups: false,  // 教師看所有組，不過濾
+        includeSubmitted: false    // ✅ 只顯示 approved 狀態的 submissions
+      }
+    })
+    const submissionsResponse = await httpResponse1.json()
 
-      // 處理快取數據（與 API 數據處理邏輯相同）
-      // 只包含已批准的成果，排除 submitted/draft/withdrawn 等其他狀態
-      rankedSubmissions.value = props.cachedSubmissions
-        .filter((sub: any) => sub.status === 'approved')
+    if (submissionsResponse.success && submissionsResponse.data) {
+      console.log('📊 [TeacherVoteModal] 從 API 載入提交數量:', submissionsResponse.data.submissions?.length || 0)
+
+      rankedSubmissions.value = (submissionsResponse.data.submissions || [])
         .map((sub: any) => {
           let groupName = sub.groupName
           let memberNames = sub.memberNames || []
@@ -1163,7 +1170,7 @@ async function loadTeacherVoteData(): Promise<void> {
             groupId: sub.groupId,
             groupName: groupName,
             memberNames: memberNames,
-            reportContent: sub.contentMarkdown || sub.reportContent,
+            reportContent: sub.contentMarkdown,
             submitTime: sub.submitTime,
             status: sub.status
           }
@@ -1173,80 +1180,28 @@ async function loadTeacherVoteData(): Promise<void> {
           const bTime = typeof b.submitTime === 'number' ? b.submitTime : 0
           return bTime - aTime
         })
-    } else {
-      // Fallback: 調用 API（向後兼容）
-      const httpResponse1 = await rpcClient.projects.content.$post({
-        json: {
-          projectId: props.projectId,
-          stageId: props.stageId,
-          contentType: 'submissions',
-          excludeUserGroups: false,  // 教師看所有組，不過濾
-          includeSubmitted: false    // ✅ 只顯示 approved 狀態的 submissions
-        }
-      })
-      const submissionsResponse = await httpResponse1.json()
-
-      if (submissionsResponse.success && submissionsResponse.data) {
-        console.log('📊 [TeacherVoteModal] 從 API 載入提交數量:', submissionsResponse.data.submissions?.length || 0)
-
-        rankedSubmissions.value = (submissionsResponse.data.submissions || [])
-          .map((sub: any) => {
-            let groupName = sub.groupName
-            let memberNames = sub.memberNames || []
-
-            if (!groupName) {
-              const group = props.stageGroups.find(g => g.groupId === sub.groupId)
-              groupName = group?.groupName || 'Unknown Group'
-              memberNames = (group as any)?.memberNames || []
-            }
-
-            return {
-              submissionId: sub.submissionId,
-              groupId: sub.groupId,
-              groupName: groupName,
-              memberNames: memberNames,
-              reportContent: sub.contentMarkdown,
-              submitTime: sub.submitTime,
-              status: sub.status
-            }
-          })
-          .sort((a: Submission, b: Submission) => {
-            const aTime = typeof a.submitTime === 'number' ? a.submitTime : 0
-            const bTime = typeof b.submitTime === 'number' ? b.submitTime : 0
-            return bTime - aTime
-          })
-      }
     }
 
     console.log('🎯 [TeacherVoteModal] 最終 rankedSubmissions:', rankedSubmissions.value.length, '個')
 
     // ===== 3. 載入評論數據 =====
-    // 優化：優先使用 cachedComments，避免冗餘 API 調用
+    // 投票需要完整數據，始終調用 API（不依賴父組件可能被分頁的快取數據）
     let commentsToProcess: any[] = []
 
-    if (props.cachedComments.length > 0) {
-      console.log('💬 [TeacherVoteModal] 使用快取 Comments 數據:', props.cachedComments.length, '個評論')
-      // 注意：cachedComments 來自 excludeTeachers: false 的 API，需要手動排除當前用戶的評論
-      // 這模擬 excludeTeachers: true 的效果，避免教師看到自己的評論
-      const currentEmail = getCurrentUserEmail()
-      commentsToProcess = props.cachedComments.filter((c: any) => c.authorEmail !== currentEmail)
-      console.log('💬 [TeacherVoteModal] 排除當前用戶評論後:', commentsToProcess.length, '個評論')
-    } else {
-      // Fallback: 調用 API（向後兼容）
-      const httpResponse2 = await rpcClient.comments.stage.$post({
-        json: {
-          projectId: props.projectId,
-          stageId: props.stageId,
-          excludeTeachers: true,  // excludeTeachers: true - teachers don't see their own comments
-          forVoting: true  // 按作者去重，每位作者只保留一篇代表评论
-        }
-      })
-      const commentsResponse = await httpResponse2.json()
-
-      if (commentsResponse.success && commentsResponse.data && commentsResponse.data.comments) {
-        console.log('💬 [TeacherVoteModal] 從 API 載入評論數量:', commentsResponse.data.comments.length)
-        commentsToProcess = commentsResponse.data.comments
+    const httpResponse2 = await rpcClient.comments.stage.$post({
+      json: {
+        projectId: props.projectId,
+        stageId: props.stageId,
+        excludeTeachers: true,  // excludeTeachers: true - teachers don't see their own comments
+        forVoting: true  // 按作者去重，每位作者只保留一篇代表评论
+        // 注意：不傳 limit/offset，確保返回完整數據
       }
+    })
+    const commentsResponse = await httpResponse2.json()
+
+    if (commentsResponse.success && commentsResponse.data && commentsResponse.data.comments) {
+      console.log('💬 [TeacherVoteModal] 從 API 載入評論數量:', commentsResponse.data.comments.length)
+      commentsToProcess = commentsResponse.data.comments
     }
 
     // 統一處理評論數據（無論來自快取或 API）

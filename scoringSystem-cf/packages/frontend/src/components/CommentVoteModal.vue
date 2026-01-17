@@ -984,14 +984,8 @@ watch(() => props.visible, async (newVal) => {
   if (newVal) {
     clearAlerts()  // Clear alerts when opening
 
-    // Step 1: Initialize comments data first
-    if (processedStageComments.value.length > 0) {
-      initializeComments(processedStageComments.value)
-      buildCommentsMap(processedStageComments.value)
-    } else {
-      // Fallback: 如果父組件未傳入評論，才呼叫 API
-      await loadStageComments()
-    }
+    // Step 1: 投票需要完整數據，始終調用 API（不依賴父組件可能被分頁的快取數據）
+    await loadStageComments()
 
     // Step 2: Check voting eligibility
     checkVotingEligibility()
@@ -1011,35 +1005,8 @@ watch(() => props.visible, async (newVal) => {
   }
 })
 
-// 監聽 stageComments 變化（從父組件傳入的評論）
-watch(() => props.stageComments, () => {
-  // Skip if loading proposal or in preview mode (prevents race condition)
-  if (isLoadingProposal.value || loadedProposalId.value) {
-    console.log('[CommentVoteModal] Skipping stageComments watcher - loading/preview mode active')
-    return
-  }
-
-  if (props.visible && processedStageComments.value.length > 0) {
-    initializeComments(processedStageComments.value)
-    buildCommentsMap(processedStageComments.value)
-  }
-}, { deep: true })
-
-// 監聽 legacy comments prop（向後兼容）
-watch(() => props.comments, () => {
-  // Skip if loading proposal or in preview mode (prevents race condition)
-  if (isLoadingProposal.value || loadedProposalId.value) {
-    return
-  }
-
-  // 只有在沒有 stageComments 時才使用 legacy comments
-  if (!props.stageComments || props.stageComments.length === 0) {
-    initializeComments()
-    if (props.visible) {
-      checkVotingEligibility()
-    }
-  }
-}, { immediate: true })
+// 注意：移除了 stageComments 和 comments prop 的 watcher
+// 投票需要完整數據，所有評論數據都從 API 獲取，不依賴父組件傳入的可能被分頁的數據
 </script>
 
 <style scoped>
