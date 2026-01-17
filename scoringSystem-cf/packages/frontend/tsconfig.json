@@ -61,6 +61,7 @@
     "node_modules",
     "dist",
     "bak",
-    "**/__tests__/**"
+    "**/__tests__/**",
+    "src/test/**"
   ]
 }

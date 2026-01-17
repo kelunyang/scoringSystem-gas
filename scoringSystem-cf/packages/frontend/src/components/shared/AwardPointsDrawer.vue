@@ -183,6 +183,17 @@
         </div>
       </div>
 
+      <!-- Confirmation Input -->
+      <div class="confirmation-section" v-if="selectedUsers.length > 0">
+        <h4><i class="fas fa-shield-alt"></i> 確認發放</h4>
+        <ConfirmationInput
+          v-model="confirmText"
+          keyword="GIVEAWAY"
+          hint-action="發放點數"
+          prefix-icon="fas fa-gift"
+        />
+      </div>
+
       <!-- Progress Bar -->
       <div v-if="isSubmitting" class="progress-section">
         <el-progress
@@ -215,12 +226,13 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { rpcClient } from '@/utils/rpc-client'
 import { generateAvatarUrl } from '@/utils/walletHelpers'
 import { getErrorMessage } from '@/utils/errorHandler'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import EmptyState from './EmptyState.vue'
+import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 
 // Drawer Breadcrumb
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
@@ -272,6 +284,7 @@ const selectAll = ref(false)
 const awardAmount = ref(0)
 const awardReason = ref('')
 const selectedStageId = ref(null)
+const confirmText = ref('')
 
 // Submission states
 const isSubmitting = ref(false)
@@ -362,6 +375,7 @@ const canSubmit = computed(() => {
   return selectedUsers.value.length > 0 &&
     awardAmount.value !== 0 &&
     awardReason.value.trim() !== '' &&
+    confirmText.value.toUpperCase() === 'GIVEAWAY' &&
     !isSubmitting.value
 })
 
@@ -379,11 +393,13 @@ function handleClose() {
 
   // Reset form
   selectedUsers.value = []
+  selectAll.value = false
   awardAmount.value = 0
   awardReason.value = ''
   selectedStageId.value = null
   selectedGroupFilter.value = null
   searchText.value = ''
+  confirmText.value = ''
 
   drawerVisible.value = false
 }
@@ -391,23 +407,10 @@ function handleClose() {
 // Handle submit
 async function handleSubmit() {
   try {
-    // Confirmation dialog
-    const confirmMessage = `
-      確定要發放點數給 ${selectedUsers.value.length} 位使用者嗎？
-      每人：${awardAmount.value > 0 ? '+' : ''}${awardAmount.value} 點
-      總計：${totalImpact.value > 0 ? '+' : ''}${totalImpact.value} 點
-    `
-
-    await ElMessageBox.confirm(confirmMessage, '確認發放', {
-      confirmButtonText: '確定發放',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-
     isSubmitting.value = true
     submittedCount.value = 0
 
-    const errors = []
+    const errors: string[] = []
 
     // Batch award points to each selected user
     for (const userEmail of selectedUsers.value) {
@@ -419,9 +422,9 @@ async function handleSubmit() {
             amount: awardAmount.value,
             transactionType: 'manual_award',
             source: awardReason.value,
-            relatedId: null,
-            settlementId: null,
-            stageId: selectedStageId.value
+            relatedId: undefined,
+            settlementId: undefined,
+            stageId: selectedStageId.value ?? undefined
           }
         })
         const response = await httpResponse.json()
@@ -441,6 +444,7 @@ async function handleSubmit() {
     if (errors.length === 0) {
       ElMessage.success(`成功發放點數給 ${selectedUsers.value.length} 位使用者！`)
       emit('success')
+      isSubmitting.value = false  // Reset before handleClose to avoid early return
       handleClose()
     } else if (errors.length < selectedUsers.value.length) {
       ElMessage.warning(`部分發放成功。失敗 ${errors.length} 筆：\n${errors.slice(0, 3).join('\n')}`)
@@ -449,10 +453,8 @@ async function handleSubmit() {
       ElMessage.error('發放失敗，請檢查後重試')
     }
   } catch (error) {
-    if (error !== 'cancel') {
-      console.error('Award points error:', error)
-      ElMessage.error('發放失敗：' + getErrorMessage(error))
-    }
+    console.error('Award points error:', error)
+    ElMessage.error('發放失敗：' + getErrorMessage(error))
   } finally {
     isSubmitting.value = false
     submittedCount.value = 0
@@ -466,8 +468,6 @@ async function handleSubmit() {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  height: 100%;
-  overflow-y: auto;
 }
 
 /* Filter Section */
@@ -496,18 +496,15 @@ async function handleSubmit() {
 .user-selection-section {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  overflow: hidden;
+  overflow-y: auto;
+  max-height: 500px;
+  flex-shrink: 0;
 }
 
 .selection-header {
   padding: 12px 16px;
   background: #f9fafb;
   border-bottom: 1px solid #e5e7eb;
-}
-
-.user-list {
-  max-height: 500px;
-  overflow-y: auto;
 }
 
 .user-item {
@@ -680,6 +677,23 @@ async function handleSubmit() {
 
 .summary-item .value.negative {
   color: #dc2626;
+}
+
+/* Confirmation Section */
+.confirmation-section {
+  padding: 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+}
+
+.confirmation-section h4 {
+  margin: 0 0 12px 0;
+  color: #991b1b;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Progress Section */
