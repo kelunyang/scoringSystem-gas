@@ -726,8 +726,8 @@
                   </div>
                 </el-tooltip>
 
-                <!-- 已發布評論（顯示總數，非分頁後的數量） -->
-                <AnimatedStatistic title="已發布評論" :value="stageCommentPagination.get(stage.id)?.total ?? stage.comments?.length ?? 0" />
+                <!-- 已發布評論（顯示總數，由 StageComments 通過 emit 更新） -->
+                <AnimatedStatistic title="已發布評論" :value="stageCommentTotals.get(stage.id) ?? stage.comments?.length ?? 0" />
               </div>
             </div>
 
@@ -758,7 +758,7 @@
             />
 
             <!-- 階段評論模式：顯示評論區域 -->
-            <div v-if="stage.viewMode" class="stage-comments-section" v-loading="stage.loadingComments" element-loading-text="載入評論資料中...">
+            <div v-if="stage.viewMode" class="stage-comments-section">
               <StageComments
                 :stage-id="stage.id"
                 :project-id="projectId"
@@ -770,11 +770,9 @@
                 :stage-status="stage.status"
                 :permission-level="permissions.permissionLevel?.value ?? 'none'"
                 :project-groups="projectData?.groups || []"
-                :initial-comments="stage.comments"
-                :initial-has-more="stageCommentPagination.get(stage.id)?.hasMore || false"
-                :initial-total-comments="stageCommentPagination.get(stage.id)?.total || 0"
                 :comment-page-size="userCommentPageSize"
                 @reply-comment="handleReplyComment"
+                @total-updated="(total: number) => stageCommentTotals.set(stage.id, total)"
               />
             </div>
 
@@ -1194,12 +1192,8 @@ const userEmailToDisplayName = ref<Record<string, string>>({})
 // ===== 評論分頁設定 =====
 /** 用戶的評論分頁設定（預設 3 則/頁） */
 const userCommentPageSize = ref(3)
-/** 各階段的評論分頁狀態 */
-const stageCommentPagination = reactive(new Map<string, {
-  hasMore: boolean
-  total: number
-  offset: number
-}>())
+/** 各階段的評論總數（由 StageComments 組件 emit total-updated 時更新） */
+const stageCommentTotals = reactive(new Map<string, number>())
 
 // ===== Loading 狀態 =====
 // loadingVoteData 已移除 - VoteResultModal 現在使用 TanStack Query 內部管理載入狀態
@@ -2844,11 +2838,12 @@ async function handleCommentSubmit(data: any) {
       console.log('找到目標階段，切換到查看評論模式:', targetStage.title)
       targetStage.viewMode = true
 
-      await nextTick()
-      await stageContent.refreshStageComments(targetStage, projectId.value)
-
-      // 更新評論數據以刷新 mention badge
-      await loadStageComments(targetStage)
+      // 使用 TanStack Query 刷新評論資料
+      // StageComments 組件使用 useInfiniteStageComments，queryKey 格式為:
+      // ['comments', 'infinite', projectId, stageId, limit, excludeTeachers]
+      await queryClient.invalidateQueries({
+        queryKey: ['comments', 'infinite', projectId.value, targetStage.id]
+      })
 
       showSuccess('評論提交成功！已切換到查看評論模式')
     } else {
@@ -3231,22 +3226,14 @@ async function loadAllStageComments() {
           // 保存後端預計算的投票資格（不受分頁影響）
           stage.votingEligible = stageData.votingEligible || false
 
-          // 儲存分頁狀態
-          stageCommentPagination.set(stage.id, {
-            hasMore: stageData.hasMore || false,
-            total: stageData.total || 0,
-            offset: stageData.comments.length
-          })
+          // 儲存評論總數（用於統計顯示的 fallback）
+          stageCommentTotals.set(stage.id, stageData.total || 0)
 
           console.log(`✅ 階段 ${stage.id} 載入 ${stage.comments?.length ?? 0} 條評論，總數 ${stageData.total}，hasMore: ${stageData.hasMore}，votingEligible: ${stage.votingEligible}`)
         } else {
           stage.comments = []
           stage.votingEligible = false
-          stageCommentPagination.set(stage.id, {
-            hasMore: false,
-            total: 0,
-            offset: 0
-          })
+          stageCommentTotals.set(stage.id, 0)
           console.warn(`⚠️ 階段 ${stage.id} 無評論數據`)
         }
       }
@@ -3299,33 +3286,21 @@ async function loadAllStageCommentsFallback() {
         // 保存後端預計算的投票資格（不受分頁影響）
         stage.votingEligible = response.data.votingEligible || false
 
-        // 儲存分頁狀態
-        stageCommentPagination.set(stage.id, {
-          hasMore: response.data.hasMore || false,
-          total: response.data.total || 0,
-          offset: (response.data.comments || []).length
-        })
+        // 儲存評論總數（用於統計顯示的 fallback）
+        stageCommentTotals.set(stage.id, response.data.total || 0)
 
         console.log(`✅ 階段 ${stage.id} 載入 ${stage.comments?.length ?? 0} 條評論，總數 ${response.data.total}，hasMore: ${response.data.hasMore}，votingEligible: ${stage.votingEligible}`)
       } else {
         stage.comments = []
         stage.votingEligible = false
-        stageCommentPagination.set(stage.id, {
-          hasMore: false,
-          total: 0,
-          offset: 0
-        })
+        stageCommentTotals.set(stage.id, 0)
         console.warn(`⚠️ 階段 ${stage.id} 無評論數據`)
       }
     } catch (error) {
       console.error(`❌ 載入階段 ${stage.id} 評論失敗:`, error)
       stage.comments = []
       stage.votingEligible = false
-      stageCommentPagination.set(stage.id, {
-        hasMore: false,
-        total: 0,
-        offset: 0
-      })
+      stageCommentTotals.set(stage.id, 0)
     }
   })
 
@@ -3431,38 +3406,7 @@ async function loadAllStageProposals() {
 }
 
 
-/**
- * 載入單一階段的評論（用於評論提交後更新）
- */
-async function loadStageComments(stage: ExtendedStage) {
-  try {
-    const httpResponse = await (rpcClient.comments as any).stage.$post({
-      json: {
-        projectId: projectId.value,
-        stageId: stage.id,
-        excludeTeachers: false
-      }
-    })
-    const response = await httpResponse.json()
-    if (response.success && response.data) {
-      // 預先解析 JSON 字段，避免在 computed 中重複解析
-      stage.comments = (response.data.comments || []).map((comment: any) => ({
-        ...comment,
-        mentionedUsers: typeof comment.mentionedUsers === 'string'
-          ? JSON.parse(comment.mentionedUsers)
-          : (comment.mentionedUsers || []),
-        mentionedGroups: typeof comment.mentionedGroups === 'string'
-          ? JSON.parse(comment.mentionedGroups)
-          : (comment.mentionedGroups || [])
-      }))
-      // 保存後端預計算的投票資格（不受分頁影響）
-      stage.votingEligible = response.data.votingEligible || false
-      console.log(`✅ 階段 ${stage.id} 評論已更新：${stage.comments?.length ?? 0} 條，votingEligible: ${stage.votingEligible}`)
-    }
-  } catch (error) {
-    console.error(`載入階段 ${stage.id} 評論失敗:`, error)
-  }
-}
+// loadStageComments 已移除 - 評論載入現在由 StageComments 組件使用 TanStack Query 自行管理
 
 /**
  * 載入群組的共識投票狀態（Active 階段使用）

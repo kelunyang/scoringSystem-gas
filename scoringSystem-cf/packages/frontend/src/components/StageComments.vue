@@ -292,7 +292,7 @@
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, ref, type DefineComponent } from 'vue'
+import { computed, defineComponent, ref, watch, toRef, type DefineComponent } from 'vue'
 import { ElBadge, ElButton, ElMessage, ElTooltip } from 'element-plus'
 import StatNumberContent from '@/components/shared/StatNumberContent.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
@@ -301,6 +301,7 @@ import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 import { processMentions } from '@/utils/mention-processor'
 import { useProjectRole } from '@/composables/useProjectRole'
 import { getNumericPermissionLevel } from '@/composables/useProjectPermissions'
+import { useInfiniteStageComments, flattenInfiniteComments, getInfiniteCommentsTotal, getInfiniteVotingEligible } from '@/composables/useProjectDetail'
 import { rpcClient } from '@/utils/rpc-client'
 import { generateAvatarUrl } from '@/utils/walletHelpers'
 import { handleError } from '@/utils/errorHandler'
@@ -372,7 +373,8 @@ const component: DefineComponent<any, any, any> = defineComponent({
       default: 3
     }
   },
-  setup(props) {
+  emits: ['reply', 'reply-comment', 'total-updated'],
+  setup(props, { emit }) {
     // Convert permission level to numeric format for backward compatibility
     const numericPermissionLevel = computed(() => {
       if (typeof props.permissionLevel === 'number') {
@@ -385,82 +387,97 @@ const component: DefineComponent<any, any, any> = defineComponent({
       return null
     })
 
-    // 分頁相關狀態 (使用 ref 避免 Options API TypeScript 推斷問題)
-    const comments = ref<any[]>([])
-    const totalComments = ref(0)
-    const hasMore = ref(false)
-    const currentOffset = ref(0)
-    const loadingMore = ref(false)
+    // 使用 TanStack Query Infinite Query 載入評論
+    const commentsQuery = useInfiniteStageComments(
+      toRef(props, 'projectId'),
+      toRef(props, 'stageId'),
+      toRef(props, 'commentPageSize'),
+      false // excludeTeachers
+    )
+
+    // 從 query 結果提取的 computed 屬性
+    const rawComments = computed(() => flattenInfiniteComments(commentsQuery.data.value))
+    const totalComments = computed(() => getInfiniteCommentsTotal(commentsQuery.data.value))
+    const queryVotingEligible = computed(() => getInfiniteVotingEligible(commentsQuery.data.value))
+    const hasMore = computed(() => commentsQuery.hasNextPage?.value ?? false)
+    const isLoading = computed(() => commentsQuery.isLoading?.value ?? false)
+    const isLoadingMore = computed(() => commentsQuery.isFetchingNextPage?.value ?? false)
 
     // 計算剩餘未載入的評論數量
     const remainingCount = computed(() => {
-      return Math.max(0, totalComments.value - comments.value.length)
+      return Math.max(0, totalComments.value - rawComments.value.length)
     })
+
+    // 監聽 totalComments 變化，emit 給父組件 (Option B)
+    watch(totalComments, (newTotal) => {
+      emit('total-updated', newTotal)
+    }, { immediate: true })
+
+    // 載入更多評論
+    async function loadMoreComments() {
+      if (commentsQuery.hasNextPage?.value && !commentsQuery.isFetchingNextPage?.value) {
+        await commentsQuery.fetchNextPage()
+      }
+    }
 
     return {
       numericPermissionLevel,
-      // 分頁狀態
-      comments,
+      // TanStack Query 相關
+      commentsQuery,
+      rawComments,
       totalComments,
+      queryVotingEligible,
       hasMore,
-      currentOffset,
-      loadingMore,
-      remainingCount
+      isLoading,
+      isLoadingMore,
+      remainingCount,
+      loadMoreComments
     }
   },
   data() {
     return {
-      // comments, totalComments, hasMore, currentOffset, loadingMore 已移至 setup()
-      loading: false,  // 預設 false，只有真正載入時才設為 true
+      // 評論資料現在由 TanStack Query 管理 (setup 中的 commentsQuery)
+      // 處理後的評論會存在 processedComments 中
+      processedComments: [] as any[],
       commentRankings: {} as Record<string, any>,
       loadingRankings: false,
-      hasInitialized: false,  // 追蹤是否已初始化
-      votingEligible: false,
       pinnedAuthorEmail: null as string | null  // 用於篩選特定作者的評論
     }
   },
-  async mounted() {
-    // 如果有傳入初始評論資料，直接使用；否則才自己載入
-    if (this.initialComments !== null) {
-      this.comments = this.processCommentsData(this.initialComments)
-      // 初始化分頁狀態
-      this.hasMore = this.initialHasMore
-      this.totalComments = this.initialTotalComments
-      this.currentOffset = this.comments.length
-      this.hasInitialized = true
-      // 如果有傳入排名資料，也直接使用
-      if (this.initialRankings !== null) {
-        this.applyRankingsToComments(this.initialRankings)
-      } else {
-        // 只載入排名
-        await this.loadCommentRankings()
-      }
-    } else {
-      // 沒有初始資料，需要自己載入
-      await this.loadStageComments()
-      this.hasInitialized = true
+  computed: {
+    // 使用處理後的評論資料
+    comments(): any[] {
+      return this.processedComments
+    },
+    // 使用 query 的 loading 狀態
+    loading(): boolean {
+      return this.isLoading
+    },
+    // 使用 query 的 loadingMore 狀態
+    loadingMore(): boolean {
+      return this.isLoadingMore
+    },
+    // 使用 query 的 votingEligible
+    votingEligible(): boolean {
+      return this.queryVotingEligible
     }
   },
   watch: {
-    // 監聽 stageId 變化（用於父組件切換階段時）
-    stageId: {
-      handler(newStageId, oldStageId) {
-        // 只有在 stageId 真正變化時才重新載入（排除初始化）
-        if (newStageId && oldStageId && newStageId !== oldStageId) {
-          this.loadStageComments()
-        }
-      }
-    },
-    // 監聽父組件傳入的評論資料變化
-    initialComments: {
-      handler(newComments) {
-        if (newComments !== null && this.hasInitialized) {
-          this.comments = this.processCommentsData(newComments)
+    // 監聽 rawComments 變化，處理評論並載入排名
+    rawComments: {
+      async handler(newComments) {
+        if (newComments && newComments.length > 0) {
+          this.processedComments = this.processCommentsData(newComments)
+          // 載入排名資料
+          await this.loadCommentRankings()
+        } else if (newComments && newComments.length === 0) {
+          this.processedComments = []
         }
       },
+      immediate: true,
       deep: true
     },
-    // 監聽父組件傳入的排名資料變化
+    // 監聯父組件傳入的排名資料變化 (如果有的話)
     initialRankings: {
       handler(newRankings) {
         if (newRankings !== null) {
@@ -468,70 +485,12 @@ const component: DefineComponent<any, any, any> = defineComponent({
         }
       },
       deep: true
-    },
-    // 監聽分頁狀態變化
-    initialHasMore: {
-      handler(newVal) {
-        this.hasMore = newVal
-      }
-    },
-    initialTotalComments: {
-      handler(newVal) {
-        this.totalComments = newVal
-      }
     }
   },
   // computed: remainingCount 已移至 setup()
   methods: {
-    async loadStageComments() {
-      try {
-        console.log('=== StageComments.loadStageComments 開始 ===')
-        console.log(`ProjectId: ${this.projectId}, StageId: ${this.stageId}`)
+    // loadStageComments 已被 TanStack Query (useInfiniteStageComments) 取代
 
-        this.loading = true
-        // Vue 3 Best Practice: rpcClient automatically handles authentication
-
-        // 從props獲取projectId
-        const projectId = this.projectId
-
-        console.log('開始調用 API 獲取評論...')
-        const httpResponse = await rpcClient.comments.stage.$post({
-          json: {
-            projectId: projectId,
-            stageId: this.stageId,
-            excludeTeachers: false
-          }
-        })
-        const response = await httpResponse.json()
-
-        console.log('評論 API 響應:', response)
-
-        if (response.success && response.data) {
-          // Extract comments from nested response structure
-          const comments = response.data.comments || []
-          console.log(`獲取到 ${comments.length} 條評論`)
-          this.comments = this.processCommentsData(comments)
-          // Store metadata
-          this.totalComments = response.data.total || 0
-          this.votingEligible = response.data.votingEligible || false
-          console.log('評論處理完成，開始載入排名...')
-          // 載入評論排名
-          await this.loadCommentRankings()
-          console.log('排名載入完成')
-        } else {
-          console.error('評論載入失敗:', response)
-          handleError('無法載入評論列表', {
-            action: '載入評論'
-          })
-        }
-      } catch (error) {
-        console.error('Error loading comments:', error)
-      } finally {
-        this.loading = false
-        console.log('=== StageComments.loadStageComments 結束 ===')
-      }
-    },
-    
     processCommentsData(rawComments: any[]) {
       if (!rawComments || !Array.isArray(rawComments)) {
         return []
@@ -816,12 +775,12 @@ const component: DefineComponent<any, any, any> = defineComponent({
           
           // 更新評論的排名信息
           console.log('開始更新評論的投票排名信息...')
-          console.log(`當前評論數: ${this.comments.length}`)
-          
-          this.comments = this.comments.map(comment => {
+          console.log(`當前評論數: ${this.processedComments.length}`)
+
+          this.processedComments = this.processedComments.map(comment => {
             const rankings = this.commentRankings[comment.commentId] || {}
             console.log(`評論 ${comment.commentId} 的投票排名:`, rankings)
-            
+
             return {
               ...comment,
               settlementRank: rankings.settlementRank || null,
@@ -829,7 +788,7 @@ const component: DefineComponent<any, any, any> = defineComponent({
               teacherVoteRank: rankings.teacherVoteRank || null
             }
           })
-          
+
           console.log('投票排名更新完成')
         } else {
           console.error('投票排名載入失敗:', response)
@@ -854,7 +813,7 @@ const component: DefineComponent<any, any, any> = defineComponent({
               console.log('收到結算排名數據:', settlementRankings)
 
               // 更新評論的結算排名和獲得點數
-              this.comments = this.comments.map(comment => {
+              this.processedComments = this.processedComments.map(comment => {
                 const settlementData = settlementRankings[comment.commentId]
                 if (settlementData) {
                   console.log(`評論 ${comment.commentId} 的結算數據:`, settlementData)
@@ -876,7 +835,7 @@ const component: DefineComponent<any, any, any> = defineComponent({
           }
         }
         
-        console.log('最終更新後的評論:', this.comments)
+        console.log('最終更新後的評論:', this.processedComments)
       } catch (error) {
         console.error('Error loading comment rankings:', error)
       } finally {
@@ -1024,65 +983,19 @@ const component: DefineComponent<any, any, any> = defineComponent({
       return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(email)}`
     },
 
-    // 供父組件調用的刷新方法
+    // 供父組件調用的刷新方法 (使用 TanStack Query refetch)
     async refreshComments() {
-      await this.loadStageComments()
+      await this.commentsQuery.refetch()
     },
 
-    // 載入更多評論（分頁）
-    async loadMoreComments() {
-      if (this.loadingMore || !this.hasMore) return
-
-      try {
-        this.loadingMore = true
-        const projectId = this.projectId
-
-        console.log(`[loadMoreComments] 載入更多評論: offset=${this.currentOffset}, limit=${this.commentPageSize}`)
-
-        const httpResponse = await rpcClient.comments.stage.$post({
-          json: {
-            projectId: projectId,
-            stageId: this.stageId,
-            excludeTeachers: false,
-            limit: this.commentPageSize,
-            offset: this.currentOffset
-          }
-        })
-        const response = await httpResponse.json()
-
-        if (response.success && response.data) {
-          const newComments = this.processCommentsData(response.data.comments || [])
-
-          // 追加新評論到列表
-          this.comments = [...this.comments, ...newComments]
-
-          // 更新分頁狀態
-          this.currentOffset += newComments.length
-          this.hasMore = response.data.hasMore || false
-          this.totalComments = response.data.total || this.totalComments
-
-          console.log(`[loadMoreComments] 載入了 ${newComments.length} 則評論，hasMore=${this.hasMore}`)
-
-          // 載入新評論的排名
-          await this.loadCommentRankings()
-        } else {
-          console.error('載入更多評論失敗:', response)
-          ElMessage.error('載入更多評論失敗')
-        }
-      } catch (error) {
-        console.error('載入更多評論錯誤:', error)
-        ElMessage.error('載入更多評論失敗')
-      } finally {
-        this.loadingMore = false
-      }
-    },
+    // loadMoreComments 已移至 setup() 使用 fetchNextPage
 
     // 應用排名資料到評論（用於從父組件接收排名資料時）
     applyRankingsToComments(rankings: Record<string, any>) {
-      if (!rankings || !this.comments.length) return
+      if (!rankings || !this.processedComments.length) return
 
       this.commentRankings = rankings
-      this.comments = this.comments.map(comment => {
+      this.processedComments = this.processedComments.map(comment => {
         const rankingData = rankings[comment.commentId] || {}
         return {
           ...comment,

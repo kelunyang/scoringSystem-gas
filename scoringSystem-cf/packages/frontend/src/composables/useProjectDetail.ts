@@ -12,7 +12,7 @@
  */
 
 import type { Ref, ComputedRef } from 'vue'
-import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/vue-query'
+import { useQuery, useMutation, useQueryClient, useQueries, useInfiniteQuery } from '@tanstack/vue-query'
 import type { UseQueryReturnType, UseMutationReturnType } from '@tanstack/vue-query'
 import { computed, unref } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
@@ -584,4 +584,109 @@ export function useCreateComment(): UseMutationReturnType<Comment, Error, Create
       ElMessage.error(error.message || '發表評論失敗')
     }
   })
+}
+
+/**
+ * Infinite Query 評論頁面資料結構
+ */
+interface InfiniteCommentsPage {
+  comments: Comment[]
+  total: number
+  totalWithReplies: number
+  votingEligible: boolean
+  offset: number
+  limit: number
+  hasMore: boolean
+}
+
+/**
+ * 使用 TanStack Query 的 Infinite Query 載入階段評論（支援分頁）
+ *
+ * @param projectId - Reactive 專案 ID
+ * @param stageId - Reactive 階段 ID
+ * @param limit - 每頁評論數量
+ * @param excludeTeachers - 是否排除教師評論
+ * @returns Infinite Query 結果
+ */
+export function useInfiniteStageComments(
+  projectId: Ref<string> | string,
+  stageId: Ref<string> | string,
+  limit: Ref<number> | number = 3,
+  excludeTeachers: Ref<boolean> | boolean = false
+) {
+  const userQuery = useCurrentUser()
+
+  const isEnabled = computed(() => {
+    const pid = getValue(projectId)
+    const sid = getValue(stageId)
+    return userQuery.isSuccess.value && !!pid && !!sid
+  })
+
+  return useInfiniteQuery({
+    queryKey: computed(() => [
+      'comments',
+      'infinite',
+      getValue(projectId),
+      getValue(stageId),
+      getValue(limit),
+      getValue(excludeTeachers)
+    ]),
+    queryFn: async ({ pageParam = 0 }): Promise<InfiniteCommentsPage> => {
+      const httpResponse = await rpcClient.comments.stage.$post({
+        json: {
+          projectId: getValue(projectId),
+          stageId: getValue(stageId),
+          excludeTeachers: getValue(excludeTeachers),
+          limit: getValue(limit),
+          offset: pageParam
+        }
+      })
+      const response = await httpResponse.json()
+
+      if (!response.success) {
+        throw new Error(response.error?.message || '載入評論失敗')
+      }
+
+      return {
+        comments: response.data.comments || [],
+        total: response.data.total || 0,
+        totalWithReplies: response.data.totalWithReplies || 0,
+        votingEligible: response.data.votingEligible || false,
+        offset: pageParam,
+        limit: getValue(limit),
+        hasMore: response.data.hasMore || false
+      }
+    },
+    getNextPageParam: (lastPage) => {
+      // 只有當還有更多時，才返回下一個 offset
+      return lastPage.hasMore
+        ? lastPage.offset + lastPage.comments.length
+        : undefined
+    },
+    initialPageParam: 0,
+    enabled: isEnabled,
+    staleTime: 1000 * 30,    // 30 秒
+    gcTime: 1000 * 60 * 10   // 10 分鐘
+  })
+}
+
+/**
+ * Helper: 從 infinite query 結果中提取扁平化的評論陣列
+ */
+export function flattenInfiniteComments(data: { pages: InfiniteCommentsPage[] } | undefined): Comment[] {
+  return data?.pages?.flatMap((page) => page.comments) ?? []
+}
+
+/**
+ * Helper: 從 infinite query 結果中提取 total
+ */
+export function getInfiniteCommentsTotal(data: { pages: InfiniteCommentsPage[] } | undefined): number {
+  return data?.pages?.[0]?.total ?? 0
+}
+
+/**
+ * Helper: 從 infinite query 結果中提取 votingEligible
+ */
+export function getInfiniteVotingEligible(data: { pages: InfiniteCommentsPage[] } | undefined): boolean {
+  return data?.pages?.[0]?.votingEligible ?? false
 }

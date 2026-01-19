@@ -1337,7 +1337,7 @@ export default {
 
     // Create a computed ref for backwards compatibility with existing code
     // Cast to ExtendedProject[] for type compatibility with function parameters
-    const projects = computed(() => (projectsQuery?.data?.value || []) as ExtendedProject[])
+    const projects = computed(() => (projectsQuery?.data?.value?.projects || []) as ExtendedProject[])
 
     // Filter persistence
     const { filters, resetFilters } = useFilterPersistence('projectManagement', {
