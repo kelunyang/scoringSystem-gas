@@ -19,6 +19,7 @@ export interface EventLogFilters {
   endTime?: number;            // End timestamp
   actions?: string[];          // Filter by actions
   resourceTypes?: string[];    // Filter by resource types
+  resourceId?: string;         // Filter by specific resource ID
   limit?: number;              // Limit number of results
   offset?: number;             // Offset for pagination
 }
@@ -86,6 +87,12 @@ export async function getProjectEventLogs(
       const placeholders = filters.resourceTypes.map(() => '?').join(',');
       query += ` AND el.entityType IN (${placeholders})`;
       params.push(...filters.resourceTypes);
+    }
+
+    // Apply resource ID filter (entityId in schema)
+    if (filters.resourceId) {
+      query += ` AND el.entityId = ?`;
+      params.push(filters.resourceId);
     }
 
     // Order by timestamp (newest first)

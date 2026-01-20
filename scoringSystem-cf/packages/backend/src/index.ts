@@ -24,7 +24,7 @@ import commentsRouter from './router/comments';
 import scoringRouter from './router/scoring';
 // DISABLED: Tags system has been disabled
 // import tagsRouter from './router/tags';
-import eventlogsRouter from './router/eventlogs';
+import activityRouter from './router/activity';
 import notificationsRouter from './router/notifications';
 import adminRouter from './router/admin';
 import ipRouter from './router/ip';
@@ -171,7 +171,7 @@ app.get('/api', (c) => {
       groups: '/api/groups',
       invitations: '/api/invitations',
       // DISABLED: tags: '/api/tags',
-      eventlogs: '/api/eventlogs',
+      activity: '/api/activity',
       notifications: '/api/notifications',
       admin: '/api/admin',
       settlement: '/api/settlement',
@@ -229,8 +229,8 @@ app.route('/api/rankings', rankingsRouter);
 // DISABLED: Tag management routes - tags system has been disabled
 // app.route('/tags', tagsRouter);
 
-// Event logs routes (COMPLETED)
-app.route('/api/eventlogs', eventlogsRouter);
+// Activity logs routes (COMPLETED) - renamed from eventlogs to avoid ad blocker interference
+app.route('/api/activity', activityRouter);
 
 // Notification routes (COMPLETED)
 app.route('/api/notifications', notificationsRouter);

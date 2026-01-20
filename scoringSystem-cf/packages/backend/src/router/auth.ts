@@ -536,8 +536,9 @@ authRouter.post(
     // Legacy alias for compatibility
     const ipAddress = requestContext.ipAddress === 'unknown' ? null : requestContext.ipAddress;
 
-    // Check if SMTP is configured
-    const smtpConfigured = !!(c.env.SMTP_HOST && c.env.SMTP_USERNAME && c.env.SMTP_PASSWORD);
+    // Check if SMTP is configured (KV-first, fallback to env)
+    const smtpConfig = await getSmtpConfig(c.env);
+    const smtpConfigured = smtpConfig !== null;
 
     // Declare verifyResult at outer scope to access user data later
     let verifyResult: any;
@@ -737,6 +738,7 @@ authRouter.post(
       success: true,
       data: {
         sessionId: token,
+        devMode: !smtpConfigured,
         user: {
           userId: user.userId,
           userEmail: user.userEmail,

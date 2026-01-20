@@ -18,7 +18,8 @@
       <div class="sidebar" :class="{
         collapsed: sidebarCollapsed,
         'mobile-open': showMobileSidebar,
-        'sudo-mode': sudoStore.isActive
+        'sudo-mode': sudoStore.isActive,
+        'dev-mode': isDevModeActive && isSystemAdmin
       }">
         <!-- Header with collapse button -->
         <div class="sidebar-header">
@@ -195,7 +196,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useIntervalFn } from '@vueuse/core'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useWebSocketStore } from '../stores/websocket'
-import { useAuth } from '../composables/useAuth'
+import { useAuth, isDevMode } from '../composables/useAuth'
 import { usePermissions } from '../composables/usePermissions'
 import type { Project } from '@/types'
 import {
@@ -256,6 +257,9 @@ const isSystemAdmin = computed(() => {
 
   return adminPermissions.some(perm => perms.includes(perm))
 })
+
+// Dev mode check (SMTP not configured - show warning to admins)
+const isDevModeActive = computed(() => isDevMode())
 
 // ========================================
 // Constants
@@ -1392,5 +1396,66 @@ onBeforeUnmount(() => {
 
 .sidebar.sudo-mode .sidebar-watermark-2025 a:hover {
   color: #e6a23c;
+}
+
+/* ===== Sidebar Dev Mode (Admin Warning) ===== */
+.sidebar.dev-mode {
+  background: linear-gradient(180deg, #722F37 0%, #4A1C23 100%); /* Maroon 漸層 */
+  border-right: 3px solid #DC143C;
+  position: relative;
+}
+
+.sidebar.dev-mode .sidebar-header {
+  border-bottom-color: #DC143C;
+}
+
+.sidebar.dev-mode .sidebar-breadcrumb {
+  background: rgba(220, 20, 60, 0.2);
+}
+
+.sidebar.dev-mode::after {
+  content: '⚠️ DEV MODE';
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #DC143C;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.sidebar.dev-mode.collapsed::after {
+  content: '⚠️';
+  padding: 4px 8px;
+}
+
+.sidebar.dev-mode .nav-item {
+  color: #ffd0d0;
+}
+
+.sidebar.dev-mode .nav-item:hover {
+  background-color: rgba(220, 20, 60, 0.3);
+}
+
+.sidebar.dev-mode .sidebar-user-controls {
+  background: linear-gradient(135deg, #4A1C23 0%, #722F37 100%);
+  border-top-color: #DC143C;
+}
+
+.sidebar.dev-mode .sidebar-watermark-2025 {
+  color: #ffd0d0;
+}
+
+.sidebar.dev-mode .sidebar-watermark-2025 a {
+  color: #ffd0d0;
+}
+
+.sidebar.dev-mode .sidebar-watermark-2025 a:hover {
+  color: #DC143C;
 }
 </style>

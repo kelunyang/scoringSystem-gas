@@ -1074,15 +1074,15 @@ class TestSettlementFunctions:
 
 
 # ============================================================================
-# Event Logs Function Tests
+# Activity Logs Function Tests (renamed from eventlogs to avoid ad blocker)
 # ============================================================================
 
-class TestEventLogsFunctions:
-    """Test event logs endpoint access control"""
+class TestActivityLogsFunctions:
+    """Test activity logs endpoint access control"""
 
     @pytest.mark.high
     @pytest.mark.functions
-    def test_eventlogs_project_requires_view(
+    def test_activity_project_requires_view(
         self,
         api_client: APIClient
     ):
@@ -1091,7 +1091,7 @@ class TestEventLogsFunctions:
         """
         fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
-        response = api_client.post('/api/eventlogs/project', auth=fake_outsider_token, json={
+        response = api_client.post('/api/activity/project', auth=fake_outsider_token, json={
             'projectId': 'proj_test'
         })
 
@@ -1100,7 +1100,7 @@ class TestEventLogsFunctions:
 
     @pytest.mark.high
     @pytest.mark.functions
-    def test_eventlogs_user_requires_view(
+    def test_activity_user_requires_view(
         self,
         api_client: APIClient
     ):
@@ -1109,7 +1109,7 @@ class TestEventLogsFunctions:
         """
         fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
-        response = api_client.post('/api/eventlogs/user', auth=fake_outsider_token, json={
+        response = api_client.post('/api/activity/user', auth=fake_outsider_token, json={
             'projectId': 'proj_test',
             'userId': 'usr_target'
         })
@@ -1119,7 +1119,7 @@ class TestEventLogsFunctions:
 
     @pytest.mark.high
     @pytest.mark.functions
-    def test_eventlogs_resource_requires_view(
+    def test_activity_resource_requires_view(
         self,
         api_client: APIClient
     ):
@@ -1128,7 +1128,7 @@ class TestEventLogsFunctions:
         """
         fake_outsider_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
-        response = api_client.post('/api/eventlogs/resource', auth=fake_outsider_token, json={
+        response = api_client.post('/api/activity/resource', auth=fake_outsider_token, json={
             'projectId': 'proj_test',
             'resourceId': 'res_test'
         })

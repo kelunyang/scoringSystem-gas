@@ -147,6 +147,9 @@ export function useLogin(): UseLoginReturn {
           sessionStorage.setItem('sessionId', response.data.sessionId);
         }
 
+        // Save devMode status for admin warning display
+        sessionStorage.setItem('devMode', response.data.devMode ? 'true' : 'false');
+
         // ✅ Invalidate current user query to trigger refetch with deduplication
         // This ensures the showAuthModal closes and isSystemAdmin updates instantly
         // Using invalidateQueries instead of refetchQueries prevents race conditions

@@ -2056,7 +2056,8 @@ export default {
         const response = await httpResponse.json()
 
         if (response.success && response.data) {
-          projects.value = response.data
+          // API returns { projects, totalCount, limit, offset }
+          projects.value = response.data.projects || response.data
         }
       } catch (error) {
         console.error('Error loading projects:', error)

@@ -1202,15 +1202,15 @@ class TestSettlementBOLA:
 
 
 # ============================================================================
-# Event Logs Access Control Tests
+# Activity Logs Access Control Tests (renamed from eventlogs to avoid ad blocker)
 # ============================================================================
 
-class TestEventLogsBOLA:
-    """Test event logs access control with 5-layer permission model"""
+class TestActivityLogsBOLA:
+    """Test activity logs access control with 5-layer permission model"""
 
     @pytest.mark.critical
     @pytest.mark.bola
-    def test_cross_project_eventlog_access(
+    def test_cross_project_activity_access(
         self,
         api_client: APIClient
     ):
@@ -1225,7 +1225,7 @@ class TestEventLogsBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
         response = api_client.post(
-            '/api/eventlogs/project',
+            '/api/activity/project',
             auth=fake_token,
             json={
                 'projectId': 'proj_unauthorized'
@@ -1237,7 +1237,7 @@ class TestEventLogsBOLA:
 
     @pytest.mark.critical
     @pytest.mark.bola
-    def test_cross_user_eventlog_access(
+    def test_cross_user_activity_access(
         self,
         api_client: APIClient
     ):
@@ -1252,7 +1252,7 @@ class TestEventLogsBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhdHRhY2tlciJ9.fake"
 
         response = api_client.post(
-            '/api/eventlogs/user',
+            '/api/activity/user',
             auth=fake_token,
             json={
                 'projectId': 'proj_test',
@@ -1265,7 +1265,7 @@ class TestEventLogsBOLA:
 
     @pytest.mark.high
     @pytest.mark.bola
-    def test_eventlog_resource_cross_project(
+    def test_activity_resource_cross_project(
         self,
         api_client: APIClient
     ):
@@ -1280,7 +1280,7 @@ class TestEventLogsBOLA:
         fake_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJvdXRzaWRlciJ9.fake"
 
         response = api_client.post(
-            '/api/eventlogs/resource',
+            '/api/activity/resource',
             auth=fake_token,
             json={
                 'projectId': 'proj_unauthorized',
@@ -1294,7 +1294,7 @@ class TestEventLogsBOLA:
 
     @pytest.mark.high
     @pytest.mark.bola
-    def test_eventlog_layer_permission_enforcement(
+    def test_activity_layer_permission_enforcement(
         self,
         api_client: APIClient,
         admin_token: str
@@ -1319,7 +1319,7 @@ class TestEventLogsBOLA:
 
         # Viewer should not be able to see system-level logs
         response = api_client.post(
-            '/api/eventlogs/project',
+            '/api/activity/project',
             auth=fake_viewer_token,
             json={
                 'projectId': 'proj_test',
@@ -1333,7 +1333,7 @@ class TestEventLogsBOLA:
 
     @pytest.mark.medium
     @pytest.mark.bola
-    def test_eventlog_id_enumeration_prevention(
+    def test_activity_id_enumeration_prevention(
         self,
         api_client: APIClient,
         admin_token: str
@@ -1354,7 +1354,7 @@ class TestEventLogsBOLA:
 
         for fake_id in fake_log_ids:
             response = api_client.post(
-                '/api/eventlogs/resource',
+                '/api/activity/resource',
                 auth=admin_token,
                 json={
                     'projectId': 'proj_nonexistent',

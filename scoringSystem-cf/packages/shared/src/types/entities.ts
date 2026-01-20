@@ -399,11 +399,12 @@ export interface EventLog {
   displayName?: string;
   entityType: string | null;
   entityId: string | null;
-  details: string; // JSON
+  details: Record<string, unknown> | null; // Parsed JSON object (backend parses before returning)
   timestamp: number;
   // Extended properties (for event log display)
   action?: string;
   resourceType?: string;
+  resourceId?: string; // Alias for entityId
   resource?: any;
   stageId?: string;
   stageName?: string;

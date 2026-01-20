@@ -152,6 +152,9 @@ export function useLogout(): UseMutationReturnType<ApiResponse, Error, void, unk
       // Clear all session data using apiClient method
       apiClient.clearToken()
 
+      // Clear devMode flag
+      sessionStorage.removeItem('devMode')
+
       // ✅ Clear all TanStack Query cache to prevent data leakage between users
       // This ensures the next user won't see the previous user's cached data
       queryClient.clear()
@@ -168,6 +171,9 @@ export function useLogout(): UseMutationReturnType<ApiResponse, Error, void, unk
 
       // Even if API call fails, still clear local state
       apiClient.clearToken()
+
+      // Clear devMode flag
+      sessionStorage.removeItem('devMode')
 
       // ✅ Clear all cache even on error to ensure clean state
       queryClient.clear()
@@ -423,6 +429,14 @@ export function useHasAllPermissions(userQuery: UseQueryReturnType<AuthUser, Err
  *
  * @returns {Object} Authentication state and methods
  */
+/**
+ * Check if the current session is in dev mode (SMTP not configured)
+ * Used to display warning to admins
+ */
+export function isDevMode(): boolean {
+  return sessionStorage.getItem('devMode') === 'true';
+}
+
 export function useAuth() {
   // Get the base query
   const userQuery = useCurrentUser()

@@ -231,11 +231,27 @@
       </table>
 
       <!-- 空状态 -->
-      <EmptyState
-        v-if="!loading && displayedLogs.length === 0"
-        parent-icon="fa-clipboard-list"
-        title="暫無事件記錄"
-        :compact="true"
+      <div v-if="displayedLogs.length === 0" v-loading="loading" class="empty-state-container">
+        <EmptyState
+          v-if="!loading"
+          parent-icon="fa-clipboard-list"
+          title="暫無事件記錄"
+          description="請調整篩選條件或時間範圍"
+          :compact="false"
+        />
+      </div>
+    </div>
+
+    <!-- Pagination (backend search mode) -->
+    <div v-if="searchMode === 'backend' && totalCount != null && totalCount > 0" class="pagination-container">
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :total="totalCount"
+        :page-sizes="[50, 100, 200]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @size-change="handlePageSizeChange"
+        @current-change="handlePageChange"
       />
     </div>
 
@@ -243,17 +259,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 // @ts-ignore - icons-vue package type issue
-import { Refresh } from '@element-plus/icons-vue'
+import { Refresh, Search } from '@element-plus/icons-vue'
+import { useDebounceFn } from '@vueuse/core'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { getErrorMessage } from '@/utils/errorHandler'
 import type { EventLog } from '@/types'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import AdminFilterToolbar from './admin/shared/AdminFilterToolbar.vue'
-import { sanitizeHtml, sanitizeText } from '@/utils/sanitize'
 import ExpandableTableRow from './shared/ExpandableTableRow.vue'
 import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 import { jsonToMarkdown } from '@/utils/json-preview'
@@ -300,6 +316,13 @@ const props = defineProps({
 // 数据
 const loading = ref(false)
 const allLogs = ref<EventLog[]>([])
+
+// Backend search mode state (following SystemLogs.vue pattern)
+const searchMode = ref<'frontend' | 'backend'>('backend') // Default to backend search
+const totalCount = ref<number | null>(null)
+const currentPage = ref(1)
+const pageSize = ref(50)
+
 // Filter persistence (localStorage)
 const { filters, isLoaded: filtersLoaded } = useFilterPersistence('eventLogViewer', {
   displayLimit: 50,
@@ -396,6 +419,19 @@ const shouldShowUserFilter = computed(() => {
 })
 
 const displayedLogs = computed<EventLog[]>(() => {
+  // Backend mode: data is already filtered by backend, just apply stage filter (client-side only)
+  if (searchMode.value === 'backend') {
+    let filtered = [...allLogs.value]
+
+    // Stage filter is client-side only (not sent to backend)
+    if (stageFilter.value) {
+      filtered = filtered.filter(log => log.stageId === stageFilter.value)
+    }
+
+    return filtered
+  }
+
+  // Frontend mode: full client-side filtering (fallback)
   let filtered = [...allLogs.value]
 
   // 时间范围过滤
@@ -460,7 +496,7 @@ const exportConfig = computed(() => ({
 }))
 
 // 方法
-const loadEventLogs = async () => {
+const loadEventLogs = async (useBackendFilters = true) => {
   // 驗證 projectId
   if (!props.projectId) {
     console.error('loadEventLogs: projectId is required but not provided')
@@ -471,16 +507,44 @@ const loadEventLogs = async () => {
   }
 
   loading.value = true
+  searchMode.value = useBackendFilters ? 'backend' : 'frontend'
+
   try {
     const endpoint = props.userMode ? 'user' : 'project'
-    const params = {
-      projectId: props.projectId,
-      filters: {}
+
+    // Build backend filters object
+    const backendFilters: Record<string, unknown> = {}
+
+    if (useBackendFilters) {
+      // Time range filter
+      if (filters.value.dateRange && filters.value.dateRange.length === 2) {
+        backendFilters.startTime = parseInt(filters.value.dateRange[0])
+        backendFilters.endTime = parseInt(filters.value.dateRange[1]) + 86400000 // +1 day
+      }
+
+      // User email filter (array format for backend)
+      if (filters.value.selectedUsers && filters.value.selectedUsers.length > 0) {
+        backendFilters.userEmails = filters.value.selectedUsers
+      }
+
+      // Resource type filter (array format for backend)
+      if (filters.value.resourceTypeFilter) {
+        backendFilters.resourceTypes = [filters.value.resourceTypeFilter]
+      }
+
+      // Pagination
+      backendFilters.limit = pageSize.value
+      backendFilters.offset = (currentPage.value - 1) * pageSize.value
     }
 
-    console.log('📊 EventLogViewer: Loading event logs', { endpoint, params })
+    const params = {
+      projectId: props.projectId,
+      filters: backendFilters
+    }
 
-    const httpResponse = await rpcClient.eventlogs[endpoint].$post({
+    console.log('📊 EventLogViewer: Loading event logs', { endpoint, params, useBackendFilters })
+
+    const httpResponse = await rpcClient.activity[endpoint].$post({
       json: params
     })
     const response = await httpResponse.json()
@@ -488,23 +552,26 @@ const loadEventLogs = async () => {
     console.log('📊 EventLogViewer: API response', {
       success: response.success,
       logsCount: response.data?.logs?.length,
+      total: response.data?.total,
+      userPermissionLevel: response.data?.userPermissionLevel,
       error: response.error
     })
 
     if (response.success) {
       // Backend returns { logs: [...], total: number, userPermissionLevel: string }
       allLogs.value = response.data?.logs || []
+      totalCount.value = response.data?.total || allLogs.value.length
       userPermissionLevel.value = response.data?.userPermissionLevel || props.permissionLevel || ''
 
       console.log('📊 EventLogViewer: Permission level received:', userPermissionLevel.value)
 
-      // 提取唯一用户列表
+      // 提取唯一用户列表（用於 user filter dropdown）
       const usersMap = new Map()
       allLogs.value.forEach(log => {
-        if (!usersMap.has(log.userEmail)) {
+        if (log.userEmail && !usersMap.has(log.userEmail)) {
           usersMap.set(log.userEmail, {
             userEmail: log.userEmail,
-            displayName: log.displayName
+            displayName: log.displayName || log.userEmail
           })
         }
       })
@@ -513,6 +580,7 @@ const loadEventLogs = async () => {
       // 即使失敗也要設置預設值
       allLogs.value = []
       availableUsers.value = []
+      totalCount.value = 0
       ElMessage.error(response.error?.message || '加载事件日志失败')
     }
   } catch (error) {
@@ -520,6 +588,7 @@ const loadEventLogs = async () => {
     // 設置預設值
     allLogs.value = []
     availableUsers.value = []
+    totalCount.value = 0
     ElMessage.error('加载事件日志失败：' + getErrorMessage(error))
   } finally {
     loading.value = false
@@ -527,11 +596,19 @@ const loadEventLogs = async () => {
 }
 
 const refreshLogs = () => {
-  loadEventLogs()
+  currentPage.value = 1
+  loadEventLogs(true) // Always use backend search
 }
 
+// Debounced backend search (triggered when filters change)
+const debouncedBackendSearch = useDebounceFn(() => {
+  currentPage.value = 1
+  loadEventLogs(true)
+}, 500)
+
 const applyFilters = () => {
-  // 过滤逻辑在 computed 中自动处理
+  // Trigger debounced backend search when filters change
+  debouncedBackendSearch()
 }
 
 const handleResetFilters = () => {
@@ -539,7 +616,23 @@ const handleResetFilters = () => {
   filters.value.resourceTypeFilter = ''
   filters.value.stageFilter = ''
   filters.value.selectedUsers = []
+  currentPage.value = 1
   // displayLimit 保持不變（用戶偏好）
+
+  // Reload with reset filters
+  loadEventLogs(true)
+}
+
+// Pagination handlers
+const handlePageChange = (page: number) => {
+  currentPage.value = page
+  loadEventLogs(true)
+}
+
+const handlePageSizeChange = (size: number) => {
+  pageSize.value = size
+  currentPage.value = 1
+  loadEventLogs(true)
 }
 
 const canExpand = (resourceType: string) => {
@@ -572,7 +665,7 @@ const loadResourceForEvent = async (event: EventLog) => {
     const eventWithResource = event as EventLog & { resourceId?: string }
 
     // Type assertion needed due to AppType being any
-    const httpResponse = await (rpcClient.eventlogs as any).resource.$post({
+    const httpResponse = await (rpcClient.activity as any).resource.$post({
       json: {
         projectId: props.projectId,
         resourceType: event.resourceType,
@@ -1005,5 +1098,23 @@ onMounted(() => {
 /* Highlight.js 主题覆盖 */
 .context-json.hljs {
   background: #f6f8fa;
+}
+
+/* Pagination Container */
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+  background: #f5f7fa;
+  border-radius: 8px;
+  margin-top: 20px;
+}
+
+/* Empty State Container */
+.empty-state-container {
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>

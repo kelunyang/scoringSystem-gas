@@ -7,16 +7,17 @@ import { z } from 'zod';
 
 /**
  * Event log filters schema
+ * Field names match the backend EventLogFilters interface in handlers/eventlogs/query.ts
  */
 const EventLogFiltersSchema = z.object({
-  action: z.string().optional(),
-  targetUserEmail: z.string().email().optional(),
-  startTime: z.number().optional(),
-  endTime: z.number().optional(),
-  limit: z.number().int().positive().optional(),
-  offset: z.number().int().nonnegative().optional(),
-  resourceType: z.string().optional(),
-  resourceId: z.string().optional()
+  actions: z.array(z.string()).optional(),              // Filter by event types (plural array)
+  userEmails: z.array(z.string().email()).optional(),   // Filter by user emails (plural array)
+  resourceTypes: z.array(z.string()).optional(),        // Filter by entity types (plural array)
+  resourceId: z.string().optional(),                    // Filter by specific resource ID
+  startTime: z.number().optional(),                     // Start timestamp (ms)
+  endTime: z.number().optional(),                       // End timestamp (ms)
+  limit: z.number().int().positive().optional(),        // Pagination limit
+  offset: z.number().int().nonnegative().optional()     // Pagination offset
 }).optional();
 
 /**
