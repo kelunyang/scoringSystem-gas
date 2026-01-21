@@ -228,6 +228,16 @@
             @show-award-points="showAwardPointsDrawer = true"
           />
 
+          <!-- Backend Search Mode Indicator -->
+          <div v-if="searchMode === 'backend' && totalTransactions > 0" class="search-result-info">
+            <el-alert type="success" :closable="false">
+              <template #title>
+                <i class="fas fa-database"></i>
+                後端搜尋完成：找到 {{ totalTransactions }} 筆符合條件的交易記錄
+              </template>
+            </el-alert>
+          </div>
+
           <!-- Transactions Table (頁面級滾動) -->
           <TransactionTableSection
             :filtered-transactions="filteredTransactions"
@@ -351,7 +361,7 @@ import TutorialDrawer from './TutorialDrawer.vue'
 
 // Composables
 import { useProjectRole } from '@/composables/useProjectRole'
-import { useWalletData, useWalletLeaderboard, extractTopWealthRankings } from '@/composables/useWallet'
+import { useWalletData, useWalletLeaderboard, useInfiniteWalletTransactions, extractTopWealthRankings, type TransactionFilters } from '@/composables/useWallet'
 import { useProjectCore } from '@/composables/useProjectDetail'
 import { useTransactionDetailsLoader } from '@/composables/useTransactionLoader'
 import { useTransactionFilter } from '@/composables/useTransactionFilter'
@@ -475,9 +485,11 @@ const showAwardPointsDrawer = ref(false)
 const exportingGrades = ref(false)
 
 // ===== Pagination State =====
-const currentOffset = ref(0)
-const pageSize = ref(50)
+const pageSize = 50 // Fixed page size for infinite scroll
 
+// ===== Backend Search State =====
+const backendFilters = ref<TransactionFilters>({})
+const searchMode = ref<'frontend' | 'backend'>('frontend')
 
 // ===== Use Composables =====
 
@@ -502,19 +514,42 @@ const canViewAllUsers = computed(() => {
   return level !== null && level <= 1
 })
 
-// Wallet Data - 使用 TanStack Query 加載所有數據（支援分頁）
+// Wallet Data - 使用 TanStack Query 加載專案、階段、使用者數據
 const {
   projects: userProjects,
   projectsLoading: loadingProjects,
   stages: projectStages,
-  users: projectUsers,
-  transactions,
-  transactionsLoading: loading,
-  totalCount: totalTransactions,
-  hasMore: hasMoreTransactions
-} = useWalletData(selectedProjectId, selectedUserEmail, canViewAllUsers, {
-  limit: pageSize,
-  offset: currentOffset
+  users: projectUsers
+} = useWalletData(selectedProjectId, selectedUserEmail, canViewAllUsers)
+
+// Transactions - 使用 useInfiniteQuery 實現無限滾動
+// 關鍵：使用 useInfiniteQuery 會自動累積所有頁面的資料
+const infiniteTransactionsQuery = useInfiniteWalletTransactions(
+  selectedProjectId,
+  selectedUserEmail,
+  { limit: pageSize, filters: backendFilters }
+)
+
+// 累積所有已載入頁面的交易
+const transactions = computed(() => {
+  return infiniteTransactionsQuery.data.value?.pages.flatMap(page => page.transactions) || []
+})
+
+// Transaction 載入狀態
+const loading = computed(() => infiniteTransactionsQuery.isLoading.value)
+const isFetchingMore = computed(() => infiniteTransactionsQuery.isFetchingNextPage.value)
+
+// 總數和是否有更多
+const totalTransactions = computed(() => {
+  const pages = infiniteTransactionsQuery.data.value?.pages
+  return pages?.[0]?.totalCount || 0
+})
+const hasMoreTransactions = computed(() => infiniteTransactionsQuery.hasNextPage.value ?? false)
+
+// 當前餘額（從第一頁取得）
+const currentBalance = computed(() => {
+  const pages = infiniteTransactionsQuery.data.value?.pages
+  return pages?.[0]?.currentBalance || 0
 })
 
 // Wallet Leaderboard - 使用 TanStack Query 自動管理
@@ -563,10 +598,10 @@ const {
 } = useTransactionFilter(transactions, {
   hasMore: hasMoreTransactions,
   onBackendSearch: async (filters) => {
-    // 觸發帶過濾條件的後端搜尋
-    await queryClient.invalidateQueries({
-      queryKey: ['wallet', 'transactions', selectedProjectId.value, selectedUserEmail.value]
-    })
+    // 更新後端過濾條件 - 觸發 TanStack Query 重新取得資料
+    // useInfiniteQuery 會在 queryKey 變更時自動重置並重新載入第一頁
+    backendFilters.value = filters
+    searchMode.value = 'backend'
   }
 })
 
@@ -579,7 +614,7 @@ const { loadDetails, getDetails, isLoading: isLoadingDetails, clearCache: clearD
 // Transaction Reversal - 撤銷交易
 // 撤銷成功後刷新 TanStack Query 緩存
 const refreshTransactions = async () => {
-  await queryClient.invalidateQueries({ queryKey: ['wallet', 'transactions'] })
+  await queryClient.invalidateQueries({ queryKey: ['wallet', 'transactions-infinite'] })
 }
 const {
   showReversalDrawer,
@@ -606,16 +641,20 @@ const { progressPercentage, remainingMinutes, resetTimer } = useAutoRefresh(hand
 // ===== Computed =====
 
 /**
- * 載入更多交易
+ * 載入更多交易（使用 useInfiniteQuery 的 fetchNextPage）
  */
 function loadMoreTransactions() {
-  currentOffset.value += pageSize.value
+  if (infiniteTransactionsQuery.hasNextPage.value && !infiniteTransactionsQuery.isFetchingNextPage.value) {
+    infiniteTransactionsQuery.fetchNextPage()
+  }
 }
 
 // 使用頁面級滾動的無限載入
+// isLoading = true 表示初始載入中，isFetchingMore = true 表示正在載入下一頁
+const isLoadingAny = computed(() => loading.value || isFetchingMore.value)
 const { loadingMore } = useWindowInfiniteScroll(
   hasMoreTransactions,
-  loading,
+  isLoadingAny,
   loadMoreTransactions
 )
 
@@ -719,14 +758,21 @@ const refreshButtonStyle = computed(() => ({
  */
 function clearAllFilters() {
   clearFilters()
+  // 重置後端搜尋狀態
+  // useInfiniteQuery 會在 queryKey (包含 filters) 變更時自動重置
+  backendFilters.value = {}
+  searchMode.value = 'frontend'
 }
 
 /**
  * 重置分頁（當專案或使用者變更時）
+ * useInfiniteQuery 會在 queryKey (包含 projectId, userId) 變更時自動重置
  */
 function resetPagination() {
-  currentOffset.value = 0
   loadingMore.value = false
+  // 重置後端搜尋狀態
+  backendFilters.value = {}
+  searchMode.value = 'frontend'
 }
 
 /**
@@ -1113,6 +1159,17 @@ watch(
 watch(() => stageGrowthDrawer.isExpanded.value, (newValue) => {
   if (newValue && !stageGrowthData.value && !loadingStageGrowth.value) {
     loadStageGrowth()
+  }
+})
+
+/**
+ * 監聽過濾條件清除，重置為前端模式
+ * useInfiniteQuery 會在 queryKey (包含 filters) 變更時自動重置
+ */
+watch(hasActiveFilters, (hasFilters) => {
+  if (!hasFilters && searchMode.value === 'backend') {
+    backendFilters.value = {}
+    searchMode.value = 'frontend'
   }
 })
 
@@ -1676,5 +1733,20 @@ onUnmounted(() => {
   font-size: 13px;
   border-top: 1px solid #e1e8ed;
   margin-top: 10px;
+}
+
+/* Backend Search Result Info */
+.search-result-info {
+  margin-bottom: 15px;
+}
+
+.search-result-info :deep(.el-alert__title) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-result-info i {
+  color: #67c23a;
 }
 </style>

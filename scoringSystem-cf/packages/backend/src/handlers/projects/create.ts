@@ -9,6 +9,7 @@ import { generateId, ID_PREFIXES } from '@utils/id-generator';
 import { stringifyJSON } from '@utils/json';
 import { logGlobalOperation } from '@utils/logging';
 import { sanitizePlainText, sanitizeDescription } from '@utils/sanitize';
+import { getConfigValue } from '@utils/config';
 
 /**
  * Create a new project
@@ -51,8 +52,8 @@ export async function createProject(
       return errorResponse('INVALID_INPUT', 'Minimum score must be less than maximum score');
     }
 
-    // Check concurrent projects limit
-    const maxConcurrentProjects = parseInt(env.MAX_CONCURRENT_PROJECTS || '5');
+    // Check concurrent projects limit (read from KV > env > default)
+    const maxConcurrentProjects = await getConfigValue(env, 'MAX_CONCURRENT_PROJECTS', { parseAsInt: true });
     const userId = await env.DB.prepare('SELECT userId FROM users WHERE userEmail = ?')
       .bind(userEmail).first();
 
@@ -142,8 +143,8 @@ export async function cloneProject(
     // Sanitize new project name
     const sanitizedName = newProjectName.trim().substring(0, 100);
 
-    // Check concurrent projects limit
-    const maxConcurrentProjects = parseInt(env.MAX_CONCURRENT_PROJECTS || '5');
+    // Check concurrent projects limit (read from KV > env > default)
+    const maxConcurrentProjects = await getConfigValue(env, 'MAX_CONCURRENT_PROJECTS', { parseAsInt: true });
     const userId = await env.DB.prepare('SELECT userId FROM users WHERE userEmail = ?')
       .bind(userEmail).first();
 
@@ -187,15 +188,6 @@ export async function cloneProject(
       originalProject.teacherRankingWeight,
       originalProject.commentRewardPercentile
     ).run();
-
-    // Copy project tags
-    const assignmentId = generateId('asmt_');
-    await env.DB.prepare(`
-      INSERT INTO projecttags (assignmentId, projectId, tagId, assignedAt, isActive)
-      SELECT ?, ?, tagId, ?, isActive
-      FROM projecttags
-      WHERE projectId = ?
-    `).bind(assignmentId, newProjectId, timestamp, projectId).run();
 
     // Copy stages (exclude archived stages)
     const originalStages = await env.DB.prepare(`

@@ -10,6 +10,7 @@ import { parseJSON, stringifyJSON } from '@utils/json';
 import { hasProjectPermission as checkProjectPermission, hasGlobalPermission } from '@utils/permissions';
 import { logProjectOperation } from '@utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
+import { getConfigValue } from '@utils/config';
 
 /**
  * Add user to group
@@ -165,7 +166,7 @@ export async function addUserToGroup(
 
     // Check group member limit
     console.log('[addUserToGroup] Checking member limit...');
-    const maxMembersPerGroup = parseInt(env.MAX_MEMBERS_PER_GROUP || '10');
+    const maxMembersPerGroup = await getConfigValue(env, 'MAX_MEMBERS_PER_GROUP', { parseAsInt: true });
     const currentMembersCount = await env.DB.prepare(`
       SELECT COUNT(*) as count FROM usergroups WHERE projectId = ? AND groupId = ?
     `).bind(projectId, groupId).first();
@@ -724,7 +725,7 @@ export async function batchAddUsersToGroup(
     }
 
     // Check member limit
-    const maxMembersPerGroup = parseInt(env.MAX_MEMBERS_PER_GROUP || '10');
+    const maxMembersPerGroup = await getConfigValue(env, 'MAX_MEMBERS_PER_GROUP', { parseAsInt: true });
     const currentMembersCount = await env.DB.prepare(`
       SELECT COUNT(*) as count FROM usergroups WHERE projectId = ? AND groupId = ?
     `).bind(projectId, groupId).first();

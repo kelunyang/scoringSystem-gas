@@ -2,7 +2,8 @@
  * Wallet Composables using TanStack Query
  *
  * Provides:
- * - useWalletTransactions() - Get user's wallet transactions
+ * - useWalletTransactions() - Get user's wallet transactions (single page)
+ * - useInfiniteWalletTransactions() - Get user's wallet transactions with infinite scroll
  * - useWalletLeaderboard() - Get wallet leaderboard
  * - useGlobalWalletBalance() - Get balance across all projects
  * - useWalletProjectUsers() - Get users in a project (for admin view)
@@ -11,7 +12,7 @@
  */
 
 import type { Ref, ComputedRef } from 'vue'
-import { useQuery, useQueries } from '@tanstack/vue-query'
+import { useQuery, useQueries, useInfiniteQuery } from '@tanstack/vue-query'
 import type { UseQueryReturnType } from '@tanstack/vue-query'
 import { computed, unref } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
@@ -122,12 +123,6 @@ interface WalletDataResult {
   users: ComputedRef<User[]>
   usersLoading: Ref<boolean>
   usersError: Ref<boolean>
-  transactions: ComputedRef<NormalizedTransaction[]>
-  transactionsLoading: Ref<boolean>
-  transactionsError: Ref<boolean>
-  totalCount: ComputedRef<number>
-  hasMore: ComputedRef<boolean>
-  currentBalance: ComputedRef<number>
   isLoading: ComputedRef<boolean>
   isError: ComputedRef<boolean>
 }
@@ -254,6 +249,126 @@ export function useWalletTransactions(
         hasMore: response.data?.hasMore || false,
         currentBalance: response.data?.currentBalance || 0
       }
+    },
+    enabled: isEnabled,
+    staleTime: 1000 * 60 * 2 // 2 minutes cache
+  })
+}
+
+/**
+ * Infinite query result type for wallet transactions
+ */
+interface InfiniteTransactionPage {
+  transactions: NormalizedTransaction[]
+  totalCount: number
+  hasMore: boolean
+  currentBalance: number
+  nextOffset: number
+}
+
+/**
+ * Get user's wallet transactions with infinite scroll support
+ *
+ * Uses TanStack Query's useInfiniteQuery to automatically accumulate pages.
+ * This is the recommended approach for infinite scroll UIs.
+ *
+ * @param projectId - Reactive project ID (null for all projects)
+ * @param userId - Reactive user ID (null for current user)
+ * @param options - Optional limit and filter options
+ * @returns Infinite query result with fetchNextPage, hasNextPage, etc.
+ */
+export function useInfiniteWalletTransactions(
+  projectId: Ref<string | null> | string | null = null,
+  userId: Ref<string | null> | string | null = null,
+  options?: {
+    limit?: number
+    filters?: Ref<TransactionFilters> | TransactionFilters
+  }
+) {
+  const userQuery = useCurrentUser()
+  const limit = options?.limit ?? 50
+
+  const isEnabled = computed(() => {
+    const pid = getValue(projectId)
+    return userQuery.isSuccess.value && !!userQuery.data.value && !!pid
+  })
+
+  return useInfiniteQuery({
+    queryKey: computed(() => [
+      'wallet',
+      'transactions-infinite',
+      getValue(projectId),
+      getValue(userId),
+      limit,
+      JSON.stringify(getValue(options?.filters ?? {}))
+    ]),
+    queryFn: async ({ pageParam }): Promise<InfiniteTransactionPage> => {
+      const filters = getValue(options?.filters ?? {})
+
+      debugLog('📡 [useInfiniteWalletTransactions] queryFn called:', {
+        projectId: getValue(projectId),
+        userId: getValue(userId),
+        limit,
+        offset: pageParam,
+        filters
+      })
+
+      const httpResponse = await rpcClient.wallets.transactions.$post({
+        json: {
+          projectId: getValue(projectId),
+          targetUserEmail: getValue(userId),
+          limit,
+          offset: pageParam,
+          ...filters
+        }
+      })
+      const response = await httpResponse.json()
+
+      if (!response.success) {
+        throw new Error(response.error?.message || '載入交易記錄失敗')
+      }
+
+      const rawTransactions = response.data.transactions || []
+
+      // Normalize transactions to match expected structure
+      const normalizedTransactions = rawTransactions.map((t: any) => ({
+        id: t.transactionId,
+        transactionId: t.transactionId,
+        points: t.amount,
+        description: t.description || t.source,
+        stage: t.stageOrder || 1,
+        stageId: t.stageId,
+        stageName: t.stageName,
+        stageOrder: t.stageOrder,
+        timestamp: t.timestamp,
+        transactionType: t.type || t.transactionType,
+        settlementId: t.settlementId,
+        relatedSubmissionId: t.relatedSubmissionId,
+        relatedCommentId: t.relatedCommentId,
+        relatedTransactionId: t.relatedTransactionId,
+        displayName: t.displayName,
+        userEmail: t.userEmail
+      })).sort((a: NormalizedTransaction, b: NormalizedTransaction) => b.timestamp - a.timestamp)
+
+      debugLog('✅ [useInfiniteWalletTransactions] API response:', {
+        transactionCount: normalizedTransactions.length,
+        totalCount: response.data?.totalCount || 0,
+        hasMore: response.data?.hasMore || false,
+        nextOffset: pageParam + limit
+      })
+
+      return {
+        transactions: normalizedTransactions,
+        totalCount: response.data?.totalCount || 0,
+        hasMore: response.data?.hasMore || false,
+        currentBalance: response.data?.currentBalance || 0,
+        nextOffset: pageParam + limit
+      }
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      // If there's more data, return the next offset; otherwise undefined to stop
+      return lastPage.hasMore ? lastPage.nextOffset : undefined
     },
     enabled: isEnabled,
     staleTime: 1000 * 60 * 2 // 2 minutes cache
@@ -540,31 +655,27 @@ export function useWalletProjectUsers(
 }
 
 /**
- * Combined wallet data hook
+ * Combined wallet data hook (without transactions)
  *
- * Provides all data needed for WalletNew component:
+ * Provides non-transaction data needed for WalletNew component:
  * - Projects list with stages
  * - Selected project's users (if user has permission)
  * - Selected project's stages
- * - Wallet transactions for selected project/user
+ *
+ * NOTE: For transactions, use useInfiniteWalletTransactions() separately.
+ * This avoids duplicate API requests.
  *
  * Depends on: auth, projectId
  *
  * @param projectId - Reactive project ID (can be null)
  * @param userEmail - Reactive user email (can be null)
  * @param canViewAllUsers - Whether user has permission to view all users
- * @param paginationOptions - Optional pagination options
- * @returns Combined query results
+ * @returns Combined query results (projects, stages, users)
  */
 export function useWalletData(
   projectId: Ref<string | null> | string | null,
   userEmail: Ref<string | null> | string | null,
-  canViewAllUsers: Ref<boolean> | boolean,
-  paginationOptions?: {
-    limit?: Ref<number> | number
-    offset?: Ref<number> | number
-    filters?: Ref<TransactionFilters> | TransactionFilters
-  }
+  canViewAllUsers: Ref<boolean> | boolean
 ): WalletDataResult {
   debugLog('🎯 [useWalletData] initialized:', {
     projectId: getValue(projectId),
@@ -607,9 +718,6 @@ export function useWalletData(
     staleTime: 1000 * 60 * 5
   })
 
-  // Transactions query (when projectId exists) - with pagination support
-  const transactionsQuery = useWalletTransactions(projectId as any, userEmail as any, paginationOptions)
-
   return {
     // Projects
     projects: computed(() => projectsQuery.data?.value || []),
@@ -626,30 +734,18 @@ export function useWalletData(
     usersLoading: usersQuery.isLoading,
     usersError: usersQuery.isError,
 
-    // Transactions
-    transactions: computed(() => transactionsQuery.data?.value?.transactions || []),
-    transactionsLoading: transactionsQuery.isLoading,
-    transactionsError: transactionsQuery.isError,
-
-    // Pagination metadata
-    totalCount: computed(() => transactionsQuery.data?.value?.totalCount || 0),
-    hasMore: computed(() => transactionsQuery.data?.value?.hasMore || false),
-    currentBalance: computed(() => transactionsQuery.data?.value?.currentBalance || 0),
-
     // Combined loading state
     isLoading: computed(() =>
       projectsQuery.isLoading.value ||
       stagesQuery.isLoading.value ||
-      usersQuery.isLoading.value ||
-      transactionsQuery.isLoading.value
+      usersQuery.isLoading.value
     ),
 
     // Combined error state
     isError: computed(() =>
       projectsQuery.isError.value ||
       stagesQuery.isError.value ||
-      usersQuery.isError.value ||
-      transactionsQuery.isError.value
+      usersQuery.isError.value
     )
   }
 }

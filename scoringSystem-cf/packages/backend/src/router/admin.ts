@@ -202,7 +202,8 @@ import {
   getAIServiceLogDetail
 } from '../handlers/admin/ai-service-logs';
 
-// SMTP configuration (using environment variables)
+// SMTP configuration
+import { getSmtpConfig } from '../utils/email';
 
 // Logging utility
 import { logGlobalOperation } from '../utils/logging';
@@ -1757,19 +1758,14 @@ app.post('/security/suspicious-logins', async (c) => {
 /**
  * POST /admin/smtp/get-config
  * Get SMTP configuration (password will be masked for security)
+ * Uses KV-first strategy via getSmtpConfig()
  */
 app.post('/smtp/get-config', async (c) => {
   try {
-    // Get SMTP config from environment variables
-    const smtpConfig = {
-      host: c.env.SMTP_HOST || '',
-      port: parseInt(c.env.SMTP_PORT || '587'),
-      username: c.env.SMTP_USERNAME || '',
-      fromName: c.env.SMTP_FROM_NAME || '',
-      fromEmail: c.env.SMTP_FROM_EMAIL || ''
-    };
+    // Get SMTP config using KV-first strategy
+    const smtpConfig = await getSmtpConfig(c.env);
 
-    if (!smtpConfig.host) {
+    if (!smtpConfig) {
       return c.json({
         success: true,
         data: null // No configuration
@@ -1780,7 +1776,11 @@ app.post('/smtp/get-config', async (c) => {
     return c.json({
       success: true,
       data: {
-        ...smtpConfig,
+        host: smtpConfig.host,
+        port: smtpConfig.port,
+        username: smtpConfig.username,
+        fromName: smtpConfig.fromName,
+        fromEmail: smtpConfig.fromEmail,
         password: '***HIDDEN***' // Hide password from response
       }
     });
@@ -1852,18 +1852,27 @@ app.post(
           success = false;
         }
       } else {
-        // Test stored configuration from environment variables
+        // Test stored configuration using KV-first strategy
+        const smtpConfig = await getSmtpConfig(c.env);
+        if (!smtpConfig) {
+          return c.json({
+            success: false,
+            error: 'SMTP not configured',
+            errorCode: 'NOT_CONFIGURED'
+          }, 400);
+        }
+
         const { WorkerMailer } = await import('worker-mailer');
         try {
           await WorkerMailer.connect({
             credentials: {
-              username: c.env.SMTP_USERNAME ?? '',
-              password: c.env.SMTP_PASSWORD ?? '',
+              username: smtpConfig.username,
+              password: smtpConfig.password,
             },
             authType: 'plain',
-            host: c.env.SMTP_HOST ?? '',
-            port: parseInt(c.env.SMTP_PORT || '587'),
-            secure: parseInt(c.env.SMTP_PORT || '587') === 465,
+            host: smtpConfig.host,
+            port: smtpConfig.port,
+            secure: smtpConfig.port === 465,
           });
           success = true;
         } catch (error) {

@@ -10,6 +10,7 @@ import { generateId, generateStageId } from '@utils/id-generator';
 import { logProjectOperation } from '@utils/logging';
 import { queueBatchNotifications } from '../../queues/notification-producer';
 import { getStageMemberEmails } from '@utils/notifications';
+import { getConfigValue } from '@utils/config';
 
 /**
  * Create a new stage in a project
@@ -47,7 +48,7 @@ export async function createStage(
     }
 
     // Check maximum stage duration (30 days default)
-    const maxStageDays = parseInt(env.MAX_STAGE_DURATION_DAYS || '30');
+    const maxStageDays = await getConfigValue(env, 'MAX_STAGE_DURATION_DAYS', { parseAsInt: true });
     const stageDurationDays = (endTime - startTime) / (24 * 60 * 60 * 1000);
 
     if (stageDurationDays > maxStageDays) {

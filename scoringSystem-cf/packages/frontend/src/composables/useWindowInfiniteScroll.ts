@@ -36,21 +36,25 @@ export function useWindowInfiniteScroll(
   } = options
 
   const loadingMore = ref(false)
+  const hasInitialDataLoaded = ref(false)
   let loadMoreTimer: ReturnType<typeof setTimeout> | null = null
   let scrollContainer: HTMLElement | Window | null = null
 
   /**
    * 檢查是否應該載入更多
+   * 需要同時滿足：可以載入更多、不在載入中、首次資料已載入完成
    */
   const shouldLoadMore = computed(() => {
-    return canLoadMore.value && !isLoading.value && !loadingMore.value
+    return canLoadMore.value && !isLoading.value && !loadingMore.value && hasInitialDataLoaded.value
   })
 
   /**
    * 載入更多（帶防抖）
    */
   function triggerLoadMore() {
-    if (!shouldLoadMore.value) return
+    if (!shouldLoadMore.value) {
+      return
+    }
 
     // Clear previous timer
     if (loadMoreTimer !== null) {
@@ -102,21 +106,9 @@ export function useWindowInfiniteScroll(
     const { scrollTop, clientHeight, scrollHeight } = getScrollMetrics()
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight
 
-    // Debug log
-    console.log('🔄 [WindowInfiniteScroll] handleScroll:', {
-      distanceFromBottom: Math.round(distanceFromBottom),
-      threshold: distance,
-      canLoadMore: canLoadMore.value,
-      isLoading: isLoading.value,
-      loadingMore: loadingMore.value,
-      shouldLoadMore: shouldLoadMore.value,
-      container: scrollContainer instanceof HTMLElement ? 'HTMLElement' : 'window'
-    })
-
     if (!shouldLoadMore.value) return
 
     if (distanceFromBottom < distance) {
-      console.log('🚀 [WindowInfiniteScroll] Triggering loadMore!')
       triggerLoadMore()
     }
   }
@@ -130,24 +122,12 @@ export function useWindowInfiniteScroll(
 
     const { clientHeight, scrollHeight } = getScrollMetrics()
 
-    console.log('📏 [WindowInfiniteScroll] checkAndLoadMore:', {
-      canLoadMore: canLoadMore.value,
-      isLoading: isLoading.value,
-      loadingMore: loadingMore.value,
-      shouldLoadMore: shouldLoadMore.value,
-      scrollHeight,
-      clientHeight,
-      needsMore: scrollHeight <= clientHeight + distance
-    })
-
     if (!shouldLoadMore.value) {
-      console.log('⏸️ [WindowInfiniteScroll] Skipping - shouldLoadMore is false')
       return
     }
 
     // 如果內容高度小於或接近容器高度，自動載入更多
     if (scrollHeight <= clientHeight + distance) {
-      console.log('🚀 [WindowInfiniteScroll] Content too short, triggering loadMore!')
       triggerLoadMore()
     }
   }
@@ -161,11 +141,9 @@ export function useWindowInfiniteScroll(
 
     if (container instanceof HTMLElement) {
       scrollContainer = container
-      console.log('📜 [WindowInfiniteScroll] Using container:', scrollContainerSelector)
     } else {
       // Fallback to window
       scrollContainer = window
-      console.log('📜 [WindowInfiniteScroll] Using window (fallback)')
     }
 
     // 綁定滾動事件
@@ -179,11 +157,8 @@ export function useWindowInfiniteScroll(
     // 使用 nextTick 確保 DOM 已經渲染
     nextTick(() => {
       initScrollContainer()
-
-      // 初始檢查
-      nextTick(() => {
-        checkAndLoadMore()
-      })
+      // 不再在掛載時立即檢查
+      // 改為在 isLoading 從 true 變成 false 時（首次資料載入完成）才開始檢查
     })
   })
 
@@ -198,9 +173,22 @@ export function useWindowInfiniteScroll(
     }
   })
 
+  // 追蹤首次資料載入完成
+  // 當 isLoading 從 true 變成 false，表示首次資料載入完成
+  watch(isLoading, (loading, wasLoading) => {
+    if (wasLoading && !loading && !hasInitialDataLoaded.value) {
+      hasInitialDataLoaded.value = true
+      // 延遲檢查，確保 DOM 已更新
+      nextTick(() => {
+        checkAndLoadMore()
+      })
+    }
+  }, { immediate: true })
+
   // 監聽 canLoadMore 變化，當變為 true 時檢查是否需要載入
+  // 只有在首次資料載入完成後才響應
   watch(canLoadMore, (newValue) => {
-    if (newValue) {
+    if (newValue && hasInitialDataLoaded.value) {
       nextTick(() => {
         checkAndLoadMore()
       })

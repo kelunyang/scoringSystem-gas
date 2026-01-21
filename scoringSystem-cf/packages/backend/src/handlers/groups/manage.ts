@@ -11,6 +11,7 @@ import { hasProjectPermission as checkProjectPermission, hasGlobalPermission } f
 import { logProjectOperation, generateChanges } from '@utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
 import { getGroupMemberEmails } from '@utils/notifications';
+import { getConfigValue } from '@utils/config';
 
 /**
  * Create a new group in a project
@@ -83,7 +84,7 @@ export async function createGroup(
 
     // Check group limit first
     console.log('🔍 [createGroup] Checking group limit...');
-    const maxGroupsPerProject = parseInt(env.MAX_GROUPS_PER_PROJECT || '20');
+    const maxGroupsPerProject = await getConfigValue(env, 'MAX_GROUPS_PER_PROJECT', { parseAsInt: true });
     const activeGroupsCount = await env.DB.prepare(`
       SELECT COUNT(*) as count FROM groups WHERE projectId = ? AND status = 'active'
     `).bind(projectId).first();
@@ -230,7 +231,7 @@ export async function batchCreateGroups(
 
     // Check total group limit
     console.log('🔍 [batchCreateGroups] Checking group limit...');
-    const maxGroupsPerProject = parseInt(env.MAX_GROUPS_PER_PROJECT || '20');
+    const maxGroupsPerProject = await getConfigValue(env, 'MAX_GROUPS_PER_PROJECT', { parseAsInt: true });
     const activeGroupsCount = await env.DB.prepare(`
       SELECT COUNT(*) as count FROM groups WHERE projectId = ? AND status = 'active'
     `).bind(projectId).first();
