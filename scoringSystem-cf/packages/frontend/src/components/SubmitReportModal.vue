@@ -131,9 +131,9 @@
               <el-slider
                 v-model="member.contribution"
                 :key="`slider-${member.email}`"
-                :min="5"
+                :min="1"
                 :max="100"
-                :step="5"
+                :step="1"
                 :disabled="!member.selected"
                 :show-tooltip="true"
                 :format-tooltip="(val: number) => `${val}%`"
@@ -142,9 +142,9 @@
               <el-input-number
                 v-model="member.contribution"
                 :key="`input-${member.email}`"
-                :min="5"
+                :min="1"
                 :max="100"
-                :step="5"
+                :step="1"
                 :disabled="!member.selected"
                 size="small"
                 controls-position="right"
@@ -691,13 +691,13 @@ const equalSplit = (): void => {
   })
 
   const memberCount = groupMembers.value.length
-  const basePercentage = Math.floor(100 / memberCount / 5) * 5
+  const basePercentage = Math.floor(100 / memberCount)
   const remainder = 100 - (basePercentage * memberCount)
 
   groupMembers.value.forEach((member, index) => {
     member.contribution = basePercentage
-    if (index < remainder / 5) {
-      member.contribution += 5
+    if (index < remainder) {
+      member.contribution += 1
     }
   })
 }
@@ -707,10 +707,8 @@ const updateContributions = (): void => {
   if (selectedMembers.length === 0) return
 
   selectedMembers.forEach(member => {
-    if (member.contribution < 5) {
-      member.contribution = 5
-    } else {
-      member.contribution = Math.round(member.contribution / 5) * 5
+    if (member.contribution < 1) {
+      member.contribution = 1
     }
   })
 }

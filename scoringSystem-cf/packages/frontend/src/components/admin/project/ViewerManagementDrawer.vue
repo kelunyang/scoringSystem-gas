@@ -26,6 +26,52 @@
           <div v-show="showAddSection" class="add-viewer-section">
             <h4><i class="fas fa-user-plus"></i> 新增存取者</h4>
 
+            <!-- Load from other projects -->
+            <div v-if="availableProjects.length > 0" class="load-from-projects-area">
+              <label class="search-label">從其他專案載入參與者</label>
+              <div class="load-from-projects-controls">
+                <el-button
+                  type="info"
+                  :loading="loadingFromProjects"
+                  :disabled="loadFromProjectIds.length === 0"
+                  @click="handleLoadFromProjects"
+                >
+                  <i class="fas fa-download"></i> 從專案載入參與者
+                </el-button>
+
+                <el-select
+                  v-if="loadFromProjectIds.length > 0"
+                  v-model="loadFromRole"
+                  placeholder="選擇角色"
+                  class="load-role-select"
+                >
+                  <el-option label="全部角色" value="all" />
+                  <el-option label="教師" value="teacher" />
+                  <el-option label="觀察者" value="observer" />
+                  <el-option label="成員" value="member" />
+                </el-select>
+
+                <el-select
+                  v-model="loadFromProjectIds"
+                  multiple
+                  filterable
+                  collapse-tags
+                  collapse-tags-tooltip
+                  placeholder="選擇來源專案..."
+                  class="load-projects-select"
+                >
+                  <el-option
+                    v-for="project in availableProjects"
+                    :key="project.projectId"
+                    :label="project.projectName"
+                    :value="project.projectId"
+                  />
+                </el-select>
+              </div>
+            </div>
+
+            <el-divider v-if="availableProjects.length > 0" />
+
             <!-- Search Area -->
             <div class="search-users-area">
               <label class="search-label">搜尋使用者</label>
@@ -370,6 +416,10 @@ export default {
     searchingUsers: {
       type: Boolean,
       default: false
+    },
+    projects: {
+      type: Array,
+      default: () => []
     }
   },
   emits: [
@@ -408,6 +458,11 @@ export default {
     // Collapsible add section
     const showAddSection = ref(false)
 
+    // Load from projects state
+    const loadFromProjectIds = ref([])
+    const loadFromRole = ref('all')
+    const loadingFromProjects = ref(false)
+
     // Unassigned members state
     const ungroupedMembers = ref([])
     const markingUnassigned = ref(false)
@@ -445,6 +500,15 @@ export default {
 
     // Unassigned count
     const ungroupedCount = computed(() => ungroupedMembers.value.length)
+
+    // Available projects for load-from-projects (exclude current project and archived)
+    const availableProjects = computed(() => {
+      if (!props.projects || !Array.isArray(props.projects)) return []
+      const currentProjectId = props.selectedProject?.projectId
+      return props.projects.filter((p) =>
+        p.projectId !== currentProjectId && p.status !== 'archived'
+      )
+    })
 
     // Methods
     const isUserSelected = (userEmail) => {
@@ -593,6 +657,59 @@ export default {
       }
     }
 
+    // Load viewers from other projects
+    const handleLoadFromProjects = async () => {
+      if (loadFromProjectIds.value.length === 0) {
+        ElMessage.warning('請先選擇來源專案')
+        return
+      }
+
+      loadingFromProjects.value = true
+      try {
+        const response = await rpcClient.projects.viewers['load-from-projects'].$post({
+          json: {
+            projectIds: loadFromProjectIds.value,
+            role: loadFromRole.value
+          }
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success && data.data) {
+            const emails = data.data.emails || []
+            const skipped = data.data.skippedProjects || []
+
+            if (emails.length === 0) {
+              ElMessage.info('所選專案中沒有找到符合條件的參與者')
+              return
+            }
+
+            // Append emails to existing search textarea
+            const existingText = newViewerSearchText.value.trim()
+            const newEmails = emails.join('\n')
+            newViewerSearchText.value = existingText
+              ? existingText + '\n' + newEmails
+              : newEmails
+
+            let message = `已載入 ${emails.length} 個 Email`
+            if (skipped.length > 0) {
+              message += `（${skipped.length} 個專案因權限不足被跳過）`
+            }
+            ElMessage.success(message)
+          } else {
+            ElMessage.error(data.error?.message || '載入失敗')
+          }
+        } else {
+          const errData = await response.json()
+          ElMessage.error(errData.error?.message || '載入失敗')
+        }
+      } catch (error) {
+        handleError(error, { action: '從專案載入參與者' })
+      } finally {
+        loadingFromProjects.value = false
+      }
+    }
+
     // Check if user is ungrouped
     const isUngrouped = (userEmail) => {
       return ungroupedMembers.value.includes(userEmail)
@@ -632,6 +749,8 @@ export default {
         batchRole.value = ''
         showAddSection.value = false
         ungroupedMembers.value = []
+        loadFromProjectIds.value = []
+        loadFromRole.value = 'all'
       }
     })
 
@@ -673,6 +792,12 @@ export default {
       getAvatarUrl,
       handleAvatarError,
       getRoleTagType,
+      // Load from projects
+      loadFromProjectIds,
+      loadFromRole,
+      loadingFromProjects,
+      availableProjects,
+      handleLoadFromProjects,
       getRoleLabel
     }
   }
@@ -929,6 +1054,28 @@ export default {
 
 .role-select-inline {
   width: 120px;
+}
+
+/* Load from projects */
+.load-from-projects-area {
+  margin-bottom: 16px;
+}
+
+.load-from-projects-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.load-projects-select {
+  flex: 1;
+  min-width: 250px;
+}
+
+.load-role-select {
+  width: 180px;
+  flex-shrink: 0;
 }
 
 /* drawer-actions 樣式由 drawer-unified.scss 統一管理 */

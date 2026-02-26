@@ -832,6 +832,7 @@
       :search-results="searchResults"
       :loading-viewers="loadingViewers"
       :searching-users="searchingUsers"
+      :projects="projects"
       @search="searchUsers"
       @add-selected="addSelectedViewers"
       @update-role="updateViewerRole"
@@ -979,6 +980,16 @@
               placeholder="請輸入新專案名稱"
               clearable
             />
+          </div>
+          <div class="form-group" style="margin-top: 16px;">
+            <el-switch
+              v-model="cloneProjectForm.copyViewers"
+              active-text="一併複製參與者"
+              inactive-text=""
+            />
+            <div class="field-hint" style="margin-top: 4px;">
+              開啟後會將原專案的存取者（教師、觀察者、成員）一併複製到新專案。帳號已不存在的使用者會自動跳過。
+            </div>
           </div>
         </div>
 
@@ -1482,10 +1493,12 @@ export default {
       sourceProject: ExtendedProject | null
       newProjectName: string
       confirmText: string
+      copyViewers: boolean
     }>({
       sourceProject: null,
       newProjectName: '',
-      confirmText: ''
+      confirmText: '',
+      copyViewers: false
     })
 
     // Clone Stage Drawer State
@@ -3910,6 +3923,7 @@ export default {
       cloneProjectForm.sourceProject = project as ExtendedProject
       cloneProjectForm.newProjectName = ''
       cloneProjectForm.confirmText = ''
+      cloneProjectForm.copyViewers = false
       showCloneProjectDrawer.value = true
     }
 
@@ -3927,13 +3941,39 @@ export default {
         const httpResponse = await rpcClient.projects.clone.$post({
           json: {
             projectId: cloneProjectForm.sourceProject!.projectId,
-            newProjectName: cloneProjectForm.newProjectName.trim()
+            newProjectName: cloneProjectForm.newProjectName.trim(),
+            copyViewers: cloneProjectForm.copyViewers
           }
         })
-        const response = await httpResponse.json()
+        const response = await httpResponse.json() as any
 
         if (response.success) {
-          ElMessage.success(`專案「${cloneProjectForm.newProjectName}」複製成功！`)
+          const data = response.data
+          let message = `專案「${cloneProjectForm.newProjectName}」複製成功！`
+
+          // Show viewer copy results if applicable
+          if (data?.viewerCopyResult) {
+            const { copied, skipped, total } = data.viewerCopyResult
+            if (total > 0) {
+              message += `\n參與者複製：共 ${total} 人，成功 ${copied} 人`
+              if (skipped.length > 0) {
+                message += `，跳過 ${skipped.length} 人（帳號已不存在）`
+              }
+            } else {
+              message += '\n原專案無參與者需要複製。'
+            }
+
+            // If there are skipped viewers, show a detailed warning
+            if (skipped.length > 0) {
+              ElMessageBox.alert(
+                `以下帳號因已不存在而被跳過：\n${skipped.join('\n')}`,
+                '部分參與者未複製',
+                { type: 'warning', confirmButtonText: '了解' }
+              )
+            }
+          }
+
+          ElMessage.success(message)
           // Refetch projects using TanStack Query
           await projectsQuery?.refetch?.()
           // Close drawer
@@ -3955,6 +3995,7 @@ export default {
       cloneProjectForm.sourceProject = null
       cloneProjectForm.newProjectName = ''
       cloneProjectForm.confirmText = ''
+      cloneProjectForm.copyViewers = false
     }
 
     // Open clone stage drawer

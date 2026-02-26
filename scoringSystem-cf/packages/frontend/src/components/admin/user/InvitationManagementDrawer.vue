@@ -933,7 +933,7 @@ const loadInvitations = async (): Promise<void> => {
 
 const loadGlobalGroups = async (): Promise<void> => {
   try {
-    const data = await fetchWithAuth<{ success: boolean; data?: GlobalGroup[] }>(
+    const data = await fetchWithAuth<{ success: boolean; data?: { groups: GlobalGroup[]; totalCount: number } }>(
       '/api/admin/global-groups',
       {
         method: 'POST',
@@ -941,8 +941,8 @@ const loadGlobalGroups = async (): Promise<void> => {
         signal: abortControllerRef.value?.signal
       }
     )
-    if (data.success && data.data) {
-      globalGroups.value = data.data.filter((g: GlobalGroup) => g.isActive)
+    if (data.success && data.data?.groups) {
+      globalGroups.value = data.data.groups.filter((g: GlobalGroup) => g.isActive)
     }
   } catch (error) {
     // Ignore AbortError when request is cancelled

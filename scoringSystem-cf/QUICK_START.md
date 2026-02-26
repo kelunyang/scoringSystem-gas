@@ -413,15 +413,19 @@ npx wrangler secret put JWT_SECRET
 # Enter your production JWT secret (should be different from dev!)
 ```
 
-#### 3. Deploy Backend
+#### 3. Deploy
+
+在專案根目錄（`scoringSystem-cf/`）執行：
 
 ```bash
-npm run deploy
+# 一鍵部署前後端
+pnpm run deploy:all
+
+# 或分別部署
+pnpm run deploy:backend            # Backend (Cloudflare Workers)
+pnpm run deploy:frontend           # Frontend (Cloudflare Pages, production)
+pnpm run deploy:frontend:preview   # Frontend (preview)
 ```
-
-You'll get a URL like: `https://scoring-system-workers.your-account.workers.dev`
-
-**Save this URL** - you'll need it for frontend configuration.
 
 #### 4. Test Backend
 
@@ -429,50 +433,6 @@ You'll get a URL like: `https://scoring-system-workers.your-account.workers.dev`
 curl https://your-worker.workers.dev
 # Should return API info
 ```
-
-### Frontend Deployment (Cloudflare Pages)
-
-#### Option A: Automatic Deployment (Recommended)
-
-1. **Push to GitHub**:
-   ```bash
-   git add .
-   git commit -m "Frontend migration complete"
-   git push
-   ```
-
-2. **Connect to Cloudflare Pages**:
-   - Go to [Cloudflare Dashboard](https://dash.cloudflare.com/) → Pages
-   - Click "Create a project"
-   - Select "Connect to Git"
-   - Choose your repository
-   - Configure build:
-     - **Build command**: `npm run build`
-     - **Build output directory**: `dist`
-     - **Root directory**: `Cloudflare-Workers/frontend-vue`
-   - Add environment variable:
-     - `VITE_API_URL` = `https://your-worker.workers.dev` (your backend URL)
-
-3. **Deploy**:
-   - Click "Save and Deploy"
-   - Wait for build to complete (~2 minutes)
-   - You'll get a URL like: `https://scoring-system.pages.dev`
-
-#### Option B: Manual Deployment
-
-1. **Update Production API URL**:
-
-   Edit `frontend-vue/.env.production`:
-   ```env
-   VITE_API_URL=https://your-worker.workers.dev
-   ```
-
-2. **Build and Deploy**:
-   ```bash
-   cd frontend-vue
-   npm run build
-   npx wrangler pages deploy dist --project-name=scoring-system
-   ```
 
 ## ✅ Post-Deployment Checklist
 

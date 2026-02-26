@@ -124,7 +124,8 @@ export type GetProjectContentRequest = z.infer<typeof GetProjectContentRequestSc
  */
 export const CloneProjectRequestSchema = z.object({
   projectId: z.string().min(1, 'Project ID is required'),
-  newProjectName: z.string().min(1, 'New project name is required').max(200, 'Project name too long')
+  newProjectName: z.string().min(1, 'New project name is required').max(200, 'Project name too long'),
+  copyViewers: z.boolean().optional().default(false)
 });
 
 export type CloneProjectRequest = z.infer<typeof CloneProjectRequestSchema>;
@@ -217,3 +218,18 @@ export const UpdateProjectViewersRoleBatchRequestSchema = z.object({
 });
 
 export type UpdateProjectViewersRoleBatchRequest = z.infer<typeof UpdateProjectViewersRoleBatchRequestSchema>;
+
+/**
+ * Load viewers from other projects request schema
+ * Used to copy viewer email addresses from selected projects
+ */
+export const LoadViewersFromProjectsRequestSchema = z.object({
+  projectIds: z.array(
+    z.string().min(1, 'Project ID is required')
+  ).min(1, 'At least one project is required').max(20, 'Maximum 20 projects per request'),
+  role: z.enum(['teacher', 'observer', 'member', 'all'], {
+    message: 'Role must be "teacher", "observer", "member", or "all"'
+  }).optional().default('all')
+});
+
+export type LoadViewersFromProjectsRequest = z.infer<typeof LoadViewersFromProjectsRequestSchema>;

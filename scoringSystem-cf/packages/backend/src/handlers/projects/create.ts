@@ -118,7 +118,8 @@ export async function cloneProject(
   env: Env,
   userEmail: string,
   projectId: string,
-  newProjectName: string
+  newProjectName: string,
+  copyViewers: boolean = false
 ): Promise<Response> {
   try {
     // Check if user has permission to create projects
@@ -234,6 +235,59 @@ export async function cloneProject(
       `).bind(stageCount, newProjectId).run();
     }
 
+    // Copy viewers if requested
+    let viewerCopyResult: { copied: number; skipped: string[]; total: number } | null = null;
+
+    if (copyViewers) {
+      // Get all active viewers from the original project
+      const originalViewers = await env.DB.prepare(`
+        SELECT pv.userEmail, pv.role
+        FROM projectviewers pv
+        WHERE pv.projectId = ? AND pv.isActive = 1
+      `).bind(projectId).all();
+
+      if (originalViewers.results.length > 0) {
+        // Check which viewer accounts still exist in the users table
+        const viewerEmails = originalViewers.results.map((v: any) => v.userEmail);
+        const placeholders = viewerEmails.map(() => '?').join(',');
+        const existingUsers = await env.DB.prepare(`
+          SELECT userEmail FROM users WHERE userEmail IN (${placeholders})
+        `).bind(...viewerEmails).all();
+
+        const existingEmailSet = new Set(existingUsers.results.map((u: any) => u.userEmail));
+        const skippedViewers: string[] = [];
+        let copiedCount = 0;
+
+        for (const viewer of originalViewers.results) {
+          const vEmail = (viewer as any).userEmail as string;
+          const vRole = (viewer as any).role as string;
+
+          // Skip the cloner themselves (they are already the project creator)
+          if (vEmail === userEmail) continue;
+
+          if (!existingEmailSet.has(vEmail)) {
+            skippedViewers.push(vEmail);
+            continue;
+          }
+
+          await env.DB.prepare(`
+            INSERT INTO projectviewers (projectId, userEmail, role, assignedBy, assignedAt, isActive)
+            VALUES (?, ?, ?, ?, ?, 1)
+          `).bind(newProjectId, vEmail, vRole, userEmail, timestamp).run();
+
+          copiedCount++;
+        }
+
+        viewerCopyResult = {
+          copied: copiedCount,
+          skipped: skippedViewers,
+          total: originalViewers.results.length
+        };
+      } else {
+        viewerCopyResult = { copied: 0, skipped: [], total: 0 };
+      }
+    }
+
     // Log project clone
     await logGlobalOperation(env, userEmail, 'project_cloned', 'project', newProjectId, {}, {
       relatedEntities: {
@@ -245,7 +299,8 @@ export async function cloneProject(
       projectId: newProjectId,
       projectName: sanitizedName,
       status: 'active',
-      createdTime: timestamp
+      createdTime: timestamp,
+      viewerCopyResult
     }, 'Project cloned successfully');
   } catch (error) {
     console.error('Clone project error:', error);

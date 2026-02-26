@@ -170,14 +170,18 @@ pnpm test:security
 ### 自行部署
 
 ```bash
-# Backend (Cloudflare Workers)
-cd scoringSystem-cf/packages/backend
-wrangler deploy
+cd scoringSystem-cf/
 
-# Frontend (Cloudflare Pages)
-cd scoringSystem-cf/packages/frontend
-npx vite build
-wrangler pages deploy dist --project-name=your-project-name
+# 一鍵部署前後端
+pnpm run deploy:all
+
+# 或分別部署
+pnpm run deploy:backend            # Backend (Cloudflare Workers)
+pnpm run deploy:frontend           # Frontend (Cloudflare Pages, production)
+pnpm run deploy:frontend:preview   # Frontend (preview)
+
+# Database Migration (如有 schema 變更)
+pnpm run migrate:remote
 ```
 
 ## License

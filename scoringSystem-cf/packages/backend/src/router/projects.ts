@@ -37,7 +37,8 @@ import {
   removeProjectViewersBatch,
   updateProjectViewerRole,
   updateProjectViewersRoleBatch,
-  markUnassignedMembers
+  markUnassignedMembers,
+  loadViewersFromProjects
 } from '../handlers/projects/viewers';
 import { scoringConfigRouter } from '../handlers/projects/scoring-config';
 import {
@@ -55,7 +56,8 @@ import {
   RemoveProjectViewerRequestSchema,
   RemoveProjectViewersBatchRequestSchema,
   UpdateProjectViewerRoleRequestSchema,
-  UpdateProjectViewersRoleBatchRequestSchema
+  UpdateProjectViewersRoleBatchRequestSchema,
+  LoadViewersFromProjectsRequestSchema
 } from '@repo/shared/schemas/projects';
 
 
@@ -258,7 +260,7 @@ app.post(
 
 /**
  * Clone existing project
- * Body: { projectId, newProjectName }
+ * Body: { projectId, newProjectName, copyViewers? }
  */
 app.post(
   '/clone',
@@ -271,7 +273,8 @@ app.post(
       c.env,
       user.userEmail,
       body.projectId,
-      body.newProjectName
+      body.newProjectName,
+      body.copyViewers
     );
 
     return response;
@@ -449,6 +452,28 @@ app.post(
       c.env,
       user.userEmail,
       body.projectId
+    );
+
+    return response;
+  }
+);
+
+/**
+ * Load viewers from other projects
+ * Body: { projectIds: string[], role?: 'teacher' | 'observer' | 'member' | 'all' }
+ */
+app.post(
+  '/viewers/load-from-projects',
+  zValidator('json', LoadViewersFromProjectsRequestSchema),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+
+    const response = await loadViewersFromProjects(
+      c.env,
+      user.userEmail,
+      body.projectIds,
+      body.role as 'teacher' | 'observer' | 'member' | 'all'
     );
 
     return response;

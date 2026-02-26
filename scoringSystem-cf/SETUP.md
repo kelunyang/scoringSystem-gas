@@ -57,29 +57,26 @@ pnpm lint
 
 ## 部署到遠端
 
-### Backend (Cloudflare Workers)
+所有部署指令皆在專案根目錄（`scoringSystem-cf/`）執行：
 
 ```bash
-cd packages/backend
-wrangler deploy
-```
+# 一鍵部署前後端
+pnpm run deploy:all
 
-### Frontend (Cloudflare Pages)
-
-```bash
-cd packages/frontend
-npx vite build
-wrangler pages deploy dist --project-name=scoring-system-frontend
+# 或分別部署
+pnpm run deploy:backend            # Backend (Cloudflare Workers)
+pnpm run deploy:frontend           # Frontend (Cloudflare Pages, production)
+pnpm run deploy:frontend:preview   # Frontend (preview)
 ```
 
 ### Database Migration
 
 ```bash
 # 本地 D1
-pnpm migrate:local
+pnpm run db:migrate
 
 # 遠端 D1
-pnpm migrate:remote
+pnpm run migrate:remote
 ```
 
 ## 環境變數

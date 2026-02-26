@@ -651,6 +651,82 @@ export async function markUnassignedMembers(
 }
 
 /**
+ * Load viewer emails from multiple projects.
+ * Returns a deduplicated list of emails for viewers matching the given role filter.
+ * Only returns emails for users that still exist in the users table (INNER JOIN).
+ *
+ * @param env - Worker environment
+ * @param userEmail - Requesting user's email
+ * @param projectIds - Array of source project IDs
+ * @param role - Role filter ('teacher' | 'observer' | 'member' | 'all')
+ * @returns Response with { emails: string[], skippedProjects: string[], total: number }
+ */
+export async function loadViewersFromProjects(
+  env: Env,
+  userEmail: string,
+  projectIds: string[],
+  role: 'teacher' | 'observer' | 'member' | 'all' = 'all'
+): Promise<Response> {
+  try {
+    if (!projectIds || projectIds.length === 0) {
+      return errorResponse('INVALID_INPUT', 'No projects specified');
+    }
+    if (projectIds.length > 20) {
+      return errorResponse('INVALID_INPUT', 'Maximum 20 projects per request');
+    }
+
+    const uniqueProjectIds = [...new Set(projectIds)];
+    const allEmails = new Set<string>();
+    const skippedProjects: string[] = [];
+
+    for (const projectId of uniqueProjectIds) {
+      const canView = await canViewProjectViewers(env, userEmail, projectId);
+      if (!canView) {
+        skippedProjects.push(projectId);
+        continue;
+      }
+
+      let query: string;
+      let bindings: unknown[];
+
+      if (role === 'all') {
+        query = `
+          SELECT pv.userEmail
+          FROM projectviewers pv
+          INNER JOIN users u ON pv.userEmail = u.userEmail
+          WHERE pv.projectId = ? AND pv.isActive = 1
+        `;
+        bindings = [projectId];
+      } else {
+        query = `
+          SELECT pv.userEmail
+          FROM projectviewers pv
+          INNER JOIN users u ON pv.userEmail = u.userEmail
+          WHERE pv.projectId = ? AND pv.isActive = 1 AND pv.role = ?
+        `;
+        bindings = [projectId, role];
+      }
+
+      const result = await env.DB.prepare(query).bind(...bindings).all();
+      for (const row of result.results || []) {
+        allEmails.add(row.userEmail as string);
+      }
+    }
+
+    const emailArray = Array.from(allEmails);
+
+    return successResponse({
+      emails: emailArray,
+      skippedProjects,
+      total: emailArray.length
+    });
+  } catch (error) {
+    console.error('Load viewers from projects error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to load viewers from projects');
+  }
+}
+
+/**
  * Add multiple viewers to a project in batch
  * Optimized to use batch queries instead of N+1 individual inserts
  */

@@ -284,29 +284,21 @@ pnpm migrate:remote   # Apply migrations to production D1
 
 ### 遠端部署 Remote Deployment
 
-#### 完整部署流程（前後端都要部署）
+所有部署指令皆在 `scoringSystem-cf/` 根目錄執行：
 
 ```bash
 cd scoringSystem-cf/
 
-# 1. Backend 部署 (Cloudflare Workers)
-cd packages/backend && wrangler deploy
+# 一鍵部署前後端
+pnpm run deploy:all
 
-# 2. Frontend 部署 (Cloudflare Pages)
-cd packages/frontend && pnpm build && wrangler pages deploy dist --project-name=scoring-system-frontend
+# 或分別部署
+pnpm run deploy:backend            # Backend (Cloudflare Workers)
+pnpm run deploy:frontend           # Frontend (Cloudflare Pages, production)
+pnpm run deploy:frontend:preview   # Frontend (preview)
 
-# 3. Database Migration (如有 schema 變更)
-pnpm migrate:remote
-```
-
-#### 單獨部署
-
-```bash
-# 只部署 Backend
-cd scoringSystem-cf/packages/backend && wrangler deploy
-
-# 只部署 Frontend 到 Production
-cd scoringSystem-cf/packages/frontend && pnpm build && wrangler pages deploy dist --project-name=scoring-system-frontend --branch=production
+# Database Migration (如有 schema 變更)
+pnpm run migrate:remote
 ```
 
 #### Cloudflare Pages Production 分支設定
@@ -317,14 +309,6 @@ cd scoringSystem-cf/packages/frontend && pnpm build && wrangler pages deploy dis
 |------|------|------|
 | `production` | Production | 部署到 scoring.kelunyang.online |
 | `main` | Preview | 部署到 preview URL (如 xxx.scoring-system-frontend.pages.dev) |
-
-```bash
-# 部署到 Production（使用 --branch=production）
-wrangler pages deploy dist --project-name=scoring-system-frontend --branch=production
-
-# 部署到 Preview（測試用，不指定 branch）
-wrangler pages deploy dist --project-name=scoring-system-frontend
-```
 
 ### 部署結果 URLs
 
