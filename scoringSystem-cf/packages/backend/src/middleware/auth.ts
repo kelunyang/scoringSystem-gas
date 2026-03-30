@@ -168,42 +168,40 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: HonoV
         '/api/rankings/teacher-rankings',
         '/api/rankings/teacher-ranking-versions',
         '/api/rankings/ai-providers',
+        '/api/rankings/list',
         // Projects
-        '/projects/core',
-        '/projects/content',
+        '/api/projects/core',
+        '/api/projects/content',
         // Stages
-        '/stages/list',
-        '/stages/get',
+        '/api/stages/list',
+        '/api/stages/get',
         // Settlement (read-only queries)
-        '/settlement/stage-rankings',
-        '/settlement/comment-rankings',
+        '/api/settlement/stage-rankings',
+        '/api/settlement/comment-rankings',
         // Scoring (read-only queries)
-        '/scoring/submission-voting-data',
-        '/scoring/comment-voting-data',
+        '/api/scoring/submission-voting-data',
+        '/api/scoring/comment-voting-data',
         // Wallets
-        '/wallets/project-ladder',
-        '/wallets/balance',
-        '/wallets/transactions',
+        '/api/wallets/project-ladder',
+        '/api/wallets/balance',
+        '/api/wallets/transactions',
         // Groups
-        '/groups/list',
-        '/groups/members',
+        '/api/groups/list',
+        '/api/groups/members',
         // Submissions
-        '/submissions/list',
-        '/submissions/detail',
-        '/submissions/participation-status',
-        // Rankings (legacy paths without /api prefix)
-        '/rankings/list',
-        '/rankings/proposals',
+        '/api/submissions/list',
+        '/api/submissions/detail',
+        '/api/submissions/participation-status',
         // Comments
-        '/comments/list',
-        '/comments/stage',
-        '/comments/details',
-        '/comments/voting-eligibility',
-        '/comments/ranking-history',
+        '/api/comments/list',
+        '/api/comments/stage',
+        '/api/comments/details',
+        '/api/comments/voting-eligibility',
+        '/api/comments/ranking-history',
         // Event logs
-        '/eventlogs/project',
-        '/eventlogs/user',
-        '/eventlogs/resource',
+        '/api/eventlogs/project',
+        '/api/eventlogs/user',
+        '/api/eventlogs/resource',
       ];
 
       // Check if this is a write operation (not in safe list)
