@@ -59,7 +59,7 @@
         v-for="(version, index) in versions"
         :key="(version as any)[versionIdKey]"
         :status="getStepStatus(version, index)"
-        class="version-step"
+        class="version-step clickable-step"
       >
         <template #title>
           <div class="version-step-title" @click="handleVersionClick(version)">
@@ -68,7 +68,7 @@
         </template>
 
         <template #description>
-          <div class="version-step-description">
+          <div class="version-step-description" @click="handleVersionClick(version)">
             <!-- Scoped slot for full customization -->
             <slot name="description" :version="version" :index="index">
               <!-- Fallback to legacy slot name for backward compatibility -->
@@ -230,10 +230,16 @@ function handleVersionClick(version: any) {
   transform: scale(1.05);
 }
 
+.clickable-step :deep(.el-step__head),
+.clickable-step :deep(.el-step__icon) {
+  cursor: pointer;
+}
+
 .version-step-description {
   font-size: 12px;
   color: #7f8c8d;
   line-height: 1.6;
+  cursor: pointer;
 }
 
 .version-hint-alert {

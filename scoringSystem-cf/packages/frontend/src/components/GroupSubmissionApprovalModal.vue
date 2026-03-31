@@ -12,12 +12,12 @@
           {{ currentPageName }}
         </el-breadcrumb-item>
         <el-breadcrumb-item>
-          <i class="fas fa-vote-yea"></i>
-          本組報告投票確認
+          <i :class="readOnly ? 'fas fa-eye' : 'fas fa-vote-yea'"></i>
+          {{ readOnly ? '成果版本檢視' : '本組報告投票確認' }}
         </el-breadcrumb-item>
       </el-breadcrumb>
     </template>
-    <div class="drawer-body" v-loading="votingDataComposable.isLoading.value" element-loading-text="載入投票資料中..." ref="modalRoot">
+    <div class="drawer-body" v-loading="votingDataComposable.versionsLoading.value" element-loading-text="載入版本資料中..." ref="modalRoot">
       <!-- DrawerAlertZone - 統一的 Alert 管理 -->
       <DrawerAlertZone />
 
@@ -327,79 +327,81 @@
 
       <!-- 操作按鈕區域 -->
       <div class="drawer-actions">
-        <!-- 場景 1: 查看舊版本 + 未投票 + 是參與者 → 恢復按鈕（操作）-->
-        <el-button
-          v-if="isViewingOldVersion && !isFinalVersionApproved && !votingData.hasUserVoted && isCurrentUserParticipant"
-          type="warning"
-          @click="showRestoreConfirmation"
-          :disabled="submitting"
-        >
-          <i class="fas fa-history"></i>
-          恢復回舊版本
-        </el-button>
+        <template v-if="!readOnly">
+          <!-- 場景 1: 查看舊版本 + 未投票 + 是參與者 → 恢復按鈕（操作）-->
+          <el-button
+            v-if="isViewingOldVersion && !isFinalVersionApproved && !votingData.hasUserVoted && isCurrentUserParticipant"
+            type="warning"
+            @click="showRestoreConfirmation"
+            :disabled="submitting"
+          >
+            <i class="fas fa-history"></i>
+            恢復回舊版本
+          </el-button>
 
-        <!-- 場景 2: 查看舊版本 + 已投票 → 狀態按鈕（disabled）-->
-        <el-button
-          v-else-if="isViewingOldVersion && !isFinalVersionApproved && votingData.hasUserVoted"
-          type="info"
-          disabled
-        >
-          <i class="fas fa-info-circle"></i>
-          查看歷史版本（已投票無法恢復）
-        </el-button>
+          <!-- 場景 2: 查看舊版本 + 已投票 → 狀態按鈕（disabled）-->
+          <el-button
+            v-else-if="isViewingOldVersion && !isFinalVersionApproved && votingData.hasUserVoted"
+            type="info"
+            disabled
+          >
+            <i class="fas fa-info-circle"></i>
+            查看歷史版本（已投票無法恢復）
+          </el-button>
 
-        <!-- 場景 3: 未投票 + 未通過 + 是參與者 → 投票按鈕（操作）-->
-        <el-button
-          v-if="!isViewingOldVersion && isFinalVersionSubmitted && !votingData.hasUserVoted && !votingData.isApproved && isCurrentUserParticipant"
-          type="success"
-          @click="submitVote(true)"
-          :disabled="submitting"
-          :loading="submitting"
-        >
-          <i v-if="!submitting" class="fas fa-check-circle"></i>
-          {{ submitting ? '投票中...' : '同意本組報告' }}
-        </el-button>
+          <!-- 場景 3: 未投票 + 未通過 + 是參與者 → 投票按鈕（操作）-->
+          <el-button
+            v-if="!isViewingOldVersion && isFinalVersionSubmitted && !votingData.hasUserVoted && !votingData.isApproved && isCurrentUserParticipant"
+            type="success"
+            @click="submitVote(true)"
+            :disabled="submitting"
+            :loading="submitting"
+          >
+            <i v-if="!submitting" class="fas fa-check-circle"></i>
+            {{ submitting ? '投票中...' : '同意本組報告' }}
+          </el-button>
 
-        <!-- 場景 4: 已投票 + 未通過 → 狀態按鈕（disabled）-->
-        <el-button
-          v-else-if="!isViewingOldVersion && votingData.hasUserVoted && !votingData.isApproved"
-          type="success"
-          disabled
-        >
-          <i class="fas fa-check-circle"></i>
-          您已投票：{{ getUserVoteStatus() }}
-        </el-button>
+          <!-- 場景 4: 已投票 + 未通過 → 狀態按鈕（disabled）-->
+          <el-button
+            v-else-if="!isViewingOldVersion && votingData.hasUserVoted && !votingData.isApproved"
+            type="success"
+            disabled
+          >
+            <i class="fas fa-check-circle"></i>
+            您已投票：{{ getUserVoteStatus() }}
+          </el-button>
 
-        <!-- 場景 5: 已通過 → 狀態按鈕（disabled）-->
-        <el-button
-          v-else-if="votingData.isApproved"
-          type="info"
-          disabled
-        >
-          <i class="fas fa-trophy"></i>
-          本組報告已獲得通過
-        </el-button>
+          <!-- 場景 5: 已通過 → 狀態按鈕（disabled）-->
+          <el-button
+            v-else-if="votingData.isApproved"
+            type="info"
+            disabled
+          >
+            <i class="fas fa-trophy"></i>
+            本組報告已獲得通過
+          </el-button>
 
-        <!-- 場景 6: 非參與者 → 提示按鈕（disabled）-->
-        <el-button
-          v-else-if="!isViewingOldVersion && isFinalVersionSubmitted && !isCurrentUserParticipant"
-          type="info"
-          disabled
-        >
-          <i class="fas fa-info-circle"></i>
-          您未參與本次提交，無法投票或操作
-        </el-button>
+          <!-- 場景 6: 非參與者 → 提示按鈕（disabled）-->
+          <el-button
+            v-else-if="!isViewingOldVersion && isFinalVersionSubmitted && !isCurrentUserParticipant"
+            type="info"
+            disabled
+          >
+            <i class="fas fa-info-circle"></i>
+            您未參與本次提交，無法投票或操作
+          </el-button>
 
-        <!-- 刪除報告按鈕（只在未投票 + 未通過 + 是參與者時顯示）-->
-        <el-button
-          v-if="!isViewingOldVersion && isFinalVersionSubmitted && !votingData.isApproved && !votingData.hasUserVoted && isCurrentUserParticipant"
-          type="danger"
-          @click="showDeleteConfirmation"
-          :disabled="submitting"
-        >
-          <i class="fas fa-trash"></i>
-          刪除報告重發
-        </el-button>
+          <!-- 刪除報告按鈕（只在未投票 + 未通過 + 是參與者時顯示）-->
+          <el-button
+            v-if="!isViewingOldVersion && isFinalVersionSubmitted && !votingData.isApproved && !votingData.hasUserVoted && isCurrentUserParticipant"
+            type="danger"
+            @click="showDeleteConfirmation"
+            :disabled="submitting"
+          >
+            <i class="fas fa-trash"></i>
+            刪除報告重發
+          </el-button>
+        </template>
 
         <!-- 顯示/隱藏共識投票狀態按鈕 -->
         <el-button
@@ -595,6 +597,7 @@ export interface Props {
   currentGroupId?: string
   allGroups?: any[]
   stageDescription?: string
+  readOnly?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -607,7 +610,8 @@ const props = withDefaults(defineProps<Props>(), {
   projectUsers: () => [],
   currentGroupId: undefined,
   allGroups: () => [],
-  stageDescription: ''
+  stageDescription: '',
+  readOnly: false
 })
 
 /**
@@ -637,7 +641,7 @@ const {
   calculateScoring
 } = usePointCalculation()
 
-const { warning, clearAlerts } = useDrawerAlerts()
+const { addAlert, warning, clearAlerts } = useDrawerAlerts()
 
 // ===== Template Refs =====
 const modalRoot = ref<HTMLElement | null>(null)
@@ -1150,11 +1154,22 @@ watch(() => props.visible, (newVal) => {
     // 清除之前的數據，強制重新載入
     resetData()
 
-    // 添加共識警告
-    warning(
-      '如果在截止時間前貴組沒有達到集體共識，系統將沒收你們這階段的獎金',
-      '共識提醒'
-    )
+    if (props.readOnly) {
+      // readOnly 模式：僅顯示唯讀提示
+      addAlert({
+        type: 'info',
+        title: '唯讀模式',
+        message: '目前為檢視模式，僅供查看成果提交版本紀錄與差異比較，無法進行投票或刪除操作。',
+        closable: false,
+        autoClose: 0
+      })
+    } else {
+      // 添加共識警告
+      warning(
+        '如果在截止時間前貴組沒有達到集體共識，系統將沒收你們這階段的獎金',
+        '共識提醒'
+      )
+    }
 
     // ✅ Phase 3 优化：使用 composable 刷新数据
     votingDataComposable.refreshAll().then(() => {
@@ -1172,7 +1187,9 @@ watch(() => props.visible, (newVal) => {
         console.log('[DEBUG] visible watcher - state initialized:', {
           currentVersionId: currentVersionId.value,
           selectedVersion: selectedVersion.value,
-          hasContentMarkdown: !!activeVer.contentMarkdown
+          hasContentMarkdown: !!activeVer.contentMarkdown,
+          totalVersions: votingDataComposable.versions.value.length,
+          versionStatuses: votingDataComposable.versions.value.map(v => `${v.submissionId?.slice(-6)}:${v.status}`)
         })
 
         // 初始化 simulatedGroupCount（如果尚未設置）

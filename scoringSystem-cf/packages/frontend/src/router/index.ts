@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw, RouteLocationNormalized, NavigationGuardNext } from 'vue-router'
 import { isTokenExpired } from '@/utils/jwt'
+import { useSudoStore } from '@/stores/sudo'
 
 // ==================== TypeScript 類型擴充 ====================
 // 擴充 vue-router 的 RouteMeta 接口，提供類型安全的 meta 屬性
@@ -414,6 +415,18 @@ router.beforeEach((to: RouteLocationNormalized, from: RouteLocationNormalized, n
   // Update document title
   if (to.meta.title) {
     document.title = `${to.meta.title} - 评分系统`
+  }
+
+  // Auto-exit sudo mode when leaving project detail
+  const sudoStore = useSudoStore()
+  if (sudoStore.isActive) {
+    const projectRoutes = ['projects-view', 'projects-stage']
+    const isGoingToProjectDetail = projectRoutes.includes(to.name as string)
+    const targetProjectId = to.params.projectId as string | undefined
+
+    if (!isGoingToProjectDetail || targetProjectId !== sudoStore.projectId) {
+      sudoStore.exitSudo()
+    }
   }
 
   // Check authentication status

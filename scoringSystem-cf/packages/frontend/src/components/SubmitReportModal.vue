@@ -12,8 +12,8 @@
           {{ currentPageName }}
         </el-breadcrumb-item>
         <el-breadcrumb-item>
-          <i class="fas fa-paper-plane"></i>
-          發送報告
+          <i :class="readOnly ? 'fas fa-history' : 'fas fa-paper-plane'"></i>
+          {{ readOnly ? '成果版本檢視' : '發送報告' }}
         </el-breadcrumb-item>
       </el-breadcrumb>
     </template>
@@ -21,18 +21,18 @@
       <!-- Alert Zone -->
       <DrawerAlertZone />
 
-      <!-- 獎金顯示 -->
-      <div class="reward-info">
+      <!-- 獎金顯示（readOnly 模式下隱藏） -->
+      <div v-if="!readOnly" class="reward-info">
         <label class="reward-label">階段報告獎金</label>
         <div class="reward-amount">{{ reportReward }}</div>
       </div>
 
-      <!-- 參考歷史版本區域（只在載入中或有歷史版本時顯示） -->
+      <!-- 歷史版本區域 -->
       <div v-if="loadingHistoricalVersions || historicalVersions.length > 0" class="version-selector-section">
         <div class="section-header">
           <label class="section-label">
             <i class="fas fa-history"></i>
-            參考歷史版本
+            {{ readOnly ? '成果提交版本' : '參考歷史版本' }}
           </label>
         </div>
 
@@ -46,9 +46,9 @@
           <el-select
             v-model="selectedHistoricalVersion"
             class="version-selector"
-            placeholder="選擇歷史版本以快速填入內容"
+            :placeholder="readOnly ? '選擇版本檢視內容' : '選擇歷史版本以快速填入內容'"
             @change="handleHistoricalVersionChange"
-            clearable
+            :clearable="!readOnly"
           >
             <el-option
               v-for="version in historicalVersions"
@@ -63,7 +63,7 @@
             </el-option>
           </el-select>
 
-          <div v-if="selectedHistoricalVersion" class="version-info">
+          <div v-if="selectedHistoricalVersion && !readOnly" class="version-info">
             <i class="fas fa-info-circle"></i>
             選擇歷史版本後會自動填入該版本的報告內容和點數分配，您可以在此基礎上進行修改
           </div>
@@ -72,12 +72,29 @@
         <!-- 無歷史版本（隱藏整個區域） -->
       </div>
 
+      <!-- readOnly 模式無版本時顯示空狀態 -->
+      <div v-if="readOnly && !loadingHistoricalVersions && historicalVersions.length === 0" style="text-align: center; padding: 40px 20px; color: #909399;">
+        <i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 16px; display: block;"></i>
+        <div>此階段尚無成果提交紀錄</div>
+      </div>
+
       <!-- Markdown 編輯區 -->
-      <div class="editor-section">
+      <div v-if="!readOnly" class="editor-section">
         <MdEditorWrapper
           v-model="content"
           :placeholder="placeholder"
         />
+      </div>
+
+      <!-- readOnly 模式：顯示報告內容預覽 -->
+      <div v-if="readOnly && content" class="editor-section">
+        <div class="section-header">
+          <label class="section-label">
+            <i class="fas fa-file-alt"></i>
+            報告內容
+          </label>
+        </div>
+        <MdPreviewWrapper :content="content" />
       </div>
 
       <!-- 參與者選擇區域 -->
@@ -86,7 +103,7 @@
           <label class="section-label">
             <i class="fas fa-users"></i> 參與者貢獻度分配
           </label>
-          <div class="header-actions">
+          <div v-if="!readOnly" class="header-actions">
             <button class="btn-equal-split" @click="equalSplit">
               <i class="fas fa-balance-scale"></i> 均分
             </button>
@@ -121,7 +138,7 @@
               <el-checkbox
                 v-model="member.selected"
                 :label="member.displayName"
-                :disabled="member.isSubmitter"
+                :disabled="readOnly || member.isSubmitter"
                 class="member-checkbox"
               />
               <span v-if="member.isSubmitter" class="submitter-tag">(提交者)</span>
@@ -134,7 +151,7 @@
                 :min="1"
                 :max="100"
                 :step="1"
-                :disabled="!member.selected"
+                :disabled="readOnly || !member.selected"
                 :show-tooltip="true"
                 :format-tooltip="(val: number) => `${val}%`"
                 @input="updateContributions"
@@ -145,7 +162,7 @@
                 :min="1"
                 :max="100"
                 :step="1"
-                :disabled="!member.selected"
+                :disabled="readOnly || !member.selected"
                 size="small"
                 controls-position="right"
                 @change="updateContributions"
@@ -197,8 +214,8 @@
         </div>
       </div>
 
-      <!-- 確認發布區域 -->
-      <div class="confirmation-section">
+      <!-- 確認發布區域（readOnly 模式下隱藏） -->
+      <div v-if="!readOnly" class="confirmation-section">
         <ConfirmationInput
           v-model="confirmationText"
           keyword="SUBMIT"
@@ -219,11 +236,11 @@
         >
           <i class="fas fa-info-circle"></i> 階段描述
         </el-button>
-        <el-button type="primary" @click="submitReport" :disabled="!canSubmit" :loading="submitting">
+        <el-button v-if="!readOnly" type="primary" @click="submitReport" :disabled="!canSubmit" :loading="submitting">
           <i v-if="!submitting" class="fas fa-paper-plane"></i>
           {{ submitting ? '提交中...' : '送出' }}
         </el-button>
-        <el-button type="warning" @click="clearContent">
+        <el-button v-if="!readOnly" type="warning" @click="clearContent">
           <i class="fas fa-eraser"></i> 清除重填
         </el-button>
       </div>
@@ -272,10 +289,12 @@ import StageDescriptionDrawer from './shared/StageDescriptionDrawer.vue'
 import DrawerAlertZone from './common/DrawerAlertZone.vue'
 import ConfirmationInput from './common/ConfirmationInput.vue'
 import MdEditorWrapper from './MdEditorWrapper.vue'
+import MdPreviewWrapper from './MdPreviewWrapper.vue'
 import { usePointCalculation } from '@/composables/usePointCalculation'
 import { useAvatar } from '@/composables/useAvatar'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
+import { useSudoStore } from '@/stores/sudo'
 
 // Drawer Breadcrumb
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
@@ -334,6 +353,7 @@ export interface Props {
   totalActiveGroups: number
   totalProjectGroups: number
   stageDescription?: string
+  readOnly?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -349,7 +369,8 @@ const props = withDefaults(defineProps<Props>(), {
   projectId: '',
   totalActiveGroups: 4,
   totalProjectGroups: 4,
-  stageDescription: ''
+  stageDescription: '',
+  readOnly: false
 })
 
 // Emits
@@ -374,10 +395,14 @@ const {
 } = usePointCalculation()
 
 const {
+  addAlert,
   warning,
   removeAlert,
   clearAlerts
 } = useDrawerAlerts()
+
+// Sudo Mode
+const sudoStore = useSudoStore()
 
 // State
 const content = ref<string>('')
@@ -509,8 +534,20 @@ watch(() => props.visible, (newVal) => {
       groupId: props.currentGroup?.groupId,
       hasProjectId: !!props.projectId,
       hasStageId: !!props.stageId,
-      hasGroupId: !!props.currentGroup?.groupId
+      hasGroupId: !!props.currentGroup?.groupId,
+      readOnly: props.readOnly
     })
+
+    // readOnly 模式（SUDO）：顯示唯讀提示
+    if (props.readOnly && sudoStore.isActive) {
+      addAlert({
+        type: 'info',
+        title: '唯讀模式',
+        message: `您正在以 SUDO 模式查看 ${sudoStore.targetUser?.displayName || '學生'} 的成果提交版本紀錄。`,
+        closable: false,
+        autoClose: 0
+      })
+    }
 
     initializeGroupMembers()
     loadHistoricalVersions()
@@ -802,6 +839,13 @@ const loadHistoricalVersions = async (): Promise<void> => {
       })))
 
       console.log(`🎯 [loadHistoricalVersions] Final result: ${historicalVersions.value.length} versions loaded (group: ${props.currentGroup?.groupId})`)
+
+      // readOnly 模式：自動選擇最新版本
+      if (props.readOnly && historicalVersions.value.length > 0) {
+        const latestVersion = historicalVersions.value[historicalVersions.value.length - 1]
+        selectedHistoricalVersion.value = latestVersion.submissionId
+        await handleHistoricalVersionChange(latestVersion.submissionId)
+      }
     } else {
       console.error('❌ [loadHistoricalVersions] API returned error:', response.error)
       historicalVersions.value = []

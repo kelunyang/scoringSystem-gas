@@ -328,7 +328,6 @@
             >
               <el-button type="info" size="small" :disabled="loadingVotingAnalysis">
                 <i v-if="loadingVotingAnalysis" class="fas fa-spinner fa-spin"></i>
-                <i v-else class="fas fa-chart-pie"></i>
                 獎金分配
               </el-button>
               <template #dropdown>
@@ -476,6 +475,39 @@
                   >
                     <i class="fa fa-info-circle"></i>
                   </button>
+                  <!-- 歷史紀錄檢視 Dropdown -->
+                  <el-dropdown
+                    trigger="click"
+                    @command="handleHistoryViewCommand($event, stage as any)"
+                    :disabled="isInitialLoading"
+                  >
+                    <button
+                      class="btn btn-timeline"
+                      :disabled="isInitialLoading"
+                      title="檢視歷史紀錄"
+                    >
+                      <i class="fas fa-code-branch"></i>
+                    </button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="submission-versions">
+                          <i class="fas fa-history"></i> 成果版本檢視
+                        </el-dropdown-item>
+                        <el-dropdown-item
+                          command="vote-records"
+                          :disabled="stage.status !== 'voting' && stage.status !== 'completed'"
+                        >
+                          <i class="fas fa-vote-yea"></i> 投票紀錄檢視
+                        </el-dropdown-item>
+                        <el-dropdown-item
+                          command="comment-vote-records"
+                          :disabled="stage.status !== 'voting' && stage.status !== 'completed'"
+                        >
+                          <i class="fas fa-comment-dots"></i> 評論投票檢視
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
                 </div>
 
                 <!-- 桌面操作按鈕群組（桌面版顯示） -->
@@ -540,7 +572,6 @@
                   >
                     <button class="btn btn-dark" :disabled="loadingVotingAnalysis || isInitialLoading">
                       <i v-if="loadingVotingAnalysis" class="fas fa-spinner fa-spin"></i>
-                      <i v-else class="fas fa-chart-pie"></i>
                       {{ loadingVotingAnalysis ? '載入中...' : '查看獎金分配' }} <i class="el-icon-arrow-down el-icon--right"></i>
                     </button>
                     <template #dropdown>
@@ -620,7 +651,6 @@
               >
                 <button class="btn btn-dark" :disabled="loadingVotingAnalysis || isInitialLoading">
                   <i v-if="loadingVotingAnalysis" class="fas fa-spinner fa-spin"></i>
-                  <i v-else class="fas fa-chart-pie"></i>
                   獎金分配
                 </button>
                 <template #dropdown>
@@ -794,6 +824,7 @@
         :user-group-info="modalManager.currentModalUserGroupInfo.value"
         :project-users="(projectData?.users || []) as any"
         :project-user-groups="(projectData?.userGroups || []) as any"
+        :read-only="voteResultReadOnly"
         @vote="handleVoteSubmit"
         @resubmit="handleResubmitRanking"
       />
@@ -811,6 +842,7 @@
         :all-groups="projectData?.groups || []"
         :total-active-groups="modalManager.currentModalActiveGroupsCount.value"
         :total-project-groups="totalProjectGroups"
+        :read-only="submitReportReadOnly"
         @submit="handleReportSubmit"
       />
 
@@ -846,6 +878,7 @@
         :comment-reward="currentModalStageCommentReward"
         :user="user"
         :stage-comments="currentModalStageComments"
+        :read-only="commentVoteReadOnly"
         @vote-submitted="handleCommentVoteSubmit"
       />
 
@@ -866,6 +899,7 @@
         :project-users="projectData?.users || []"
         :current-group-id="groupData.currentUserGroup.value?.groupId"
         :all-groups="projectData?.groups || []"
+        :read-only="groupApprovalReadOnly"
         @vote-submitted="handleGroupApprovalVoteSubmit"
         @submission-deleted="handleSubmissionDeleted"
       />
@@ -1086,6 +1120,11 @@ const { userId } = useAuth()
 
 // ===== SUDO Mode Store =====
 const sudoStore = useSudoStore()
+const isSudoActive = computed(() => {
+  return sudoStore.isActive &&
+         sudoStore.projectId === projectId.value &&
+         !!sudoStore.targetUser
+})
 
 // ===== TanStack Query Client =====
 // Initialize queryClient in setup stage for use in event handlers
@@ -1199,6 +1238,10 @@ const stageCommentTotals = reactive(new Map<string, number>())
 // loadingVoteData 已移除 - VoteResultModal 現在使用 TanStack Query 內部管理載入狀態
 const loadingTeacherVoteData = ref(false)
 const loadingVotingAnalysis = ref(false)
+const submitReportReadOnly = ref(false)
+const voteResultReadOnly = ref(false)
+const commentVoteReadOnly = ref(false)
+const groupApprovalReadOnly = ref(false)
 
 // ===== Modal 數據 =====
 const currentStageSubmissions = ref<any[]>([])
@@ -1328,6 +1371,20 @@ const stageContent = useStageContentManagement(
 
 // Modal 管理
 const modalManager = useModalManager()
+
+// 當 modal 關閉時重置 readOnly 標記
+watch(() => modalManager.showVoteResultModal.value, (visible) => {
+  if (!visible) voteResultReadOnly.value = false
+})
+watch(() => modalManager.showCommentVoteModal.value, (visible) => {
+  if (!visible) commentVoteReadOnly.value = false
+})
+watch(() => modalManager.showSubmitReportModal.value, (visible) => {
+  if (!visible) submitReportReadOnly.value = false
+})
+watch(() => modalManager.showGroupSubmissionApprovalModal.value, (visible) => {
+  if (!visible) groupApprovalReadOnly.value = false
+})
 
 // 共識警告
 const consensusWarning = useConsensusWarning()
@@ -2593,7 +2650,8 @@ function handleReportAction(stage: ExtendedStage) {
  * - 資料由 Modal 內部自動載入和快取
  * - 不再需要預先載入資料
  */
-function openVoteResultModal(stage: ExtendedStage) {
+function openVoteResultModal(stage: ExtendedStage, readOnly = false) {
+  voteResultReadOnly.value = readOnly
   // 直接開啟 Modal，無需預載入資料
   // VoteResultModal 會通過 TanStack Query 自動載入
   modalManager.openVoteResultModal(stage, null)
@@ -2608,6 +2666,16 @@ function openVoteResultModal(stage: ExtendedStage) {
  * - activeGroupsCount 僅用於 UI 模擬，不影響實際提交邏輯
  */
 function openSubmitReportModal(stage: ExtendedStage) {
+  submitReportReadOnly.value = false
+  const activeGroupsCount = stage.groups?.length || 1
+  modalManager.openSubmitReportModal(stage, activeGroupsCount)
+}
+
+/**
+ * SUDO 模式：打開成果版本檢視（唯讀）
+ */
+function openSubmitReportModalReadOnly(stage: ExtendedStage) {
+  submitReportReadOnly.value = true
   const activeGroupsCount = stage.groups?.length || 1
   modalManager.openSubmitReportModal(stage, activeGroupsCount)
 }
@@ -2775,6 +2843,30 @@ function handleAnalysisCommand(command: string, stage: ExtendedStage) {
     modalManager.openAnalysisModal(command, stage)
   } else {
     showWarning('只有已結算的階段才能顯示獎金分配結果')
+  }
+}
+
+/**
+ * 歷史紀錄檢視 Dropdown 命令處理
+ * 所有用戶都可使用，drawer 以 readOnly 模式開啟
+ */
+function handleHistoryViewCommand(command: string, stage: ExtendedStage) {
+  switch (command) {
+    case 'submission-versions':
+      groupApprovalReadOnly.value = true
+      openGroupSubmissionApprovalModal(stage)
+      break
+    case 'vote-records':
+      if (stage.status === 'voting' || stage.status === 'completed') {
+        openVoteResultModal(stage, true)
+      }
+      break
+    case 'comment-vote-records':
+      if (stage.status === 'voting' || stage.status === 'completed') {
+        commentVoteReadOnly.value = true
+        modalManager.openCommentVoteModal(stage)
+      }
+      break
   }
 }
 

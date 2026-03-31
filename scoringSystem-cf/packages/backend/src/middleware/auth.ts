@@ -163,6 +163,7 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: HonoV
         // Rankings (read-only queries)
         '/api/rankings/proposals',
         '/api/rankings/stage-rankings',
+        '/api/rankings/all-stages-rankings',
         '/api/rankings/teacher-vote-history',
         '/api/rankings/voting-status',
         '/api/rankings/teacher-rankings',
@@ -192,10 +193,13 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: HonoV
         '/api/submissions/list',
         '/api/submissions/detail',
         '/api/submissions/participation-status',
+        '/api/submissions/versions',
+        '/api/submissions/voting-history',
         // Comments
         '/api/comments/list',
         '/api/comments/stage',
         '/api/comments/details',
+        '/api/comments/all-stages',
         '/api/comments/voting-eligibility',
         '/api/comments/ranking-history',
         // Event logs

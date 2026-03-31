@@ -12,8 +12,8 @@
           {{ currentPageName }}
         </el-breadcrumb-item>
         <el-breadcrumb-item>
-          <i class="fas fa-comment"></i>
-          評論投票
+          <i :class="isSudoMode ? 'fas fa-eye' : 'fas fa-comment'"></i>
+          {{ isSudoMode ? '評論投票檢視' : '評論投票' }}
         </el-breadcrumb-item>
       </el-breadcrumb>
     </template>
@@ -90,7 +90,7 @@
         <CommentRankingTransfer
         :items="allComments"
         :max-selections="dynamicMaxSelections"
-        :disabled="isPreviewMode"
+        :disabled="isReadOnly"
         item-key="id"
         unique-by-field="authorEmail"
         :display-fields="{
@@ -136,9 +136,9 @@
 
       <!-- 操作按鈕 -->
       <div class="drawer-actions">
-        <!-- 離開檢視模式按鈕（預覽模式時顯示） -->
+        <!-- 離開檢視模式按鈕（預覽模式時顯示，SUDO 模式下隱藏） -->
         <el-button
-          v-if="isPreviewMode"
+          v-if="isPreviewMode && !isSudoMode"
           type="warning"
           @click="exitPreviewMode"
         >
@@ -146,21 +146,23 @@
           離開檢視模式
         </el-button>
 
-        <!-- 送出投票按鈕 -->
+        <!-- 送出投票按鈕（SUDO 模式下隱藏） -->
         <el-button
+          v-if="!isSudoMode"
           type="primary"
           @click="submitVote"
-          :disabled="!canSubmit || isPreviewMode"
+          :disabled="!canSubmit || isReadOnly"
           :loading="submitting"
         >
           <i v-if="!submitting" class="fas fa-paper-plane"></i>
           {{ isViewingOldVersion ? '切回最新版本以投票' : '送出投票' }}
         </el-button>
 
-        <!-- 清除重選按鈕 -->
+        <!-- 清除重選按鈕（SUDO 模式下隱藏） -->
         <el-button
+          v-if="!isSudoMode"
           @click="clearAll"
-          :disabled="isPreviewMode"
+          :disabled="isReadOnly"
         >
           <i class="fas fa-eraser"></i>
           清除重選
@@ -183,6 +185,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { usePointCalculation } from '@/composables/usePointCalculation'
+import { useSudoStore } from '@/stores/sudo'
 import type { Group } from '@repo/shared'
 
 // Drawer Breadcrumb
@@ -193,6 +196,10 @@ const { addAlert, clearAlerts, warning } = useDrawerAlerts()
 
 // Point Calculation
 const { calculateRankWeights } = usePointCalculation()
+
+// Read-Only / Sudo Mode
+const sudoStore = useSudoStore()
+const isSudoMode = computed(() => props.readOnly || sudoStore.isActive)
 
 // ========== Type Definitions ==========
 
@@ -250,6 +257,7 @@ export interface Props {
   user?: User | null
   comments?: Comment[]
   stageComments?: any[]  // 從父組件傳入的原始評論列表（避免重複 API 呼叫）
+  readOnly?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -297,7 +305,8 @@ const props = withDefaults(defineProps<Props>(), {
       fullContent: '建議在未來版本中加入更多的功能擴展，提升整體的實用價值，讓產品更具競爭力。'
     }
   ],
-  stageComments: () => []
+  stageComments: () => [],
+  readOnly: false
 })
 
 const emit = defineEmits<{
@@ -381,6 +390,11 @@ const isViewingOldVersion = computed((): boolean => {
 // Preview mode: true when a proposal version is loaded into the editor
 const isPreviewMode = computed((): boolean => {
   return loadedProposalId.value !== null
+})
+
+// Read-only mode: preview or sudo
+const isReadOnly = computed((): boolean => {
+  return isPreviewMode.value || isSudoMode.value
 })
 
 // 查找当前用户的评论
@@ -984,6 +998,20 @@ watch(() => props.visible, async (newVal) => {
   if (newVal) {
     clearAlerts()  // Clear alerts when opening
 
+    // 唯讀模式提示
+    if (isSudoMode.value) {
+      const alertMessage = sudoStore.isActive
+        ? `您正在以 SUDO 模式查看 ${sudoStore.targetUser?.displayName || '學生'} 的評論投票視角。此模式僅供查看，無法進行任何投票操作。`
+        : '目前為檢視模式，僅供查看評論投票紀錄，無法進行任何投票操作。'
+      addAlert({
+        type: 'info',
+        title: '唯讀模式',
+        message: alertMessage,
+        closable: false,
+        autoClose: 0
+      })
+    }
+
     // Step 1: 投票需要完整數據，始終調用 API（不依賴父組件可能被分頁的快取數據）
     await loadStageComments()
 
@@ -995,7 +1023,7 @@ watch(() => props.visible, async (newVal) => {
     await loadProposalVersions()
 
     // Step 4: Show appropriate alert (only if no proposal was loaded into preview mode)
-    if (!loadedProposalId.value) {
+    if (!loadedProposalId.value && !isSudoMode.value) {
       showRankingRulesAlert()
     }
   } else {

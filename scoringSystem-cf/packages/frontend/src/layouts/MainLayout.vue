@@ -166,6 +166,18 @@
           </div>
         </div>
 
+        <!-- Mode Tags (底部，watermark 上方) -->
+        <div v-if="(isDevModeActive && isSystemAdmin) || sudoStore.isActive" class="sidebar-mode-tags">
+          <div v-if="isDevModeActive && isSystemAdmin" class="mode-tag mode-tag-dev">
+            <span class="mode-tag-text">⚠️ DEV MODE</span>
+            <span class="mode-tag-icon">⚠️</span>
+          </div>
+          <div v-if="sudoStore.isActive" class="mode-tag mode-tag-sudo">
+            <span class="mode-tag-text">🕵️ SUDO MODE</span>
+            <span class="mode-tag-icon">🕵️</span>
+          </div>
+        </div>
+
         <!-- Watermark Footer (底部) -->
         <div class="sidebar-watermark-2025">
           <span>Kelunyang@2025</span>
@@ -1402,7 +1414,6 @@ onBeforeUnmount(() => {
 .sidebar.dev-mode {
   background: linear-gradient(180deg, #722F37 0%, #4A1C23 100%); /* Maroon 漸層 */
   border-right: 3px solid #DC143C;
-  position: relative;
 }
 
 .sidebar.dev-mode .sidebar-header {
@@ -1411,27 +1422,6 @@ onBeforeUnmount(() => {
 
 .sidebar.dev-mode .sidebar-breadcrumb {
   background: rgba(220, 20, 60, 0.2);
-}
-
-.sidebar.dev-mode::after {
-  content: '⚠️ DEV MODE';
-  position: absolute;
-  top: 70px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #DC143C;
-  color: white;
-  padding: 4px 12px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: bold;
-  z-index: 10;
-  white-space: nowrap;
-}
-
-.sidebar.dev-mode.collapsed::after {
-  content: '⚠️';
-  padding: 4px 8px;
 }
 
 .sidebar.dev-mode .nav-item {
@@ -1457,5 +1447,52 @@ onBeforeUnmount(() => {
 
 .sidebar.dev-mode .sidebar-watermark-2025 a:hover {
   color: #DC143C;
+}
+
+/* ===== Mode Tags (底部，watermark 上方) ===== */
+.sidebar-mode-tags {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px 0;
+}
+
+.mode-tag {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  color: white;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.mode-tag-dev {
+  background: #DC143C;
+}
+
+.mode-tag-sudo {
+  background: #e6a23c;
+}
+
+.mode-tag .mode-tag-icon {
+  display: none;
+}
+
+.sidebar.collapsed .mode-tag .mode-tag-text {
+  display: none;
+}
+
+.sidebar.collapsed .mode-tag .mode-tag-icon {
+  display: inline;
+}
+
+.sidebar.collapsed .mode-tag {
+  padding: 4px 8px;
+}
+
+.sidebar.collapsed .sidebar-mode-tags {
+  padding: 4px 4px 0;
 }
 </style>

@@ -15,8 +15,8 @@
           {{ currentPageName }}
         </el-breadcrumb-item>
         <el-breadcrumb-item>
-          <i class="fas fa-vote-yea"></i>
-          階段成果投票
+          <i :class="isReadOnly ? 'fas fa-eye' : 'fas fa-vote-yea'"></i>
+          {{ isReadOnly ? '投票紀錄檢視' : '階段成果投票' }}
         </el-breadcrumb-item>
       </el-breadcrumb>
     </template>
@@ -74,7 +74,7 @@
         <div v-if="!hasActiveProposal || !isViewingOldVersion" class="ranking-list-container">
           <DraggableRankingList
             :items="displayRankings"
-            :disabled="!!(hasExistingProposal && !isResubmitting)"
+            :disabled="!!(hasExistingProposal && !isResubmitting) || isReadOnly"
             itemKey="groupId"
             itemLabel="groupName"
             @update:items="handleRankingUpdate"
@@ -567,6 +567,7 @@ import { usePointCalculation } from '@/composables/usePointCalculation'
 import { useAvatar } from '@/composables/useAvatar'
 import { useRankingProposals, type SubmittedGroup, type RankingData } from '@/composables/useRankingProposals'
 import { useVoteResultAlerts } from '@/composables/useVoteResultAlerts'
+import { useSudoStore } from '@/stores/sudo'
 
 // ============= TypeScript Types =============
 
@@ -617,6 +618,7 @@ export interface Props {
   userGroupInfo?: UserGroupInfoProp | null
   projectUsers?: ProjectUser[]
   projectUserGroups?: ProjectUserGroup[]
+  readOnly?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -625,7 +627,8 @@ const props = withDefaults(defineProps<Props>(), {
   user: null,
   userGroupInfo: null,
   projectUsers: () => [],
-  projectUserGroups: () => []
+  projectUserGroups: () => [],
+  readOnly: false
 })
 
 const emit = defineEmits<{
@@ -645,6 +648,10 @@ const {
   generateMemberAvatarUrl,
   generateMemberInitials
 } = useAvatar()
+
+// ===== Read-Only Mode =====
+const sudoStore = useSudoStore()
+const isReadOnly = computed(() => props.readOnly || sudoStore.isActive)
 
 // ===== TanStack Query Hook =====
 const rankingProposals = useRankingProposals(
@@ -776,10 +783,12 @@ const userHasVoted = computed(() => {
 const showInitialProposalButton = computed(() => false)
 
 const showSubmitProposalButton = computed(() => {
+  if (isReadOnly.value) return false
   return !hasExistingProposal.value || isResubmitting.value
 })
 
 const showVoteButtons = computed(() => {
+  if (isReadOnly.value) return false
   return hasExistingProposal.value && !userHasVoted.value && !isResubmitting.value && isLatestVersion.value
 })
 
@@ -818,6 +827,7 @@ const isDisagree = computed(() => {
 const canResetCondition = computed(() => isTied.value || isDisagree.value)
 
 const showResetButton = computed(() => {
+  if (isReadOnly.value) return false
   return !!(isGroupLeader.value &&
          hasExistingProposal.value &&
          isLatestVersion.value &&
@@ -1119,7 +1129,7 @@ const allGroupsForChartWithPoints = computed(() => {
 // ============= Alert Management (via Composable) =============
 
 // Initialize alert composable with all required reactive values
-const { clearAlerts } = useVoteResultAlerts({
+const { addAlert, clearAlerts } = useVoteResultAlerts({
   visible: toRef(props, 'visible'),
   showWithdrawDrawer,
   showResetDrawer,
@@ -1142,6 +1152,20 @@ watch(() => props.visible, async (newVal) => {
     await nextTick()
     if (submittedGroupsFromHook.value && submittedGroupsFromHook.value.length > 0) {
       localSubmittedGroups.value = [...submittedGroupsFromHook.value]
+    }
+    // 唯讀模式：顯示提示並自動展開投票詳情
+    if (isReadOnly.value) {
+      showVotingDetails.value = true
+      const alertMessage = sudoStore.isActive
+        ? `您正在以 SUDO 模式查看 ${sudoStore.targetUser?.displayName || '學生'} 的成果投票視角。此模式僅供查看，無法進行任何投票操作。`
+        : '目前為檢視模式，僅供查看投票紀錄，無法進行任何投票操作。'
+      addAlert({
+        type: 'info',
+        title: '唯讀模式',
+        message: alertMessage,
+        closable: false,
+        autoClose: 0
+      })
     }
   } else {
     resetState()
