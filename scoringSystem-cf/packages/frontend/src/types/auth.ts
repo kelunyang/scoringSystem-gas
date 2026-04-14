@@ -137,3 +137,41 @@ export type TurnstileErrorCallback = () => void;
  * Turnstile expired callback
  */
 export type TurnstileExpiredCallback = () => void;
+
+// ─── TOTP Types ───
+
+/**
+ * Two-factor authentication method
+ */
+export type TwoFactorMethod = 'email' | 'totp';
+
+/**
+ * TOTP setup initialization response
+ */
+export interface TotpSetupInitResponse {
+  secret: string;
+  otpauthUri: string;
+}
+
+/**
+ * TOTP setup verification response (includes recovery codes)
+ */
+export interface TotpSetupVerifyResponse {
+  enabled: boolean;
+  recoveryCodes: string[];
+}
+
+/**
+ * TOTP status response
+ */
+export interface TotpStatusResponse {
+  totpEnabled: boolean;
+  recoveryCodesRemaining: number;
+}
+
+/**
+ * TOTP recovery codes regeneration response
+ */
+export interface TotpRegenerateCodesResponse {
+  recoveryCodes: string[];
+}

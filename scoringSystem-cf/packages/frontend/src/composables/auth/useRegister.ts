@@ -11,6 +11,8 @@ import type { RegisterData, InvitationVerificationResponse } from '../../types/a
 export interface UseRegisterReturn {
   loading: Ref<boolean>;
   invitationVerified: Ref<boolean>;
+  registrationComplete: Ref<boolean>;
+  registrationSessionId: Ref<string | null>;
   errorMessage: Ref<string>;
   availableTags: Ref<string[]>;
   targetEmail: Ref<string | undefined>;
@@ -23,6 +25,7 @@ export interface UseRegisterReturn {
   verifyInvitation: (invitationCode: string, userEmail: string, turnstileToken: string) => Promise<boolean>;
   checkInvitationStatus: (invitationCode: string, userEmail: string) => Promise<void>;
   register: (data: RegisterData) => Promise<boolean>;
+  clearRegistrationSession: () => void;
   reset: () => void;
   backToInvitationStep: () => void;
 }
@@ -58,6 +61,8 @@ export interface UseRegisterReturn {
 export function useRegister(): UseRegisterReturn {
   const loading = ref(false);
   const invitationVerified = ref(false);
+  const registrationComplete = ref(false);
+  const registrationSessionId = ref<string | null>(null);
   const errorMessage = ref('');
   const availableTags = ref<string[]>([]);
   const targetEmail = ref<string | undefined>();
@@ -219,6 +224,14 @@ export function useRegister(): UseRegisterReturn {
       const response = await httpResponse.json();
 
       if (response.success) {
+        // Store session token temporarily for optional TOTP setup
+        const sessionId = response.data?.sessionId;
+        if (sessionId) {
+          registrationSessionId.value = sessionId;
+          // Temporarily save to sessionStorage so rpcClient can use it for TOTP API calls
+          sessionStorage.setItem('sessionId', sessionId);
+        }
+        registrationComplete.value = true;
         return true;
       } else {
         errorMessage.value = response.error?.message || '註冊失敗';
@@ -250,11 +263,24 @@ export function useRegister(): UseRegisterReturn {
   }
 
   /**
+   * Clear the temporary registration session
+   * Call this after TOTP setup is complete or skipped, before redirecting to login
+   */
+  function clearRegistrationSession() {
+    if (registrationSessionId.value) {
+      sessionStorage.removeItem('sessionId');
+      registrationSessionId.value = null;
+    }
+  }
+
+  /**
    * Reset registration state
    */
   function reset() {
     loading.value = false;
     invitationVerified.value = false;
+    registrationComplete.value = false;
+    clearRegistrationSession();
     errorMessage.value = '';
     availableTags.value = [];
     targetEmail.value = undefined;
@@ -276,6 +302,8 @@ export function useRegister(): UseRegisterReturn {
   return {
     loading,
     invitationVerified,
+    registrationComplete,
+    registrationSessionId,
     errorMessage,
     availableTags,
     targetEmail,
@@ -288,6 +316,7 @@ export function useRegister(): UseRegisterReturn {
     verifyInvitation,
     checkInvitationStatus,
     register,
+    clearRegistrationSession,
     reset,
     backToInvitationStep
   };

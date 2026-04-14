@@ -229,6 +229,7 @@ async function queryLoginEvents(
       eventType,
       action: row.action,
       ipAddress: context.ipAddress || 'unknown',
+      twoFactorMethod: context.twoFactorMethod || null,
       reason: context.reason || row.message,
       attemptCount: context.attemptCount
     }

@@ -54,12 +54,12 @@ export const LoginVerifyPasswordRequestSchema = z.object({
 export type LoginVerifyPasswordRequest = z.infer<typeof LoginVerifyPasswordRequestSchema>;
 
 /**
- * Verification code schema with proper validation
+ * Email verification code schema (12-char OTP)
  * - Strips hyphens before validation (separators only)
  * - Converts to uppercase
  * - Validates character set and length
  */
-const VerificationCodeSchema = z.string()
+const EmailVerificationCodeSchema = z.string()
   .transform(val => {
     // Remove whitespace, hyphens, and convert to uppercase
     // This ensures consistent 12-character format throughout the pipeline
@@ -75,11 +75,34 @@ const VerificationCodeSchema = z.string()
   );
 
 /**
+ * Flexible verification code schema for login 2FA
+ * Accepts:
+ * - 12-char email OTP codes (A-Z@#!, with optional hyphens)
+ * - 6-digit TOTP codes (numeric)
+ * - 8-char recovery codes (alphanumeric)
+ * Backend determines which verification path based on user's totpEnabled flag
+ */
+const FlexibleVerificationCodeSchema = z.string()
+  .transform(val => val.trim().replace(/-/g, '').toUpperCase())
+  .refine(
+    (cleanCode) => {
+      // 6-digit TOTP code
+      if (/^\d{6}$/.test(cleanCode)) return true;
+      // 8-char recovery code (A-Z, 2-9, excluding I,O,0,1)
+      if (cleanCode.length === 8 && /^[A-HJ-NP-Z2-9]+$/.test(cleanCode)) return true;
+      // 12-char email OTP code
+      if (cleanCode.length === 12 && /^[A-Z@#!]+$/.test(cleanCode)) return true;
+      return false;
+    },
+    { message: 'Invalid verification code format' }
+  );
+
+/**
  * Login verify 2FA request schema
  */
 export const LoginVerify2FARequestSchema = z.object({
   userEmail: EmailSchema,
-  code: VerificationCodeSchema,
+  code: FlexibleVerificationCodeSchema,
   turnstileToken: TurnstileTokenSchema
 });
 
@@ -199,7 +222,7 @@ export type VerifyEmailForResetRequest = z.infer<typeof VerifyEmailForResetReque
  */
 export const PasswordResetVerifyCodeRequestSchema = z.object({
   userEmail: EmailSchema,
-  code: VerificationCodeSchema,
+  code: EmailVerificationCodeSchema,
   turnstileToken: TurnstileTokenSchema
 });
 
@@ -224,7 +247,37 @@ export const TwoFactorVerificationResponseSchema = z.object({
   message: z.string(),
   emailSent: z.boolean().optional(),
   devMode: z.boolean().optional(),
-  expiresAt: z.number().optional()
+  expiresAt: z.number().optional(),
+  twoFactorMethod: z.enum(['email', 'totp']).optional()
 });
 
 export type TwoFactorVerificationResponse = z.infer<typeof TwoFactorVerificationResponseSchema>;
+
+// ─── TOTP Setup Schemas ───
+
+/**
+ * TOTP setup verification request (6-digit code from authenticator app)
+ */
+export const TotpSetupVerifyRequestSchema = z.object({
+  code: z.string().regex(/^\d{6}$/, 'TOTP code must be exactly 6 digits')
+});
+
+export type TotpSetupVerifyRequest = z.infer<typeof TotpSetupVerifyRequestSchema>;
+
+/**
+ * TOTP disable request (requires password confirmation)
+ */
+export const TotpDisableRequestSchema = z.object({
+  password: PasswordSchema
+});
+
+export type TotpDisableRequest = z.infer<typeof TotpDisableRequestSchema>;
+
+/**
+ * TOTP recovery codes regeneration request
+ */
+export const TotpRegenerateCodesRequestSchema = z.object({
+  password: PasswordSchema
+});
+
+export type TotpRegenerateCodesRequest = z.infer<typeof TotpRegenerateCodesRequestSchema>;

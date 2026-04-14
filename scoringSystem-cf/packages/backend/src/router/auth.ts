@@ -32,7 +32,10 @@ import {
   Resend2FARequestSchema,
   VerifyEmailForResetRequestSchema,
   PasswordResetVerifyCodeRequestSchema,
-  ResetPasswordRequestSchema
+  ResetPasswordRequestSchema,
+  TotpSetupVerifyRequestSchema,
+  TotpDisableRequestSchema,
+  TotpRegenerateCodesRequestSchema
 } from '@repo/shared/schemas/auth';
 
 const authRouter = new Hono<{ Bindings: Env }>();
@@ -454,6 +457,22 @@ authRouter.post(
       }, 401);
     }
 
+    // Check if user has TOTP enabled — if so, skip email entirely
+    const totpEnabled = user.totpEnabled === 1;
+
+    if (totpEnabled) {
+      // TOTP users don't need email verification codes
+      return c.json({
+        success: true,
+        data: {
+          message: '請使用驗證器 App 輸入驗證碼',
+          emailSent: false,
+          devMode: false,
+          twoFactorMethod: 'totp' as const
+        }
+      });
+    }
+
     // Check if SMTP is configured for sending verification codes (KV-first)
     const smtpConfig = await getSmtpConfig(c.env);
     const smtpConfigured = smtpConfig !== null;
@@ -491,6 +510,7 @@ authRouter.post(
           message: '驗證碼已發送到您的信箱',
           emailSent: true,
           devMode: false,
+          twoFactorMethod: 'email' as const,
           expiresAt: storeResult.expiresAt
         }
       });
@@ -502,7 +522,8 @@ authRouter.post(
         data: {
           message: '密碼驗證成功（開發模式：無需驗證碼）',
           emailSent: false,
-          devMode: true
+          devMode: true,
+          twoFactorMethod: 'email' as const
         }
       });
     }
@@ -536,50 +557,91 @@ authRouter.post(
     // Legacy alias for compatibility
     const ipAddress = requestContext.ipAddress === 'unknown' ? null : requestContext.ipAddress;
 
-    // Check if SMTP is configured (KV-first, fallback to env)
-    const smtpConfig = await getSmtpConfig(c.env);
-    const smtpConfigured = smtpConfig !== null;
+    // ─── 2FA Verification with verified flag pattern ───
+    // SECURITY: Every path must explicitly set verified=true before JWT is issued.
+    // This prevents fallthrough bypass bugs.
+    let verified = false;
+    let user: any = null;
 
-    // Declare verifyResult at outer scope to access user data later
-    let verifyResult: any;
+    // Fetch user first to check TOTP status
+    user = await c.env.DB
+      .prepare('SELECT * FROM users WHERE userEmail = ?')
+      .bind(body.userEmail)
+      .first();
 
-    if (smtpConfigured) {
-      // Validate verification code from database (also returns user data to avoid duplicate query)
-      verifyResult = await verifyTwoFactorCode(c.env, body.userEmail, body.code);
+    if (!user) {
+      return c.json({
+        success: false,
+        error: { code: 'INVALID_CREDENTIALS', message: '用戶不存在' }
+      }, 401);
+    }
 
-      if (!verifyResult.success) {
-        // User data is now included in verifyResult (no duplicate query needed)
-        const user = verifyResult.user;
+    const totpEnabled = user.totpEnabled === 1;
 
-        if (!user) {
-          return c.json({
-            success: false,
-            error: { code: 'INVALID_CREDENTIALS', message: '用戶不存在' }
-          }, 401);
+    if (totpEnabled) {
+      // ─── TOTP Verification Path ───
+      // TOTP is independent of SMTP — always required when enabled
+      const { verifyTotpCode, verifyRecoveryCode } = await import('../utils/totp');
+
+      const totpSecret = user.totpSecret as string;
+      if (!totpSecret) {
+        // Corrupted state: totpEnabled but no secret
+        return c.json({
+          success: false,
+          error: { code: 'SYSTEM_ERROR', message: 'TOTP 設定異常，請聯繫管理員' }
+        }, 500);
+      }
+
+      // Try TOTP code first (6 digits)
+      let totpValid = false;
+      if (/^\d{6}$/.test(body.code)) {
+        totpValid = await verifyTotpCode(totpSecret, body.code);
+      }
+
+      // If TOTP didn't match, try recovery code (8 chars)
+      if (!totpValid) {
+        const recoveryCodes = await c.env.DB
+          .prepare('SELECT codeId, codeHash FROM totp_recovery_codes WHERE userId = ? AND isUsed = 0')
+          .bind(user.userId)
+          .all();
+
+        for (const row of recoveryCodes.results) {
+          if (await verifyRecoveryCode(body.code, row.codeHash as string)) {
+            // Mark recovery code as used
+            await c.env.DB
+              .prepare('UPDATE totp_recovery_codes SET isUsed = 1, usedAt = ? WHERE codeId = ?')
+              .bind(Date.now(), row.codeId)
+              .run();
+
+            // Log recovery code usage
+            await logGlobalOperation(
+              c.env,
+              body.userEmail,
+              'totp_recovery_code_used',
+              'user',
+              user.userId as string,
+              { codeId: row.codeId, remainingCodes: recoveryCodes.results.length - 1 },
+              { level: 'warning' }
+            );
+
+            totpValid = true;
+            break;
+          }
         }
+      }
 
-        // Get IP address for logging
-        const ipAddress = c.req.header('CF-Connecting-IP') || null;
-
-        // Map verification error to failure reason
-        let failureReason = '2fa_invalid_code';
-        if (verifyResult.error === 'CODE_EXPIRED') {
-          failureReason = '2fa_code_expired';
-        } else if (verifyResult.error === 'MAX_ATTEMPTS_EXCEEDED') {
-          failureReason = '2fa_max_attempts';
-        }
-
-        // Check for progressive lockout
+      if (!totpValid) {
+        // TOTP verification failed — trigger progressive lockout
+        const lockIpAddress = c.req.header('CF-Connecting-IP') || null;
         const lockResult = await check2FAFailureAndLock(
           c.env,
           body.userEmail,
           user.userId as string,
-          failureReason,
-          ipAddress
+          '2fa_totp_invalid',
+          lockIpAddress
         );
 
         if (lockResult.shouldLock) {
-          // Account has been locked
           if (lockResult.lockType === 'permanent') {
             return c.json({
               success: false,
@@ -589,17 +651,12 @@ authRouter.post(
               }
             }, 403);
           } else {
-            // Temporary lock
             const durationMinutes = Math.ceil((lockResult.lockDuration || 0) / 60000);
             const durationHours = Math.floor(durationMinutes / 60);
             const durationMins = durationMinutes % 60;
-
-            let timeMessage = '';
-            if (durationHours > 0) {
-              timeMessage = `${durationHours} hours ${durationMins} minutes`;
-            } else {
-              timeMessage = `${durationMins} minutes`;
-            }
+            const timeMessage = durationHours > 0
+              ? `${durationHours} hours ${durationMins} minutes`
+              : `${durationMins} minutes`;
 
             return c.json({
               success: false,
@@ -611,46 +668,107 @@ authRouter.post(
           }
         }
 
-        // Return original error if no lock triggered
         return c.json({
           success: false,
           error: {
-            code: verifyResult.error || 'INVALID_CODE',
-            message: verifyResult.message || '驗證碼錯誤',
-            attemptsLeft: verifyResult.attemptsLeft
+            code: 'INVALID_CODE',
+            message: '驗證碼錯誤'
           }
         }, 401);
       }
 
-    }
+      verified = true;
 
-    // Get user data (from verification result in production, or query in dev mode)
-    let user;
-    if (smtpConfigured) {
-      // Production: user already fetched in verifyTwoFactorCode
-      user = verifyResult.user;
     } else {
-      // Dev mode: need to query user
-      user = await c.env.DB
-        .prepare('SELECT * FROM users WHERE userEmail = ?')
-        .bind(body.userEmail)
-        .first();
+      // ─── Email OTP Verification Path (existing behavior) ───
+      const smtpConfig = await getSmtpConfig(c.env);
+      const smtpConfigured = smtpConfig !== null;
+
+      if (smtpConfigured) {
+        const verifyResult = await verifyTwoFactorCode(c.env, body.userEmail, body.code);
+
+        if (!verifyResult.success) {
+          const lockIpAddress = c.req.header('CF-Connecting-IP') || null;
+
+          let failureReason = '2fa_invalid_code';
+          if (verifyResult.error === 'CODE_EXPIRED') {
+            failureReason = '2fa_code_expired';
+          } else if (verifyResult.error === 'MAX_ATTEMPTS_EXCEEDED') {
+            failureReason = '2fa_max_attempts';
+          }
+
+          const lockResult = await check2FAFailureAndLock(
+            c.env,
+            body.userEmail,
+            user.userId as string,
+            failureReason,
+            lockIpAddress
+          );
+
+          if (lockResult.shouldLock) {
+            if (lockResult.lockType === 'permanent') {
+              return c.json({
+                success: false,
+                error: {
+                  code: 'USER_DISABLED',
+                  message: 'Account has been permanently disabled due to multiple 2FA verification failures. Please contact an administrator.'
+                }
+              }, 403);
+            } else {
+              const durationMinutes = Math.ceil((lockResult.lockDuration || 0) / 60000);
+              const durationHours = Math.floor(durationMinutes / 60);
+              const durationMins = durationMinutes % 60;
+              const timeMessage = durationHours > 0
+                ? `${durationHours} hours ${durationMins} minutes`
+                : `${durationMins} minutes`;
+
+              return c.json({
+                success: false,
+                error: {
+                  code: 'USER_LOCKED',
+                  message: `Account temporarily locked due to multiple 2FA failures. Please try again in ${timeMessage}.`
+                }
+              }, 403);
+            }
+          }
+
+          return c.json({
+            success: false,
+            error: {
+              code: verifyResult.error || 'INVALID_CODE',
+              message: verifyResult.message || '驗證碼錯誤',
+              attemptsLeft: verifyResult.attemptsLeft
+            }
+          }, 401);
+        }
+
+        verified = true;
+      } else {
+        // Dev mode: SMTP not configured, skip verification
+        verified = true;
+      }
     }
 
-    if (!user) {
+    // ─── Final safety check: NEVER issue JWT without verification ───
+    if (!verified) {
+      console.error('[login-verify-2fa] CRITICAL: Reached JWT issuance without verified=true');
       return c.json({
         success: false,
-        error: { code: 'INVALID_CREDENTIALS', message: '用戶不存在' }
-      }, 401);
+        error: { code: 'SYSTEM_ERROR', message: '驗證系統錯誤' }
+      }, 500);
     }
 
-    // Check if user is disabled
+    // Check if user is disabled (re-check in case status changed during verification)
     if (user.status === 'disabled') {
       return c.json({
         success: false,
         error: { code: 'USER_DISABLED', message: '此帳號已被停用' }
       }, 403);
     }
+
+    // Determine devMode for response
+    const smtpConfig = await getSmtpConfig(c.env);
+    const smtpConfigured = smtpConfig !== null;
 
     // Generate JWT token
     const sessionTimeout = parseInt(await getConfigValue(c.env, 'SESSION_TIMEOUT'));
@@ -684,6 +802,7 @@ authRouter.post(
       {
         userEmail: user.userEmail,
         userId: user.userId,
+        twoFactorMethod: totpEnabled ? 'totp' : 'email',
         ipAddress: requestContext.ipAddress,
         country: requestContext.country,
         city: requestContext.city,
@@ -707,6 +826,7 @@ authRouter.post(
         eventType: 'login_success',
         userEmail: user.userEmail as string,
         userId: user.userId as string,
+        twoFactorMethod: totpEnabled ? 'totp' : 'email',
         ipAddress: requestContext.ipAddress,
         country: requestContext.country,
         city: requestContext.city,
@@ -785,6 +905,14 @@ authRouter.post(
         success: false,
         error: { code: 'USER_DISABLED', message: '此帳號已被停用' }
       }, 403);
+    }
+
+    // TOTP users don't receive email codes — resend is not applicable
+    if (user.totpEnabled === 1) {
+      return c.json({
+        success: false,
+        error: { code: 'TOTP_ENABLED', message: 'TOTP 使用者不需要重新發送驗證碼' }
+      }, 400);
     }
 
     // Check if SMTP is configured for sending verification codes (KV-first)
@@ -925,6 +1053,316 @@ authRouter.post(
     );
 
     return c.json(result, result.success ? 200 : 400);
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════
+// TOTP (Google Authenticator) Management Endpoints
+// All require authentication via authMiddleware
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * GET /auth/totp/status
+ * Get current TOTP status for the authenticated user
+ */
+authRouter.get(
+  '/totp/status',
+  authMiddleware,
+  async (c) => {
+    const authUser = c.get('user') as any;
+
+    const user = await c.env.DB
+      .prepare('SELECT totpEnabled FROM users WHERE userId = ?')
+      .bind(authUser.userId)
+      .first();
+
+    if (!user) {
+      return c.json({
+        success: false,
+        error: { code: 'USER_NOT_FOUND', message: '用戶不存在' }
+      }, 404);
+    }
+
+    const remainingCodes = await c.env.DB
+      .prepare('SELECT COUNT(*) as count FROM totp_recovery_codes WHERE userId = ? AND isUsed = 0')
+      .bind(authUser.userId)
+      .first<{ count: number }>();
+
+    return c.json({
+      success: true,
+      data: {
+        totpEnabled: user.totpEnabled === 1,
+        recoveryCodesRemaining: remainingCodes?.count || 0
+      }
+    });
+  }
+);
+
+/**
+ * POST /auth/totp/setup-init
+ * Initialize TOTP setup: generate secret, store in KV temporarily
+ */
+authRouter.post(
+  '/totp/setup-init',
+  authMiddleware,
+  async (c) => {
+    const authUser = c.get('user') as any;
+
+    // Check if TOTP is already enabled
+    const user = await c.env.DB
+      .prepare('SELECT totpEnabled FROM users WHERE userId = ?')
+      .bind(authUser.userId)
+      .first();
+
+    if (user?.totpEnabled === 1) {
+      return c.json({
+        success: false,
+        error: { code: 'TOTP_ALREADY_ENABLED', message: 'TOTP 已經啟用' }
+      }, 400);
+    }
+
+    const { generateTotpSecret, buildOtpauthUri } = await import('../utils/totp');
+    const { getSystemTitle } = await import('../utils/email');
+
+    const secret = generateTotpSecret();
+    const systemTitle = await getSystemTitle(c.env);
+    const otpauthUri = buildOtpauthUri(authUser.userEmail, secret, systemTitle);
+
+    // Store pending secret in KV with 10-minute TTL
+    await c.env.KV.put(
+      `totp_pending:${authUser.userId}`,
+      secret,
+      { expirationTtl: 600 }
+    );
+
+    await logGlobalOperation(
+      c.env,
+      authUser.userEmail,
+      'totp_setup_initiated',
+      'user',
+      authUser.userId,
+      { userEmail: authUser.userEmail },
+      { level: 'info' }
+    );
+
+    return c.json({
+      success: true,
+      data: {
+        secret,
+        otpauthUri
+      }
+    });
+  }
+);
+
+/**
+ * POST /auth/totp/setup-verify
+ * Verify TOTP code and finalize setup (enable TOTP + generate recovery codes)
+ */
+authRouter.post(
+  '/totp/setup-verify',
+  authMiddleware,
+  zValidator('json', TotpSetupVerifyRequestSchema),
+  async (c) => {
+    const authUser = c.get('user') as any;
+    const body = c.req.valid('json');
+
+    // Retrieve pending secret from KV
+    const pendingSecret = await c.env.KV.get(`totp_pending:${authUser.userId}`);
+    if (!pendingSecret) {
+      return c.json({
+        success: false,
+        error: { code: 'SETUP_EXPIRED', message: 'TOTP 設定已過期，請重新開始' }
+      }, 400);
+    }
+
+    // Verify the code against the pending secret
+    const { verifyTotpCode, generateRecoveryCodes } = await import('../utils/totp');
+    const isValid = await verifyTotpCode(pendingSecret, body.code);
+
+    if (!isValid) {
+      return c.json({
+        success: false,
+        error: { code: 'INVALID_CODE', message: '驗證碼錯誤，請確認您的驗證器 App 時間同步' }
+      }, 401);
+    }
+
+    // Enable TOTP in database
+    const now = Date.now();
+    await c.env.DB
+      .prepare('UPDATE users SET totpSecret = ?, totpEnabled = 1, totpEnabledAt = ? WHERE userId = ?')
+      .bind(pendingSecret, now, authUser.userId)
+      .run();
+
+    // Generate recovery codes
+    const { codes, hashes } = await generateRecoveryCodes(10);
+
+    // Store recovery code hashes
+    const stmts = hashes.map((hash, i) => {
+      const codeId = `rc_${authUser.userId}_${now}_${i}`;
+      return c.env.DB
+        .prepare('INSERT INTO totp_recovery_codes (codeId, userId, codeHash, isUsed, createdAt) VALUES (?, ?, ?, 0, ?)')
+        .bind(codeId, authUser.userId, hash, now);
+    });
+    await c.env.DB.batch(stmts);
+
+    // Clean up pending secret
+    await c.env.KV.delete(`totp_pending:${authUser.userId}`);
+
+    await logGlobalOperation(
+      c.env,
+      authUser.userEmail,
+      'totp_enabled',
+      'user',
+      authUser.userId,
+      { userEmail: authUser.userEmail, enabledAt: now, recoveryCodesGenerated: codes.length },
+      { level: 'info' }
+    );
+
+    return c.json({
+      success: true,
+      data: {
+        enabled: true,
+        recoveryCodes: codes
+      }
+    });
+  }
+);
+
+/**
+ * POST /auth/totp/disable
+ * Disable TOTP (requires password confirmation)
+ */
+authRouter.post(
+  '/totp/disable',
+  authMiddleware,
+  zValidator('json', TotpDisableRequestSchema),
+  async (c) => {
+    const authUser = c.get('user') as any;
+    const body = c.req.valid('json');
+
+    // Fetch user with password for verification
+    const user = await c.env.DB
+      .prepare('SELECT userId, userEmail, password, totpEnabled FROM users WHERE userId = ?')
+      .bind(authUser.userId)
+      .first();
+
+    if (!user || user.totpEnabled !== 1) {
+      return c.json({
+        success: false,
+        error: { code: 'TOTP_NOT_ENABLED', message: 'TOTP 尚未啟用' }
+      }, 400);
+    }
+
+    // Verify password
+    const { verifyPassword } = await import('../handlers/auth/password');
+    const isValidPassword = await verifyPassword(body.password, user.password as string);
+    if (!isValidPassword) {
+      return c.json({
+        success: false,
+        error: { code: 'INVALID_PASSWORD', message: '密碼錯誤' }
+      }, 401);
+    }
+
+    // Disable TOTP
+    await c.env.DB
+      .prepare('UPDATE users SET totpSecret = NULL, totpEnabled = 0, totpEnabledAt = NULL WHERE userId = ?')
+      .bind(authUser.userId)
+      .run();
+
+    // Delete all recovery codes
+    await c.env.DB
+      .prepare('DELETE FROM totp_recovery_codes WHERE userId = ?')
+      .bind(authUser.userId)
+      .run();
+
+    await logGlobalOperation(
+      c.env,
+      authUser.userEmail,
+      'totp_disabled',
+      'user',
+      authUser.userId,
+      { userEmail: authUser.userEmail },
+      { level: 'info' }
+    );
+
+    return c.json({
+      success: true,
+      data: { disabled: true }
+    });
+  }
+);
+
+/**
+ * POST /auth/totp/recovery-codes/regenerate
+ * Regenerate recovery codes (requires password confirmation)
+ */
+authRouter.post(
+  '/totp/recovery-codes/regenerate',
+  authMiddleware,
+  zValidator('json', TotpRegenerateCodesRequestSchema),
+  async (c) => {
+    const authUser = c.get('user') as any;
+    const body = c.req.valid('json');
+
+    // Fetch user with password
+    const user = await c.env.DB
+      .prepare('SELECT userId, userEmail, password, totpEnabled FROM users WHERE userId = ?')
+      .bind(authUser.userId)
+      .first();
+
+    if (!user || user.totpEnabled !== 1) {
+      return c.json({
+        success: false,
+        error: { code: 'TOTP_NOT_ENABLED', message: 'TOTP 尚未啟用' }
+      }, 400);
+    }
+
+    // Verify password
+    const { verifyPassword } = await import('../handlers/auth/password');
+    const isValidPassword = await verifyPassword(body.password, user.password as string);
+    if (!isValidPassword) {
+      return c.json({
+        success: false,
+        error: { code: 'INVALID_PASSWORD', message: '密碼錯誤' }
+      }, 401);
+    }
+
+    // Delete old recovery codes
+    await c.env.DB
+      .prepare('DELETE FROM totp_recovery_codes WHERE userId = ?')
+      .bind(authUser.userId)
+      .run();
+
+    // Generate new recovery codes
+    const { generateRecoveryCodes } = await import('../utils/totp');
+    const { codes, hashes } = await generateRecoveryCodes(10);
+
+    const now = Date.now();
+    const stmts = hashes.map((hash, i) => {
+      const codeId = `rc_${authUser.userId}_${now}_${i}`;
+      return c.env.DB
+        .prepare('INSERT INTO totp_recovery_codes (codeId, userId, codeHash, isUsed, createdAt) VALUES (?, ?, ?, 0, ?)')
+        .bind(codeId, authUser.userId, hash, now);
+    });
+    await c.env.DB.batch(stmts);
+
+    await logGlobalOperation(
+      c.env,
+      authUser.userEmail,
+      'totp_recovery_codes_regenerated',
+      'user',
+      authUser.userId,
+      { userEmail: authUser.userEmail, codesGenerated: codes.length },
+      { level: 'info' }
+    );
+
+    return c.json({
+      success: true,
+      data: {
+        recoveryCodes: codes
+      }
+    });
   }
 );
 

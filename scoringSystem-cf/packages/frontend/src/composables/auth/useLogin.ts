@@ -7,13 +7,14 @@ import { ref, computed } from 'vue';
 import { useQueryClient } from '@tanstack/vue-query';
 import { rpcClient } from '@/utils/rpc-client';
 import type { Ref, ComputedRef } from 'vue';
-import type { LoginCredentials, TwoFactorData } from '../../types/auth';
+import type { LoginCredentials, TwoFactorData, TwoFactorMethod } from '../../types/auth';
 
 export interface UseLoginReturn {
   loading: Ref<boolean>;
   resendLoading: Ref<boolean>;
   emailPasswordVerified: Ref<boolean>;
   devMode: Ref<boolean>;
+  twoFactorMethod: Ref<TwoFactorMethod>;
   errorMessage: Ref<string>;
   userEmail: Ref<string>;
   canSubmitPassword: ComputedRef<boolean>;
@@ -58,6 +59,7 @@ export function useLogin(): UseLoginReturn {
   const resendLoading = ref(false);
   const emailPasswordVerified = ref(false);
   const devMode = ref(false);
+  const twoFactorMethod = ref<TwoFactorMethod>('email');
   const errorMessage = ref('');
   const userEmail = ref('');
 
@@ -100,6 +102,8 @@ export function useLogin(): UseLoginReturn {
         userEmail.value = credentials.email;
         // Check if dev mode (SMTP not configured)
         devMode.value = response.data?.devMode === true;
+        // Track 2FA method (TOTP or email)
+        twoFactorMethod.value = response.data?.twoFactorMethod === 'totp' ? 'totp' : 'email';
         return true;
       } else {
         errorMessage.value = response.error?.message || '密碼驗證失敗';
@@ -118,11 +122,12 @@ export function useLogin(): UseLoginReturn {
    * In dev mode (SMTP not configured), a dummy code is used to pass schema validation
    */
   async function verifyTwoFactor(twoFactorData: TwoFactorData): Promise<boolean> {
-    // In dev mode, use a dummy code that passes schema validation
-    // Schema requires 12 characters from [A-Z@#!]
-    const codeToSend = devMode.value ? 'DEVMODEBYPAS' : twoFactorData.code;
+    // In dev mode (email method only), use a dummy code that passes schema validation
+    // TOTP users must always provide a real code regardless of dev mode
+    const isDevBypass = devMode.value && twoFactorMethod.value !== 'totp';
+    const codeToSend = isDevBypass ? 'DEVMODEBYPAS' : twoFactorData.code;
 
-    if (!devMode.value && !twoFactorData.code) {
+    if (!isDevBypass && !twoFactorData.code) {
       errorMessage.value = '請輸入驗證碼';
       return false;
     }
@@ -213,6 +218,7 @@ export function useLogin(): UseLoginReturn {
     resendLoading.value = false;
     emailPasswordVerified.value = false;
     devMode.value = false;
+    twoFactorMethod.value = 'email';
     errorMessage.value = '';
     userEmail.value = '';
   }
@@ -222,6 +228,7 @@ export function useLogin(): UseLoginReturn {
     resendLoading,
     emailPasswordVerified,
     devMode,
+    twoFactorMethod,
     errorMessage,
     userEmail,
     canSubmitPassword,

@@ -33,6 +33,10 @@
 
           <!-- 登入成功事件 -->
           <div v-if="event.eventType === 'login_success'" class="event-detail">
+            <div v-if="event.twoFactorMethod" class="event-info">
+              <i :class="event.twoFactorMethod === 'totp' ? 'fas fa-shield-alt' : 'fas fa-envelope'"></i>
+              驗證: {{ event.twoFactorMethod === 'totp' ? 'TOTP 驗證器' : 'Email 驗證碼' }}
+            </div>
             <div class="event-info">
               <i class="fas fa-map-marker-alt"></i>
               IP: {{ event.ipAddress || 'unknown' }}

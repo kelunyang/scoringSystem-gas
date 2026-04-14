@@ -193,7 +193,7 @@ export function useResetPassword(): UseMutationReturnType<void, Error, ResetPass
     mutationFn: async ({ targetEmail }: ResetPasswordParams): Promise<void> => {
       const response = await fetchWithAuth<ApiResponse<void>>(
         '/api/admin/users/reset-password',
-        { method: 'POST', body: { targetEmail } }
+        { method: 'POST', body: { userEmail: targetEmail } }
       )
 
       if (!response.success) {

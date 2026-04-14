@@ -12,6 +12,7 @@ export interface LoginEvent {
   eventType: 'login_success' | 'login_failed';
   userEmail: string;
   userId?: string;
+  twoFactorMethod?: 'email' | 'totp'; // Which 2FA method was used for login
   ipAddress: string;
   country: string;
   city: string | null;

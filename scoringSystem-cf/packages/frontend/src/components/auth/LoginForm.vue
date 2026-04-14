@@ -20,13 +20,13 @@
           </template>
         </el-step>
         <el-step
-          title="兩階段驗證"
-          description="輸入驗證碼"
+          :title="twoFactorMethod === 'totp' ? '驗證器驗證' : '兩階段驗證'"
+          :description="twoFactorMethod === 'totp' ? '輸入驗證器驗證碼' : '輸入驗證碼'"
           :status="step2Status"
         >
           <template #icon>
-            <i v-if="emailPasswordVerified" class="fas fa-envelope step-icon step-icon--active"></i>
-            <i v-else class="fas fa-envelope step-icon step-icon--wait"></i>
+            <i v-if="emailPasswordVerified" :class="twoFactorMethod === 'totp' ? 'fas fa-shield-alt step-icon step-icon--active' : 'fas fa-envelope step-icon step-icon--active'"></i>
+            <i v-else :class="twoFactorMethod === 'totp' ? 'fas fa-shield-alt step-icon step-icon--wait' : 'fas fa-envelope step-icon step-icon--wait'"></i>
           </template>
         </el-step>
       </el-steps>
@@ -45,6 +45,7 @@
       v-else
       key="twofactor-step"
       :user-email="userEmail"
+      :method="twoFactorMethod"
       theme-color="#1A9B8E"
       @submit="handleTwoFactorSubmit"
       @resend="handleResendCode"
@@ -88,6 +89,7 @@ const {
   resendLoading,
   emailPasswordVerified,
   devMode,
+  twoFactorMethod,
   errorMessage,
   userEmail,
   verifyPassword,
@@ -118,7 +120,8 @@ async function handlePasswordSubmit(data: { credentials: LoginCredentials; turns
 
   if (success) {
     // In dev mode (SMTP not configured), auto-complete login
-    if (devMode.value) {
+    // TOTP users must always verify even in dev mode
+    if (devMode.value && twoFactorMethod.value !== 'totp') {
       ElMessage({
         type: 'info',
         message: '開發模式：自動完成登入...',

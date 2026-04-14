@@ -299,7 +299,15 @@
           </div>
         </div>
 
-        <!-- 區塊 3: 活動統計 -->
+        <!-- 區塊 3: 兩階段驗證設定 -->
+        <div class="settings-section totp-section">
+          <h3><i class="fas fa-shield-alt"></i> 兩階段驗證設定</h3>
+          <div class="totp-content">
+            <TotpSetup />
+          </div>
+        </div>
+
+        <!-- 區塊 4: 活動統計 -->
         <div class="settings-section activity-section">
           <h3><i class="fas fa-chart-line"></i> 我的活動統計</h3>
           <div class="activity-content">
@@ -346,6 +354,7 @@ import TopBarUserControls from './TopBarUserControls.vue'
 import UserActivityHeatmap from './charts/UserActivityHeatmap.vue'
 import UserActivityDetail from '@/components/shared/UserActivityDetail.vue'
 import AvatarEditor from './shared/AvatarEditor.vue'
+import TotpSetup from './settings/TotpSetup.vue'
 import { useBreadcrumb } from '@/composables/useBreadcrumb'
 import { rpcClient } from '@/utils/rpc-client'
 import { getUserPreferences, setUserPreference } from '@/utils/userPreferences'
@@ -356,7 +365,8 @@ export default {
     TopBarUserControls,
     UserActivityHeatmap,
     UserActivityDetail,
-    AvatarEditor
+    AvatarEditor,
+    TotpSetup
   },
   props: {
     user: {

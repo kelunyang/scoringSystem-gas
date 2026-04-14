@@ -18,6 +18,7 @@
             :ref="el => inputRefs[getDigitIndex(groupIndex, i)] = el as HTMLInputElement | null"
             :value="digits[getDigitIndex(groupIndex, i)]"
             type="text"
+            :inputmode="inputMode === 'numeric' ? 'numeric' : 'text'"
             maxlength="1"
             class="pin-digit"
             :class="{ 'has-value': digits[getDigitIndex(groupIndex, i)] }"
@@ -43,13 +44,17 @@ export interface Props {
   modelValue?: string;
   disabled?: boolean;
   themeColor?: string;
+  inputMode?: 'text' | 'numeric';
+  pinGroupSize?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   length: 6,
   modelValue: '',
   disabled: false,
-  themeColor: '#800000'
+  themeColor: '#800000',
+  inputMode: 'text',
+  pinGroupSize: 4
 });
 
 // Expose themeColor for template
@@ -65,8 +70,8 @@ const emit = defineEmits<{
 const digits = ref<string[]>(Array(props.length).fill(''));
 const inputRefs = ref<(HTMLInputElement | null)[]>([]);
 
-// Grouping constants (4 digits per group for XXXX-XXXX-XXXX format)
-const groupSize = 4;
+// Grouping constants (configurable group size)
+const groupSize = props.pinGroupSize;
 const groupCount = computed(() => Math.ceil(props.length / groupSize));
 
 /**

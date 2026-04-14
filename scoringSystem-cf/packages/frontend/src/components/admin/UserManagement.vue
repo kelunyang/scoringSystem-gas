@@ -1508,7 +1508,7 @@ export default {
       try {
         // Vue 3 Best Practice: adminApi automatically handles authentication
         const response = await adminApi.users.resetPassword({
-          targetEmail: userEmail
+          userEmail
         } as any)
 
         if (response.success) {

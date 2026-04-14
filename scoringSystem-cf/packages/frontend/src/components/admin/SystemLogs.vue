@@ -449,6 +449,7 @@
               <th style="width: 180px">時間</th>
               <th style="width: 150px">用戶</th>
               <th style="width: 150px">操作</th>
+              <th style="width: 100px">驗證方式</th>
               <th style="width: 150px">IP 地址</th>
               <th style="width: 180px">位置</th>
               <th style="min-width: 200px">設備/瀏覽器</th>
@@ -459,7 +460,7 @@
             <template v-for="log in displayedLoginLogs" :key="log.logId">
             <ExpandableTableRow
               :is-expanded="expandedLoginLogId === log.logId"
-              :expansion-colspan="8"
+              :expansion-colspan="9"
               @toggle-expansion="handleToggleLoginExpansion(log)"
             >
               <!-- Main Row -->
@@ -483,6 +484,18 @@
                   <el-tag :type="log.action === 'login_success' ? 'success' : 'danger'" size="small">
                     {{ log.action === 'login_success' ? '登入成功' : '登入失敗' }}
                   </el-tag>
+                </td>
+                <td>
+                  <el-tag
+                    v-if="log.action === 'login_success'"
+                    :type="getLoginLogContext(log, 'twoFactorMethod') === 'totp' ? 'warning' : 'info'"
+                    size="small"
+                    effect="plain"
+                  >
+                    <i :class="getLoginLogContext(log, 'twoFactorMethod') === 'totp' ? 'fas fa-shield-alt' : 'fas fa-envelope'"></i>
+                    {{ getLoginLogContext(log, 'twoFactorMethod') === 'totp' ? 'TOTP' : 'Email' }}
+                  </el-tag>
+                  <span v-else>-</span>
                 </td>
                 <td>{{ getLoginLogContext(log, 'ipAddress') }}</td>
                 <td>{{ getLoginLogLocation(log) }}</td>
@@ -517,6 +530,15 @@
                       <el-descriptions-item label="結果">
                         <el-tag :type="log.action === 'login_success' ? 'success' : 'danger'">
                           {{ log.action === 'login_success' ? '登入成功' : '登入失敗' }}
+                        </el-tag>
+                      </el-descriptions-item>
+                      <el-descriptions-item label="驗證方式" v-if="log.action === 'login_success'">
+                        <el-tag
+                          :type="getLoginLogContext(log, 'twoFactorMethod') === 'totp' ? 'warning' : 'info'"
+                          size="small"
+                        >
+                          <i :class="getLoginLogContext(log, 'twoFactorMethod') === 'totp' ? 'fas fa-shield-alt' : 'fas fa-envelope'"></i>
+                          {{ getLoginLogContext(log, 'twoFactorMethod') === 'totp' ? 'TOTP 驗證器' : 'Email 驗證碼' }}
                         </el-tag>
                       </el-descriptions-item>
                       <el-descriptions-item label="IP 地址">

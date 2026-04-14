@@ -3,7 +3,7 @@
     <!-- Steps Indicator -->
     <div class="steps-container">
       <el-steps
-        :active="invitationVerified ? 1 : 0"
+        :active="activeStep"
         finish-status="success"
         align-center
         role="navigation"
@@ -25,8 +25,19 @@
           :status="step2Status"
         >
           <template #icon>
-            <i v-if="invitationVerified" class="fas fa-user-edit step-icon step-icon--active"></i>
+            <i v-if="registrationComplete" class="fas fa-check-circle step-icon step-icon--success"></i>
+            <i v-else-if="invitationVerified" class="fas fa-user-edit step-icon step-icon--active"></i>
             <i v-else class="fas fa-user-plus step-icon step-icon--wait"></i>
+          </template>
+        </el-step>
+        <el-step
+          title="驗證器設定"
+          description="設定登入驗證方式"
+          :status="step3Status"
+        >
+          <template #icon>
+            <i v-if="registrationComplete" class="fas fa-shield-alt step-icon step-icon--active"></i>
+            <i v-else class="fas fa-shield-alt step-icon step-icon--wait"></i>
           </template>
         </el-step>
       </el-steps>
@@ -46,13 +57,39 @@
 
     <!-- Step 2: User Information -->
     <UserInfoStep
-      v-else
+      v-else-if="!registrationComplete"
       key="userinfo-step"
       :target-email="targetEmail"
       @submit="handleRegisterSubmit"
       @back="handleBack"
       :loading="loading"
     />
+
+    <!-- Step 3: Optional TOTP Setup -->
+    <div v-else class="totp-setup-step">
+      <div class="totp-intro">
+        <div class="totp-intro-icon">
+          <i class="fas fa-shield-alt"></i>
+        </div>
+        <h3>設定驗證器 App（建議）</h3>
+        <p class="totp-intro-text">
+          使用 Google Authenticator 等驗證器 App 進行登入驗證，<br>
+          避免因信箱問題而無法收到驗證碼。
+        </p>
+      </div>
+
+      <TotpSetup ref="totpSetupRef" />
+
+      <div class="totp-step-actions">
+        <el-button
+          type="primary"
+          size="large"
+          @click="finishRegistration"
+        >
+          {{ totpSetupDone ? '前往登入' : '跳過，稍後設定' }}
+        </el-button>
+      </div>
+    </div>
 
     <!-- Error Message -->
     <div
@@ -72,10 +109,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { ref, computed } from 'vue';
 import { ElMessage } from 'element-plus';
 import InvitationStep from './InvitationStep.vue';
 import UserInfoStep from './UserInfoStep.vue';
+import TotpSetup from '../settings/TotpSetup.vue';
 import { useRegister } from '../../composables/auth/useRegister';
 import type { RegisterData } from '../../types/auth';
 
@@ -88,6 +126,7 @@ const emit = defineEmits<{
 const {
   loading,
   invitationVerified,
+  registrationComplete,
   errorMessage,
   targetEmail,
   checkingInvitation,
@@ -96,9 +135,21 @@ const {
   verifyInvitation,
   checkInvitationStatus,
   register,
+  clearRegistrationSession,
   backToInvitationStep,
   reset
 } = useRegister();
+
+const totpSetupRef = ref<InstanceType<typeof TotpSetup> | null>(null);
+const totpSetupDone = ref(false);
+const registeredEmail = ref('');
+
+// Active step for the step indicator
+const activeStep = computed(() => {
+  if (registrationComplete.value) return 2;
+  if (invitationVerified.value) return 1;
+  return 0;
+});
 
 // Computed properties for step status
 const step1Status = computed(() => {
@@ -108,7 +159,13 @@ const step1Status = computed(() => {
 });
 
 const step2Status = computed(() => {
+  if (registrationComplete.value) return 'success';
   if (invitationVerified.value) return 'process';
+  return 'wait';
+});
+
+const step3Status = computed(() => {
+  if (registrationComplete.value) return 'process';
   return 'wait';
 });
 
@@ -147,15 +204,21 @@ async function handleRegisterSubmit(data: RegisterData) {
   const success = await register(data);
 
   if (success) {
+    registeredEmail.value = data.email;
     ElMessage({
       type: 'success',
-      message: '註冊成功！請使用註冊的帳號登入',
-      duration: 3000
+      message: '註冊成功！建議設定驗證器 App 以順利登入',
+      duration: 4000
     });
-
-    // Emit registerSuccess event with user email to switch to login
-    emit('registerSuccess', { userEmail: data.email });
   }
+}
+
+/**
+ * Finish registration — clear temp session and go to login
+ */
+function finishRegistration() {
+  clearRegistrationSession();
+  emit('registerSuccess', { userEmail: registeredEmail.value });
 }
 
 /**
@@ -170,6 +233,8 @@ function handleBack() {
  */
 function resetForm() {
   reset();
+  totpSetupDone.value = false;
+  registeredEmail.value = '';
 }
 
 // Expose reset method to parent component
@@ -202,6 +267,42 @@ defineExpose({
 
 .step-icon--wait {
   color: #94a3b8;
+}
+
+/* Step 3: TOTP Setup */
+.totp-setup-step {
+  padding: 0 20px;
+}
+
+.totp-intro {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.totp-intro-icon {
+  font-size: 40px;
+  color: #9B59B6;
+  margin-bottom: 12px;
+}
+
+.totp-intro h3 {
+  margin: 0 0 8px;
+  color: #2c3e50;
+  font-size: 18px;
+}
+
+.totp-intro-text {
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.totp-step-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+  padding-bottom: 16px;
 }
 
 .error-message {
