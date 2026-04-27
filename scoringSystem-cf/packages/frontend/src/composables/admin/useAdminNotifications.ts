@@ -297,6 +297,86 @@ export function useDeleteNotification(): UseMutationReturnType<
 }
 
 // ============================================================================
+// useSendNotificationEmail - Mutation to send email for a single notification
+// ============================================================================
+
+interface SendNotificationEmailParams {
+  notificationId: string
+}
+
+export function useSendNotificationEmail(): UseMutationReturnType<
+  void,
+  Error,
+  SendNotificationEmailParams,
+  unknown
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ notificationId }: SendNotificationEmailParams) => {
+      const response = await adminApi.notifications.sendSingle({ notificationId } as any)
+
+      if (!response.success) {
+        throw new Error(response.error?.message || '發送郵件失敗')
+      }
+    },
+    onSuccess: () => {
+      ElMessage.success('郵件發送成功')
+      queryClient.invalidateQueries({ queryKey: ['admin', 'notifications'] })
+    },
+    onError: (error: Error) => {
+      ElMessage.error(`發送失敗: ${error.message}`)
+    }
+  })
+}
+
+// ============================================================================
+// useSendBatchNotificationEmails - Mutation to send emails for multiple notifications
+// ============================================================================
+
+interface SendBatchNotificationEmailsParams {
+  notificationIds: string[]
+}
+
+interface BatchEmailSendResult {
+  successCount: number
+  errorCount: number
+  sentIds?: string[]
+}
+
+export function useSendBatchNotificationEmails(): UseMutationReturnType<
+  BatchEmailSendResult,
+  Error,
+  SendBatchNotificationEmailsParams,
+  unknown
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ notificationIds }: SendBatchNotificationEmailsParams) => {
+      const response = await adminApi.notifications.sendBatch({ notificationIds } as any)
+
+      if (!response.success) {
+        throw new Error(response.error?.message || '批量發送郵件失敗')
+      }
+
+      return response.data as unknown as BatchEmailSendResult
+    },
+    onSuccess: (data) => {
+      if (data.errorCount === 0) {
+        ElMessage.success(`成功發送 ${data.successCount} 封郵件`)
+      } else {
+        ElMessage.warning(`成功: ${data.successCount}, 失敗: ${data.errorCount}`)
+      }
+      queryClient.invalidateQueries({ queryKey: ['admin', 'notifications'] })
+    },
+    onError: (error: Error) => {
+      ElMessage.error(`批量發送失敗: ${error.message}`)
+    }
+  })
+}
+
+// ============================================================================
 // Re-export types
 // ============================================================================
 
@@ -305,5 +385,8 @@ export type {
   SendNotificationParams,
   SendBatchNotificationsParams,
   BatchSendResult,
-  DeleteNotificationParams
+  DeleteNotificationParams,
+  SendNotificationEmailParams,
+  SendBatchNotificationEmailsParams,
+  BatchEmailSendResult
 }

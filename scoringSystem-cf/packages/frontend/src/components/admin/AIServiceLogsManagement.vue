@@ -480,6 +480,7 @@ import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 import { jsonToMarkdown } from '@/utils/json-preview'
+import { useAIServiceLogDetail } from '@/composables/admin/useAIServiceLogs'
 import type {
   AIServiceLog,
   AIServiceType,
@@ -487,6 +488,9 @@ import type {
   AIRankingType,
   AIServiceStatisticsResponse
 } from '@repo/shared/types/admin'
+
+// ================== TanStack Query ==================
+const aiServiceLogDetailMutation = useAIServiceLogDetail()
 
 // ================== Instance & Global ==================
 
@@ -856,13 +860,12 @@ const handleToggleExpansion = async (log: AIServiceLog): Promise<void> => {
     loadingDetail.value = true
 
     try {
-      const response = await adminApi.aiServiceLogs.detail(log.callId)
-      if (response.success && response.data) {
-        expandedLogDetails.value = {
-          log: response.data.log,
-          childCalls: response.data.childCalls || [],
-          parentCall: response.data.parentCall || null
-        }
+      // Use TanStack Query mutation for fetching details
+      const result = await aiServiceLogDetailMutation.mutateAsync(log.callId)
+      expandedLogDetails.value = {
+        log: result.log,
+        childCalls: result.childCalls || [],
+        parentCall: result.parentCall || null
       }
     } catch (error) {
       console.error('Error loading log detail:', error)
@@ -892,13 +895,12 @@ const expandChildLog = async (child: AIServiceLog): Promise<void> => {
     loadingDetail.value = true
 
     try {
-      const response = await adminApi.aiServiceLogs.detail(child.callId)
-      if (response.success && response.data) {
-        expandedLogDetails.value = {
-          log: response.data.log,
-          childCalls: response.data.childCalls || [],
-          parentCall: response.data.parentCall || null
-        }
+      // Use TanStack Query mutation for fetching details
+      const result = await aiServiceLogDetailMutation.mutateAsync(child.callId)
+      expandedLogDetails.value = {
+        log: result.log,
+        childCalls: result.childCalls || [],
+        parentCall: result.parentCall || null
       }
     } catch (error) {
       console.error('Error loading child log detail:', error)

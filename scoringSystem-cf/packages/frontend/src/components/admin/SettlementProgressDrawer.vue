@@ -1239,8 +1239,6 @@ useEventListener(window, 'settlement-progress', handleSettlementProgress as unkn
 
 .validation-warnings {
   text-align: left;
-  max-height: 400px;
-  overflow-y: auto;
 }
 
 .validation-warnings h4 {

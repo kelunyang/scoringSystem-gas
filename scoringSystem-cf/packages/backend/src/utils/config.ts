@@ -32,7 +32,11 @@ const CONFIG_KEY_MAP: Record<string, string> = {
   MAX_BATCH_EMAIL_SIZE: 'config:max_batch_email_size',
   EMAIL_BATCH_DELAY_MS: 'config:email_batch_delay_ms',
   MAX_EMAILS_PER_HOUR: 'config:max_emails_per_hour',
-  // SMTP Configuration
+  // Email Sending Configuration (Cloudflare Email Service + SMTP fallback)
+  EMAIL_FROM_EMAIL: 'config:email_from_email',
+  EMAIL_FROM_NAME: 'config:email_from_name',
+  EMAIL_REPLY_TO: 'config:email_reply_to',
+  // SMTP Fallback Configuration
   SMTP_HOST: 'config:smtp_host',
   SMTP_PORT: 'config:smtp_port',
   SMTP_USERNAME: 'config:smtp_username',
@@ -75,7 +79,11 @@ const DEFAULT_VALUES: Record<string, any> = {
   MAX_BATCH_EMAIL_SIZE: 100, // Maximum emails per batch operation
   EMAIL_BATCH_DELAY_MS: 100, // Delay between emails in milliseconds
   MAX_EMAILS_PER_HOUR: 500, // Rate limit for email sending
-  // SMTP Configuration
+  // Email Sending Configuration (Cloudflare Email Service + SMTP fallback)
+  EMAIL_FROM_EMAIL: '',
+  EMAIL_FROM_NAME: '評分系統',
+  EMAIL_REPLY_TO: '',
+  // SMTP Fallback Configuration
   SMTP_HOST: '',
   SMTP_PORT: 587,
   SMTP_USERNAME: '',

@@ -6,6 +6,44 @@
 import type { AuthUser } from '@repo/shared';
 
 /**
+ * Cloudflare Email Service types
+ * @see https://developers.cloudflare.com/email-service/api/send-emails/workers-api/
+ */
+export interface EmailAddress {
+  email: string;
+  name?: string;
+}
+
+export interface EmailAttachment {
+  content: string | ArrayBuffer;
+  filename: string;
+  type: string;
+  disposition: 'attachment' | 'inline';
+  contentId?: string;
+}
+
+export interface EmailMessage {
+  to: string | string[] | EmailAddress | EmailAddress[];
+  from: string | EmailAddress;
+  subject: string;
+  html?: string;
+  text?: string;
+  cc?: string | string[] | EmailAddress | EmailAddress[];
+  bcc?: string | string[] | EmailAddress | EmailAddress[];
+  replyTo?: string | EmailAddress;
+  attachments?: EmailAttachment[];
+  headers?: Record<string, string>;
+}
+
+export interface EmailSendResponse {
+  messageId: string;
+}
+
+export interface SendEmail {
+  send(message: EmailMessage): Promise<EmailSendResponse>;
+}
+
+/**
  * Cloudflare Workers environment bindings
  * These are configured in wrangler.toml
  */
@@ -79,6 +117,10 @@ export interface Env {
 
   // R2 Storage (for file uploads)
   FILES?: R2Bucket;
+
+  // Cloudflare Email Service (native binding)
+  // Optional to allow SMTP fallback during transition
+  EMAIL?: SendEmail;
 }
 
 // Re-export AuthUser for external use

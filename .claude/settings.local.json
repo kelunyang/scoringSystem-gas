@@ -100,7 +100,8 @@
       "Bash(wrangler kv key list:*)",
       "Bash(wrangler secret list:*)",
       "Bash(wrangler kv namespace list:*)",
-      "Bash(npx vitest run)"
+      "Bash(npx vitest run)",
+      "Bash(npx vitest:*)"
     ],
     "deny": [],
     "ask": []

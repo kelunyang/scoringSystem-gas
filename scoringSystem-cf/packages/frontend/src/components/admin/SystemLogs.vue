@@ -863,6 +863,9 @@ import EmptyState from '@/components/shared/EmptyState.vue'
 import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
 import { adminApi } from '@/api/admin'
 import { getErrorMessage } from '@/utils/errorHandler'
+// TanStack Query composables
+import { useLogStatistics, useEntityDetails } from '@/composables/admin/useSystemLogs'
+import { useQueryClient } from '@tanstack/vue-query'
 import { sanitizeHtml } from '@/utils/sanitize'
 import { useDebounceFn } from '@vueuse/core'
 import type { LogEntry, LogFilterOptions, SystemLogsRequest, EmailLog, LogStatistics } from '@repo/shared/types/admin'
@@ -880,6 +883,11 @@ const router = useRouter()
 
 // Register refresh function with parent SystemAdmin
 const registerRefresh = inject<(fn: (() => void) | null) => void>('registerRefresh', () => {})
+
+// ==================== TanStack Query ====================
+const queryClient = useQueryClient()
+const logStatisticsQuery = useLogStatistics()
+const entityDetailsMutation = useEntityDetails()
 
 // ==================== 常數定義 ====================
 const DEFAULT_DISPLAY_LIMIT = 50 // 降低預設值提升效能
@@ -903,7 +911,8 @@ const logModeOptions = [
 // 基礎 reactive 變數
 const loading = ref(false)
 const allLogs = ref<LogEntry[]>([])
-const logStats = ref<LogStatistics | null>(null)
+// logStats 現在從 TanStack Query 獲取
+const logStats = computed(() => logStatisticsQuery.data.value || null)
 const displayLimit = ref(DEFAULT_DISPLAY_LIMIT)
 const searchAbortController = ref<AbortController | null>(null)
 
@@ -1902,16 +1911,9 @@ watch(
   { deep: true }
 )
 
-const loadLogStats = async () => {
-  try {
-    const response = await adminApi.system.logStatistics()
-
-    if (response.success) {
-      logStats.value = response.data || null
-    }
-  } catch (error: unknown) {
-    console.error('加载日志统计失败:', error)
-  }
+// 使用 TanStack Query 的 refetch 來刷新統計數據
+const loadLogStats = () => {
+  logStatisticsQuery.refetch()
 }
 
 // extractFilterOptions 已移除 - 改用 computed properties 自動計算
@@ -2026,7 +2028,7 @@ const handleToggleExpansion = async (log: LogEntry) => {
   await fetchEntityDetails(log)
 }
 
-// 獲取實體詳情（分離邏輯以便重用）
+// 獲取實體詳情（使用 TanStack Query mutation）
 const fetchEntityDetails = async (log: LogEntry) => {
   if (!log.entityType || !log.entityId) return
 
@@ -2034,26 +2036,43 @@ const fetchEntityDetails = async (log: LogEntry) => {
   loadingEntity.value = true
 
   try {
-    const response = await adminApi.system.entityDetails({
-      entityType: log.entityType as any, // EntityDetailsRequest has specific union type
+    // 使用 TanStack Query mutation
+    const result = await entityDetailsMutation.mutateAsync({
+      entityType: log.entityType,
       entityId: log.entityId
     })
 
-    if (response.success) {
-      entityContent.value = response.data?.details || null
+    entityContent.value = result.entity || null
 
-      // Parse relatedEntities if available
-      if (log.relatedEntities) {
-        try {
-          relatedEntitiesData.value = JSON.parse(log.relatedEntities)
-        } catch (e) {
-          relatedEntitiesData.value = null
-        }
-      } else {
+    // Parse relatedEntities if available
+    if (log.relatedEntities) {
+      try {
+        relatedEntitiesData.value = JSON.parse(log.relatedEntities)
+      } catch (e) {
         relatedEntitiesData.value = null
       }
+    } else {
+      relatedEntitiesData.value = result.relatedEntities || null
+    }
 
-      // Parse context if available
+    // Parse context if available
+    if (log.context) {
+      try {
+        contextData.value = typeof log.context === 'string' ? JSON.parse(log.context) : log.context
+      } catch (e) {
+        contextData.value = null
+      }
+    } else {
+      contextData.value = result.context || null
+    }
+  } catch (error: unknown) {
+    // Check for ENTITY_NOT_FOUND specifically - this is expected for login logs with non-existent users
+    const errorMessage = error instanceof Error ? error.message : ''
+    if (errorMessage.includes('ENTITY_NOT_FOUND') || errorMessage.includes('找不到')) {
+      // Show context data instead of error for expected "not found" cases
+      entityContent.value = null
+      relatedEntitiesData.value = null
+      // Still parse and show context if available
       if (log.context) {
         try {
           contextData.value = typeof log.context === 'string' ? JSON.parse(log.context) : log.context
@@ -2063,34 +2082,13 @@ const fetchEntityDetails = async (log: LogEntry) => {
       } else {
         contextData.value = null
       }
+      // Don't collapse - just show the context data
     } else {
-      // Check for ENTITY_NOT_FOUND specifically - this is expected for login logs with non-existent users
-      if (response.error?.code === 'ENTITY_NOT_FOUND') {
-        // Show context data instead of error for expected "not found" cases
-        entityContent.value = null
-        relatedEntitiesData.value = null
-        // Still parse and show context if available
-        if (log.context) {
-          try {
-            contextData.value = typeof log.context === 'string' ? JSON.parse(log.context) : log.context
-          } catch (e) {
-            contextData.value = null
-          }
-        } else {
-          contextData.value = null
-        }
-        // Don't collapse - just show the context data
-      } else {
-        ElMessage.error(response.error?.message || '加载实体详情失败')
-        expandedLogId.value = null
-        entityContent.value = null
-      }
+      console.error('加载实体详情失败:', error)
+      ElMessage.error('加载实体详情失败：' + getErrorMessage(error))
+      expandedLogId.value = null
+      entityContent.value = null
     }
-  } catch (error) {
-    console.error('加载实体详情失败:', error)
-    ElMessage.error('加载实体详情失败：' + getErrorMessage(error))
-    expandedLogId.value = null
-    entityContent.value = null
   } finally {
     loadingEntity.value = false
     expandingId.value = null

@@ -202,8 +202,8 @@ import {
   getAIServiceLogDetail
 } from '../handlers/admin/ai-service-logs';
 
-// SMTP configuration
-import { getSmtpConfig } from '../utils/email';
+// Email configuration
+import { getSmtpConfig, testCloudflareEmailService } from '../utils/email';
 
 // Logging utility
 import { logGlobalOperation } from '../utils/logging';
@@ -1903,6 +1903,41 @@ app.post(
     }
   }
 );
+
+/**
+ * POST /admin/email/test-cloudflare
+ * Test Cloudflare Email Service connection
+ * Sends a test email to the current admin user
+ */
+app.post('/email/test-cloudflare', async (c) => {
+  const user = c.get('user');
+
+  try {
+    // Send test email to the current admin user
+    const result = await testCloudflareEmailService(c.env, user.userEmail);
+
+    if (result.success) {
+      return c.json({
+        success: true,
+        message: `Cloudflare Email 測試成功！測試郵件已發送到 ${user.userEmail}`,
+        messageId: result.messageId
+      });
+    } else {
+      return c.json({
+        success: false,
+        error: result.error || 'Cloudflare Email 測試失敗',
+        errorCode: result.errorType || 'CF_EMAIL_TEST_FAILED'
+      }, 400);
+    }
+  } catch (error) {
+    console.error('Cloudflare Email test error:', error);
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Cloudflare Email 測試失敗',
+      errorCode: 'CF_EMAIL_TEST_FAILED'
+    }, 500);
+  }
+});
 
 // ============================================
 // Email Logs Management Routes

@@ -330,21 +330,54 @@ export const systemConfigCategories: ConfigCategory[] = [
   },
 
   // ========================================================================
-  // 9. SMTP 郵件服務配置
+  // 9. 郵件寄送配置（SMTP）
+  // NOTE: Cloudflare Email Service 因 Beta 限制暫時停用
   // ========================================================================
   {
     key: 'smtp',
-    title: '郵件服務配置 (SMTP)',
+    title: '郵件寄送配置',
     icon: 'fa-envelope',
-    description: '配置 SMTP 郵件服務後，系統將可以發送邀請碼郵件給新用戶。支援 Gmail、Outlook、自架 SMTP 伺服器等。',
+    description: '系統使用 SMTP 寄送郵件（邀請碼、密碼重設等）。Cloudflare Email Service 因 Beta 限制暫時停用。',
     fields: [
+      // Email sending configuration
+      {
+        key: 'EMAIL_FROM_EMAIL',
+        label: '寄件者郵箱',
+        type: 'input',
+        category: 'smtp',
+        placeholder: 'noreply@yourdomain.com',
+        description: '郵件寄件者地址',
+        prependIcon: 'fa-at',
+        inputType: 'email'
+      },
+      {
+        key: 'EMAIL_FROM_NAME',
+        label: '寄件者名稱',
+        type: 'input',
+        category: 'smtp',
+        placeholder: '林口高中評分系統',
+        description: '郵件中顯示的寄件者名稱',
+        prependIcon: 'fa-user',
+        inputType: 'text'
+      },
+      {
+        key: 'EMAIL_REPLY_TO',
+        label: '回覆地址',
+        type: 'input',
+        category: 'smtp',
+        placeholder: 'admin@school.edu.tw',
+        description: '收件者回覆郵件時會寄到此地址（選填，可與寄件者不同）',
+        prependIcon: 'fa-reply',
+        inputType: 'email'
+      },
+      // SMTP configuration
       {
         key: 'SMTP_HOST',
         label: 'SMTP 主機地址',
         type: 'input',
         category: 'smtp',
         placeholder: 'smtp.gmail.com',
-        description: '例如: smtp.gmail.com (Gmail) 或 smtp.office365.com (Outlook)',
+        description: 'SMTP 伺服器地址。例如: smtp.gmail.com (Gmail) 或 smtp.office365.com (Outlook)',
         prependIcon: 'fa-server',
         inputType: 'text'
       },
@@ -379,24 +412,6 @@ export const systemConfigCategories: ConfigCategory[] = [
         description: 'Gmail 需使用「應用程式密碼」而非帳號密碼。前往: Google 帳戶 → 安全性 → 兩步驟驗證 → 應用程式密碼',
         showPassword: true,
         prependIcon: 'fa-key'
-      },
-      {
-        key: 'SMTP_FROM_NAME',
-        label: '寄件者名稱',
-        type: 'input',
-        category: 'smtp',
-        placeholder: '評分系統',
-        description: '郵件中顯示的寄件者名稱',
-        inputType: 'text'
-      },
-      {
-        key: 'SMTP_FROM_EMAIL',
-        label: '寄件者郵箱',
-        type: 'input',
-        category: 'smtp',
-        placeholder: 'noreply@example.com',
-        description: '郵件中顯示的寄件者郵箱地址',
-        inputType: 'email'
       }
     ]
   }

@@ -646,6 +646,20 @@ import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import { useWindowInfiniteScroll } from '@/composables/useWindowInfiniteScroll'
 import { rpcClient } from '@/utils/rpc-client'
 import { adminApi } from '@/api/admin'
+// TanStack Query composables for admin operations
+import { useAdminUsers, useGlobalGroupsList, type ExtendedUser as AdminExtendedUser } from '@/composables/admin/useAdminUsers'
+import {
+  useUpdateUserStatus,
+  useBatchUpdateUserStatus,
+  useResetPassword,
+  useUnlockUser,
+  useUpdateUserProfile
+} from '@/composables/admin/useUserMutations'
+import {
+  useGlobalGroups,
+  useAddUserToGlobalGroup,
+  useRemoveUserFromGlobalGroup
+} from '@/composables/admin/useGlobalGroups'
 import { getAvatarUrl, parseAvatarOptions, generateDicebearUrl } from '@/utils/avatar'
 import type { User, GlobalGroup } from '@repo/shared'
 
@@ -763,6 +777,17 @@ export default {
 
     // Register action function with parent SystemAdmin
     const registerAction = inject<(fn: (() => void) | null) => void>('registerAction', () => {})
+
+    // ============================================================================
+    // TanStack Query Mutations
+    // ============================================================================
+    const updateUserStatusMutation = useUpdateUserStatus()
+    const batchUpdateUserStatusMutation = useBatchUpdateUserStatus()
+    const resetPasswordMutation = useResetPassword()
+    const unlockUserMutation = useUnlockUser()
+    const updateUserProfileMutation = useUpdateUserProfile()
+    const addUserToGroupMutation = useAddUserToGlobalGroup()
+    const removeUserFromGroupMutation = useRemoveUserFromGlobalGroup()
 
     const users = ref<ExtendedUser[]>([])
 
@@ -1475,25 +1500,16 @@ export default {
     }
 
     const toggleUserStatus = async (user: ExtendedUser) => {
-      try {
-        const newStatus = user.status === 'active' ? 'disabled' : 'active'
+      const newStatus = user.status === 'active' ? 'disabled' : 'active'
 
-        // 使用管理員專用API更新用戶狀態
-        const response = await adminApi.users.updateStatus({
-          targetEmail: user.userEmail,
-          status: newStatus
-        } as any)
-        
-        if (response.success) {
-          user.status = newStatus
-          ElMessage.error(`用戶狀態已${newStatus === 'active' ? '啟用' : '停用'}`)
-        } else {
-          ElMessage.error(`操作失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
-        console.error('Toggle user status error:', error)
-        ElMessage.error('操作失敗，請重試')
-      }
+      // 使用 TanStack Query mutation
+      await updateUserStatusMutation.mutateAsync({
+        targetEmail: user.userEmail,
+        status: newStatus
+      })
+
+      // 更新本地狀態（mutation onSuccess 會觸發 cache invalidation）
+      user.status = newStatus
     }
 
     // <i class="fas fa-check-circle text-success"></i> Open password reset drawer for single user
@@ -1505,23 +1521,9 @@ export default {
     // Password reset handler (single user only - batch mode disabled for security)
     // Backend auto-generates random password and emails it to user
     const handlePasswordResetConfirm = async ({ userEmail }: { userEmail: string }) => {
-      try {
-        // Vue 3 Best Practice: adminApi automatically handles authentication
-        const response = await adminApi.users.resetPassword({
-          userEmail
-        } as any)
-
-        if (response.success) {
-          ElMessage.success('密碼重設成功，新密碼已發送至使用者信箱')
-          showPasswordResetDrawer.value = false
-          await loadUsers()
-        } else {
-          ElMessage.error(`密碼重設失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
-        console.error('Password reset error:', error)
-        ElMessage.error(`密碼重設失敗: ${(error as any).message || '未知錯誤'}`)
-      }
+      // 使用 TanStack Query mutation（會自動處理 success/error 訊息和 cache invalidation）
+      await resetPasswordMutation.mutateAsync({ targetEmail: userEmail })
+      showPasswordResetDrawer.value = false
     }
 
     // DISABLED: toggleDefaultTag - tags system disabled
@@ -1618,24 +1620,14 @@ export default {
     */
 
     const removeUserFromGroup = async (membership: GlobalGroupMembership) => {
-      const groupName = getGlobalGroupById(membership.groupId)?.groupName || membership.groupId
-      try {
-        const response = await adminApi.globalGroups.removeUser({
-          groupId: membership.groupId,
-          userEmail: editingUser.value!.userEmail
-        })
+      // 使用 TanStack Query mutation（會自動處理 success/error 訊息）
+      await removeUserFromGroupMutation.mutateAsync({
+        groupId: membership.groupId,
+        userEmail: editingUser.value!.userEmail
+      })
 
-        if (response.success) {
-          // 從群組列表中移除
-          userGlobalGroups.value = userGlobalGroups.value.filter(g => g.groupId !== membership.groupId)
-          ElMessage.success(`已從群組「${groupName}」中移除`)
-        } else {
-          ElMessage.error(`移除失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
-        console.error('Error removing user from group:', error)
-        ElMessage.error('移除群組失敗，請重試')
-      }
+      // 從本地群組列表中移除
+      userGlobalGroups.value = userGlobalGroups.value.filter(g => g.groupId !== membership.groupId)
     }
 
     const loadUserGlobalGroups = async (userEmail: string) => {
@@ -1996,43 +1988,25 @@ export default {
       batchUpdatingStatus.value = true
 
       try {
-        const response = await adminApi.users.batchUpdateStatus({
+        // 使用 TanStack Query mutation（會自動處理 success/error 訊息和 cache invalidation）
+        const result = await batchUpdateUserStatusMutation.mutateAsync({
           targetEmails: userEmails,
           status
-        } as any)
+        })
 
-        if (response.success && response.data) {
-          const data = response.data as { successCount: number; failureCount: number; results: Array<{ success: boolean; userEmail: string }> }
-          const successCount = data.successCount
-          const failureCount = data.failureCount
-          const batchResults = data.results
-
-          // Update local user status
-          batchResults.forEach((result) => {
-            if (result.success) {
-              const user = users.value.find(u => u.userEmail === result.userEmail)
-              if (user) user.status = status
-            }
-          })
-
-          // Show result
-          if (failureCount === 0) {
-            ElMessage.success(`成功更新 ${successCount} 位使用者狀態`)
-          } else {
-            ElMessage.warning(`成功: ${successCount}, 失敗: ${failureCount}`)
+        // Update local user status
+        result.results.forEach((r) => {
+          if (r.success) {
+            const user = users.value.find(u => u.userEmail === r.userEmail)
+            if (user) user.status = status
           }
+        })
 
-          // Clear selection
-          clearSelection()
+        // Clear selection
+        clearSelection()
 
-          // Refresh list
-          await loadUsers()
-        } else {
-          ElMessage.error(`批量操作失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
-        console.error('Batch update status error:', error)
-        ElMessage.error('批量操作失敗，請重試')
+        // Refresh list
+        await loadUsers()
       } finally {
         batchUpdatingStatus.value = false
       }
@@ -2077,32 +2051,18 @@ export default {
       unlocking.value = true
 
       try {
-        const response = await adminApi.users.unlock({
+        // 使用 TanStack Query mutation（會自動處理 success/error 訊息和 cache invalidation）
+        await unlockUserMutation.mutateAsync({
           targetEmail: unlockingUser.value.userEmail,
           unlockReason: unlockReason.value,
           resetLockCount: resetLockCount.value
-        } as any)
+        })
 
-        if (response.success) {
-          ElMessage.success(`帳戶已解鎖：${unlockingUser.value.userEmail}`)
+        // Close drawer
+        closeUnlockDrawer()
 
-          // Close drawer
-          closeUnlockDrawer()
-
-          // Refresh users list
-          await loadUsers()
-        } else {
-          if (response.error?.code === 'USER_NOT_LOCKED') {
-            ElMessage.error('該使用者帳戶目前並未被鎖定')
-          } else if (response.error?.code === 'USER_NOT_FOUND') {
-            ElMessage.error('找不到該使用者')
-          } else {
-            ElMessage.error(`解鎖失敗: ${response.error?.message || '未知錯誤'}`)
-          }
-        }
-      } catch (error) {
-        console.error('Unlock user error:', error)
-        ElMessage.error('解鎖失敗，請重試')
+        // Refresh users list
+        await loadUsers()
       } finally {
         unlocking.value = false
       }
@@ -2736,29 +2696,26 @@ export default {
           userData.avatarOptions = freshUser.avatarOptions
         }
 
-        // Update user via admin API with userData wrapper
-        const response = await adminApi.users.updateProfile({ userEmail: freshUser.userEmail, displayName: freshUser.displayName, status: freshUser.status } as any)
+        // 使用 TanStack Query mutation 更新用戶資料
+        await updateUserProfileMutation.mutateAsync({
+          userEmail: freshUser.userEmail,
+          displayName: freshUser.displayName ?? undefined,
+          status: freshUser.status
+        })
 
-        if (response.success) {
-          // Update the user in the users list
-          const userIndex = users.value.findIndex(u => u.userEmail === editingUser.value!.userEmail)
-          if (userIndex !== -1) {
-            users.value[userIndex] = { ...users.value[userIndex], ...editingUser.value! }
-          }
-
-          // Reset change flags
-          editingUserAvatarChanged.value = false
-
-          // Show success message
-          ElMessage.success('用戶資料已更新')
-
-          // Close drawer
-          showEditUserDrawer.value = false
-          editingUser.value = null
-          originalUser.value = null
-        } else {
-          throw new Error(response.error?.message || '更新用戶資料失敗')
+        // Update the user in the users list
+        const userIndex = users.value.findIndex(u => u.userEmail === editingUser.value!.userEmail)
+        if (userIndex !== -1) {
+          users.value[userIndex] = { ...users.value[userIndex], ...editingUser.value! }
         }
+
+        // Reset change flags
+        editingUserAvatarChanged.value = false
+
+        // Close drawer (mutation 會自動顯示成功訊息)
+        showEditUserDrawer.value = false
+        editingUser.value = null
+        originalUser.value = null
       } catch (error) {
         console.error('Error saving editing user:', error)
         ElMessage.error('保存失敗：' + (error instanceof Error ? error.message : '未知錯誤'))
@@ -2776,19 +2733,15 @@ export default {
         // Prepare update data in the format backend expects
         const userData = {
           userEmail: editingUser.value.userEmail,
-          displayName: editingUser.value.displayName,
+          displayName: editingUser.value.displayName ?? undefined,
           status: editingUser.value.status,
-          avatarSeed: editingUser.value.avatarSeed,
+          avatarSeed: editingUser.value.avatarSeed ?? undefined,
           avatarStyle: editingUser.value.avatarStyle || 'avataaars',
           avatarOptions: editingUser.value.avatarOptions || {}
         }
 
-        // Update basic user info using admin API
-        const updateResponse = await adminApi.users.updateProfile(userData as any)
-
-        if (!updateResponse.success) {
-          throw new Error(updateResponse.error?.message || '更新用戶資料失敗')
-        }
+        // 使用 TanStack Query mutation 更新用戶資料
+        await updateUserProfileMutation.mutateAsync(userData)
 
         // DISABLED: Handle tag changes - tags system disabled (backend router not available)
         /*
@@ -2832,11 +2785,11 @@ export default {
         }
         */
 
-        // Process selected groups to add
+        // Process selected groups to add (使用 TanStack Query mutation)
         if (selectedGroupsToAdd.value && selectedGroupsToAdd.value.length > 0) {
           for (const groupId of selectedGroupsToAdd.value) {
             try {
-              await adminApi.globalGroups.addUser({
+              await addUserToGroupMutation.mutateAsync({
                 groupId: groupId,
                 userEmail: editingUser.value.userEmail
               })
@@ -2886,65 +2839,46 @@ export default {
 
     const addUserToGlobalGroup = async () => {
       if (!selectedGlobalGroupToAdd.value || !editingUser.value) return
-      
-      try {
-        const group = globalGroups.value.find(g => g.groupId === selectedGlobalGroupToAdd.value)
-        if (!group) return
 
-        const response = await adminApi.globalGroups.addUser({
-          groupId: selectedGlobalGroupToAdd.value,
-          userEmail: editingUser.value.userEmail
-        })
-        
-        if (response.success) {
-          // Add group to user's globalGroups array
-          if (!editingUser.value.globalGroups) editingUser.value.globalGroups = []
-          // Parse globalPermissions from JSON string if needed
-          const permissions = typeof group.globalPermissions === 'string'
-            ? JSON.parse(group.globalPermissions) as string[]
-            : group.globalPermissions
-          editingUser.value.globalGroups.push({
-            groupId: group.groupId,
-            groupName: group.groupName,
-            globalPermissions: permissions
-          })
-          
-          selectedGlobalGroupToAdd.value = ''
-          ElMessage.success(`已將用戶添加到「${group.groupName}」群組`)
-        } else {
-          ElMessage.error(`添加失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
-        console.error('Error adding user to global group:', error)
-        ElMessage.error('添加到全域群組失敗，請重試')
-      }
+      const group = globalGroups.value.find(g => g.groupId === selectedGlobalGroupToAdd.value)
+      if (!group) return
+
+      // 使用 TanStack Query mutation（會自動處理 success/error 訊息）
+      await addUserToGroupMutation.mutateAsync({
+        groupId: selectedGlobalGroupToAdd.value,
+        userEmail: editingUser.value.userEmail
+      })
+
+      // Add group to user's globalGroups array
+      if (!editingUser.value.globalGroups) editingUser.value.globalGroups = []
+      // Parse globalPermissions from JSON string if needed
+      const permissions = typeof group.globalPermissions === 'string'
+        ? JSON.parse(group.globalPermissions) as string[]
+        : group.globalPermissions
+      editingUser.value.globalGroups.push({
+        groupId: group.groupId,
+        groupName: group.groupName,
+        globalPermissions: permissions
+      })
+
+      selectedGlobalGroupToAdd.value = ''
     }
 
     const removeUserFromGlobalGroup = async (group: GlobalGroupMembership) => {
       if (!editingUser.value) return
 
-      try {
-        const response = await adminApi.globalGroups.removeUser({
-          groupId: group.groupId,
-          userEmail: editingUser.value.userEmail
-        })
+      // 使用 TanStack Query mutation（會自動處理 success/error 訊息）
+      await removeUserFromGroupMutation.mutateAsync({
+        groupId: group.groupId,
+        userEmail: editingUser.value.userEmail
+      })
 
-        if (response.success) {
-          // Remove group from user's globalGroups array
-          if (editingUser.value.globalGroups) {
-            const index = editingUser.value.globalGroups.findIndex(g => g.groupId === group.groupId)
-            if (index !== -1) {
-              editingUser.value.globalGroups.splice(index, 1)
-            }
-          }
-
-          ElMessage.success(`已從「${group.groupName}」群組中移除用戶`)
-        } else {
-          ElMessage.error(`移除失敗: ${response.error?.message || '未知錯誤'}`)
+      // Remove group from user's globalGroups array
+      if (editingUser.value.globalGroups) {
+        const index = editingUser.value.globalGroups.findIndex(g => g.groupId === group.groupId)
+        if (index !== -1) {
+          editingUser.value.globalGroups.splice(index, 1)
         }
-      } catch (error) {
-        console.error('Error removing user from global group:', error)
-        ElMessage.error('從全域群組移除失敗，請重試')
       }
     }
 

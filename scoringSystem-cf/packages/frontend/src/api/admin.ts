@@ -615,4 +615,20 @@ export const adminApi = {
         { method: 'POST', body: params, signal }
       ),
   },
+
+  /**
+   * Email Service API
+   * For testing Cloudflare Email Service
+   */
+  email: {
+    /**
+     * Test Cloudflare Email Service connection
+     * Sends a test email to the current admin user
+     */
+    testCloudflare: (signal?: AbortSignal) =>
+      fetchWithAuth<ApiResponse<{ message: string; messageId?: string }>>(
+        '/api/admin/email/test-cloudflare',
+        { method: 'POST', signal }
+      ),
+  },
 }

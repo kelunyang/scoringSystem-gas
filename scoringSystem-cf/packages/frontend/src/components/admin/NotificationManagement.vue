@@ -415,20 +415,16 @@ import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import { useWindowInfiniteScroll } from '@/composables/useWindowInfiniteScroll'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
+import {
+  useDeleteNotification,
+  useSendNotificationEmail,
+  useSendBatchNotificationEmails
+} from '@/composables/admin/useAdminNotifications'
 
-// ================== Interfaces ==================
-
-interface BatchSendResponse {
-  success: boolean
-  data: {
-    successCount: number
-    errorCount: number
-    sentIds?: string[]
-  }
-  error?: {
-    message: string
-  }
-}
+// ================== TanStack Query Mutations ==================
+const deleteNotificationMutation = useDeleteNotification()
+const sendNotificationEmailMutation = useSendNotificationEmail()
+const sendBatchNotificationEmailsMutation = useSendBatchNotificationEmails()
 
 // ================== State ==================
 
@@ -724,20 +720,20 @@ const sendSelectedEmails = async (): Promise<void> => {
 
       progressMessage.value = `處理第 ${batchNumber}/${totalBatches} 批 (每批最多 ${BATCH_SIZE} 封)`
 
-      // Send batch request
-      const response = await adminApi.notifications.sendBatch({
-        notificationIds: batch.map(n => n.notificationId)
-      } as any) as unknown as BatchSendResponse
+      try {
+        // Use TanStack Query mutation for batch send
+        const result = await sendBatchNotificationEmailsMutation.mutateAsync({
+          notificationIds: batch.map(n => n.notificationId)
+        })
 
-      if (response.success) {
-        successCount += response.data.successCount || 0
-        errorCount += response.data.errorCount || 0
+        successCount += result.successCount || 0
+        errorCount += result.errorCount || 0
 
         // Update local state for successfully sent notifications
-        if (response.data.sentIds) {
+        if (result.sentIds) {
           // Create a new array to trigger reactivity (since we use shallowRef)
           notifications.value = notifications.value.map(n => {
-            if (response.data.sentIds && response.data.sentIds.includes(n.notificationId)) {
+            if (result.sentIds && result.sentIds.includes(n.notificationId)) {
               return {
                 ...n,
                 emailSent: true,
@@ -747,7 +743,7 @@ const sendSelectedEmails = async (): Promise<void> => {
             return n
           })
         }
-      } else {
+      } catch {
         errorCount += batch.length
       }
 
@@ -789,24 +785,19 @@ const sendSingleEmail = async (notification: Notification): Promise<void> => {
 
   sendingEmails.value = true
   try {
-    const response = await adminApi.notifications.sendSingle({
+    await sendNotificationEmailMutation.mutateAsync({
       notificationId: notification.notificationId
-    } as any)
-
-    if (response.success) {
-      // Update local state (create new array for shallowRef)
-      notifications.value = notifications.value.map(n =>
-        n.notificationId === notification.notificationId
-          ? { ...n, emailSent: true, emailSentTime: Date.now() }
-          : n
-      )
-      ElMessage.success('郵件發送成功')
-    } else {
-      throw new Error(response.error?.message || '發送失敗')
-    }
+    })
+    // Update local state (create new array for shallowRef)
+    notifications.value = notifications.value.map(n =>
+      n.notificationId === notification.notificationId
+        ? { ...n, emailSent: true, emailSentTime: Date.now() }
+        : n
+    )
+    // Note: Success message is handled by the mutation's onSuccess
   } catch (error) {
     console.error('Error sending email:', error)
-    ElMessage.error(`發送失敗: ${error instanceof Error ? error.message : '未知錯誤'}`)
+    // Note: Error message is handled by the mutation's onError
   } finally {
     sendingEmails.value = false
   }
@@ -814,22 +805,17 @@ const sendSingleEmail = async (notification: Notification): Promise<void> => {
 
 const deleteNotification = async (notification: Notification): Promise<void> => {
   try {
-    const response = await adminApi.notifications.delete({
+    await deleteNotificationMutation.mutateAsync({
       notificationId: notification.notificationId
     })
-
-    if (response.success) {
-      // Remove from local list (create new array for shallowRef)
-      notifications.value = notifications.value.filter(
-        n => n.notificationId !== notification.notificationId
-      )
-      ElMessage.success('通知已刪除')
-    } else {
-      throw new Error(response.error?.message || '刪除失敗')
-    }
+    // Remove from local list (create new array for shallowRef)
+    notifications.value = notifications.value.filter(
+      n => n.notificationId !== notification.notificationId
+    )
+    // Note: Success message is handled by the mutation's onSuccess
   } catch (error) {
     console.error('Error deleting notification:', error)
-    ElMessage.error(`刪除失敗: ${error instanceof Error ? error.message : '未知錯誤'}`)
+    // Note: Error message is handled by the mutation's onError
   }
 }
 

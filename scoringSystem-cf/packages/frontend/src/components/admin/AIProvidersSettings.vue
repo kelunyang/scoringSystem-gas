@@ -166,12 +166,31 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import EmptyState from '@/components/shared/EmptyState.vue'
-import { rpcClient } from '@/utils/rpc-client'
 import { getErrorMessage } from '@/utils/errorHandler'
 import type { AIProviderPublic } from '@repo/shared'
+import {
+  useAIProviders,
+  useCreateAIProvider,
+  useUpdateAIProvider,
+  useToggleAIProvider,
+  useDeleteAIProvider,
+  useTestAIProvider,
+  useAIPrompts,
+  useUpdateAIPrompts
+} from '@/composables/admin/useAIProviders'
+
+// ================== TanStack Query ==================
+const aiProvidersQuery = useAIProviders()
+const aiPromptsQuery = useAIPrompts()
+const createProviderMutation = useCreateAIProvider()
+const updateProviderMutation = useUpdateAIProvider()
+const toggleProviderMutation = useToggleAIProvider()
+const deleteProviderMutation = useDeleteAIProvider()
+const testProviderMutation = useTestAIProvider()
+const updatePromptsMutation = useUpdateAIPrompts()
 
 // ========== Props ==========
 
@@ -189,22 +208,35 @@ const props = withDefaults(defineProps<Props>(), {
 
 // ========== State ==========
 
-const loading = ref(false)
-const saving = ref(false)
-const promptsLoading = ref(false)
-const savingPrompts = ref(false)
 const dialogVisible = ref(false)
 const isEditing = ref(false)
 const editingProviderId = ref<string | null>(null)
-const testingConnection = ref(false)
 const formRef = ref<FormInstance>()
+
+// Computed loading states from TanStack Query
+const loading = computed(() => aiProvidersQuery.isLoading.value)
+const promptsLoading = computed(() => aiPromptsQuery.isLoading.value)
+const saving = computed(() => createProviderMutation.isPending.value || updateProviderMutation.isPending.value)
+const savingPrompts = computed(() => updatePromptsMutation.isPending.value)
+const testingConnection = computed(() => testProviderMutation.isPending.value)
 
 interface ProviderRow extends AIProviderPublic {
   updating?: boolean
   testing?: boolean
 }
 
+// Providers from TanStack Query with local updating state
 const providers = ref<ProviderRow[]>([])
+
+// Watch for query data changes and sync to local state
+watch(() => aiProvidersQuery.data.value, (newData) => {
+  if (newData?.providers) {
+    providers.value = newData.providers.map((p: AIProviderPublic) => ({
+      ...p,
+      updating: false
+    }))
+  }
+}, { immediate: true })
 
 const form = reactive({
   name: '',
@@ -223,6 +255,16 @@ const defaults = reactive({
   submissionPrompt: '',
   commentPrompt: ''
 })
+
+// Watch for prompts query data changes
+watch(() => aiPromptsQuery.data.value, (newData) => {
+  if (newData) {
+    promptConfig.submissionPrompt = newData.submissionPrompt || ''
+    promptConfig.commentPrompt = newData.commentPrompt || ''
+    defaults.submissionPrompt = newData.defaults?.submissionPrompt || ''
+    defaults.commentPrompt = newData.defaults?.commentPrompt || ''
+  }
+}, { immediate: true })
 
 const formRules: FormRules = {
   name: [
@@ -252,53 +294,17 @@ const formRules: FormRules = {
 // ========== Methods ==========
 
 /**
- * Load AI providers list
+ * Refresh providers list (trigger TanStack Query refetch)
  */
-async function loadProviders(): Promise<void> {
-  loading.value = true
-  try {
-    const httpResponse = await rpcClient.api.system['ai-providers'].list.$post({
-      json: {}
-    })
-    const response = await httpResponse.json() as any
-
-    if (response.success && response.data?.providers) {
-      providers.value = response.data.providers.map((p: AIProviderPublic) => ({
-        ...p,
-        updating: false
-      }))
-    }
-  } catch (error) {
-    console.error('Failed to load AI providers:', error)
-    ElMessage.error('載入 AI 服務列表失敗')
-  } finally {
-    loading.value = false
-  }
+function refreshProviders(): void {
+  aiProvidersQuery.refetch()
 }
 
 /**
- * Load AI prompt configuration
+ * Refresh prompts config (trigger TanStack Query refetch)
  */
-async function loadPromptConfig(): Promise<void> {
-  promptsLoading.value = true
-  try {
-    const httpResponse = await rpcClient.api.system['ai-prompts'].get.$post({
-      json: {}
-    })
-    const response = await httpResponse.json() as any
-
-    if (response.success && response.data) {
-      promptConfig.submissionPrompt = response.data.submissionPrompt || ''
-      promptConfig.commentPrompt = response.data.commentPrompt || ''
-      defaults.submissionPrompt = response.data.defaults?.submissionPrompt || ''
-      defaults.commentPrompt = response.data.defaults?.commentPrompt || ''
-    }
-  } catch (error) {
-    console.error('Failed to load AI prompt config:', error)
-    ElMessage.error('載入 AI 評分標準失敗')
-  } finally {
-    promptsLoading.value = false
-  }
+function refreshPrompts(): void {
+  aiPromptsQuery.refetch()
 }
 
 /**
@@ -341,48 +347,32 @@ async function saveProvider(): Promise<void> {
     return
   }
 
-  saving.value = true
   try {
-    let response: any
-
     if (isEditing.value && editingProviderId.value) {
-      // Update existing
-      const httpResponse = await rpcClient.api.system['ai-providers'].update.$post({
-        json: {
-          providerId: editingProviderId.value,
-          name: form.name,
-          baseUrl: form.baseUrl,
-          model: form.model,
-          apiKey: form.apiKey || undefined, // Only send if provided
-          enabled: form.enabled
-        }
+      // Update existing using TanStack Query mutation
+      await updateProviderMutation.mutateAsync({
+        providerId: editingProviderId.value,
+        name: form.name,
+        baseUrl: form.baseUrl,
+        model: form.model,
+        apiKey: form.apiKey || undefined,
+        enabled: form.enabled
       })
-      response = await httpResponse.json()
     } else {
-      // Create new
-      const httpResponse = await rpcClient.api.system['ai-providers'].create.$post({
-        json: {
-          name: form.name,
-          baseUrl: form.baseUrl,
-          model: form.model,
-          apiKey: form.apiKey,
-          enabled: form.enabled
-        }
+      // Create new using TanStack Query mutation
+      await createProviderMutation.mutateAsync({
+        name: form.name,
+        baseUrl: form.baseUrl,
+        model: form.model,
+        apiKey: form.apiKey,
+        enabled: form.enabled
       })
-      response = await httpResponse.json()
     }
-
-    if (response.success) {
-      ElMessage.success(isEditing.value ? 'AI 服務已更新' : 'AI 服務已新增')
-      dialogVisible.value = false
-      await loadProviders()
-    } else {
-      ElMessage.error(response.error?.message || '操作失敗')
-    }
+    dialogVisible.value = false
+    // Cache invalidation is handled by the mutation's onSuccess
   } catch (error) {
-    ElMessage.error(getErrorMessage(error))
-  } finally {
-    saving.value = false
+    // Error message is handled by the mutation's onError
+    console.error('Save provider failed:', error)
   }
 }
 
@@ -392,25 +382,15 @@ async function saveProvider(): Promise<void> {
 async function toggleEnabled(provider: ProviderRow): Promise<void> {
   provider.updating = true
   try {
-    const httpResponse = await rpcClient.api.system['ai-providers'].update.$post({
-      json: {
-        providerId: provider.id,
-        enabled: provider.enabled
-      }
+    await toggleProviderMutation.mutateAsync({
+      providerId: provider.id,
+      enabled: provider.enabled
     })
-    const response = await httpResponse.json() as any
-
-    if (response.success) {
-      ElMessage.success(`AI 服務已${provider.enabled ? '啟用' : '停用'}`)
-    } else {
-      // Revert on failure
-      provider.enabled = !provider.enabled
-      ElMessage.error(response.error?.message || '操作失敗')
-    }
+    // Success message is handled by the mutation's onSuccess
   } catch (error) {
     // Revert on error
     provider.enabled = !provider.enabled
-    ElMessage.error(getErrorMessage(error))
+    // Error message is handled by the mutation's onError
   } finally {
     provider.updating = false
   }
@@ -442,19 +422,13 @@ async function confirmDelete(provider: ProviderRow): Promise<void> {
  */
 async function deleteProvider(provider: ProviderRow): Promise<void> {
   try {
-    const httpResponse = await rpcClient.api.system['ai-providers'].delete.$post({
-      json: { providerId: provider.id }
+    await deleteProviderMutation.mutateAsync({
+      providerId: provider.id
     })
-    const response = await httpResponse.json() as any
-
-    if (response.success) {
-      ElMessage.success('AI 服務已刪除')
-      await loadProviders()
-    } else {
-      ElMessage.error(response.error?.message || '刪除失敗')
-    }
+    // Success message and cache invalidation handled by mutation
   } catch (error) {
-    ElMessage.error(getErrorMessage(error))
+    // Error message handled by mutation's onError
+    console.error('Delete provider failed:', error)
   }
 }
 
@@ -467,31 +441,19 @@ async function testCurrentProvider(): Promise<void> {
     return
   }
 
-  testingConnection.value = true
   try {
-    const httpResponse = await rpcClient.api.system['ai-providers'].test.$post({
-      json: { providerId: editingProviderId.value }
+    const result = await testProviderMutation.mutateAsync({
+      providerId: editingProviderId.value
     })
-    const response = await httpResponse.json() as any
-
-    if (response.success && response.data) {
-      ElMessage.success({
-        message: `${form.name} 連線成功 (${response.data.responseTimeMs}ms)`,
-        duration: 5000
-      })
-    } else {
-      ElMessage.error({
-        message: `${form.name} 連線失敗: ${response.error?.message || '未知錯誤'}`,
-        duration: 8000
-      })
-    }
+    ElMessage.success({
+      message: `${form.name} 連線成功 (${result.responseTimeMs}ms)`,
+      duration: 5000
+    })
   } catch (error) {
     ElMessage.error({
-      message: `測試失敗: ${getErrorMessage(error)}`,
+      message: `${form.name} 連線失敗: ${getErrorMessage(error)}`,
       duration: 8000
     })
-  } finally {
-    testingConnection.value = false
   }
 }
 
@@ -499,25 +461,15 @@ async function testCurrentProvider(): Promise<void> {
  * Save AI prompt configuration
  */
 async function savePromptConfig(): Promise<void> {
-  savingPrompts.value = true
   try {
-    const httpResponse = await rpcClient.api.system['ai-prompts'].update.$post({
-      json: {
-        submissionPrompt: promptConfig.submissionPrompt,
-        commentPrompt: promptConfig.commentPrompt
-      }
+    await updatePromptsMutation.mutateAsync({
+      submissionPrompt: promptConfig.submissionPrompt,
+      commentPrompt: promptConfig.commentPrompt
     })
-    const response = await httpResponse.json() as any
-
-    if (response.success) {
-      ElMessage.success('AI 評分標準已儲存')
-    } else {
-      ElMessage.error(response.error?.message || '儲存失敗')
-    }
+    // Success message is handled by the mutation's onSuccess
   } catch (error) {
-    ElMessage.error(getErrorMessage(error))
-  } finally {
-    savingPrompts.value = false
+    // Error message is handled by the mutation's onError
+    console.error('Save prompts failed:', error)
   }
 }
 
@@ -546,10 +498,8 @@ async function resetPromptsToDefault(): Promise<void> {
 
 // ========== Lifecycle ==========
 
-onMounted(() => {
-  loadProviders()
-  loadPromptConfig()
-})
+// Data is loaded automatically by TanStack Query when enabled
+// No need for explicit onMounted calls
 </script>
 
 <style lang="scss" scoped>

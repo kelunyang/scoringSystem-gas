@@ -32,23 +32,47 @@
         @reset="confirmResetProperties"
         @update="handleConfigUpdate"
       >
-        <!-- SMTP Test Button via Slot -->
+        <!-- Email Test Buttons via Slot -->
         <template #actions-smtp>
           <div class="config-actions">
-            <el-button
-              type="success"
-              @click="testSmtpConnection"
-              :loading="testingSmtp"
-              icon="Connection"
-            >
-              測試連接
-            </el-button>
+            <div class="email-test-buttons">
+              <el-tooltip content="Cloudflare Email Service 目前處於 Beta，暫時停用" placement="top">
+                <el-button
+                  type="info"
+                  disabled
+                  icon="Message"
+                >
+                  CF Email (停用)
+                </el-button>
+              </el-tooltip>
+              <el-button
+                type="success"
+                @click="testSmtpConnection"
+                :loading="testingSmtp"
+                icon="Connection"
+              >
+                測試 SMTP 連接
+              </el-button>
+            </div>
             <el-alert
-              v-if="isGmailSmtp"
-              title="Gmail 設定提示"
-              type="warning"
+              title="郵件服務說明"
+              type="info"
               :closable="false"
               style="margin-top: 15px;"
+            >
+              <template #default>
+                <p style="margin: 0; font-size: 12px;">
+                  目前使用 SMTP 寄信。Cloudflare Email Service 因 Beta 限制暫時停用。<br>
+                  測試郵件將發送到您目前登入的管理員帳號郵箱。
+                </p>
+              </template>
+            </el-alert>
+            <el-alert
+              v-if="isGmailSmtp"
+              title="Gmail SMTP 設定提示"
+              type="warning"
+              :closable="false"
+              style="margin-top: 10px;"
             >
               <template #default>
                 <p style="margin: 0; font-size: 12px;">
@@ -84,7 +108,19 @@ import AIProvidersSettings from '@/components/admin/AIProvidersSettings.vue'
 import { systemConfigCategories } from '@/config/admin-settings-config'
 import { rpcClient } from '@/utils/rpc-client'
 import { adminApi } from '@/api/admin'
+import {
+  useUpdateProperties,
+  useResetProperties,
+  useTestSmtpConnection,
+  useTestCloudflareEmail
+} from '@/composables/admin/useSystemProperties'
 import type { PropertiesConfig } from '@/types/admin-properties'
+
+// ================== TanStack Query Mutations ==================
+const updatePropertiesMutation = useUpdateProperties()
+const resetPropertiesMutation = useResetProperties()
+const testSmtpMutation = useTestSmtpConnection()
+const testCfEmailMutation = useTestCloudflareEmail()
 
 // ============================================================================
 // Vue 3 Composition API with TypeScript
@@ -121,6 +157,7 @@ const loadingProperties = ref<boolean>(false)
 const savingProperties = ref<boolean>(false)
 const resettingProperties = ref<boolean>(false)
 const testingSmtp = ref<boolean>(false)
+const testingCfEmail = ref<boolean>(false)
 
 
 
@@ -288,48 +325,32 @@ const loadPropertiesConfig = async (): Promise<void> => {
 }
 
 const savePropertiesConfig = async (): Promise<void> => {
+  // 檢查是否有變更
+  if (!hasChanges.value) {
+    ElMessage.warning('沒有任何變更需要儲存')
+    return
+  }
+
+  // 只送出有變更的欄位
+  const changedProperties: Partial<PropertiesConfig> = {}
+  for (const field of modifiedFields.value) {
+    changedProperties[field] = propertiesConfig.value[field]
+  }
+
+  console.log('送出變更的欄位:', changedProperties)
+  console.log('修改的欄位列表:', modifiedFields.value)
+
   savingProperties.value = true
   try {
-    // 檢查是否有變更
-    if (!hasChanges.value) {
-      ElMessage.warning('沒有任何變更需要儲存')
-      savingProperties.value = false
-      return
-    }
-
-    // 只送出有變更的欄位
-    const changedProperties: Partial<PropertiesConfig> = {}
-    for (const field of modifiedFields.value) {
-      changedProperties[field] = propertiesConfig.value[field]
-    }
-
-    console.log('送出變更的欄位:', changedProperties)
-    console.log('修改的欄位列表:', modifiedFields.value)
-    console.log('當前配置:', JSON.parse(JSON.stringify(propertiesConfig)))
-    console.log('原始配置:', JSON.parse(JSON.stringify(originalPropertiesConfig)))
-
-    const response = await adminApi.properties.update({
+    await updatePropertiesMutation.mutateAsync({
       properties: changedProperties
     })
-
-    if (response.success) {
-      // 儲存成功後，更新原始配置為當前配置
-      originalPropertiesConfig.value = JSON.parse(JSON.stringify(propertiesConfig.value))
-
-      // 顯示詳細的變更信息
-      const changesCount = response.data?.changes?.length || modifiedFields.value.length
-      ElMessage.success(`配置已儲存 (${changesCount} 個欄位已更新)`)
-    } else {
-      // 處理特定錯誤碼
-      if (response.error?.code === 'NO_CHANGES') {
-        ElMessage.warning('沒有可更新的欄位')
-      } else {
-        ElMessage.error(`儲存失敗: ${response.error?.message || '未知錯誤'}`)
-      }
-    }
+    // 儲存成功後，更新原始配置為當前配置
+    originalPropertiesConfig.value = JSON.parse(JSON.stringify(propertiesConfig.value))
+    // Success message is handled by the mutation's onSuccess
   } catch (error) {
     console.error('儲存配置失敗:', error)
-    ElMessage.error('儲存配置失敗，請重試')
+    // Error message is handled by the mutation's onError
   } finally {
     savingProperties.value = false
   }
@@ -356,17 +377,12 @@ const confirmResetProperties = async (): Promise<void> => {
 const resetProperties = async (): Promise<void> => {
   resettingProperties.value = true
   try {
-    const response = await adminApi.properties.reset()
-
-    if (response.success) {
-      await loadPropertiesConfig()
-      ElMessage.success('配置已重設為預設值')
-    } else {
-      ElMessage.error(`重設失敗: ${response.error?.message || '未知錯誤'}`)
-    }
+    await resetPropertiesMutation.mutateAsync()
+    // Success message is handled by the mutation's onSuccess
+    await loadPropertiesConfig()
   } catch (error) {
     console.error('重設配置失敗:', error)
-    ElMessage.error('重設配置失敗，請重試')
+    // Error message is handled by the mutation's onError
   } finally {
     resettingProperties.value = false
   }
@@ -386,7 +402,7 @@ const testSmtpConnection = async (): Promise<void> => {
 
   testingSmtp.value = true
   try {
-    const response = await adminApi.smtp.testConnection({
+    await testSmtpMutation.mutateAsync({
       config: {
         host: propertiesConfig.value.SMTP_HOST,
         port: Number(propertiesConfig.value.SMTP_PORT) || 587,
@@ -396,17 +412,35 @@ const testSmtpConnection = async (): Promise<void> => {
         fromEmail: propertiesConfig.value.SMTP_FROM_EMAIL || ''
       }
     })
-
-    if (response.success) {
-      ElMessage.success('<i class="fas fa-check-circle text-success"></i> SMTP 連接測試成功！')
-    } else {
-      ElMessage.error(`<i class="fas fa-times-circle text-danger"></i> SMTP 連接測試失敗: ${response.error}`)
-    }
+    // Success message is handled by the mutation's onSuccess
   } catch (error) {
     console.error('測試 SMTP 連接失敗:', error)
-    ElMessage.error('測試失敗，請檢查配置')
+    // Error message is handled by the mutation's onError
   } finally {
     testingSmtp.value = false
+  }
+}
+
+/**
+ * 測試 Cloudflare Email Service 連接
+ * 會寄送測試郵件到當前管理員的郵箱
+ */
+const testCloudflareEmail = async (): Promise<void> => {
+  // Validation - check if EMAIL_FROM_EMAIL is configured
+  if (!propertiesConfig.value.EMAIL_FROM_EMAIL) {
+    ElMessage.warning('請先設定寄件者郵箱 (EMAIL_FROM_EMAIL)')
+    return
+  }
+
+  testingCfEmail.value = true
+  try {
+    await testCfEmailMutation.mutateAsync()
+    // Success message is handled by the mutation's onSuccess
+  } catch (error) {
+    console.error('測試 Cloudflare Email 失敗:', error)
+    // Error message is handled by the mutation's onError
+  } finally {
+    testingCfEmail.value = false
   }
 }
 
@@ -960,10 +994,17 @@ onBeforeUnmount(() => {
 
 .config-actions {
   display: flex;
+  flex-direction: column;
   gap: 10px;
   margin-top: 10px;
   padding-top: 15px;
   border-top: 1px solid #e1e8ed;
+}
+
+.email-test-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .readonly-item {

@@ -1292,8 +1292,27 @@ import { useAuth } from '@/composables/useAuth'
 import { useMediaQuery } from '@/composables/useMediaQuery'
 import { useAdminProjects } from '@/composables/useAdminProjects'
 import dayjs from 'dayjs'
-import { rpcClient } from '@/utils/rpc-client'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
+import {
+  useCreateProject,
+  useUpdateProject,
+  useGetProject,
+  useUpdateScoringConfig,
+  useCloneProject,
+  useListProjectViewers,
+  useAddViewersBatch,
+  useAddViewer,
+  useUpdateViewerRole,
+  useRemoveViewer,
+  useSearchUsers,
+  useListStages,
+  useGetStage,
+  useCreateStage,
+  useUpdateStage,
+  useUpdateStageOrder,
+  useCheckVotingLock,
+  useCloneStageToProjects
+} from '@/composables/admin/useProjects'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
@@ -1345,6 +1364,26 @@ export default {
 
     // Use TanStack Query for projects data with auth dependency
     const projectsQuery = useAdminProjects()
+
+    // ================== TanStack Query Mutations ==================
+    const createProjectMutation = useCreateProject()
+    const updateProjectMutation = useUpdateProject()
+    const getProjectMutation = useGetProject()
+    const updateScoringConfigMutation = useUpdateScoringConfig()
+    const cloneProjectMutation = useCloneProject()
+    const listViewersMutation = useListProjectViewers()
+    const addViewersBatchMutation = useAddViewersBatch()
+    const addViewerMutation = useAddViewer()
+    const updateViewerRoleMutation = useUpdateViewerRole()
+    const removeViewerMutation = useRemoveViewer()
+    const searchUsersMutation = useSearchUsers()
+    const listStagesMutation = useListStages()
+    const getStageDetailMutation = useGetStage()
+    const createStageMutation = useCreateStage()
+    const updateStageMutation = useUpdateStage()
+    const updateStageOrderMutation = useUpdateStageOrder()
+    const checkVotingLockMutation = useCheckVotingLock()
+    const cloneStageToProjectsMutation = useCloneStageToProjects()
 
     // Create a computed ref for backwards compatibility with existing code
     // Cast to ExtendedProject[] for type compatibility with function parameters
@@ -2038,12 +2077,12 @@ export default {
         ElMessage.warning('請輸入專案名稱')
         return
       }
-      
+
       if (!projectForm.description.trim()) {
         ElMessage.warning('請輸入專案描述')
         return
       }
-      
+
       // 驗證分數區間
       if (projectForm.scoreRangeMin >= projectForm.scoreRangeMax) {
         ElMessage.warning('最低分必須小於最高分')
@@ -2053,44 +2092,25 @@ export default {
       try {
         creating.value = true
 
-        // Vue 3 Best Practice: rpcClient automatically handles authentication
-        const httpResponse = await rpcClient.projects.create.$post({
-          json: {
+        // Use TanStack Query mutation
+        const result = await createProjectMutation.mutateAsync({
           projectData: {
             projectName: projectForm.projectName.trim(),
             description: projectForm.description.trim(),
             scoreRangeMin: projectForm.scoreRangeMin,
             scoreRangeMax: projectForm.scoreRangeMax
           }
-          }
         })
-        const response = await httpResponse.json()
-        
-        if (response.success) {
-          // DISABLED: Assign selected tags to the new project - tags system disabled
-          /*
-          if (selectedTags.value.length > 0) {
-            const tagIds = selectedTags.value.map(tag => tag.tagId)
-            const tagAssignmentSuccess = await assignTagsToProject(response.data.projectId, tagIds)
 
-            if (!tagAssignmentSuccess) {
-              ElMessage.success('專案創建成功，但標籤分配部分失敗')
-            }
-          }
-          */
-
-          ElMessage.success('專案創建成功')
-          showCreateModal.value = false
-          projectForm.projectName = ''
-          projectForm.description = ''
-          projectForm.scoreRangeMin = 65
-          projectForm.scoreRangeMax = 95
-          // DISABLED: selectedTags.value = [] - tags system disabled
-          // Refetch projects using TanStack Query
-          projectsQuery?.refetch?.()
-        } else {
-          ElMessage.error(`創建失敗: ${response.error?.message || '未知錯誤'}`)
-        }
+        // Mutation throws on error, so if we reach here, it succeeded
+        ElMessage.success('專案創建成功')
+        showCreateModal.value = false
+        projectForm.projectName = ''
+        projectForm.description = ''
+        projectForm.scoreRangeMin = 65
+        projectForm.scoreRangeMax = 95
+        // Refetch projects using TanStack Query
+        projectsQuery?.refetch?.()
       } catch (error) {
         console.error('Error creating project:', error)
         ElMessage.error('創建失敗，請重試')
@@ -2123,16 +2143,11 @@ export default {
       }
 
       try {
-        const httpResponse = await rpcClient.projects[':projectId']['scoring-config'].$put({
-          param: { projectId },
-          json: scoringConfig
+        // Use TanStack Query mutation
+        await updateScoringConfigMutation.mutateAsync({
+          projectId,
+          config: scoringConfig
         })
-        const response = await httpResponse.json()
-
-        if (!response.success) {
-          console.error('Failed to save scoring configuration:', response.error)
-          ElMessage.warning('評分配置保存失敗，但專案已保存')
-        }
       } catch (error) {
         console.error('Error saving scoring configuration:', error)
         ElMessage.warning('評分配置保存失敗，但專案已保存')
@@ -2165,9 +2180,8 @@ export default {
         updating.value = true
 
         if (editForm.projectId) {
-          // Vue 3 Best Practice: rpcClient automatically handles authentication
-          const httpResponse = await rpcClient.projects.update.$post({
-          json: {
+          // Use TanStack Query mutation for update
+          await updateProjectMutation.mutateAsync({
             projectId: editForm.projectId,
             updates: {
               projectName: editForm.projectName.trim(),
@@ -2175,73 +2189,37 @@ export default {
               scoreRangeMin: editForm.scoreRangeMin,
               scoreRangeMax: editForm.scoreRangeMax
             }
+          })
+
+          // Update scoring configuration if any fields are set
+          await saveScoringConfig(editForm.projectId, formData)
+
+          // Reload stages if this project is currently expanded
+          if (expandedProjects.has(editForm.projectId)) {
+            await loadProjectStagesForExpansion(editForm.projectId)
           }
-        })
-        const response = await httpResponse.json()
 
-          if (response.success) {
-            // Update scoring configuration if any fields are set
-            await saveScoringConfig(editForm.projectId, formData)
-
-            ElMessage.success('專案更新成功')
-            // Refetch projects using TanStack Query
-            await projectsQuery?.refetch?.()
-
-            // Reload stages if this project is currently expanded
-            if (expandedProjects.has(editForm.projectId)) {
-              await loadProjectStagesForExpansion(editForm.projectId)
-            }
-
-            showEditModal.value = false
-          } else {
-            ElMessage.error(`更新失敗: ${response.error?.message || '未知錯誤'}`)
-          }
+          showEditModal.value = false
         } else {
-          // Create new project
-          const httpResponse = await rpcClient.projects.create.$post({
-          json: {
+          // Create new project using TanStack Query mutation
+          const result = await createProjectMutation.mutateAsync({
             projectData: {
               projectName: editForm.projectName.trim(),
               description: editForm.description.trim(),
               scoreRangeMin: editForm.scoreRangeMin,
               scoreRangeMax: editForm.scoreRangeMax
             }
-          }
-        })
-        const response = await httpResponse.json()
+          })
 
-          if (response.success) {
-            // Save scoring configuration for new project
-            const newProjectId = response.data.projectId
-            await saveScoringConfig(newProjectId, formData)
+          // Save scoring configuration for new project
+          const newProjectId = result.projectId
+          await saveScoringConfig(newProjectId, formData)
 
-            // DISABLED: Assign selected tags to the new project - tags system disabled
-            /*
-            if (selectedTags.value.length > 0) {
-              const tagIds = selectedTags.value.map(tag => tag.tagId)
-              const tagAssignmentSuccess = await assignTagsToProject(response.data.projectId, tagIds)
-
-              if (!tagAssignmentSuccess) {
-                ElMessage.warning('專案創建成功，但標籤分配部分失敗')
-              } else {
-                ElMessage.success('專案創建成功')
-              }
-            } else {
-            */
-              ElMessage.success('專案創建成功')
-            // }
-
-            // Refetch projects using TanStack Query
-            await projectsQuery?.refetch?.()
-            showEditModal.value = false
-            // DISABLED: selectedTags.value = [] - tags system disabled
-          } else {
-            ElMessage.error(`創建失敗: ${response.error?.message || '未知錯誤'}`)
-          }
+          showEditModal.value = false
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error saving project:', error)
-        ElMessage.error(editForm.projectId ? '更新失敗，請重試' : '創建失敗，請重試')
+        // Error messages are already shown by mutation onError handlers
       } finally {
         updating.value = false
       }
@@ -2267,9 +2245,8 @@ export default {
       try {
         updating.value = true
 
-        // Vue 3 Best Practice: rpcClient automatically handles authentication
-        const httpResponse = await rpcClient.projects.update.$post({
-          json: {
+        // Use TanStack Query mutation
+        await updateProjectMutation.mutateAsync({
           projectId: editForm.projectId,
           updates: {
             projectName: editForm.projectName.trim(),
@@ -2277,21 +2254,12 @@ export default {
             scoreRangeMin: editForm.scoreRangeMin,
             scoreRangeMax: editForm.scoreRangeMax
           }
-          }
         })
-        const response = await httpResponse.json()
-        
-        if (response.success) {
-          ElMessage.success('專案更新成功')
-          showEditModal.value = false
-          // Refetch projects using TanStack Query
-          projectsQuery?.refetch?.()
-        } else {
-          ElMessage.error(`更新失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
+
+        showEditModal.value = false
+      } catch (error: any) {
         console.error('Error updating project:', error)
-        ElMessage.error('更新失敗，請重試')
+        // Error message already shown by mutation onError handler
       } finally {
         updating.value = false
       }
@@ -2299,23 +2267,12 @@ export default {
 
     const viewProject = async (project: any) => {
       try {
-        // Vue 3 Best Practice: rpcClient automatically handles authentication
-        const httpResponse = await rpcClient.projects.get.$post({
-          json: {
-            projectId: project.projectId
-
-          }
+        // Use TanStack Query mutation
+        const result = await getProjectMutation.mutateAsync({
+          projectId: project.projectId
         })
-        const response = await httpResponse.json()
-
-        if (response.success && response.data) {
-          selectedProject.value = response.data as ExtendedProject
-          showViewModal.value = true
-        } else {
-          console.error('Failed to load project details:', response.error)
-          selectedProject.value = project
-          showViewModal.value = true
-        }
+        selectedProject.value = result as ExtendedProject
+        showViewModal.value = true
       } catch (error) {
         console.error('Error loading project details:', error)
         selectedProject.value = project
@@ -2354,27 +2311,16 @@ export default {
         // Add to archiving set
         archivingProjects.value.add(project.projectId)
 
-        // 使用update API來更改狀態為archived
-        const httpResponse = await rpcClient.projects.update.$post({
-          json: {
+        // Use TanStack Query mutation (message shown by onSuccess handler)
+        await updateProjectMutation.mutateAsync({
           projectId: project.projectId,
           updates: {
             status: 'archived'
           }
-          }
         })
-        const response = await httpResponse.json()
-
-        if (response.success) {
-          ElMessage.success('專案已封存')
-          // Refetch projects using TanStack Query
-          await projectsQuery?.refetch?.()
-        } else {
-          ElMessage.error(`封存失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error archiving project:', error)
-        ElMessage.error('封存失敗，請重試')
+        // Error message already shown by mutation onError handler
       } finally {
         // Remove from archiving set
         archivingProjects.value.delete(project.projectId)
@@ -2386,27 +2332,16 @@ export default {
         // Add to archiving set (reuse the same tracking set)
         archivingProjects.value.add(project.projectId)
 
-        // 使用update API來更改狀態為active
-        const httpResponse = await rpcClient.projects.update.$post({
-          json: {
+        // Use TanStack Query mutation (message shown by onSuccess handler)
+        await updateProjectMutation.mutateAsync({
           projectId: project.projectId,
           updates: {
             status: 'active'
           }
-          }
         })
-        const response = await httpResponse.json()
-
-        if (response.success) {
-          ElMessage.success('專案已解除封存')
-          // Refetch projects using TanStack Query
-          await projectsQuery?.refetch?.()
-        } else {
-          ElMessage.error(`解除封存失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error unarchiving project:', error)
-        ElMessage.error('解除封存失敗，請重試')
+        // Error message already shown by mutation onError handler
       } finally {
         // Remove from archiving set
         archivingProjects.value.delete(project.projectId)
@@ -2454,21 +2389,12 @@ export default {
       console.log('🔍 [loadProjectViewers] Starting for projectId:', projectId)
       loadingViewers.value = true
       try {
-        const httpResponse = await rpcClient.projects.viewers.list.$post({
-          json: { projectId }
-        })
-        const response = await httpResponse.json()
-        console.log('🔍 [loadProjectViewers] API response:', response)
-
-        if (response.success && response.data) {
-          projectViewers.value = response.data as ProjectViewer[]
-          console.log('✅ [loadProjectViewers] Loaded viewers:', projectViewers.value)
-        } else {
-          console.error('❌ [loadProjectViewers] Failed to load:', response.error)
-          projectViewers.value = []
-          ElMessage.error(`無法載入存取者清單: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
+        // Use TanStack Query mutation
+        const result = await listViewersMutation.mutateAsync({ projectId })
+        console.log('🔍 [loadProjectViewers] API response:', result)
+        projectViewers.value = result as ProjectViewer[]
+        console.log('✅ [loadProjectViewers] Loaded viewers:', projectViewers.value)
+      } catch (error: any) {
         console.error('❌ [loadProjectViewers] Exception:', error)
         projectViewers.value = []
         ElMessage.error('載入存取者清單失敗')
@@ -2508,17 +2434,10 @@ export default {
 
         for (const query of searchQueries) {
           try {
-            const httpResponse = await rpcClient.users.search.$post({
-              json: { query, limit: 50 }
-            })
-            const response = await httpResponse.json()
-
-            if (response.success && response.data) {
-              allResults.push(...response.data)
-            } else {
-              errors.push(`搜尋「${query}」失敗: ${response.error?.message || '未知錯誤'}`)
-            }
-          } catch (error) {
+            // Use TanStack Query mutation
+            const result = await searchUsersMutation.mutateAsync({ query, limit: 50 })
+            allResults.push(...result)
+          } catch (error: any) {
             console.error(`Error searching for "${query}":`, error)
             errors.push(`搜尋「${query}」時發生錯誤`)
           }
@@ -2589,49 +2508,42 @@ export default {
       try {
         loadingViewers.value = true
 
-        // Use batch API instead of individual requests
-        const httpResponse = await rpcClient.projects.viewers['add-batch'].$post({
-          json: {
-            projectId: selectedProject.value.projectId,
-            viewers: users.map((u: any) => ({
-              userEmail: u.userEmail,
-              role: u.role
-            }))
-          }
+        // Use TanStack Query mutation for batch add
+        const result = await addViewersBatchMutation.mutateAsync({
+          projectId: selectedProject.value.projectId,
+          viewers: users.map((u: any) => ({
+            userEmail: u.userEmail,
+            role: u.role || 'teacher'
+          }))
         })
-        const response = await httpResponse.json()
 
-        if (response.success) {
-          const summary = response.data?.summary || {}
-          const messages = []
+        const summary = result?.summary || {}
+        const messages = []
 
-          if (summary.inserted > 0) messages.push(`新增 ${summary.inserted} 位`)
-          if (summary.reactivated > 0) messages.push(`重新啟用 ${summary.reactivated} 位`)
-          if (summary.updated > 0) messages.push(`更新角色 ${summary.updated} 位`)
-          if (summary.unchanged > 0) messages.push(`${summary.unchanged} 位已存在`)
+        if (summary.inserted > 0) messages.push(`新增 ${summary.inserted} 位`)
+        if (summary.reactivated > 0) messages.push(`重新啟用 ${summary.reactivated} 位`)
+        if (summary.updated > 0) messages.push(`更新角色 ${summary.updated} 位`)
+        if (summary.unchanged > 0) messages.push(`${summary.unchanged} 位已存在`)
 
-          const hasChanges = summary.inserted > 0 || summary.reactivated > 0 || summary.updated > 0
+        const hasChanges = summary.inserted > 0 || summary.reactivated > 0 || summary.updated > 0
 
-          if (messages.length > 0) {
-            if (hasChanges) {
-              ElMessage.success(messages.join('、'))
-            } else {
-              ElMessage.info(messages.join('、') + '，無需變更')
-            }
+        if (messages.length > 0) {
+          if (hasChanges) {
+            ElMessage.success(messages.join('、'))
+          } else {
+            ElMessage.info(messages.join('、') + '，無需變更')
           }
-
-          // Reset and reload
-          newViewer.searchText = ''
-          newViewer.role = 'teacher'
-          searchResults.value = []
-          selectedUsers.value = []
-          await loadProjectViewers(selectedProject.value.projectId)
-        } else {
-          ElMessage.error(response.error?.message || '新增存取者失敗')
         }
-      } catch (error) {
+
+        // Reset and reload
+        newViewer.searchText = ''
+        newViewer.role = 'teacher'
+        searchResults.value = []
+        selectedUsers.value = []
+        await loadProjectViewers(selectedProject.value.projectId)
+      } catch (error: any) {
         console.error('Error adding selected viewers:', error)
-        ElMessage.error('批次新增存取者失敗')
+        // Error message already shown by mutation onError handler
       } finally {
         loadingViewers.value = false
       }
@@ -2644,25 +2556,17 @@ export default {
       }
 
       try {
-        const httpResponse = await rpcClient.projects.viewers['update-role'].$post({
-          json: {
+        // Use TanStack Query mutation (message shown by onSuccess handler)
+        await updateViewerRoleMutation.mutateAsync({
           projectId: selectedProject.value.projectId,
           userEmail: userEmail,
           role: newRole
-        }
         })
-        const response = await httpResponse.json()
-
-        if (response.success) {
-          ElMessage.success('角色已更新')
-          // Reload viewers
-          await loadProjectViewers(selectedProject.value.projectId)
-        } else {
-          ElMessage.error(`更新失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
+        // Reload viewers
+        await loadProjectViewers(selectedProject.value.projectId)
+      } catch (error: any) {
         console.error('Error updating viewer role:', error)
-        ElMessage.error('更新角色失敗')
+        // Error message already shown by mutation onError handler
       }
     }
 
@@ -2673,24 +2577,16 @@ export default {
       }
 
       try {
-        const httpResponse = await rpcClient.projects.viewers.remove.$post({
-          json: {
+        // Use TanStack Query mutation (message shown by onSuccess handler)
+        await removeViewerMutation.mutateAsync({
           projectId: selectedProject.value.projectId,
           userEmail: userEmail
-        }
         })
-        const response = await httpResponse.json()
-
-        if (response.success) {
-          ElMessage.success('存取者已移除')
-          // Reload viewers
-          await loadProjectViewers(selectedProject.value.projectId)
-        } else {
-          ElMessage.error(`移除失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
+        // Reload viewers
+        await loadProjectViewers(selectedProject.value.projectId)
+      } catch (error: any) {
         console.error('Error removing viewer:', error)
-        ElMessage.error('移除存取者失敗')
+        // Error message already shown by mutation onError handler
       }
     }
 
@@ -2752,19 +2648,16 @@ export default {
         let successCount = 0
         let failCount = 0
 
-        for (const userEmail of selectedViewers.value) {
-          const httpResponse = await rpcClient.projects.viewers['update-role'].$post({
-          json: {
-            projectId: selectedProject.value.projectId,
-            userEmail: userEmail,
-            role: batchRole.value
-          }
-        })
-        const response = await httpResponse.json()
-
-          if (response.success) {
+        for (const viewer of selectedViewers.value) {
+          try {
+            // Use TanStack Query mutation (silent - no messages)
+            await updateViewerRoleMutation.mutateAsync({
+              projectId: selectedProject.value.projectId,
+              userEmail: viewer.userEmail,
+              role: batchRole.value
+            })
             successCount++
-          } else {
+          } catch {
             failCount++
           }
         }
@@ -2808,18 +2701,15 @@ export default {
         let successCount = 0
         let failCount = 0
 
-        for (const userEmail of selectedViewers.value) {
-          const httpResponse = await rpcClient.projects.viewers.remove.$post({
-          json: {
-            projectId: selectedProject.value.projectId,
-            userEmail: userEmail
-          }
-        })
-        const response = await httpResponse.json()
-
-          if (response.success) {
+        for (const viewer of selectedViewers.value) {
+          try {
+            // Use TanStack Query mutation (silent - no messages)
+            await removeViewerMutation.mutateAsync({
+              projectId: selectedProject.value.projectId,
+              userEmail: viewer.userEmail
+            })
             successCount++
-          } else {
+          } catch {
             failCount++
           }
         }
@@ -2872,23 +2762,19 @@ export default {
     const loadProjectStagesForExpansion = async (projectId: string) => {
       // Note: Loading state is now managed by watch() handler
       try {
-        // Vue 3 Best Practice: rpcClient automatically handles authentication
-        const httpResponse = await rpcClient.stages.list.$post({
-          json: {
-            projectId: projectId,
-            includeArchived: true  // Always fetch all stages, filter on frontend
-          }
+        // Use TanStack Query mutation
+        const result = await listStagesMutation.mutateAsync({
+          projectId: projectId,
+          includeArchived: true  // Always fetch all stages, filter on frontend
         })
-        const response = await httpResponse.json()
 
-        if (response.success && response.data && response.data.stages) {
+        if (result?.stages) {
           // Inject projectId into each stage for later use
-          const sortedStages = response.data.stages
+          const sortedStages = result.stages
             .map((stage: Stage) => ({ ...stage, projectId }))
             .sort((a: Stage, b: Stage) => a.stageOrder - b.stageOrder)
           projectStagesMap.set(projectId, sortedStages)
         } else {
-          console.error('Failed to load stages:', response.error)
           projectStagesMap.set(projectId, [])
         }
       } catch (error) {
@@ -2925,18 +2811,10 @@ export default {
       loadingProjectMembers.value.add(projectId)
 
       try {
-        const httpResponse = await rpcClient.projects.viewers.list.$post({
-          json: { projectId }
-        })
-        const response = await httpResponse.json()
-
-        if (response.success && response.data) {
-          projectMembersMap.value.set(projectId, response.data)
-        } else {
-          console.error('Failed to load project members:', response.error)
-          projectMembersMap.value.set(projectId, [])
-        }
-      } catch (error) {
+        // Use TanStack Query mutation
+        const result = await listViewersMutation.mutateAsync({ projectId })
+        projectMembersMap.value.set(projectId, result)
+      } catch (error: any) {
         console.error('Error loading project members:', error)
         projectMembersMap.value.set(projectId, [])
         ElMessage.error('載入專案成員失敗')
@@ -2966,27 +2844,20 @@ export default {
       addingMember.value = true
 
       try {
-        const httpResponse = await rpcClient.projects.viewers.add.$post({
-          json: {
+        // Use TanStack Query mutation (message shown by onSuccess handler)
+        await addViewerMutation.mutateAsync({
           projectId: selectedProjectForMember.value.projectId,
           userEmail: newMember.email,
           role: newMember.role
-        }
         })
-        const response = await httpResponse.json()
 
-        if (response.success) {
-          ElMessage.success('成員已新增')
-          showAddMemberDialog.value = false
+        showAddMemberDialog.value = false
 
-          // Reload members for this project
-          await loadProjectMembers(selectedProjectForMember.value.projectId)
-        } else {
-          ElMessage.error(`新增失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
+        // Reload members for this project
+        await loadProjectMembers(selectedProjectForMember.value.projectId)
+      } catch (error: any) {
         console.error('Error adding member:', error)
-        ElMessage.error('新增成員失敗')
+        // Error message already shown by mutation onError handler
       } finally {
         addingMember.value = false
       }
@@ -2994,48 +2865,32 @@ export default {
 
     const handleMemberRoleChange = async (newRole: string, projectId: string, member: any) => {
       try {
-        const httpResponse = await rpcClient.projects.viewers['update-role'].$post({
-          json: {
+        // Use TanStack Query mutation (message shown by onSuccess handler)
+        await updateViewerRoleMutation.mutateAsync({
           projectId: projectId,
           userEmail: member.userEmail,
           role: newRole
-        }
         })
-        const response = await httpResponse.json()
-
-        if (response.success) {
-          ElMessage.success('角色已更新')
-          // Reload members
-          await loadProjectMembers(projectId)
-        } else {
-          ElMessage.error(`更新失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
+        // Reload members
+        await loadProjectMembers(projectId)
+      } catch (error: any) {
         console.error('Error updating member role:', error)
-        ElMessage.error('更新角色失敗')
+        // Error message already shown by mutation onError handler
       }
     }
 
     const removeMember = async (projectId: string, userEmail: string) => {
       try {
-        const httpResponse = await rpcClient.projects.viewers.remove.$post({
-          json: {
+        // Use TanStack Query mutation (message shown by onSuccess handler)
+        await removeViewerMutation.mutateAsync({
           projectId: projectId,
           userEmail: userEmail
-        }
         })
-        const response = await httpResponse.json()
-
-        if (response.success) {
-          ElMessage.success('成員已移除')
-          // Reload members
-          await loadProjectMembers(projectId)
-        } else {
-          ElMessage.error(`移除失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
+        // Reload members
+        await loadProjectMembers(projectId)
+      } catch (error: any) {
         console.error('Error removing member:', error)
-        ElMessage.error('移除成員失敗')
+        // Error message already shown by mutation onError handler
       }
     }
 
@@ -3117,26 +2972,21 @@ export default {
     const loadProjectStages = async (projectId: string) => {
       loadingStages.value = true
       try {
-        // Vue 3 Best Practice: rpcClient automatically handles authentication
-        const httpResponse = await rpcClient.stages.list.$post({
-          json: {
-            projectId: projectId,
-            includeArchived: true  // Always fetch all stages
-          }
+        // Use TanStack Query mutation
+        const result = await listStagesMutation.mutateAsync({
+          projectId: projectId,
+          includeArchived: true  // Always fetch all stages
         })
-        const response = await httpResponse.json()
 
-        if (response.success && response.data && response.data.stages) {
+        if (result?.stages) {
           // Inject projectId into each stage for later use
-          projectStages.value = response.data.stages
+          projectStages.value = result.stages
             .map((stage: Stage) => ({ ...stage, projectId }))
             .sort((a: Stage, b: Stage) => a.stageOrder - b.stageOrder)
         } else {
-          console.error('Failed to load stages:', response.error)
           projectStages.value = []
-          ElMessage.error(`無法載入階段資料: ${response.error?.message || '未知錯誤'}`)
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error loading stages:', error)
         projectStages.value = []
         ElMessage.error('載入階段資料失敗，請重試')
@@ -3179,47 +3029,38 @@ export default {
       editStageForm.commentRewardPool = 0
 
       try {
-        // Get detailed stage information including reward pools
-        const httpResponse = await rpcClient.stages.get.$post({
-          json: {
-            projectId: selectedProject.value!.projectId,
-            stageId: stage.stageId
-          }
+        // Get detailed stage information using TanStack Query mutation
+        const stageDetails = await getStageDetailMutation.mutateAsync({
+          projectId: selectedProject.value!.projectId,
+          stageId: stage.stageId
         })
-        const response = await httpResponse.json()
 
-        if (response.success && response.data) {
-          const stageDetails = response.data
-          editStageForm.stageId = stageDetails.stageId
-          editStageForm.stageName = stageDetails.stageName
-          // 修正時區問題：使用本地時區而不是UTC
-          const formatDatetimeLocal = (timestamp: number): string => {
-            const date = new Date(timestamp)
-            // 獲取本地時間的YYYY-MM-DDTHH:MM格式，避免時區轉換
-            const year = date.getFullYear()
-            const month = String(date.getMonth() + 1).padStart(2, '0')
-            const day = String(date.getDate()).padStart(2, '0')
-            const hours = String(date.getHours()).padStart(2, '0')
-            const minutes = String(date.getMinutes()).padStart(2, '0')
-            return `${year}-${month}-${day}T${hours}:${minutes}`
-          }
-          
-          editStageForm.startTime = formatDatetimeLocal(stageDetails.startTime)
-          editStageForm.endTime = formatDatetimeLocal(stageDetails.endTime)
-          editStageForm.description = stageDetails.description || ''
-          editStageForm.status = stageDetails.status
-          
-          // Get reward pools directly from stage data
-          editStageForm.reportRewardPool = stageDetails.reportRewardPool || 0
-          editStageForm.commentRewardPool = stageDetails.commentRewardPool || 0
-
-          // Check voting lock (if stage has votes, prevent time editing)
-          await checkVotingLock(selectedProject.value!.projectId, stageDetails.stageId)
-        } else {
-          ElMessage.error(`載入階段詳情失敗: ${response.error?.message || '未知錯誤'}`)
-          showEditStageModal.value = false
+        editStageForm.stageId = stageDetails.stageId
+        editStageForm.stageName = stageDetails.stageName
+        // 修正時區問題：使用本地時區而不是UTC
+        const formatDatetimeLocal = (timestamp: number): string => {
+          const date = new Date(timestamp)
+          // 獲取本地時間的YYYY-MM-DDTHH:MM格式，避免時區轉換
+          const year = date.getFullYear()
+          const month = String(date.getMonth() + 1).padStart(2, '0')
+          const day = String(date.getDate()).padStart(2, '0')
+          const hours = String(date.getHours()).padStart(2, '0')
+          const minutes = String(date.getMinutes()).padStart(2, '0')
+          return `${year}-${month}-${day}T${hours}:${minutes}`
         }
-      } catch (error) {
+
+        editStageForm.startTime = formatDatetimeLocal(stageDetails.startTime)
+        editStageForm.endTime = formatDatetimeLocal(stageDetails.endTime)
+        editStageForm.description = stageDetails.description || ''
+        editStageForm.status = stageDetails.status
+
+        // Get reward pools directly from stage data
+        editStageForm.reportRewardPool = stageDetails.reportRewardPool || 0
+        editStageForm.commentRewardPool = stageDetails.commentRewardPool || 0
+
+        // Check voting lock (if stage has votes, prevent time editing)
+        await checkVotingLock(selectedProject.value!.projectId, stageDetails.stageId)
+      } catch (error: any) {
         console.error('Error loading stage details:', error)
         ElMessage.error('載入階段詳情失敗，請重試')
         showEditStageModal.value = false
@@ -3237,23 +3078,15 @@ export default {
 
       checkingVotingLock.value = true
       try {
-        // Call backend API to check for votes
-        const httpResponse = await rpcClient.stages['check-voting-lock'].$post({
-          json: {
-            projectId,
-            stageId
-          }
+        // Use TanStack Query mutation to check for votes
+        const result = await checkVotingLockMutation.mutateAsync({
+          projectId,
+          stageId
         })
-        const response = await httpResponse.json()
-
-        if (response.success) {
-          isVotingLocked.value = response.data.hasVotes || false
-        } else {
-          // On error, assume not locked (fail-open for better UX)
-          isVotingLocked.value = false
-        }
+        isVotingLocked.value = result?.hasVotes || false
       } catch (error) {
         console.error('Error checking voting lock:', error)
+        // On error, assume not locked (fail-open for better UX)
         isVotingLocked.value = false
       } finally {
         checkingVotingLock.value = false
@@ -3299,41 +3132,25 @@ export default {
       savingStageDetails.value = true
       try {
         if (editStageForm.stageId) {
-          // 更新現有階段
-          const updates = {
-            stageName: editStageForm.stageName.trim(),
-            startTime: new Date(editStageForm.startTime).getTime(),
-            endTime: new Date(editStageForm.endTime).getTime(),
-            description: editStageForm.description,
-            reportRewardPool: editStageForm.reportRewardPool || 0,
-            commentRewardPool: editStageForm.commentRewardPool || 0
-          }
-
-          const httpResponse = await rpcClient.stages.update.$post({
-            json: {
-              projectId: selectedProject.value!.projectId,
-              stageId: editStageForm.stageId,
-              updates: updates
+          // 更新現有階段 using TanStack Query mutation
+          await updateStageMutation.mutateAsync({
+            projectId: selectedProject.value!.projectId,
+            stageId: editStageForm.stageId,
+            updates: {
+              stageName: editStageForm.stageName.trim(),
+              startTime: new Date(editStageForm.startTime).getTime(),
+              endTime: new Date(editStageForm.endTime).getTime(),
+              description: editStageForm.description,
+              reportRewardPool: editStageForm.reportRewardPool || 0,
+              commentRewardPool: editStageForm.commentRewardPool || 0
             }
           })
-          const response = await httpResponse.json()
 
-          if (response.success) {
-            ElMessage.success('階段已更新')
-
-            // Reload project stages to ensure data sync
-            await loadProjectStagesForExpansion(selectedProject.value!.projectId)
-
-            showEditStageModal.value = false
-          } else {
-            stageFormError.value = {
-              title: '更新失敗',
-              message: response.error?.message || '未知錯誤'
-            }
-            ElMessage.error(`更新失敗: ${response.error?.message || '未知錯誤'}`)
-          }
+          // Reload project stages to ensure data sync
+          await loadProjectStagesForExpansion(selectedProject.value!.projectId)
+          showEditStageModal.value = false
         } else {
-          // 創建新階段
+          // 創建新階段 using TanStack Query mutation
           console.log('=== Creating new stage ===')
           console.log('Selected project:', selectedProject.value)
 
@@ -3351,36 +3168,24 @@ export default {
           console.log('Stage data to create:', stageData)
           console.log('Project ID:', selectedProject.value!.projectId)
 
-          const httpResponse = await rpcClient.stages.create.$post({
-            json: {
-              projectId: selectedProject.value!.projectId,
-              stageData: stageData
-            }
+          const result = await createStageMutation.mutateAsync({
+            projectId: selectedProject.value!.projectId,
+            stageData: stageData
           })
-          const response = await httpResponse.json()
 
-          console.log('Create stage response:', response)
+          console.log('Stage created successfully:', result)
 
-          if (response.success) {
-            ElMessage.success('階段已新增')
-            console.log('Stage created successfully:', response.data)
-
-            // Reload project stages to ensure data sync
-            await loadProjectStagesForExpansion(selectedProject.value!.projectId)
-
-            showEditStageModal.value = false
-          } else {
-            console.error('Create stage failed:', response)
-            stageFormError.value = {
-              title: '新增階段失敗',
-              message: response.error?.message || '未知錯誤'
-            }
-            ElMessage.error(`新增失敗: ${response.error?.message || '未知錯誤'}`)
-          }
+          // Reload project stages to ensure data sync
+          await loadProjectStagesForExpansion(selectedProject.value!.projectId)
+          showEditStageModal.value = false
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error saving stage:', error)
-        ElMessage.error(editStageForm.stageId ? '更新階段失敗，請重試' : '新增階段失敗，請重試')
+        stageFormError.value = {
+          title: editStageForm.stageId ? '更新失敗' : '新增階段失敗',
+          message: error.message || '未知錯誤'
+        }
+        // Error message already shown by mutation onError handler
       } finally {
         savingStageDetails.value = false
       }
@@ -3518,34 +3323,26 @@ export default {
           reportRewardPool: newStage.reportRewardPool || 0,
           commentRewardPool: newStage.commentRewardPool || 0
         }
-        
-        const httpResponse = await rpcClient.stages.create.$post({
-          json: {
-            projectId: selectedProject.value!.projectId,
-            stageData: stageData
-          }
-        })
-        const response = await httpResponse.json()
 
-        if (response.success) {
-          ElMessage.success('階段已新增')
-          
-          // Reset form
-          newStage.stageName = ''
-          newStage.startTime = ''
-          newStage.endTime = ''
-          newStage.description = ''
-          newStage.reportRewardPool = 0
-          newStage.commentRewardPool = 0
-          
-          // Reload stages
-          await loadProjectStages(selectedProject.value!.projectId)
-        } else {
-          ElMessage.error(`新增失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
+        // Use TanStack Query mutation (message shown by onSuccess handler)
+        await createStageMutation.mutateAsync({
+          projectId: selectedProject.value!.projectId,
+          stageData: stageData
+        })
+
+        // Reset form
+        newStage.stageName = ''
+        newStage.startTime = ''
+        newStage.endTime = ''
+        newStage.description = ''
+        newStage.reportRewardPool = 0
+        newStage.commentRewardPool = 0
+
+        // Reload stages
+        await loadProjectStages(selectedProject.value!.projectId)
+      } catch (error: any) {
         console.error('Error creating stage:', error)
-        ElMessage.error('新增階段失敗，請重試')
+        // Error message already shown by mutation onError handler
       }
     }
 
@@ -3645,7 +3442,7 @@ export default {
     const saveStageOrder = async (projectId: string | null = null, stages: Stage[] | null = null) => {
       const targetProjectId = projectId || selectedProject.value?.projectId
       const targetStages = stages || projectStages.value
-      
+
       if (!targetProjectId || !targetStages) {
         ElMessage.error('無法保存階段順序：缺少必要參數')
         return
@@ -3653,26 +3450,17 @@ export default {
 
       savingStageOrder.value = true
       try {
-        // Update stage order for each stage
+        // Update stage order for each stage using TanStack Query mutation (silent)
         for (const stage of targetStages) {
-          const httpResponse = await rpcClient.stages.update.$post({
-            json: {
-              projectId: targetProjectId,
-              stageId: stage.stageId,
-              updates: { stageOrder: stage.stageOrder }
-            }
+          await updateStageOrderMutation.mutateAsync({
+            projectId: targetProjectId,
+            stageId: stage.stageId,
+            updates: { stageOrder: stage.stageOrder }
           })
-          const response = await httpResponse.json()
-
-          if (!response.success) {
-            console.error('Failed to update stage order:', response.error)
-            ElMessage.error(`更新階段順序失敗: ${response.error?.message || '未知錯誤'}`)
-            return
-          }
         }
-        
+
         ElMessage.success('階段順序已儲存')
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error saving stage order:', error)
         ElMessage.error('儲存階段順序失敗，請重試')
       } finally {
@@ -3808,24 +3596,16 @@ export default {
           return
         }
 
-        const httpResponse = await rpcClient.stages.update.$post({
-          json: {
-            projectId: projectId,
-            stageId: stage.stageId,
-            updates: { status: 'archived' }
-          }
+        // Use TanStack Query mutation (message shown by onSuccess handler)
+        await updateStageMutation.mutateAsync({
+          projectId: projectId,
+          stageId: stage.stageId,
+          updates: { status: 'archived' }
         })
-        const response = await httpResponse.json()
 
-        if (response.success) {
-          ElMessage.success('階段已封存')
-
-          // Reload stages to get updated status
-          await loadProjectStagesForExpansion(projectId)
-        } else {
-          ElMessage.error(`封存失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
+        // Reload stages to get updated status
+        await loadProjectStagesForExpansion(projectId)
+      } catch (error: any) {
         console.error('Error archiving stage:', error)
         ElMessage.error('封存階段失敗，請重試')
       } finally {
@@ -3846,24 +3626,16 @@ export default {
           return
         }
 
-        const httpResponse = await rpcClient.stages.update.$post({
-          json: {
-            projectId: projectId,
-            stageId: stage.stageId,
-            updates: { status: 'pending' }
-          }
+        // Use TanStack Query mutation (message shown by onSuccess handler)
+        await updateStageMutation.mutateAsync({
+          projectId: projectId,
+          stageId: stage.stageId,
+          updates: { status: 'pending' }
         })
-        const response = await httpResponse.json()
 
-        if (response.success) {
-          ElMessage.success('階段已解除封存')
-
-          // Reload stages to get updated status
-          await loadProjectStagesForExpansion(projectId)
-        } else {
-          ElMessage.error(`解除封存失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
+        // Reload stages to get updated status
+        await loadProjectStagesForExpansion(projectId)
+      } catch (error: any) {
         console.error('Error unarchiving stage:', error)
         ElMessage.error('解除封存階段失敗，請重試')
       } finally {
@@ -3938,52 +3710,43 @@ export default {
       ElMessage.info('開始複製專案，請稍候...')
 
       try {
-        const httpResponse = await rpcClient.projects.clone.$post({
-          json: {
-            projectId: cloneProjectForm.sourceProject!.projectId,
-            newProjectName: cloneProjectForm.newProjectName.trim(),
-            copyViewers: cloneProjectForm.copyViewers
-          }
+        // Use TanStack Query mutation
+        const data = await cloneProjectMutation.mutateAsync({
+          projectId: cloneProjectForm.sourceProject!.projectId,
+          newProjectName: cloneProjectForm.newProjectName.trim(),
+          copyViewers: cloneProjectForm.copyViewers
         })
-        const response = await httpResponse.json() as any
 
-        if (response.success) {
-          const data = response.data
-          let message = `專案「${cloneProjectForm.newProjectName}」複製成功！`
+        let message = `專案「${cloneProjectForm.newProjectName}」複製成功！`
 
-          // Show viewer copy results if applicable
-          if (data?.viewerCopyResult) {
-            const { copied, skipped, total } = data.viewerCopyResult
-            if (total > 0) {
-              message += `\n參與者複製：共 ${total} 人，成功 ${copied} 人`
-              if (skipped.length > 0) {
-                message += `，跳過 ${skipped.length} 人（帳號已不存在）`
-              }
-            } else {
-              message += '\n原專案無參與者需要複製。'
-            }
-
-            // If there are skipped viewers, show a detailed warning
+        // Show viewer copy results if applicable
+        if (data?.viewerCopyResult) {
+          const { copied, skipped, total } = data.viewerCopyResult
+          if (total > 0) {
+            message += `\n參與者複製：共 ${total} 人，成功 ${copied} 人`
             if (skipped.length > 0) {
-              ElMessageBox.alert(
-                `以下帳號因已不存在而被跳過：\n${skipped.join('\n')}`,
-                '部分參與者未複製',
-                { type: 'warning', confirmButtonText: '了解' }
-              )
+              message += `，跳過 ${skipped.length} 人（帳號已不存在）`
             }
+          } else {
+            message += '\n原專案無參與者需要複製。'
           }
 
-          ElMessage.success(message)
-          // Refetch projects using TanStack Query
-          await projectsQuery?.refetch?.()
-          // Close drawer
-          closeCloneDrawer()
-        } else {
-          ElMessage.error(`複製失敗: ${response.error?.message || '未知錯誤'}`)
+          // If there are skipped viewers, show a detailed warning
+          if (skipped.length > 0) {
+            ElMessageBox.alert(
+              `以下帳號因已不存在而被跳過：\n${skipped.join('\n')}`,
+              '部分參與者未複製',
+              { type: 'warning', confirmButtonText: '了解' }
+            )
+          }
         }
-      } catch (error) {
+
+        ElMessage.success(message)
+        // Close drawer
+        closeCloneDrawer()
+      } catch (error: any) {
         console.error('Error cloning project:', error)
-        ElMessage.error('複製專案失敗，請重試')
+        // Error message already shown by mutation onError handler
       } finally {
         cloningProject.value = false
       }
@@ -4020,36 +3783,25 @@ export default {
         const targetCount = cloneStageForm.targetProjectIds.length
         ElMessage.info(`開始複製階段到 ${targetCount} 個專案，請稍候...`)
 
-        const httpResponse = await rpcClient.stages['clone-to-projects'].$post({
-          json: {
-            sourceProjectId: cloneStageForm.sourceStage.projectId,
-            stageId: cloneStageForm.sourceStage.stageId,
-            newStageName: cloneStageForm.newStageName.trim(),
-            targetProjectIds: cloneStageForm.targetProjectIds
-          }
+        // Use TanStack Query mutation
+        const result = await cloneStageToProjectsMutation.mutateAsync({
+          sourceProjectId: cloneStageForm.sourceStage.projectId,
+          stageId: cloneStageForm.sourceStage.stageId,
+          newStageName: cloneStageForm.newStageName.trim(),
+          targetProjectIds: cloneStageForm.targetProjectIds
         })
-        const response = await httpResponse.json()
 
-        if (response.success) {
-          ElMessage.success(`成功複製到 ${response.data.totalCloned} 個專案！`)
-
-          // Refresh stages for affected projects that are currently expanded
-          for (const projectId of cloneStageForm.targetProjectIds) {
-            if (isProjectExpanded(projectId)) {
-              await loadProjectStagesForExpansion(projectId)
-            }
+        // Refresh stages for affected projects that are currently expanded
+        for (const projectId of cloneStageForm.targetProjectIds) {
+          if (isProjectExpanded(projectId)) {
+            await loadProjectStagesForExpansion(projectId)
           }
-
-          closeCloneStageDrawer()
-        } else {
-          const failedProject = response.data?.failedProjectId
-            ? `（專案: ${response.data.failedProjectName || response.data.failedProjectId}）`
-            : ''
-          ElMessage.error(`複製失敗${failedProject}: ${response.error || '未知錯誤'}`)
         }
-      } catch (error) {
+
+        closeCloneStageDrawer()
+      } catch (error: any) {
         console.error('Error cloning stage:', error)
-        ElMessage.error('複製階段失敗，請重試')
+        // Error message already shown by mutation onError handler
       } finally {
         cloningStage.value = false
       }

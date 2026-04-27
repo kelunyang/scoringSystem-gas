@@ -14,28 +14,11 @@ import { useInfiniteQuery, useQuery, useMutation } from '@tanstack/vue-query'
 import { computed, type Ref, type ComputedRef } from 'vue'
 import { adminApi } from '@/api/admin'
 import { useCurrentUser } from '@/composables/useAuth'
+import type { AIServiceLog } from '@repo/shared'
 
 // ============================================================================
 // Types
 // ============================================================================
-
-export interface AIServiceLog {
-  callId: string
-  serviceType: string
-  modelId?: string
-  userId?: string
-  displayName?: string
-  projectId?: string
-  status: 'success' | 'error' | 'pending'
-  inputTokens?: number
-  outputTokens?: number
-  totalTokens?: number
-  latencyMs?: number
-  cost?: number
-  createdAt: number
-  errorMessage?: string
-  metadata?: Record<string, unknown>
-}
 
 export interface AIServiceFilters {
   serviceType?: string
@@ -226,6 +209,7 @@ export function useAIServiceLogDetail(): UseMutationReturnType<
 // ============================================================================
 
 export type {
+  AIServiceLog,
   AIServiceLogsPage,
   AIServiceLogDetailResult
 }

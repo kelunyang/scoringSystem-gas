@@ -245,6 +245,16 @@ import DeactivateGroupConfirmDrawer from './group-management/project-groups/Deac
 import ViewerManagementDrawer from './project/ViewerManagementDrawer.vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { adminApi } from '@/api/admin'
+// TanStack Query composables for global groups
+import {
+  useCreateGlobalGroup,
+  useUpdateGlobalGroup,
+  useToggleGlobalGroupStatus,
+  useAddUserToGlobalGroup,
+  useRemoveUserFromGlobalGroup,
+  useBatchAddUsersToGlobalGroup,
+  useBatchRemoveUsersFromGlobalGroup
+} from '@/composables/admin/useGlobalGroups'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import { formatTime } from '@/utils/helpers'
 import { useExpandable } from '@/composables/useExpandable'
@@ -278,6 +288,17 @@ export default {
   setup(props) {
     const route = useRoute()
     const router = useRouter()
+
+    // ============================================================================
+    // TanStack Query Mutations
+    // ============================================================================
+    const createGlobalGroupMutation = useCreateGlobalGroup()
+    const updateGlobalGroupMutation = useUpdateGlobalGroup()
+    const toggleGlobalGroupStatusMutation = useToggleGlobalGroupStatus()
+    const addUserToGroupMutation = useAddUserToGlobalGroup()
+    const removeUserFromGroupMutation = useRemoveUserFromGlobalGroup()
+    const batchAddUsersMutation = useBatchAddUsersToGlobalGroup()
+    const batchRemoveUsersMutation = useBatchRemoveUsersFromGlobalGroup()
 
     // Register refresh function with parent SystemAdmin
     const registerRefresh = inject('registerRefresh', () => {})
@@ -883,25 +904,22 @@ export default {
 
         const isEdit = !!globalGroupForm.groupId
 
-        const payload = {
-          groupName: globalGroupForm.groupName.trim(),
-          description: globalGroupForm.description.trim(),
-          globalPermissions: globalGroupForm.globalPermissions
-        }
-
+        // 使用 TanStack Query mutation
         if (isEdit) {
-          payload.groupId = globalGroupForm.groupId
+          await updateGlobalGroupMutation.mutateAsync({
+            groupId: globalGroupForm.groupId,
+            groupName: globalGroupForm.groupName.trim(),
+            globalPermissions: globalGroupForm.globalPermissions
+          })
+        } else {
+          await createGlobalGroupMutation.mutateAsync({
+            groupName: globalGroupForm.groupName.trim(),
+            globalPermissions: globalGroupForm.globalPermissions
+          })
         }
 
-        const response = isEdit
-          ? await adminApi.globalGroups.update(payload)
-          : await adminApi.globalGroups.create(payload)
-
-        if (response.success) {
-          showSuccess(isEdit ? '全域群組更新成功' : '全域群組建立成功')
-          showGlobalGroupModal.value = false
-          loadGlobalGroups()
-        }
+        showGlobalGroupModal.value = false
+        loadGlobalGroups()
       } catch (error) {
         console.error('Error saving global group:', error)
         handleError(error, { action: '保存全域群組' })
@@ -911,37 +929,25 @@ export default {
     }
 
     const deactivateGlobalGroup = async (group) => {
-      try {
-        const response = await adminApi.globalGroups.deactivate(group.groupId)
-
-        if (response.success) {
-          showSuccess('全域群組已停用')
-          loadGlobalGroups()
-        }
-      } catch (error) {
-        console.error('Error deactivating global group:', error)
-        handleError(error, { action: '停用全域群組' })
-      }
+      // 使用 TanStack Query mutation
+      await toggleGlobalGroupStatusMutation.mutateAsync({
+        groupId: group.groupId,
+        activate: false
+      })
+      loadGlobalGroups()
     }
 
     const activateGlobalGroup = async (group) => {
-      try {
-        const response = await adminApi.globalGroups.activate(group.groupId)
-
-        if (response.success) {
-          showSuccess('全域群組已啟用')
-          loadGlobalGroups()
-        }
-      } catch (error) {
-        console.error('Error activating global group:', error)
-        handleError(error, { action: '啟用全域群組' })
-      }
+      // 使用 TanStack Query mutation（會自動顯示成功/錯誤訊息）
+      await toggleGlobalGroupStatusMutation.mutateAsync({
+        groupId: group.groupId,
+        activate: true
+      })
+      loadGlobalGroups()
     }
 
     const toggleGlobalGroupStatus = async (group) => {
       try {
-        const action = group.isActive ? '停用' : '啟用'
-
         // Show confirmation dialog for deactivation
         if (group.isActive) {
           await ElMessageBox.confirm(
@@ -951,18 +957,15 @@ export default {
           )
         }
 
-        const response = group.isActive
-          ? await adminApi.globalGroups.deactivate(group.groupId)
-          : await adminApi.globalGroups.activate(group.groupId)
-
-        if (response.success) {
-          showSuccess(`成功${action}群組`)
-          loadGlobalGroups()
-        }
+        // 使用 TanStack Query mutation（會自動顯示成功/錯誤訊息）
+        await toggleGlobalGroupStatusMutation.mutateAsync({
+          groupId: group.groupId,
+          activate: !group.isActive
+        })
+        loadGlobalGroups()
       } catch (error) {
         if (error === 'cancel') return
         console.error('Error toggling group status:', error)
-        handleError(error, { action: `${group.isActive ? '停用' : '啟用'}群組` })
       }
     }
 
@@ -1398,40 +1401,28 @@ export default {
       try {
         addingMember.value = true
 
-        // Use batch API instead of individual requests
-        const response = await adminApi.globalGroups.batchAddUsers({
+        // 使用 TanStack Query batch mutation
+        const result = await batchAddUsersMutation.mutateAsync({
           groupId: group.groupId,
           userEmails: selectedUsersToAdd.value
         })
 
-        if (response.success) {
-          const data = response.data || {}
-          const successCount = data.successCount || selectedUsersToAdd.value.length
-          const failureCount = data.failureCount || 0
-
-          if (successCount > 0) {
-            showSuccess(`成功新增 ${successCount} 個成員`)
-          }
-          if (failureCount > 0) {
-            const failedResults = (data.results || []).filter(r => !r.success)
-            const errorMessage = failedResults.map(r => `${r.userEmail}: ${r.error}`).join('\n')
-            ElMessage.warning({
-              message: `${failureCount} 個成員新增失敗：\n${errorMessage}`,
-              duration: 8000,
-              showClose: true
-            })
-          }
-
-          selectedUsersToAdd.value = []
-          addingMemberForGlobalGroup.value = null
-          await loadGlobalGroupMembersInline(group.groupId)
-          await loadGlobalGroups() // Refresh group list to update member count
-        } else {
-          handleError(response.error?.message || '新增成員失敗', { type: 'error' })
+        // 顯示部分失敗的警告（mutation 會處理成功訊息）
+        if (result.failedCount > 0) {
+          const errorMessage = (result.errors || []).join('\n')
+          ElMessage.warning({
+            message: `${result.failedCount} 個成員新增失敗：\n${errorMessage}`,
+            duration: 8000,
+            showClose: true
+          })
         }
+
+        selectedUsersToAdd.value = []
+        addingMemberForGlobalGroup.value = null
+        await loadGlobalGroupMembersInline(group.groupId)
+        await loadGlobalGroups() // Refresh group list to update member count
       } catch (error) {
         console.error('Error adding members:', error)
-        handleError('新增成員時發生錯誤', { type: 'error' })
       } finally {
         addingMember.value = false
       }
@@ -1467,19 +1458,16 @@ export default {
       try {
         removingMemberEmail.value = member.userEmail
 
-        const response = await adminApi.globalGroups.removeUser({
+        // 使用 TanStack Query mutation（會自動顯示成功/錯誤訊息）
+        await removeUserFromGroupMutation.mutateAsync({
           groupId: group.groupId,
           userEmail: member.userEmail
         })
 
-        if (response.success) {
-          showSuccess('成員已移除')
-          await loadGlobalGroupMembersInline(group.groupId)
-          await loadGlobalGroups() // Refresh group list to update member count
-        }
+        await loadGlobalGroupMembersInline(group.groupId)
+        await loadGlobalGroups() // Refresh group list to update member count
       } catch (error) {
         console.error('Error removing member:', error)
-        handleError(error, { action: '移除成員' })
       } finally {
         removingMemberEmail.value = null
       }
@@ -1539,28 +1527,23 @@ export default {
             pendingRemoveGroup.value = null
           }
         } else if (pendingRemoveType.value === 'global') {
-          // Global Groups batch remove
+          // Global Groups batch remove - 使用 TanStack Query mutation
           const userEmails = pendingRemoveMembers.value.map(m => m.userEmail)
 
-          const response = await adminApi.globalGroups.batchRemoveUsers({
+          await batchRemoveUsersMutation.mutateAsync({
             groupId: pendingRemoveGroup.value.groupId,
             userEmails: userEmails
           })
 
-          if (response.success) {
-            const successCount = response.data?.successCount || 0
-            showSuccess(`成功移除 ${successCount} 個成員`)
+          // Refresh members list（mutation 會處理成功訊息）
+          await loadGlobalGroupMembersInline(pendingRemoveGroup.value.groupId)
+          // Refresh group list to update member count
+          await loadGlobalGroups()
 
-            // Refresh members list
-            await loadGlobalGroupMembersInline(pendingRemoveGroup.value.groupId)
-            // Refresh group list to update member count
-            await loadGlobalGroups()
-
-            // Close drawer
-            showRemoveMemberDrawer.value = false
-            pendingRemoveMembers.value = []
-            pendingRemoveGroup.value = null
-          }
+          // Close drawer
+          showRemoveMemberDrawer.value = false
+          pendingRemoveMembers.value = []
+          pendingRemoveGroup.value = null
         }
       } catch (error) {
         console.error('Error batch removing members:', error)

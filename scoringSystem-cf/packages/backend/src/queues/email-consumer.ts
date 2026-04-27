@@ -85,10 +85,31 @@ async function recordIdempotency(
 
 /**
  * Determine if error should trigger retry
+ * Handles both Cloudflare Email Service and SMTP errors
  */
 function shouldRetryEmailError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
+  }
+
+  // Check Cloudflare Email Service error codes
+  const errorCode = (error as any)?.code;
+  if (errorCode) {
+    // Cloudflare Email Service - retryable errors
+    if (errorCode === 'E_RATE_LIMIT_EXCEEDED') {
+      return true;
+    }
+
+    // Cloudflare Email Service - non-retryable errors
+    if ([
+      'E_VALIDATION_ERROR',
+      'E_SENDER_NOT_VERIFIED',
+      'E_TOO_MANY_RECIPIENTS',
+      'E_DAILY_LIMIT_EXCEEDED',
+      'E_RECIPIENT_SUPPRESSED',
+    ].includes(errorCode)) {
+      return false;
+    }
   }
 
   // D1 database errors - retry

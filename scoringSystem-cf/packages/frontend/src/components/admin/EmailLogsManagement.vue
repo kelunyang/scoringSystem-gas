@@ -464,6 +464,16 @@ import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 import { jsonToMarkdown } from '@/utils/json-preview'
+import {
+  useEmailStatistics,
+  useResendEmail,
+  useBatchResendEmails
+} from '@/composables/admin/useEmailLogs'
+
+// ================== TanStack Query Mutations ==================
+const emailStatisticsQuery = useEmailStatistics()
+const resendEmailMutation = useResendEmail()
+const batchResendEmailsMutation = useBatchResendEmails()
 
 // ================== Interfaces ==================
 
@@ -492,16 +502,6 @@ interface EmailLog {
   selected: boolean
 }
 
-interface EmailStatistics {
-  total: number
-  sent: number
-  failed: number
-  successRate: number
-  byTrigger: Array<{ trigger: string; count: number; status: string }>
-  last7Days: Array<{ date: string; count: number; status: string }>
-  timestamp: number
-}
-
 // ================== Instance & Global ==================
 
 const route = useRoute()
@@ -513,7 +513,6 @@ const registerRefresh = inject<(fn: (() => void) | null) => void>('registerRefre
 // ================== State ==================
 
 const logs = ref<EmailLog[]>([])
-const statistics = ref<EmailStatistics | null>(null)
 const loading = ref<boolean>(false)
 const resending = ref<boolean>(false)
 
@@ -591,14 +590,17 @@ const BATCH_SIZE = 50
 // ================== Computed Properties ==================
 
 const stats = computed(() => {
-  if (statistics.value) {
+  // Use TanStack Query statistics data
+  const statsData = emailStatisticsQuery.data.value
+  if (statsData) {
     return {
-      totalEmails: statistics.value.total,
-      successRate: statistics.value.successRate,
-      failedEmails: statistics.value.failed,
+      totalEmails: statsData.totalEmails,
+      successRate: statsData.sentCount > 0 ? (statsData.sentCount / statsData.totalEmails * 100) : 0,
+      failedEmails: statsData.failedCount,
       last24Hours: calculateLast24Hours()
     }
   }
+  // Fallback to local calculation if query data not available
   return {
     totalEmails: logs.value.length,
     successRate: logs.value.length > 0 ? (logs.value.filter(l => l.status === 'sent').length / logs.value.length * 100) : 0,
@@ -845,20 +847,15 @@ const loadEmailLogs = async (append: boolean = false, withFilters: boolean = fal
   }
 }
 
-const loadStatistics = async (): Promise<void> => {
-  try {
-    const response = await adminApi.emailLogs.statistics()
-
-    if (response.success && response.data) {
-      statistics.value = response.data
-    }
-  } catch (error) {
-    console.error('Error loading statistics:', error)
-  }
+const loadStatistics = (): void => {
+  // Statistics are now loaded via TanStack Query (emailStatisticsQuery)
+  // This function just triggers a refetch if needed
+  emailStatisticsQuery.refetch()
 }
 
 const refreshLogs = async (): Promise<void> => {
-  await Promise.all([loadEmailLogs(), loadStatistics()])
+  await loadEmailLogs()
+  loadStatistics() // This triggers refetch of TanStack Query
   ElMessage.success('郵件紀錄已更新')
 }
 
@@ -966,16 +963,15 @@ const resendSelectedEmails = async (): Promise<void> => {
 
       progressMessage.value = `處理第 ${batchNumber}/${totalBatches} 批 (每批最多 ${BATCH_SIZE} 封)`
 
-      // Send batch request
-      const response = await adminApi.emailLogs.resendBatch({
-        logIds: batch.map(l => l.logId)
-      })
+      try {
+        // Use TanStack Query mutation for batch resend
+        const result = await batchResendEmailsMutation.mutateAsync({
+          logIds: batch.map(l => l.logId)
+        })
 
-      if (response.success && response.data) {
-        const data = response.data as { successCount?: number; failedCount?: number }
-        successCount += data.successCount || 0
-        failedCount += data.failedCount || 0
-      } else {
+        successCount += result.successCount || 0
+        failedCount += result.failedCount || 0
+      } catch {
         failedCount += batch.length
       }
 
@@ -1014,20 +1010,14 @@ const resendSelectedEmails = async (): Promise<void> => {
 const resendSingleEmail = async (log: EmailLog): Promise<void> => {
   resending.value = true
   try {
-    const response = await adminApi.emailLogs.resendSingle({
+    await resendEmailMutation.mutateAsync({
       logId: log.logId
     })
-
-    if (response.success) {
-      ElMessage.success('郵件重送成功')
-      // Refresh to show new log entry
-      await refreshLogs()
-    } else {
-      ElMessage.error(`重送失敗: ${response.error?.message || '未知錯誤'}`)
-    }
+    // Refresh to show new log entry (success message handled by mutation)
+    await refreshLogs()
   } catch (error) {
     console.error('Error resending email:', error)
-    ElMessage.error('郵件重送失敗')
+    // Error message handled by mutation's onError
   } finally {
     resending.value = false
   }
@@ -1135,7 +1125,8 @@ const getTriggerTagType = (trigger: string): 'success' | 'warning' | 'info' | 'd
 
 onMounted(async () => {
   // 🆕 簡化：初始載入直接使用後端搜尋（帶 filter 參數）
-  await Promise.all([loadEmailLogs(false, true), loadStatistics()])
+  // Statistics are loaded automatically via TanStack Query (emailStatisticsQuery)
+  await loadEmailLogs(false, true)
 
   // Auto-expand email detail if emailId parameter exists in URL
   if (route.params.emailId && typeof route.params.emailId === 'string') {

@@ -30,7 +30,7 @@
         <el-button size="small" @click="showRegenerateDialog = true">
           <i class="fas fa-sync-alt"></i> 重新產生備用碼
         </el-button>
-        <el-button size="small" type="danger" @click="showDisableDialog = true">
+        <el-button size="small" type="danger" @click="showDisableDrawer = true">
           <i class="fas fa-times-circle"></i> 停用
         </el-button>
       </div>
@@ -128,31 +128,59 @@
       </div>
     </div>
 
-    <!-- Disable Dialog -->
-    <el-dialog
-      v-model="showDisableDialog"
+    <!-- Disable Drawer -->
+    <el-drawer
+      v-model="showDisableDrawer"
       title="停用驗證器"
-      width="400px"
+      direction="ttb"
+      size="100%"
+      class="drawer-maroon"
       :close-on-click-modal="false"
     >
-      <p>停用後將改回電子郵件驗證碼登入。請輸入密碼確認：</p>
-      <el-input
-        v-model="disablePassword"
-        type="password"
-        placeholder="輸入密碼"
-        show-password
-        @keyup.enter="confirmDisable"
-      />
-      <div v-if="disableError" class="dialog-error">
-        <i class="fas fa-exclamation-circle"></i> {{ disableError }}
+      <div class="drawer-content">
+        <el-alert type="error" :closable="false" show-icon style="margin-bottom: 20px;">
+          <template #title>危險操作</template>
+          停用驗證器後將改回電子郵件驗證碼登入，帳號安全性將降低。
+        </el-alert>
+
+        <el-form label-position="top">
+          <el-form-item label="請輸入密碼確認身份">
+            <el-input
+              v-model="disablePassword"
+              type="password"
+              placeholder="輸入密碼"
+              show-password
+            />
+          </el-form-item>
+
+          <el-form-item label="請輸入 DISABLE 確認停用">
+            <el-input
+              v-model="disableConfirmText"
+              placeholder="輸入 DISABLE"
+              @keyup.enter="confirmDisable"
+            />
+          </el-form-item>
+        </el-form>
+
+        <div v-if="disableError" class="drawer-error">
+          <i class="fas fa-exclamation-circle"></i> {{ disableError }}
+        </div>
       </div>
+
       <template #footer>
-        <el-button @click="showDisableDialog = false">取消</el-button>
-        <el-button type="danger" :loading="disableLoading" @click="confirmDisable">
-          確認停用
-        </el-button>
+        <div class="drawer-actions">
+          <el-button @click="showDisableDrawer = false">取消</el-button>
+          <el-button
+            type="danger"
+            :loading="disableLoading"
+            :disabled="disableConfirmText !== 'DISABLE'"
+            @click="confirmDisable"
+          >
+            確認停用驗證器
+          </el-button>
+        </div>
       </template>
-    </el-dialog>
+    </el-drawer>
 
     <!-- Regenerate Dialog -->
     <el-dialog
@@ -215,8 +243,9 @@ const initLoading = ref(false);
 const recoveryCodes = ref<string[]>([]);
 
 // Disable state
-const showDisableDialog = ref(false);
+const showDisableDrawer = ref(false);
 const disablePassword = ref('');
+const disableConfirmText = ref('');
 const disableError = ref('');
 const disableLoading = ref(false);
 
@@ -355,6 +384,11 @@ async function confirmDisable() {
     return;
   }
 
+  if (disableConfirmText.value !== 'DISABLE') {
+    disableError.value = '請輸入 DISABLE 確認';
+    return;
+  }
+
   disableLoading.value = true;
   disableError.value = '';
 
@@ -367,8 +401,9 @@ async function confirmDisable() {
     if (response.success) {
       totpEnabled.value = false;
       recoveryCodesRemaining.value = 0;
-      showDisableDialog.value = false;
+      showDisableDrawer.value = false;
       disablePassword.value = '';
+      disableConfirmText.value = '';
       ElMessage.success('驗證器已停用');
     } else {
       disableError.value = response.error?.message || '停用失敗';
@@ -586,5 +621,29 @@ async function confirmRegenerate() {
   margin-top: 8px;
   color: #dc3545;
   font-size: 13px;
+}
+
+/* Drawer styles */
+.drawer-content {
+  padding: 20px;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.drawer-error {
+  margin-top: 16px;
+  padding: 12px;
+  background: #fef2f2;
+  border-radius: 6px;
+  color: #dc3545;
+  font-size: 13px;
+}
+
+.drawer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #e5e7eb;
 }
 </style>

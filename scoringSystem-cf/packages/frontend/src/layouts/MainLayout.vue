@@ -180,7 +180,7 @@
 
         <!-- Watermark Footer (底部) -->
         <div class="sidebar-watermark-2025">
-          <span>Kelunyang@2025</span>
+          <span>Kelunyang@2026</span>
           <a href="mailto:kelunyang@outlook.com" target="_blank"><i class="fa-solid fa-envelope"></i></a>
           <a href="https://github.com/kelunyang/scoringSystem-gas" target="_blank"><i class="fa-brands fa-github"></i></a>
         </div>

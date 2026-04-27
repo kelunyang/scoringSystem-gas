@@ -18,7 +18,9 @@ export type {
   GlobalGroupMember,
   ProjectGroupMember,
   GlobalGroupListRequest,
-  GlobalGroupListResponse
+  GlobalGroupListResponse,
+  AIServiceLog,
+  AIServiceLogsQueryResponse
 } from './types/admin';
 
 // Export admin enums
