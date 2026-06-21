@@ -248,7 +248,9 @@ export const TwoFactorVerificationResponseSchema = z.object({
   emailSent: z.boolean().optional(),
   devMode: z.boolean().optional(),
   expiresAt: z.number().optional(),
-  twoFactorMethod: z.enum(['email', 'totp']).optional()
+  twoFactorMethod: z.enum(['email', 'totp', 'passkey']).optional(),
+  passkeyAvailable: z.boolean().optional(),
+  availableMethods: z.array(z.enum(['email', 'totp', 'passkey'])).optional()
 });
 
 export type TwoFactorVerificationResponse = z.infer<typeof TwoFactorVerificationResponseSchema>;
@@ -281,3 +283,100 @@ export const TotpRegenerateCodesRequestSchema = z.object({
 });
 
 export type TotpRegenerateCodesRequest = z.infer<typeof TotpRegenerateCodesRequestSchema>;
+
+// ─── Passkey (WebAuthn) Schemas ───
+
+/**
+ * Transport types for WebAuthn credentials
+ */
+const PasskeyTransportSchema = z.enum(['internal', 'hybrid', 'usb', 'ble', 'nfc']);
+
+/**
+ * Passkey registration verify request
+ * Receives the credential from navigator.credentials.create()
+ */
+export const PasskeyRegisterVerifyRequestSchema = z.object({
+  id: z.string().min(1, 'Credential ID is required'),
+  rawId: z.string().min(1, 'Raw credential ID is required'),
+  type: z.literal('public-key'),
+  response: z.object({
+    clientDataJSON: z.string().min(1),
+    attestationObject: z.string().min(1),
+    transports: z.array(PasskeyTransportSchema).optional()
+  }),
+  deviceName: z.string().max(100).optional()
+});
+
+export type PasskeyRegisterVerifyRequest = z.infer<typeof PasskeyRegisterVerifyRequestSchema>;
+
+/**
+ * Passkey authentication init request
+ */
+export const PasskeyAuthInitRequestSchema = z.object({
+  userEmail: EmailSchema
+});
+
+export type PasskeyAuthInitRequest = z.infer<typeof PasskeyAuthInitRequestSchema>;
+
+/**
+ * Passkey authentication verify request
+ * Receives the assertion from navigator.credentials.get()
+ */
+export const PasskeyAuthVerifyRequestSchema = z.object({
+  userEmail: EmailSchema,
+  id: z.string().min(1, 'Credential ID is required'),
+  rawId: z.string().min(1, 'Raw credential ID is required'),
+  type: z.literal('public-key'),
+  response: z.object({
+    clientDataJSON: z.string().min(1),
+    authenticatorData: z.string().min(1),
+    signature: z.string().min(1),
+    userHandle: z.string().optional()
+  }),
+  turnstileToken: TurnstileTokenSchema
+});
+
+export type PasskeyAuthVerifyRequest = z.infer<typeof PasskeyAuthVerifyRequestSchema>;
+
+/**
+ * Passkey credential update request (rename)
+ */
+export const PasskeyCredentialUpdateRequestSchema = z.object({
+  deviceName: z.string().min(1).max(100, 'Device name must be 100 characters or less')
+});
+
+export type PasskeyCredentialUpdateRequest = z.infer<typeof PasskeyCredentialUpdateRequestSchema>;
+
+/**
+ * Passkey credential delete request (requires password)
+ */
+export const PasskeyCredentialDeleteRequestSchema = z.object({
+  password: PasswordSchema
+});
+
+export type PasskeyCredentialDeleteRequest = z.infer<typeof PasskeyCredentialDeleteRequestSchema>;
+
+/**
+ * Passkey credential info schema
+ */
+export const PasskeyCredentialSchema = z.object({
+  credentialId: z.string(),
+  deviceName: z.string(),
+  transports: z.array(PasskeyTransportSchema),
+  createdAt: z.number(),
+  lastUsedAt: z.number().nullable(),
+  backedUp: z.boolean()
+});
+
+export type PasskeyCredential = z.infer<typeof PasskeyCredentialSchema>;
+
+/**
+ * Passkey status response schema
+ */
+export const PasskeyStatusResponseSchema = z.object({
+  enabled: z.boolean(),
+  credentialCount: z.number(),
+  credentials: z.array(PasskeyCredentialSchema)
+});
+
+export type PasskeyStatusResponse = z.infer<typeof PasskeyStatusResponseSchema>;

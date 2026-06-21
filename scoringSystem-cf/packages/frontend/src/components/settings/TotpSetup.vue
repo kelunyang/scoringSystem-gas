@@ -227,6 +227,11 @@ import type {
   TotpRegenerateCodesResponse
 } from '@/types/auth';
 
+// Emits
+const emit = defineEmits<{
+  'setup-complete': [];
+}>();
+
 // State
 const totpEnabled = ref(false);
 const recoveryCodesRemaining = ref(0);
@@ -373,6 +378,7 @@ function finishSetup() {
   recoveryCodes.value = [];
   verifyCode.value = '';
   fetchStatus(); // Refresh status
+  emit('setup-complete');
 }
 
 /**

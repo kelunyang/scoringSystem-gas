@@ -15,6 +15,8 @@ export interface UseLoginReturn {
   emailPasswordVerified: Ref<boolean>;
   devMode: Ref<boolean>;
   twoFactorMethod: Ref<TwoFactorMethod>;
+  passkeyAvailable: Ref<boolean>;
+  availableMethods: Ref<TwoFactorMethod[]>;
   errorMessage: Ref<string>;
   userEmail: Ref<string>;
   canSubmitPassword: ComputedRef<boolean>;
@@ -22,6 +24,7 @@ export interface UseLoginReturn {
   verifyPassword: (credentials: LoginCredentials, turnstileToken: string) => Promise<boolean>;
   verifyTwoFactor: (twoFactorData: TwoFactorData) => Promise<boolean>;
   resendVerificationCode: (turnstileToken: string) => Promise<boolean>;
+  switchMethod: (method: TwoFactorMethod) => void;
   reset: () => void;
 }
 
@@ -30,7 +33,7 @@ export interface UseLoginReturn {
  *
  * Handles the two-step authentication process:
  * Step 1: Email + Password verification
- * Step 2: 2FA code verification
+ * Step 2: 2FA code verification (supports email, TOTP, or Passkey)
  *
  * @param apiClient - API client instance
  * @returns Login state and methods
@@ -60,6 +63,8 @@ export function useLogin(): UseLoginReturn {
   const emailPasswordVerified = ref(false);
   const devMode = ref(false);
   const twoFactorMethod = ref<TwoFactorMethod>('email');
+  const passkeyAvailable = ref(false);
+  const availableMethods = ref<TwoFactorMethod[]>(['email']);
   const errorMessage = ref('');
   const userEmail = ref('');
 
@@ -102,8 +107,13 @@ export function useLogin(): UseLoginReturn {
         userEmail.value = credentials.email;
         // Check if dev mode (SMTP not configured)
         devMode.value = response.data?.devMode === true;
-        // Track 2FA method (TOTP or email)
-        twoFactorMethod.value = response.data?.twoFactorMethod === 'totp' ? 'totp' : 'email';
+        // Track 2FA method
+        const method = response.data?.twoFactorMethod;
+        twoFactorMethod.value = method === 'passkey' ? 'passkey' : (method === 'totp' ? 'totp' : 'email');
+        // Track passkey availability
+        passkeyAvailable.value = response.data?.passkeyAvailable === true;
+        // Track available methods
+        availableMethods.value = response.data?.availableMethods || ['email'];
         return true;
       } else {
         errorMessage.value = response.error?.message || '密碼驗證失敗';
@@ -120,11 +130,12 @@ export function useLogin(): UseLoginReturn {
   /**
    * Step 2: Verify 2FA code
    * In dev mode (SMTP not configured), a dummy code is used to pass schema validation
+   * Note: Passkey authentication is handled separately via usePasskey composable
    */
   async function verifyTwoFactor(twoFactorData: TwoFactorData): Promise<boolean> {
     // In dev mode (email method only), use a dummy code that passes schema validation
     // TOTP users must always provide a real code regardless of dev mode
-    const isDevBypass = devMode.value && twoFactorMethod.value !== 'totp';
+    const isDevBypass = devMode.value && twoFactorMethod.value === 'email';
     const codeToSend = isDevBypass ? 'DEVMODEBYPAS' : twoFactorData.code;
 
     if (!isDevBypass && !twoFactorData.code) {
@@ -155,7 +166,7 @@ export function useLogin(): UseLoginReturn {
         // Save devMode status for admin warning display
         sessionStorage.setItem('devMode', response.data.devMode ? 'true' : 'false');
 
-        // ✅ Invalidate current user query to trigger refetch with deduplication
+        // Invalidate current user query to trigger refetch with deduplication
         // This ensures the showAuthModal closes and isSystemAdmin updates instantly
         // Using invalidateQueries instead of refetchQueries prevents race conditions
         await queryClient.invalidateQueries({
@@ -211,6 +222,16 @@ export function useLogin(): UseLoginReturn {
   }
 
   /**
+   * Switch 2FA method (e.g., from passkey to TOTP or email)
+   */
+  function switchMethod(method: TwoFactorMethod): void {
+    if (availableMethods.value.includes(method)) {
+      twoFactorMethod.value = method;
+      errorMessage.value = '';
+    }
+  }
+
+  /**
    * Reset login state
    */
   function reset() {
@@ -219,6 +240,8 @@ export function useLogin(): UseLoginReturn {
     emailPasswordVerified.value = false;
     devMode.value = false;
     twoFactorMethod.value = 'email';
+    passkeyAvailable.value = false;
+    availableMethods.value = ['email'];
     errorMessage.value = '';
     userEmail.value = '';
   }
@@ -229,6 +252,8 @@ export function useLogin(): UseLoginReturn {
     emailPasswordVerified,
     devMode,
     twoFactorMethod,
+    passkeyAvailable,
+    availableMethods,
     errorMessage,
     userEmail,
     canSubmitPassword,
@@ -236,6 +261,7 @@ export function useLogin(): UseLoginReturn {
     verifyPassword,
     verifyTwoFactor,
     resendVerificationCode,
+    switchMethod,
     reset
   };
 }

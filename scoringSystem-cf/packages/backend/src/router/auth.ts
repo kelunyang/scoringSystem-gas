@@ -35,7 +35,12 @@ import {
   ResetPasswordRequestSchema,
   TotpSetupVerifyRequestSchema,
   TotpDisableRequestSchema,
-  TotpRegenerateCodesRequestSchema
+  TotpRegenerateCodesRequestSchema,
+  PasskeyRegisterVerifyRequestSchema,
+  PasskeyAuthInitRequestSchema,
+  PasskeyAuthVerifyRequestSchema,
+  PasskeyCredentialUpdateRequestSchema,
+  PasskeyCredentialDeleteRequestSchema
 } from '@repo/shared/schemas/auth';
 
 const authRouter = new Hono<{ Bindings: Env }>();
@@ -460,15 +465,42 @@ authRouter.post(
     // Check if user has TOTP enabled — if so, skip email entirely
     const totpEnabled = user.totpEnabled === 1;
 
-    if (totpEnabled) {
-      // TOTP users don't need email verification codes
+    // Check if user has Passkey enabled
+    const passkeyEnabled = user.passkeyEnabled === 1;
+    let passkeyCredentialCount = 0;
+    if (passkeyEnabled) {
+      const passkeyCount = await c.env.DB
+        .prepare('SELECT COUNT(*) as count FROM passkey_credentials WHERE userId = ?')
+        .bind(user.userId)
+        .first<{ count: number }>();
+      passkeyCredentialCount = passkeyCount?.count || 0;
+    }
+    const passkeyAvailable = passkeyEnabled && passkeyCredentialCount > 0;
+
+    // Build available methods list
+    const availableMethods: ('passkey' | 'totp' | 'email')[] = [];
+    if (passkeyAvailable) availableMethods.push('passkey');
+    if (totpEnabled) availableMethods.push('totp');
+    availableMethods.push('email'); // Email is always available
+
+    // Determine preferred method: passkey > totp > email
+    const preferredMethod = passkeyAvailable ? 'passkey' : (totpEnabled ? 'totp' : 'email');
+
+    if (passkeyAvailable || totpEnabled) {
+      // User has passkey or TOTP enabled - skip email code
+      const message = passkeyAvailable
+        ? '請使用 Passkey 或其他驗證方式'
+        : '請使用驗證器 App 輸入驗證碼';
+
       return c.json({
         success: true,
         data: {
-          message: '請使用驗證器 App 輸入驗證碼',
+          message,
           emailSent: false,
           devMode: false,
-          twoFactorMethod: 'totp' as const
+          twoFactorMethod: preferredMethod,
+          passkeyAvailable,
+          availableMethods
         }
       });
     }
@@ -511,6 +543,8 @@ authRouter.post(
           emailSent: true,
           devMode: false,
           twoFactorMethod: 'email' as const,
+          passkeyAvailable: false,
+          availableMethods: ['email'] as const,
           expiresAt: storeResult.expiresAt
         }
       });
@@ -523,7 +557,9 @@ authRouter.post(
           message: '密碼驗證成功（開發模式：無需驗證碼）',
           emailSent: false,
           devMode: true,
-          twoFactorMethod: 'email' as const
+          twoFactorMethod: 'email' as const,
+          passkeyAvailable: false,
+          availableMethods: ['email'] as const
         }
       });
     }
@@ -1363,6 +1399,313 @@ authRouter.post(
         recoveryCodes: codes
       }
     });
+  }
+);
+
+// ─── Passkey (WebAuthn) Routes ───
+
+/**
+ * GET /auth/passkey/status
+ * Get passkey status and registered credentials for authenticated user
+ */
+authRouter.get(
+  '/passkey/status',
+  authMiddleware,
+  async (c) => {
+    const authUser = c.get('user') as any;
+
+    const { getPasskeyStatus } = await import('../handlers/auth/passkey');
+    const status = await getPasskeyStatus(c.env, authUser.userId);
+
+    return c.json({
+      success: true,
+      data: status
+    });
+  }
+);
+
+/**
+ * POST /auth/passkey/register-init
+ * Initialize passkey registration ceremony
+ */
+authRouter.post(
+  '/passkey/register-init',
+  authMiddleware,
+  async (c) => {
+    const authUser = c.get('user') as any;
+
+    const { initPasskeyRegistration } = await import('../handlers/auth/passkey');
+    const options = await initPasskeyRegistration(c.env, authUser.userId, authUser.userEmail);
+
+    await logGlobalOperation(
+      c.env,
+      authUser.userEmail,
+      'passkey_registration_initiated',
+      'user',
+      authUser.userId,
+      { userEmail: authUser.userEmail },
+      { level: 'info' }
+    );
+
+    return c.json({
+      success: true,
+      data: options
+    });
+  }
+);
+
+/**
+ * POST /auth/passkey/register-verify
+ * Complete passkey registration with authenticator response
+ */
+authRouter.post(
+  '/passkey/register-verify',
+  authMiddleware,
+  zValidator('json', PasskeyRegisterVerifyRequestSchema),
+  async (c) => {
+    const authUser = c.get('user') as any;
+    const body = c.req.valid('json');
+
+    try {
+      const { verifyPasskeyRegistration } = await import('../handlers/auth/passkey');
+      const result = await verifyPasskeyRegistration(
+        c.env,
+        authUser.userId,
+        authUser.userEmail,
+        body
+      );
+
+      return c.json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Registration failed';
+      return c.json({
+        success: false,
+        error: { code: 'PASSKEY_REGISTRATION_FAILED', message }
+      }, 400);
+    }
+  }
+);
+
+/**
+ * GET /auth/passkey/credentials
+ * List all registered passkeys for authenticated user
+ */
+authRouter.get(
+  '/passkey/credentials',
+  authMiddleware,
+  async (c) => {
+    const authUser = c.get('user') as any;
+
+    const { getPasskeyStatus } = await import('../handlers/auth/passkey');
+    const status = await getPasskeyStatus(c.env, authUser.userId);
+
+    return c.json({
+      success: true,
+      data: { credentials: status.credentials }
+    });
+  }
+);
+
+/**
+ * PATCH /auth/passkey/credentials/:credentialId
+ * Update passkey device name
+ */
+authRouter.patch(
+  '/passkey/credentials/:credentialId',
+  authMiddleware,
+  zValidator('json', PasskeyCredentialUpdateRequestSchema),
+  async (c) => {
+    const authUser = c.get('user') as any;
+    const credentialId = c.req.param('credentialId');
+    const body = c.req.valid('json');
+
+    const { updatePasskeyName } = await import('../handlers/auth/passkey');
+    const updated = await updatePasskeyName(c.env, authUser.userId, credentialId, body.deviceName);
+
+    if (!updated) {
+      return c.json({
+        success: false,
+        error: { code: 'CREDENTIAL_NOT_FOUND', message: 'Passkey not found' }
+      }, 404);
+    }
+
+    return c.json({
+      success: true,
+      data: { message: 'Passkey renamed' }
+    });
+  }
+);
+
+/**
+ * DELETE /auth/passkey/credentials/:credentialId
+ * Delete a passkey (requires password confirmation)
+ */
+authRouter.delete(
+  '/passkey/credentials/:credentialId',
+  authMiddleware,
+  zValidator('json', PasskeyCredentialDeleteRequestSchema),
+  async (c) => {
+    const authUser = c.get('user') as any;
+    const credentialId = c.req.param('credentialId');
+    const body = c.req.valid('json');
+
+    // Verify password
+    const { verifyPassword } = await import('@repo/shared/utils/password');
+    const user = await c.env.DB
+      .prepare('SELECT password FROM users WHERE userId = ?')
+      .bind(authUser.userId)
+      .first<{ password: string }>();
+
+    if (!user) {
+      return c.json({
+        success: false,
+        error: { code: 'USER_NOT_FOUND', message: 'User not found' }
+      }, 404);
+    }
+
+    const passwordValid = await verifyPassword(body.password, user.password);
+    if (!passwordValid) {
+      return c.json({
+        success: false,
+        error: { code: 'INVALID_PASSWORD', message: '密碼錯誤' }
+      }, 401);
+    }
+
+    const { deletePasskey } = await import('../handlers/auth/passkey');
+    const deleted = await deletePasskey(c.env, authUser.userId, authUser.userEmail, credentialId);
+
+    if (!deleted) {
+      return c.json({
+        success: false,
+        error: { code: 'CREDENTIAL_NOT_FOUND', message: 'Passkey not found' }
+      }, 404);
+    }
+
+    return c.json({
+      success: true,
+      data: { message: 'Passkey deleted' }
+    });
+  }
+);
+
+/**
+ * POST /auth/passkey/auth-init
+ * Initialize passkey authentication ceremony (called after password verification)
+ */
+authRouter.post(
+  '/passkey/auth-init',
+  zValidator('json', PasskeyAuthInitRequestSchema),
+  async (c) => {
+    const body = c.req.valid('json');
+
+    const { initPasskeyAuthentication } = await import('../handlers/auth/passkey');
+    const options = await initPasskeyAuthentication(c.env, body.userEmail);
+
+    if (!options) {
+      return c.json({
+        success: false,
+        error: { code: 'NO_PASSKEYS', message: 'User has no passkeys registered' }
+      }, 400);
+    }
+
+    return c.json({
+      success: true,
+      data: options
+    });
+  }
+);
+
+/**
+ * POST /auth/passkey/auth-verify
+ * Complete passkey authentication and issue JWT
+ */
+authRouter.post(
+  '/passkey/auth-verify',
+  zValidator('json', PasskeyAuthVerifyRequestSchema),
+  async (c) => {
+    const body = c.req.valid('json');
+
+    // Verify Turnstile
+    const turnstileError = await verifyTurnstileMiddleware(
+      c.env,
+      body.turnstileToken,
+      c.req.header('CF-Connecting-IP')
+    );
+    if (turnstileError) {
+      return c.json(turnstileError, 403);
+    }
+
+    try {
+      const { verifyPasskeyAuthentication } = await import('../handlers/auth/passkey');
+      const result = await verifyPasskeyAuthentication(c.env, body.userEmail, body);
+
+      // Get user info for token
+      const user = await c.env.DB
+        .prepare(`
+          SELECT userId, userEmail, displayName, status, registrationTime, lastActivityTime,
+                 avatarSeed, avatarStyle, avatarOptions
+          FROM users WHERE userId = ?
+        `)
+        .bind(result.userId)
+        .first();
+
+      if (!user) {
+        return c.json({
+          success: false,
+          error: { code: 'USER_NOT_FOUND', message: 'User not found' }
+        }, 404);
+      }
+
+      // Generate JWT token
+      const sessionTimeout = parseInt(await getConfigValue(c.env, 'SESSION_TIMEOUT'));
+      const sessionId = await generateToken(
+        c.env.JWT_SECRET,
+        result.userId,
+        body.userEmail,
+        sessionTimeout
+      );
+
+      // Update last activity time
+      await c.env.DB
+        .prepare('UPDATE users SET lastActivityTime = ? WHERE userId = ?')
+        .bind(Date.now(), result.userId)
+        .run();
+
+      // Get global permissions
+      const globalPermissions = await getUserGlobalPermissions(c.env.DB, result.userId);
+
+      // Clear any login failure tracking
+      const { clearFailedAttempts } = await import('../handlers/auth/login');
+      await clearFailedAttempts(c.env.DB, body.userEmail);
+
+      return c.json({
+        success: true,
+        data: {
+          sessionId,
+          user: {
+            userId: user.userId,
+            userEmail: user.userEmail,
+            displayName: user.displayName,
+            status: user.status,
+            registrationTime: user.registrationTime,
+            lastActivityTime: user.lastActivityTime,
+            avatarSeed: user.avatarSeed,
+            avatarStyle: user.avatarStyle,
+            avatarOptions: user.avatarOptions ? JSON.parse(user.avatarOptions as string) : undefined,
+            globalPermissions
+          }
+        }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Authentication failed';
+      return c.json({
+        success: false,
+        error: { code: 'PASSKEY_AUTH_FAILED', message }
+      }, 401);
+    }
   }
 );
 

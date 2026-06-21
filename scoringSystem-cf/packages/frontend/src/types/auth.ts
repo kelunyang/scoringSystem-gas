@@ -143,7 +143,7 @@ export type TurnstileExpiredCallback = () => void;
 /**
  * Two-factor authentication method
  */
-export type TwoFactorMethod = 'email' | 'totp';
+export type TwoFactorMethod = 'email' | 'totp' | 'passkey';
 
 /**
  * TOTP setup initialization response

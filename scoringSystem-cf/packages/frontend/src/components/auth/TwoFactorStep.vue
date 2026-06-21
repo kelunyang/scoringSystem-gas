@@ -1,7 +1,43 @@
 <template>
   <div class="two-factor-step">
+    <!-- Method selector: show when multiple methods available -->
+    <div v-if="availableMethods.length > 1" class="method-selector">
+      <div class="method-tabs">
+        <button
+          v-if="availableMethods.includes('passkey')"
+          class="method-tab"
+          :class="{ active: currentMethod === 'passkey' }"
+          @click="selectMethod('passkey')"
+        >
+          <i class="fas fa-fingerprint"></i> Passkey
+        </button>
+        <button
+          v-if="availableMethods.includes('totp')"
+          class="method-tab"
+          :class="{ active: currentMethod === 'totp' }"
+          @click="selectMethod('totp')"
+        >
+          <i class="fas fa-shield-alt"></i> 驗證器
+        </button>
+        <button
+          v-if="availableMethods.includes('email')"
+          class="method-tab"
+          :class="{ active: currentMethod === 'email' }"
+          @click="selectMethod('email')"
+        >
+          <i class="fas fa-envelope"></i> Email
+        </button>
+      </div>
+    </div>
+
+    <!-- Passkey mode -->
+    <div v-if="currentMethod === 'passkey'" class="info-message info-message--passkey">
+      <p>使用 <strong>Passkey</strong> 進行驗證</p>
+      <p class="hint">請觸摸安全金鑰或使用生物辨識（指紋/Face ID）</p>
+    </div>
+
     <!-- Email OTP mode -->
-    <div v-if="method === 'email'" class="info-message">
+    <div v-else-if="currentMethod === 'email'" class="info-message">
       <p>驗證碼已發送到 <strong>{{ userEmail }}</strong></p>
       <p class="hint">請查收您的電子郵件並輸入12位驗證碼（連字號可省略）</p>
     </div>
@@ -12,11 +48,29 @@
       <p class="hint">輸入 6 位數驗證碼</p>
     </div>
 
-    <div class="form-group">
+    <!-- Passkey button -->
+    <div v-if="currentMethod === 'passkey'" class="passkey-section">
+      <button
+        class="btn btn-passkey"
+        :style="buttonStyle"
+        @click="handlePasskeyAuth"
+        :disabled="loading || passkeyLoading"
+      >
+        <div v-if="passkeyLoading" class="spinner"></div>
+        <i v-else class="fas fa-fingerprint"></i>
+        {{ passkeyLoading ? '驗證中...' : '使用 Passkey 登入' }}
+      </button>
+      <p v-if="passkeyError" class="passkey-error">
+        <i class="fas fa-exclamation-circle"></i> {{ passkeyError }}
+      </p>
+    </div>
+
+    <!-- Code input (for email and TOTP) -->
+    <div v-else class="form-group">
       <label class="pin-label">驗證碼</label>
       <!-- Email OTP: 12-char input -->
       <PinCodeInput
-        v-if="method === 'email'"
+        v-if="currentMethod === 'email'"
         v-model="code"
         :length="12"
         :disabled="loading"
@@ -48,11 +102,11 @@
       </div>
     </div>
 
-    <div class="form-actions">
+    <div v-if="currentMethod !== 'passkey'" class="form-actions">
       <button
         class="btn btn-primary"
         :style="buttonStyle"
-        @click="method === 'totp' && showRecoveryInput ? handleSubmitRecovery() : handleSubmit()"
+        @click="currentMethod === 'totp' && showRecoveryInput ? handleSubmitRecovery() : handleSubmit()"
         :disabled="!canSubmit || loading"
       >
         <div v-if="loading" class="spinner"></div>
@@ -61,7 +115,7 @@
     </div>
 
     <!-- Resend button: only for email OTP -->
-    <div v-if="method === 'email'" class="resend-section">
+    <div v-if="currentMethod === 'email'" class="resend-section">
       <CountdownButton
         label="重新發送驗證碼"
         :duration="60"
@@ -77,7 +131,7 @@
     </div>
 
     <!-- Recovery code toggle: only for TOTP -->
-    <div v-if="method === 'totp'" class="recovery-toggle">
+    <div v-if="currentMethod === 'totp'" class="recovery-toggle">
       <button
         class="btn-link"
         @click="toggleRecoveryInput"
@@ -102,12 +156,14 @@ import PinCodeInput from './PinCodeInput.vue';
 import CountdownButton from '../shared/CountdownButton.vue';
 import TurnstileWidget from '../TurnstileWidget.vue';
 import { useTurnstile } from '../../composables/auth/useTurnstile';
+import { usePasskey } from '../../composables/auth/usePasskey';
 import type { TwoFactorData, TwoFactorMethod } from '../../types/auth';
 
 // Props
 export interface Props {
   userEmail: string;
   method?: TwoFactorMethod;
+  availableMethods?: TwoFactorMethod[];
   loading?: boolean;
   resendLoading?: boolean;
   themeColor?: string;
@@ -115,6 +171,7 @@ export interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   method: 'email',
+  availableMethods: () => ['email'],
   loading: false,
   resendLoading: false,
   themeColor: '#E17055'
@@ -124,19 +181,43 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   submit: [TwoFactorData];
   resend: [{ turnstileToken: string }];
+  passkeySuccess: [];
+  methodChange: [TwoFactorMethod];
 }>();
+
+// Current method (can be changed by user)
+const currentMethod = ref<TwoFactorMethod>(props.method);
+
+// Watch for prop changes
+watch(() => props.method, (newMethod) => {
+  currentMethod.value = newMethod;
+});
 
 // Form data
 const code = ref('');
 const recoveryCode = ref('');
 const showRecoveryInput = ref(false);
 
+// Passkey state
+const {
+  loading: passkeyLoading,
+  errorMessage: passkeyError,
+  initAuthentication,
+  verifyAuthentication
+} = usePasskey();
+
 // Reset inputs when method changes
-watch(() => props.method, () => {
+watch(currentMethod, () => {
   code.value = '';
   recoveryCode.value = '';
   showRecoveryInput.value = false;
 });
+
+// Method selection
+function selectMethod(method: TwoFactorMethod) {
+  currentMethod.value = method;
+  emit('methodChange', method);
+}
 
 // Turnstile
 const { token: turnstileToken, onVerify, onError, onExpired, reset: resetTurnstile } = useTurnstile();
@@ -156,7 +237,7 @@ function handleTurnstileExpired() {
 const canSubmit = computed(() => {
   if (props.loading || !turnstileToken.value) return false;
 
-  if (props.method === 'totp') {
+  if (currentMethod.value === 'totp') {
     if (showRecoveryInput.value) {
       return recoveryCode.value.length === 8;
     }
@@ -220,6 +301,21 @@ function handleResend() {
   // Reset turnstile for next use
   resetTurnstile();
 }
+
+// Passkey authentication
+async function handlePasskeyAuth() {
+  if (!turnstileToken.value) return;
+
+  // Step 1: Get authentication options and trigger browser prompt
+  const credential = await initAuthentication(props.userEmail);
+  if (!credential) return;
+
+  // Step 2: Verify with server
+  const success = await verifyAuthentication(props.userEmail, turnstileToken.value);
+  if (success) {
+    emit('passkeySuccess');
+  }
+}
 </script>
 
 <style scoped>
@@ -227,6 +323,51 @@ function handleResend() {
   margin-top: 20px;
 }
 
+/* Method selector */
+.method-selector {
+  margin-bottom: 20px;
+}
+
+.method-tabs {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.method-tab {
+  flex: 1;
+  max-width: 120px;
+  padding: 10px 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  background: white;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.method-tab i {
+  font-size: 18px;
+}
+
+.method-tab:hover {
+  border-color: #94a3b8;
+  color: #475569;
+}
+
+.method-tab.active {
+  border-color: var(--theme-color, #E17055);
+  background: linear-gradient(135deg, rgba(225, 112, 85, 0.1) 0%, rgba(225, 112, 85, 0.05) 100%);
+  color: var(--theme-color, #E17055);
+}
+
+/* Info messages */
 .info-message {
   padding: 16px;
   background-color: #f0f9ff;
@@ -240,6 +381,11 @@ function handleResend() {
   border-color: #bbf7d0;
 }
 
+.info-message--passkey {
+  background-color: #fdf4ff;
+  border-color: #f0abfc;
+}
+
 .info-message p {
   margin: 4px 0;
   font-size: 14px;
@@ -250,11 +396,60 @@ function handleResend() {
   color: #166534;
 }
 
+.info-message--passkey p {
+  color: #86198f;
+}
+
 .info-message .hint {
   font-size: 13px;
   color: #64748b;
 }
 
+/* Passkey section */
+.passkey-section {
+  margin-bottom: 20px;
+}
+
+.btn-passkey {
+  width: 100%;
+  padding: 16px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
+}
+
+.btn-passkey:hover:not(:disabled) {
+  opacity: 0.9;
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-passkey:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-passkey i {
+  font-size: 20px;
+}
+
+.passkey-error {
+  margin-top: 12px;
+  text-align: center;
+  color: #dc3545;
+  font-size: 13px;
+}
+
+/* Form group */
 .form-group {
   margin-bottom: 20px;
 }

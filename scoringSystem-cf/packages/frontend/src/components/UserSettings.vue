@@ -303,6 +303,7 @@
         <div class="settings-section totp-section">
           <h3><i class="fas fa-shield-alt"></i> 兩階段驗證設定</h3>
           <div class="totp-content">
+            <PasskeySetup />
             <TotpSetup />
           </div>
         </div>
@@ -355,6 +356,7 @@ import UserActivityHeatmap from './charts/UserActivityHeatmap.vue'
 import UserActivityDetail from '@/components/shared/UserActivityDetail.vue'
 import AvatarEditor from './shared/AvatarEditor.vue'
 import TotpSetup from './settings/TotpSetup.vue'
+import PasskeySetup from './settings/PasskeySetup.vue'
 import { useBreadcrumb } from '@/composables/useBreadcrumb'
 import { rpcClient } from '@/utils/rpc-client'
 import { getUserPreferences, setUserPreference } from '@/utils/userPreferences'
@@ -366,7 +368,8 @@ export default {
     UserActivityHeatmap,
     UserActivityDetail,
     AvatarEditor,
-    TotpSetup
+    TotpSetup,
+    PasskeySetup
   },
   props: {
     user: {
