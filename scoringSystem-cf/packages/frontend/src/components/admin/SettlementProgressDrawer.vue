@@ -1017,6 +1017,39 @@ async function settleStage(stage: Stage, forceSettle = false): Promise<void> {
     const response = await httpResponse.json()
 
     if (response.success) {
+      // HTTP response 作為 fallback：若 WebSocket 已更新則不重複處理
+      if (settlementStatus.value !== 'completed') {
+        const data = response.data as any
+        settlementProgress.step = 'completed'
+        settlementProgress.progress = 100
+        settlementProgress.message = '結算完成！'
+        settlementProgress.details = {
+          settlementId: data?.settlementId,
+          rankings: data?.finalRankings,
+          scores: data?.scoringResults,
+          weightedScores: data?.weightedScores,
+          totalRewardDistributed: data?.totalPointsDistributed,
+          participantCount: data?.participantCount,
+          commentRankings: data?.commentRankings,
+          commentScores: data?.commentScores,
+          groupNames: data?.groupNames,
+          authorNames: data?.authorNames
+        }
+        settlementStatus.value = 'completed'
+        settlementResult.value = (settlementProgress.details ?? null) as SettlementDetails | null
+
+        try {
+          await buildGroupNamesFromTransactions()
+        } catch (err) {
+          console.error('Failed to build group names:', err)
+        }
+
+        emit('settlement-complete', {
+          stageId: stage.stageId,
+          settlementId: data?.settlementId,
+          result: settlementProgress.details
+        })
+      }
       ElMessage.success(`階段「${stage.stageName}」結算完成！獎金已按照系統規則自動分配。`)
     } else {
       settlementStatus.value = 'idle'

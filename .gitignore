@@ -78,6 +78,7 @@ pnpm-debug.log*
 *~
 .DS_Store
 Thumbs.db
+._*
 
 # ===================================
 # Google Apps Script (所有目錄)
@@ -130,3 +131,10 @@ temp/
 # Auto-generated files
 # ===================================
 scoringSystem-cf/packages/frontend/src/styles/_theme-generated.scss
+
+# ===================================
+# Claude Code local settings
+# ===================================
+.claude/settings.local.json
+.claude/settings.local.json.tmp.*
+.claude/._*
