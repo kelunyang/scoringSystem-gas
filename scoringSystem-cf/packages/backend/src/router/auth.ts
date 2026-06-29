@@ -1434,8 +1434,15 @@ authRouter.post(
   async (c) => {
     const authUser = c.get('user') as any;
 
+    // 可選 attachment：'platform'（綁這台電腦）/ 'cross-platform'（綁手機，跳 QR）
+    const body = await c.req.json().catch(() => ({} as any));
+    const attachment =
+      body?.attachment === 'platform' || body?.attachment === 'cross-platform'
+        ? body.attachment
+        : undefined;
+
     const { initPasskeyRegistration } = await import('../handlers/auth/passkey');
-    const options = await initPasskeyRegistration(c.env, authUser.userId, authUser.userEmail);
+    const options = await initPasskeyRegistration(c.env, authUser.userId, authUser.userEmail, attachment);
 
     await logGlobalOperation(
       c.env,
@@ -1602,7 +1609,7 @@ authRouter.post(
     const body = c.req.valid('json');
 
     const { initPasskeyAuthentication } = await import('../handlers/auth/passkey');
-    const options = await initPasskeyAuthentication(c.env, body.userEmail);
+    const options = await initPasskeyAuthentication(c.env, body.userEmail, body.crossDevice === true);
 
     if (!options) {
       return c.json({
@@ -1662,9 +1669,9 @@ authRouter.post(
       // Generate JWT token
       const sessionTimeout = parseInt(await getConfigValue(c.env, 'SESSION_TIMEOUT'));
       const sessionId = await generateToken(
-        c.env.JWT_SECRET,
         result.userId,
         body.userEmail,
+        c.env.JWT_SECRET,
         sessionTimeout
       );
 

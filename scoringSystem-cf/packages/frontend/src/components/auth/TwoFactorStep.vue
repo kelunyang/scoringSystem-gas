@@ -50,6 +50,28 @@
 
     <!-- Passkey button -->
     <div v-if="currentMethod === 'passkey'" class="passkey-section">
+      <!-- 只有桌機（PC/Mac）才顯示：用這台電腦的 passkey，還是用手機（掃 QR） -->
+      <el-select
+        v-if="isDesktop"
+        v-model="passkeyCrossDevice"
+        size="large"
+        class="passkey-mode-select"
+        :disabled="passkeyLoading"
+      >
+        <el-option label="使用我的手機登入（掃 QR code）" :value="true" />
+        <el-option label="使用這台電腦登入" :value="false" />
+      </el-select>
+      <!-- 選「使用我的手機登入」時，提示如何在系統視窗跳到 QR（各 OS 操作不同） -->
+      <el-alert
+        v-if="isDesktop && passkeyCrossDevice"
+        type="info"
+        :closable="false"
+        show-icon
+        title="請拿出手機掃描 QR code"
+        class="passkey-mode-select"
+      >
+        {{ passkeyQrHint }}
+      </el-alert>
       <button
         class="btn btn-passkey"
         :style="buttonStyle"
@@ -156,7 +178,7 @@ import PinCodeInput from './PinCodeInput.vue';
 import CountdownButton from '../shared/CountdownButton.vue';
 import TurnstileWidget from '../TurnstileWidget.vue';
 import { useTurnstile } from '../../composables/auth/useTurnstile';
-import { usePasskey } from '../../composables/auth/usePasskey';
+import { usePasskey, isDesktopDevice, getDesktopOS } from '../../composables/auth/usePasskey';
 import type { TwoFactorData, TwoFactorMethod } from '../../types/auth';
 
 // Props
@@ -205,6 +227,22 @@ const {
   initAuthentication,
   verifyAuthentication
 } = usePasskey();
+
+// 桌機才顯示登入方式選單；桌機預設「使用我的手機」（discoverable，跳 QR），手機/平板直接用本機
+const isDesktop = isDesktopDevice();
+const passkeyCrossDevice = ref(isDesktop);
+
+// 依作業系統提示「如何在系統視窗跳到手機 QR」（各 OS 操作不同）
+const desktopOS = getDesktopOS();
+const passkeyQrHint = computed(() => {
+  if (desktopOS === 'windows') {
+    return '系統會跳出選擇視窗，請點選「iPhone、iPad 或 Android 裝置」（使用其他裝置），出現 QR code 後用手機掃描即可登入。';
+  }
+  if (desktopOS === 'mac') {
+    return '系統視窗跳出後：Safari 請選「使用其他手機」、Chrome 請選「使用手機或平板電腦」，出現 QR code 後用手機掃描即可登入。';
+  }
+  return '系統視窗跳出後，請選「使用手機或平板電腦（Use a phone or tablet）」，出現 QR code 後用手機掃描即可登入。';
+});
 
 // Reset inputs when method changes
 watch(currentMethod, () => {
@@ -307,7 +345,7 @@ async function handlePasskeyAuth() {
   if (!turnstileToken.value) return;
 
   // Step 1: Get authentication options and trigger browser prompt
-  const credential = await initAuthentication(props.userEmail);
+  const credential = await initAuthentication(props.userEmail, passkeyCrossDevice.value);
   if (!credential) return;
 
   // Step 2: Verify with server
@@ -408,6 +446,11 @@ async function handlePasskeyAuth() {
 /* Passkey section */
 .passkey-section {
   margin-bottom: 20px;
+}
+
+.passkey-mode-select {
+  width: 100%;
+  margin-bottom: 12px;
 }
 
 .btn-passkey {

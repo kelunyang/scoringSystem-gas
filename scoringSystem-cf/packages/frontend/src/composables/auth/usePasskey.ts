@@ -34,12 +34,12 @@ export interface UsePasskeyReturn {
 
   // Settings page methods
   fetchStatus: () => Promise<void>;
-  registerPasskey: (deviceName?: string) => Promise<boolean>;
+  registerPasskey: (deviceName?: string, attachment?: 'platform' | 'cross-platform') => Promise<boolean>;
   renamePasskey: (credentialId: string, deviceName: string) => Promise<boolean>;
   deletePasskey: (credentialId: string, password: string) => Promise<boolean>;
 
   // Authentication methods
-  initAuthentication: (userEmail: string) => Promise<any>;
+  initAuthentication: (userEmail: string, crossDevice?: boolean) => Promise<any>;
   verifyAuthentication: (userEmail: string, turnstileToken: string) => Promise<boolean>;
 }
 
@@ -145,7 +145,10 @@ export function usePasskey(): UsePasskeyReturn {
   /**
    * Register a new passkey
    */
-  async function registerPasskey(deviceName?: string): Promise<boolean> {
+  async function registerPasskey(
+    deviceName?: string,
+    attachment?: 'platform' | 'cross-platform'
+  ): Promise<boolean> {
     if (!isSupported.value) {
       errorMessage.value = '您的瀏覽器不支援 Passkey';
       return false;
@@ -156,8 +159,9 @@ export function usePasskey(): UsePasskeyReturn {
 
     try {
       // Step 1: Get registration options from server
+      // attachment: 'platform' = 綁定這台電腦；'cross-platform' = 綁定手機（跳 QR）
       const initResponse = await (rpcClient.api.auth as any).passkey['register-init'].$post({
-        json: {}
+        json: attachment ? { attachment } : {}
       });
       const initResult = await initResponse.json();
 
@@ -301,7 +305,7 @@ export function usePasskey(): UsePasskeyReturn {
   /**
    * Initialize passkey authentication (called during login)
    */
-  async function initAuthentication(userEmail: string): Promise<any> {
+  async function initAuthentication(userEmail: string, crossDevice = false): Promise<any> {
     if (!isSupported.value) {
       errorMessage.value = '您的瀏覽器不支援 Passkey';
       return null;
@@ -312,8 +316,9 @@ export function usePasskey(): UsePasskeyReturn {
 
     try {
       // Get authentication options from server
+      // crossDevice: true = 使用你的手機登入（discoverable，跳 QR）
       const initResponse = await (rpcClient.api.auth as any).passkey['auth-init'].$post({
-        json: { userEmail }
+        json: { userEmail, crossDevice }
       });
       const initResult = await initResponse.json();
 
@@ -439,6 +444,29 @@ export function usePasskey(): UsePasskeyReturn {
 }
 
 // ─── Helper Functions ───
+
+/**
+ * 判斷是否為桌機（PC / Mac）。
+ * 只有桌機才需要「綁定/使用手機（掃 QR）」的選單；手機/平板本身就是 platform 裝置。
+ */
+export function isDesktopDevice(): boolean {
+  const ua = navigator.userAgent;
+  // 明確的行動裝置（手機 / 平板）
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile|Windows Phone|Tablet/i.test(ua);
+  // iPadOS 桌面版 Safari 會偽裝成 Macintosh：用觸控點數補判，視為平板（非桌機）
+  const isIpadDesktopUA = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+  return !isMobile && !isIpadDesktopUA;
+}
+
+/**
+ * 取得桌機作業系統（用於提示「如何跳到手機 QR」的視窗操作差異）。
+ */
+export function getDesktopOS(): 'windows' | 'mac' | 'other' {
+  const ua = navigator.userAgent;
+  if (/Windows/i.test(ua)) return 'windows';
+  if (/Macintosh|Mac OS X/i.test(ua)) return 'mac';
+  return 'other';
+}
 
 /**
  * Get default device name based on user agent

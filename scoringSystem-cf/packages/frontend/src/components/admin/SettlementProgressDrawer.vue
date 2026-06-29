@@ -1018,7 +1018,8 @@ async function settleStage(stage: Stage, forceSettle = false): Promise<void> {
 
     if (response.success) {
       // HTTP response 作為 fallback：若 WebSocket 已更新則不重複處理
-      if (settlementStatus.value !== 'completed') {
+      // cast：WebSocket 可能已在 await 期間將狀態改為 'completed'，TS 無法推斷
+      if ((settlementStatus.value as SettlementStatus) !== 'completed') {
         const data = response.data as any
         settlementProgress.step = 'completed'
         settlementProgress.progress = 100

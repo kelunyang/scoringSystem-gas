@@ -313,7 +313,9 @@ export type PasskeyRegisterVerifyRequest = z.infer<typeof PasskeyRegisterVerifyR
  * Passkey authentication init request
  */
 export const PasskeyAuthInitRequestSchema = z.object({
-  userEmail: EmailSchema
+  userEmail: EmailSchema,
+  // true = 使用你的手機登入（discoverable / 跳 QR）；預設 false = 使用這台電腦
+  crossDevice: z.boolean().optional()
 });
 
 export type PasskeyAuthInitRequest = z.infer<typeof PasskeyAuthInitRequestSchema>;

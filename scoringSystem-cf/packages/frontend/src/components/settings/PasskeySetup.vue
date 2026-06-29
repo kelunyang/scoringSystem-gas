@@ -81,6 +81,26 @@
       <h4>新增 Passkey</h4>
       <p class="step-hint">請按照瀏覽器提示完成 Passkey 註冊</p>
 
+      <!-- 只有桌機（PC/Mac）才顯示：要把 passkey 綁到這台電腦，還是綁到手機（掃 QR） -->
+      <div v-if="isDesktop" class="device-name-input">
+        <el-select v-model="registerAttachment" style="width: 100%" size="large">
+          <el-option label="綁定我的手機（掃 QR code）" value="cross-platform" />
+          <el-option label="綁定這台電腦（指紋／Windows Hello）" value="platform" />
+        </el-select>
+      </div>
+
+      <!-- 選「綁定我的手機」時，提示如何在系統視窗跳到 QR（各 OS 操作不同） -->
+      <el-alert
+        v-if="isDesktop && registerAttachment === 'cross-platform'"
+        type="info"
+        :closable="false"
+        show-icon
+        title="請拿出手機掃描 QR code"
+        style="margin-bottom: 16px;"
+      >
+        {{ qrHint }}
+      </el-alert>
+
       <div class="device-name-input">
         <el-input
           v-model="deviceName"
@@ -190,7 +210,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
-import { usePasskey, type PasskeyCredential } from '@/composables/auth/usePasskey';
+import { usePasskey, isDesktopDevice, getDesktopOS, type PasskeyCredential } from '@/composables/auth/usePasskey';
 
 // Emits
 const emit = defineEmits<{
@@ -211,6 +231,23 @@ const {
 // State
 const registering = ref(false);
 const deviceName = ref('');
+// 桌機才顯示綁定方式選單；桌機預設「綁定我的手機」，手機/平板直接綁這台（platform）
+const isDesktop = isDesktopDevice();
+const registerAttachment = ref<'platform' | 'cross-platform'>(
+  isDesktop ? 'cross-platform' : 'platform'
+);
+
+// 依作業系統提示「如何在系統視窗跳到手機 QR」（各 OS 操作不同）
+const desktopOS = getDesktopOS();
+const qrHint = computed(() => {
+  if (desktopOS === 'windows') {
+    return '系統會先跳出「安全金鑰 / USB 裝置」的視窗，請改點選「iPhone、iPad 或 Android 裝置」（使用其他裝置），畫面就會出現 QR code，拿手機掃描即可綁定。';
+  }
+  if (desktopOS === 'mac') {
+    return '系統視窗跳出後：Safari 請選「使用其他手機」、Chrome 請選「使用手機或平板電腦」，畫面就會出現 QR code，拿手機掃描即可綁定。';
+  }
+  return '系統視窗跳出後，請選「使用手機或平板電腦（Use a phone or tablet）」，畫面就會出現 QR code，拿手機掃描即可綁定。';
+});
 
 // Rename state
 const showRenameDialog = ref(false);
@@ -239,6 +276,7 @@ onMounted(async () => {
 function startRegistration() {
   registering.value = true;
   deviceName.value = '';
+  registerAttachment.value = isDesktop ? 'cross-platform' : 'platform';
 }
 
 function cancelRegistration() {
@@ -247,7 +285,7 @@ function cancelRegistration() {
 }
 
 async function confirmRegistration() {
-  const success = await registerPasskey(deviceName.value || undefined);
+  const success = await registerPasskey(deviceName.value || undefined, registerAttachment.value);
   if (success) {
     registering.value = false;
     deviceName.value = '';

@@ -1,8 +1,45 @@
 <template>
   <div class="stage-timeline">
-    <div class="timeline-track">
-      <!-- 時間軸線段 - 按階段狀態分段顯示 -->
-      <div class="timeline-segments">
+    <div ref="trackRef" class="timeline-track">
+      <!-- 彈性繩：SVG 曲線，端點 Y 由物理座標驅動，水平彎曲由 segSway 驅動 -->
+      <svg
+        v-if="physics.isStarted.value"
+        class="timeline-rope"
+        :width="60"
+        :height="trackHeight"
+        style="position: absolute; top: 0; left: 0; overflow: visible; z-index: 1; pointer-events: none;"
+      >
+        <defs>
+          <!-- 斜線 pattern（每個階段狀態一組顏色），indicator 所在線段套用 -->
+          <pattern
+            v-for="p in hatchPatterns"
+            :key="p.id"
+            :id="p.id"
+            patternUnits="userSpaceOnUse"
+            :width="8"
+            :height="8"
+            patternTransform="rotate(45)"
+          >
+            <rect width="8" height="8" :fill="p.color" />
+            <rect width="4" height="8" fill="#ffffff" opacity="0.5">
+              <animate attributeName="x" from="0" to="8" dur="0.5s" repeatCount="indefinite" />
+            </rect>
+          </pattern>
+        </defs>
+        <path
+          v-for="(seg, i) in ropeSegments"
+          :key="i"
+          :d="seg.d"
+          :stroke="seg.active ? `url(#${seg.patternId})` : seg.color"
+          :stroke-width="seg.active ? 7 : 4"
+          fill="none"
+          stroke-linecap="round"
+          :opacity="seg.active ? 1 : 0.85"
+        />
+      </svg>
+
+      <!-- 物理引擎未啟動時的靜態線段（fallback） -->
+      <div v-else class="timeline-segments">
         <div
           v-for="(segment, index) in timelineSegments"
           :key="'segment-' + index"
@@ -19,18 +56,26 @@
         ></div>
       </div>
 
-      <!-- 滾動位置指示器 -->
+      <!-- 滾動位置指示器（物理球驅動） -->
       <div
         class="scroll-indicator"
         :class="{ 'is-idle': !isScrolling }"
-        :style="{ top: scrollProgress + '%' }"
+        :style="physics.isStarted.value
+          ? { top: `${physics.positions.value.get(INDICATOR_ID)?.y ?? 0}px` }
+          : { top: scrollProgress + '%' }"
         :title="`滾動進度: ${Math.round(scrollProgress)}%`"
       >
         <div class="scroll-percentage">{{ Math.round(scrollProgress) }}%</div>
       </div>
 
-      <!-- 起始標記 -->
-      <div class="timeline-marker timeline-start" :style="{ top: '0%' }" title="專案開始">
+      <!-- 起始標記（繩子最上端錨點，入場時一起 bungee 掉落） -->
+      <div
+        class="timeline-marker timeline-start"
+        :style="physics.isStarted.value
+          ? { top: `${physics.positions.value.get(START_ID)?.y ?? -20}px`, opacity: physics.positions.value.has(START_ID) ? '1' : '0' }
+          : { top: '0%' }"
+        title="專案開始"
+      >
         <div class="marker-dot"><i class="fas fa-flag"></i></div>
       </div>
 
@@ -44,7 +89,12 @@
           'active': activeStageId === stage.id,
           [`status-${stage.originalStatus || 'pending'}`]: true
         }"
-        :style="{ top: getStagePosition(index) + '%' }"
+        :style="physics.isStarted.value
+          ? {
+              top: `${physics.positions.value.get(stage.id)?.y ?? -20}px`,
+              opacity: physics.positions.value.has(stage.id) ? '1' : '0'
+            }
+          : { top: getStagePosition(index) + '%' }"
         :data-stage-index="index"
         :data-stage-id="stage.id"
         @click="handleStageClick(stage.id || '')"
@@ -77,8 +127,14 @@
         </div>
       </div>
 
-      <!-- 結束標記 -->
-      <div class="timeline-marker timeline-end" :style="{ top: '100%' }" title="專案結束">
+      <!-- 結束標記（繩子最下端錨點，入場時一起 bungee 掉落） -->
+      <div
+        class="timeline-marker timeline-end"
+        :style="physics.isStarted.value
+          ? { top: `${physics.positions.value.get(END_ID)?.y ?? -20}px`, opacity: physics.positions.value.has(END_ID) ? '1' : '0' }
+          : { top: '100%' }"
+        title="專案結束"
+      >
         <div class="marker-dot"><i class="fas fa-flag-checkered"></i></div>
       </div>
     </div>
@@ -89,6 +145,8 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, toRef, nextTick } from 'vue'
 import { useActiveScroll } from 'vue-use-active-scroll'
 import { useViewportStageTracking } from '@/composables/useViewportStageTracking'
+import { usePhysicsAnimation } from '@/composables/usePhysicsAnimation'
+import Matter from 'matter-js'
 import type { Stage } from '@/types'
 
 // ==================== 常量定义 ====================
@@ -98,6 +156,36 @@ const TOOLTIP_AUTO_HIDE_DELAY = 5000  // 5 秒自動隱藏
 const TOOLTIP_FADE_IN_DURATION = 500   // 0.5 秒淡入
 const TOOLTIP_FADE_OUT_DURATION = 2000 // 2 秒淡出
 const isDev = import.meta.env.DEV
+
+// ==================== 物理引擎常數 ====================
+const DOT_RADIUS = 10
+const INDICATOR_RADIUS = 6
+const INDICATOR_ID = '__scroll_indicator__'
+const START_ID = '__start_marker__'   // 起始旗標（繩子最上端錨點）
+const END_ID = '__end_marker__'       // 結束旗標（繩子最下端錨點）
+const DROP_FROM_Y = -30               // 入場時所有球的起始 Y（track 頂端上方）→ 自由落體
+const CASCADE_DELAY_MS = 90           // 由下而上逐顆釋放的間隔
+
+// 彈簧/阻尼參數（setVelocity 模型，單位為 px/frame，與 dt、質量無關）
+// 經 headless matter.js 模擬驗證穩定收斂
+// 重要：不使用 Matter.applyForce，因其內部會乘上 dt²(≈278) 造成數值爆走
+const K_ANCHOR = 0.08   // 導航點錨點彈簧剛度（偏低阻尼以製造入場 bungee 回彈）
+const DAMP_DOT = 0.90   // 導航點阻尼（每幀速度保留率，0.90 → 入場過衝約 26px 後回彈）
+const K_COUP = 0.05     // 相鄰導航點耦合（點擊激振時的漣漪傳遞）
+const MAXV_DOT = 16     // 導航點最大速度（等速掉落 + 防爆走）
+const K_IND = 0.16      // Scroll 指示器追蹤剛度
+const DAMP_IND = 0.78   // Scroll 指示器阻尼
+const MAXV_IND = 30     // Scroll 指示器最大速度
+
+// 線段水平擺動參數（純視覺，由 indicator 速度驅動；經 headless 模擬驗證）
+// indicator 以下的線段擺動較強、以上較弱；滾動停止後彈回直線
+// 經 headless 模擬調校：中速滾動時下方擺幅約 12px、上方約 3px（3.7× 不對稱、不飽和），
+// 快速滾動時達上限 20px（劇烈甩動），滾動停止後回直線
+const SWAY_K_BELOW = 0.22  // indicator 以下線段的擺動激發強度
+const SWAY_K_ABOVE = 0.06  // indicator 以上線段的擺動激發強度（較弱）
+const SWAY_SPRING = 0.15   // 擺動彈回直線的剛度
+const SWAY_DAMP = 0.82     // 擺動阻尼
+const SWAY_MAX = 20        // 最大水平擺幅（px）
 
 // ==================== Props & Emits ====================
 const props = defineProps({
@@ -304,6 +392,37 @@ function useTimelineMapping(normalizedStages: any) {
   }
 }
 
+// ==================== 物理引擎狀態 ====================
+const trackRef = ref<HTMLElement | null>(null)
+const trackHeight = ref(300)
+
+// 繩子錨點鏈（由上而下）：起始旗標 → 各導航點 → 結束旗標
+// 每個錨點有 id（對應物理 body）、目標 y、階段狀態（決定線段顏色）
+const orderedTargets = ref<{ id: string; y: number; status: string }[]>([])
+
+// 線段水平擺幅（每個 segment 一個值；0 = 直線）；reactive 供 SVG 讀取
+const segSway = ref<number[]>([])
+let segSwayVel: number[] = []           // 非響應式內部速度
+const hasEntranceSettled = ref(false)   // 入場掉落完成後才啟用擺動
+const indicatorY = ref(0)               // 指示器目前 Y（供判定 active segment）
+
+const physics = usePhysicsAnimation({
+  gravity: { x: 0, y: 0 },  // 無引擎重力，由 onUpdate 的 setVelocity 彈簧全權控制
+  restitution: 0.25,
+  friction: 0.05,
+  frictionAir: 0,           // 阻尼由 onUpdate 手動處理，不用 frictionAir
+  velocityThreshold: 0.02,
+  settleDelay: 600
+})
+
+const STATUS_COLORS: Record<string, string> = {
+  pending: 'var(--stage-pending-bg)',
+  active: 'var(--stage-active-bg)',
+  voting: 'var(--stage-voting-bg)',
+  completed: 'var(--stage-completed-bg)',
+  archived: 'var(--stage-completed-bg)'
+}
+
 // ==================== State ====================
 const hoveredStageId = ref(null)
 const activeTooltipStageId = ref(null)
@@ -362,6 +481,182 @@ const scrollProgress = computed(() => {
 // Active scroll tracking
 const { setActive, activeId: activeStageId } = useActiveScroll(stageIds)
 
+// ==================== 物理引擎：SVG 繩子計算 ====================
+// 線段端點 Y 來自導航點物理位置（入場時跟著掉落回彈）；
+// 水平彎曲由 segSway 驅動（滾動時擺動，停止後彈回直線）；
+// indicator 所在區間的線段標記 active → 套用斜線 pattern fill
+const ropeSegments = computed(() => {
+  if (!physics.isStarted.value || orderedTargets.value.length < 2) return []
+  const pos = physics.positions.value
+  const indY = indicatorY.value
+  const chain = orderedTargets.value
+  const segments = []
+
+  // 鏈包含 起始旗標 → 各導航點 → 結束旗標，繩子覆蓋整條時間軸
+  for (let i = 0; i < chain.length - 1; i++) {
+    const pA = pos.get(chain[i].id)
+    const pB = pos.get(chain[i + 1].id)
+    if (!pA || !pB) continue
+
+    // 水平擺幅：以二次貝茲曲線在中點向外彎，端點固定在錨點（保持連接）
+    const bow = segSway.value[i] ?? 0
+    const midY = (pA.y + pB.y) / 2
+    const ctrlX = pA.x + bow
+
+    // indicator 是否落在此線段 Y 範圍內 → active（pattern fill）
+    const top = Math.min(pA.y, pB.y)
+    const bot = Math.max(pA.y, pB.y)
+    const active = indY >= top && indY <= bot
+
+    const status = chain[i].status || 'pending'
+    segments.push({
+      d: `M ${pA.x} ${pA.y} Q ${ctrlX} ${midY} ${pB.x} ${pB.y}`,
+      color: STATUS_COLORS[status] ?? '#6b7280',
+      active,
+      patternId: `hatch-${status}`
+    })
+  }
+  return segments
+})
+
+// 斜線 pattern 定義（每個階段狀態一組顏色）
+const hatchPatterns = computed(() => {
+  const statuses = ['pending', 'active', 'voting', 'completed', 'archived']
+  return statuses.map(s => ({
+    id: `hatch-${s}`,
+    color: STATUS_COLORS[s] ?? '#6b7280'
+  }))
+})
+
+// ==================== 物理引擎：初始化 ====================
+async function initPhysics() {
+  const track = trackRef.value
+  if (!track || !normalizedStages.value.length) return
+
+  trackHeight.value = track.offsetHeight
+  const W = track.offsetWidth
+  const H = trackHeight.value
+  const CX = W / 2
+
+  physics.initEngine()
+
+  // 左右邊牆（略寬讓點能輕微橫向擺動）
+  physics.addWall(-4, H / 2, 8, H * 3)
+  physics.addWall(W + 4, H / 2, 8, H * 3)
+
+  // 建立錨點鏈（由上而下）：起始旗標 → 各導航點 → 結束旗標
+  // 起始/結束旗標讓繩子覆蓋整條時間軸（修正第一/最後線段缺失），且一起參與 bungee
+  const stages = normalizedStages.value
+  const firstStatus = (stages[0] as any)?.originalStatus || 'pending'
+  const lastStatus = (stages[stages.length - 1] as any)?.originalStatus || 'pending'
+  const chain: { id: string; y: number; status: string }[] = [
+    { id: START_ID, y: 0, status: firstStatus },
+    ...stages.map((s: any, i: number) => ({
+      id: s.id,
+      y: (getStagePosition(i) / 100) * H,
+      status: s.originalStatus || 'pending'
+    })),
+    { id: END_ID, y: H, status: lastStatus }
+  ]
+  orderedTargets.value = chain
+  const nSeg = chain.length - 1
+
+  // onUpdate：用 setVelocity 實作彈簧（frame 單位，dt/mass 無關，數值穩定）
+  // 每幀讀取 body.velocity.y → 加彈簧/耦合 → 阻尼 → clamp → 寫回
+  const clampV = (v: number, m: number) => Math.max(-m, Math.min(m, v))
+
+  physics.onUpdate((bodies) => {
+    const { Body } = Matter
+    const ch = orderedTargets.value
+    const n = ch.length
+
+    // 相鄰錨點耦合的速度增量（漣漪可沿整條繩子傳遞）
+    const coupling = new Array(n).fill(0)
+    for (let i = 0; i < n - 1; i++) {
+      const a = bodies.get(ch[i].id)
+      const b = bodies.get(ch[i + 1].id)
+      if (!a || !b) continue
+      const stretch = (b.position.y - a.position.y) - (ch[i + 1].y - ch[i].y)
+      coupling[i] += stretch * K_COUP
+      coupling[i + 1] -= stretch * K_COUP
+    }
+
+    // 1. 各錨點（旗標 + 導航點）：錨點彈簧 + 耦合 + 阻尼
+    for (let i = 0; i < n; i++) {
+      const body = bodies.get(ch[i].id)
+      if (!body) continue
+      let v = body.velocity.y
+      v += (ch[i].y - body.position.y) * K_ANCHOR
+      v += coupling[i]
+      v *= DAMP_DOT
+      Body.setVelocity(body, { x: 0, y: clampV(v, MAXV_DOT) })
+    }
+
+    // 2. Scroll 指示器：追蹤捲動位置（較強彈簧、較高速度上限）
+    const indicator = bodies.get(INDICATOR_ID)
+    let indY = indicatorY.value
+    let indVy = 0
+    if (indicator) {
+      const targetY = (scrollProgress.value / 100) * trackHeight.value
+      let v = indicator.velocity.y
+      v += (targetY - indicator.position.y) * K_IND
+      v *= DAMP_IND
+      v = clampV(v, MAXV_IND)
+      Body.setVelocity(indicator, { x: 0, y: v })
+      indY = indicator.position.y
+      indVy = v
+      indicatorY.value = indY
+    }
+
+    // 3. 線段水平擺動（純視覺）：由 indicator 速度激發，indicator 以下較強、以上較弱
+    //    入場掉落完成前不擺動（保持直線下墜的 bungee 效果）
+    if (hasEntranceSettled.value && n >= 2) {
+      if (segSwayVel.length !== n - 1) segSwayVel = new Array(n - 1).fill(0)
+      const nextSway = new Array(n - 1)
+      for (let i = 0; i < n - 1; i++) {
+        const segMidY = (ch[i].y + ch[i + 1].y) / 2
+        const excite = indVy * (segMidY > indY ? SWAY_K_BELOW : SWAY_K_ABOVE)
+        let sv = segSwayVel[i] + excite
+        sv += -(segSway.value[i] ?? 0) * SWAY_SPRING  // 彈回直線
+        sv *= SWAY_DAMP
+        segSwayVel[i] = sv
+        nextSway[i] = clampV((segSway.value[i] ?? 0) + sv, SWAY_MAX)
+      }
+      segSway.value = nextSway
+    }
+  })
+
+  // 入場掉落 settle 後才啟用線段擺動
+  physics.onSettled(() => { hasEntranceSettled.value = true })
+
+  // Scroll 指示器球（先加，從當前捲動位置稍上方開始；group -1 不撞錨點）
+  const indicatorStartY = (scrollProgress.value / 100) * H
+  physics.addBody({
+    id: INDICATOR_ID,
+    x: CX,
+    y: indicatorStartY > 20 ? indicatorStartY - 20 : indicatorStartY + 20,
+    radius: INDICATOR_RADIUS,
+    collisionFilter: { group: -1 }
+  })
+
+  physics.start()
+
+  // 由下而上逐顆釋放：結束旗標 → 最底導航點 → … → 起始旗標
+  // 每顆從 track 頂端上方自由落體掉入目標，形成由下往上的 bungee 瀑布
+  const releaseOrder = [...chain].reverse()
+  await physics.addBodiesWithDelay(
+    releaseOrder.map(node => ({
+      id: node.id,
+      x: CX,
+      y: DROP_FROM_Y,            // 皆從頂端上方落下（自由落體）
+      radius: DOT_RADIUS,
+      velocity: { x: 0, y: 0 },
+      collisionFilter: { group: -1 }  // 全部 group -1：互不碰撞，保持穩定直線
+    })),
+    CASCADE_DELAY_MS
+  )
+}
+
 // ==================== Methods ====================
 
 const getStatusText = (status: string) => {
@@ -380,6 +675,15 @@ const getStageTooltip = (stage: Stage) => {
 }
 
 const handleStageClick = (stageId: string) => {
+  // 激振：給予向上的瞬間速度，漣漪透過耦合彈簧傳遞到相鄰點
+  // 用 setVelocity（mass 無關）比 applyForce 更可靠
+  const body = physics.getBody(stageId)
+  if (body) {
+    Matter.Body.setVelocity(body, { x: 0, y: -6 })
+    // 喚醒可能已 settle 的引擎，讓漣漪能動起來
+    if (physics.isSettled.value) physics.start()
+  }
+
   setActive(stageId)
 
   const targetElement = document.getElementById(`stage-${stageId}`)
@@ -487,6 +791,9 @@ onMounted(async () => {
   if (props.currentStageId) {
     setActive(props.currentStageId)
   }
+
+  // 啟動物理引擎
+  await initPhysics()
 })
 
 // 清理函数（VueUse composables 會自動清理）
@@ -503,6 +810,14 @@ onBeforeUnmount(() => {
 watch(() => props.stages, async () => {
   await nextTick()
   initStageBoundings()
+  // 重置物理引擎（階段資料變動時重新初始化）
+  physics.cleanup()
+  hasEntranceSettled.value = false
+  segSway.value = []
+  segSwayVel = []
+  orderedTargets.value = []
+  await nextTick()
+  await initPhysics()
 }, { deep: true })
 
 watch(activeStageId, (newStageId) => {
@@ -511,6 +826,11 @@ watch(activeStageId, (newStageId) => {
 
 watch(scrollProgress, () => {
   checkScrollIndicatorCollision()
+
+  // 用戶捲動時喚醒已 settle 的物理引擎（讓 scroll indicator 重新追蹤）
+  if (physics.isSettled.value) {
+    physics.start()
+  }
 
   // 滾動動畫追蹤
   isScrolling.value = true

@@ -151,7 +151,9 @@ export async function getPasskeyStatus(
 export async function initPasskeyRegistration(
   env: Env,
   userId: string,
-  userEmail: string
+  userEmail: string,
+  /** 'platform' = 綁定這台電腦（Hello/Touch ID）；'cross-platform' = 綁定手機/安全金鑰（跳 QR）；不給 = 由系統選 */
+  attachment?: 'platform' | 'cross-platform'
 ): Promise<PasskeyRegistrationOptions> {
   const config = getConfig(env);
   const challenge = generateChallenge();
@@ -203,9 +205,13 @@ export async function initPasskeyRegistration(
       { type: 'public-key', alg: -257 },  // RS256 (fallback)
     ],
     authenticatorSelection: {
-      authenticatorAttachment: 'platform',  // Prefer platform authenticator (Touch ID, Face ID)
+      // attachment 由使用者選擇：
+      //   'platform'       → 只用本機（Windows Hello / Touch ID），不跳 QR
+      //   'cross-platform' → 排除本機 → 直接跳 QR / 安全金鑰（綁定手機）
+      //   undefined        → 不限制，由作業系統視窗讓使用者自己挑
+      ...(attachment ? { authenticatorAttachment: attachment } : {}),
       residentKey: 'preferred',             // Enable discoverable credentials
-      userVerification: 'preferred',
+      userVerification: 'required',
     },
     attestation: 'none',  // No attestation required for consumer apps
     excludeCredentials,
@@ -341,7 +347,9 @@ export async function verifyPasskeyRegistration(
  */
 export async function initPasskeyAuthentication(
   env: Env,
-  userEmail: string
+  userEmail: string,
+  /** true = 使用你的手機登入：送空的 allowCredentials（discoverable）→ 跳「用其他裝置」QR */
+  crossDevice = false
 ): Promise<PasskeyAuthenticationOptions | null> {
   const config = getConfig(env);
 
@@ -385,12 +393,16 @@ export async function initPasskeyAuthentication(
     challenge,
     rpId: config.rpId,
     timeout: config.timeout,
-    userVerification: 'preferred',
-    allowCredentials: credentials.results.map((row: any) => ({
-      id: row.credentialId,
-      type: 'public-key' as const,
-      transports: JSON.parse(row.transports || '["internal", "hybrid"]'),
-    })),
+    userVerification: 'required',
+    // 「使用手機登入」送空陣列（discoverable）→ 系統顯示完整 passkey 選單含 QR；
+    // 「使用這台電腦」照舊帶入該帳號已註冊的憑證 → 直接走本機。
+    allowCredentials: crossDevice
+      ? []
+      : credentials.results.map((row: any) => ({
+          id: row.credentialId,
+          type: 'public-key' as const,
+          transports: JSON.parse(row.transports || '["internal", "hybrid"]'),
+        })),
   };
 }
 
@@ -475,6 +487,11 @@ export async function verifyPasskeyAuthentication(
     throw new Error('User presence not verified');
   }
 
+  // Require user verification (biometric / PIN)
+  if (!authData.flags.userVerified) {
+    throw new Error('User verification required');
+  }
+
   // Verify signature
   const publicKey = base64UrlToBuffer(storedCredential.credentialPublicKey);
   const signature = base64UrlToBuffer(credential.response.signature);
@@ -491,8 +508,10 @@ export async function verifyPasskeyAuthentication(
   }
 
   // Verify counter (replay attack prevention)
+  // Note: synced passkeys (Apple/Google) always report signCount = 0, so the
+  // signCount > 0 guard ensures they are never falsely flagged.
   if (authData.signCount > 0 && authData.signCount <= storedCredential.counter) {
-    // Possible cloned authenticator - log warning but don't fail
+    // Possible cloned authenticator - log and reject
     await logGlobalOperation(
       env,
       userEmail,
@@ -506,6 +525,7 @@ export async function verifyPasskeyAuthentication(
       },
       { level: 'warning' }
     );
+    throw new Error('Possible cloned authenticator detected');
   }
 
   // Update counter and last used

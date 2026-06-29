@@ -18,37 +18,62 @@
 
     <!-- 階段進度顯示：流程圖 or 甘特圖 -->
     <div class="stage-display-container">
-      <!-- 流程圖模式（原有） -->
-      <div v-if="stageDisplayMode === 'linear'" class="stage-progress">
-      <!-- 開始標記：當第一個顯示的階段是專案第一個階段時 -->
-      <template v-if="shouldShowStartMarker">
-        <div class="stage-marker start-marker">開始</div>
-        <i class="fas fa-chevron-right stage-arrow"></i>
-      </template>
-      
-      <template v-for="(stage, index) in displayStages" :key="stage.stageId || index">
-        <div 
-          class="stage-item"
-          :class="{ 
-            active: isStageActive(stage),
-            completed: isStageCompleted(stage),
-            pending: isStagePending(stage),
-            voting: isStageVoting(stage),
-            'multiple-active': stageDisplay.hasMultipleActiveStages && isStageActive(stage)
-          }"
-        >
-          {{ stage.stageName || stage.stageTitle || `階段${stage.stageOrder || index + 1}` }}
-        </div>
-        <i 
-          v-if="index < displayStages.length - 1 || shouldShowEndMarker"
-          class="fas fa-chevron-right stage-arrow"
-        ></i>
-      </template>
-      
-      <!-- 結束標記：當最後一個顯示的階段是專案最後一個階段時 -->
-      <template v-if="shouldShowEndMarker">
-        <div class="stage-marker end-marker">結束</div>
-      </template>
+      <!-- 流程圖模式（原有）+ LED 指示燈開車：行經之處的階段看板逐一彈起 -->
+      <div
+        v-if="stageDisplayMode === 'linear'"
+        ref="stageProgressRef"
+        class="stage-progress"
+      >
+        <template v-for="(node, i) in progressNodes" :key="node.key">
+          <!-- 階段看板 -->
+          <div
+            v-if="node.type === 'chip'"
+            :ref="(el) => setNodeRef(el, i)"
+            class="stage-item"
+            :class="{
+              active: isStageActive(node.stage),
+              completed: isStageCompleted(node.stage),
+              pending: isStagePending(node.stage),
+              voting: isStageVoting(node.stage),
+              'multiple-active': stageDisplay.hasMultipleActiveStages && isStageActive(node.stage)
+            }"
+            :style="{ '--bounce': boardBounceY(node.bodyIndex) + 'px' }"
+          >
+            <!-- 當前階段：跳起後在上方以灰字標註到期時間 -->
+            <span
+              v-if="node.isCurrent && dueShown && formatDue(node.stage)"
+              class="stage-due"
+            >{{ formatDue(node.stage) }}</span>
+            {{ node.stage.stageName || node.stage.stageTitle || `階段${node.stage.stageOrder || node.chipIndex + 1}` }}
+          </div>
+          <!-- 開始標記 -->
+          <div
+            v-else-if="node.type === 'start-marker'"
+            :ref="(el) => setNodeRef(el, i)"
+            class="stage-marker start-marker"
+            :style="{ '--bounce': boardBounceY(node.bodyIndex) + 'px' }"
+          >開始</div>
+          <!-- 結束標記 -->
+          <div
+            v-else-if="node.type === 'end-marker'"
+            :ref="(el) => setNodeRef(el, i)"
+            class="stage-marker end-marker"
+            :style="{ '--bounce': boardBounceY(node.bodyIndex) + 'px' }"
+          >結束</div>
+          <!-- 連接箭頭 -->
+          <i
+            v-else
+            :ref="(el) => setNodeRef(el, i)"
+            class="fas fa-chevron-right stage-arrow"
+          ></i>
+        </template>
+
+        <!-- LED 指示燈（車）：底部軌道開車，不與看板重疊 -->
+        <div
+          v-if="ledVisible"
+          class="stage-led-car"
+          :style="{ left: ledLeft }"
+        ></div>
       </div>
 
       <!-- 甘特圖模式（新增） -->
@@ -121,7 +146,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, onBeforeUpdate, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { getProjectStageDisplay, getStageTimeRemaining } from '@/utils/stageStatus'
 import { getUserPreferences } from '@/utils/userPreferences'
@@ -129,6 +154,8 @@ import { useCurrentUser } from '@/composables/useAuth'
 import AvatarGroup from './common/AvatarGroup.vue'
 import StageGanttChart from './charts/StageGanttChart.vue'
 import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
+import { useInViewport } from '@/composables/useInViewport'
+import { useStageBounce } from '@/composables/useStageBounce'
 
 export default {
   name: 'ProjectCard',
@@ -219,6 +246,7 @@ export default {
     onBeforeUnmount(() => {
       window.removeEventListener('stageDisplayModeChanged', handleStageDisplayModeChange)
       window.removeEventListener('userPreferencesChanged', handlePreferencesChange)
+      clearBounceTimers()
     })
 
     // 獲取專案階段顯示資訊
@@ -230,6 +258,188 @@ export default {
     const displayStages = computed(() => {
       return stageDisplay.value.displayStages
     })
+
+    // ===== LED 指示燈「開車」+ 看板波浪跳動（matter.js）=====
+    // LED 從起點逐幀開到「當前階段」並停下；車頭經過哪張看板，那張就「跳起來」一下 → 波浪。
+    // LED 走不到「下一階段」，所以下一階段在 LED 到站後自己跳。LED 在底部軌道，不與看板重疊。
+    const LED_SLIDE_MS = 1600          // LED 開到當前階段的時間（rAF 逐幀驅動）
+    const NEXT_BOUNCE_DELAY_MS = 1400  // LED 到站後，走不到的看板隔多久開始依序跳
+    const LIFT_MAX = 22                // 看板被 LED 抬到最高的位移（px）
+    const HUMP_HALF = 26               // LED 影響看板的左右半徑（px，決定「進入/離開」範圍）
+
+    const stageProgressRef = ref(null)
+    const ledLeft = ref('0px')
+    const ledVisible = computed(
+      () => stageDisplayMode.value === 'linear' && displayStages.value.length > 0
+    )
+
+    const bounce = useStageBounce()
+
+    // 當前階段在 displayStages 中的索引
+    const currentDisplayIndex = computed(() => {
+      const cur = stageDisplay.value.currentStage
+      if (!cur) return -1
+      return displayStages.value.findIndex(s => s.stageId === cur.stageId)
+    })
+
+    // 進度節點（依序）：開始標記 →（箭頭）→ 各階段看板 →（箭頭）→ 結束標記
+    // 看板類（chip / marker）配一個 matter.js body index 供彈起；箭頭只淡入
+    const progressNodes = computed(() => {
+      const nodes = []
+      const stages = displayStages.value
+      let bodyIdx = 0
+      if (shouldShowStartMarker.value) {
+        nodes.push({ type: 'start-marker', key: 'start', bodyIndex: bodyIdx++ })
+        nodes.push({ type: 'arrow', key: 'arrow-start' })
+      }
+      const currentId = stageDisplay.value.currentStage?.stageId
+      stages.forEach((stage, index) => {
+        nodes.push({
+          type: 'chip',
+          key: stage.stageId || `chip-${index}`,
+          stage,
+          chipIndex: index,
+          bodyIndex: bodyIdx++,
+          isCurrent: !!currentId && stage.stageId === currentId
+        })
+        if (index < stages.length - 1 || shouldShowEndMarker.value) {
+          nodes.push({ type: 'arrow', key: `arrow-${index}` })
+        }
+      })
+      if (shouldShowEndMarker.value) {
+        nodes.push({ type: 'end-marker', key: 'end', bodyIndex: bodyIdx++ })
+      }
+      return nodes
+    })
+    const boardCount = computed(
+      () => progressNodes.value.filter(n => n.bodyIndex !== undefined).length
+    )
+
+    const nodeEls = ref([])
+    const dueShown = ref(false) // 當前階段跳起後才顯示到期時間
+    onBeforeUpdate(() => { nodeEls.value = [] })
+    const setNodeRef = (el, i) => { if (el) nodeEls.value[i] = el }
+    const boardBounceY = (bodyIndex) => bounce.bounceY(bodyIndex)
+
+    // 當前階段的到期時間（灰字寫在卡片上方），格式：~ 2026/02/01 13:56
+    const formatDue = (stage) => {
+      const t = stage?.endTime
+      if (t === null || t === undefined) return ''
+      const d = typeof t === 'number' ? new Date(t) : new Date(t)
+      if (isNaN(d.getTime())) return ''
+      const p = (n) => String(n).padStart(2, '0')
+      return `~ ${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+    }
+
+    let bounceTimers = []
+    let ledRaf = null
+    const clearBounceTimers = () => {
+      bounceTimers.forEach(t => clearTimeout(t))
+      bounceTimers = []
+      if (ledRaf !== null) cancelAnimationFrame(ledRaf)
+      ledRaf = null
+    }
+
+    const runIndicator = async () => {
+      if (stageDisplayMode.value !== 'linear') return
+      const nodes = progressNodes.value
+      if (!nodes.length) return
+
+      bounce.ensure(boardCount.value)
+      dueShown.value = false
+      clearBounceTimers()
+      ledLeft.value = '0px'
+      await nextTick()
+
+      if (!stageProgressRef.value) return
+      const centerOf = (i) => {
+        const el = nodeEls.value[i]
+        return el ? el.offsetLeft + el.offsetWidth / 2 : 0
+      }
+      const halfOf = (i) => {
+        const el = nodeEls.value[i]
+        return el ? el.offsetWidth / 2 : HUMP_HALF
+      }
+
+      // LED 停靠點 = 當前階段（無當前階段 → 開到最後）
+      const ci = currentDisplayIndex.value
+      let stopNodeIdx = nodes.findIndex(n => n.type === 'chip' && n.chipIndex === ci)
+      if (stopNodeIdx < 0) stopNodeIdx = nodes.length - 1
+      const stopX = centerOf(stopNodeIdx)
+
+      // 各「看板」節點：中心 x、左右半徑（LED 進入～離開的範圍）
+      const boardNodes = nodes
+        .map((node, i) => ({ node, i, x: centerOf(i), half: halfOf(i), plucked: false }))
+        .filter(o => o.node.bodyIndex !== undefined)
+      const reachable = boardNodes.filter(o => o.x <= stopX + 0.5)
+      const beyond = boardNodes.filter(o => o.x > stopX + 0.5)
+
+      // 量不到位置（極少數）：LED 直接停在當前階段、顯示到期時間
+      if (stopX <= 0) {
+        ledLeft.value = Math.max(0, stopX) + 'px'
+        dueShown.value = true
+        return
+      }
+
+      // LED 與看板震動「同一個 rAF 迴圈」→ 完全同步：
+      // LED 進入看板（到左緣）→ 開始抬升；到中央 → 最高；離開 → 錨點歸位、弦回彈震盪。
+      const startTs = performance.now()
+      let arrivalTs = null
+      const sweep = (now) => {
+        const t = Math.min(1, (now - startTs) / LED_SLIDE_MS)
+        const ledX = stopX * t
+        ledLeft.value = ledX + 'px'
+
+        // 由 LED 位置驅動每張「走得到」的看板抬升量（半正弦駝峰，中央最高）
+        // 到站後（t>=1）全部釋放（lift=0）→ 錨點歸位，當前看板回彈震盪不會卡在高點
+        reachable.forEach(o => {
+          let lift = 0
+          if (t < 1) {
+            const left = o.x - o.half
+            const right = o.x + o.half
+            if (ledX >= left && ledX <= right) {
+              const p = (ledX - left) / (right - left) // 0→1
+              lift = LIFT_MAX * Math.sin(Math.PI * p)  // 中央 p=0.5 → 最高
+            }
+          }
+          bounce.setLift(o.node.bodyIndex, lift)
+        })
+
+        // 到站：顯示當前階段到期時間，並讓 LED 走不到的看板依序撥動（自己震）
+        if (t >= 1) {
+          if (arrivalTs === null) {
+            arrivalTs = now
+            dueShown.value = true
+          }
+          const since = now - arrivalTs
+          beyond.forEach((o, k) => {
+            if (!o.plucked && since >= NEXT_BOUNCE_DELAY_MS + k * 220) {
+              o.plucked = true
+              bounce.pluck(o.node.bodyIndex)
+            }
+          })
+        }
+
+        bounce.step()
+
+        const allBeyondDone = beyond.every(o => o.plucked)
+        if (t < 1 || !allBeyondDone || !bounce.isSettled()) {
+          ledRaf = requestAnimationFrame(sweep)
+        } else {
+          ledRaf = null
+        }
+      }
+      ledRaf = requestAnimationFrame(sweep)
+    }
+
+    // 進場才啟動（Dashboard 多卡效能）
+    const { hasEntered } = useInViewport(stageProgressRef, { once: true })
+    watch(hasEntered, (entered) => { if (entered) runIndicator() })
+    // 階段推進 / 資料變更 → 重新開車與彈跳
+    watch(
+      [currentDisplayIndex, () => displayStages.value.length],
+      () => { if (hasEntered.value) runIndicator() }
+    )
     
     // 當前階段的剩餘時間
     const timeRemaining = computed(() => {
@@ -434,6 +644,14 @@ export default {
       shouldShowEndMarker,
       currentGroupMembers,
       stageDisplayMode,
+      stageProgressRef,
+      progressNodes,
+      setNodeRef,
+      dueShown,
+      boardBounceY,
+      formatDue,
+      ledLeft,
+      ledVisible,
       ganttStages,
       ganttMilestones,
       handleStageClick,
@@ -586,6 +804,44 @@ export default {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  position: relative;
+  padding-top: 32px;     /* 看板向上「彈起」+ 到期時間灰字的空間 */
+  padding-bottom: 16px;  /* 底部 LED 軌道的車道（與看板分離，不重疊） */
+}
+
+/* LED 指示燈（車）：在底部軌道上「開車」到當前階段（位置由 JS 逐幀驅動） */
+.stage-led-car {
+  position: absolute;
+  bottom: 2px;
+  left: 0;
+  width: 22px;
+  height: 8px;
+  margin-left: -11px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #157347, var(--stage-active-bg));
+  box-shadow:
+    0 0 10px color-mix(in srgb, var(--stage-active-bg) 75%, transparent),
+    0 0 3px rgba(255, 255, 255, 0.9);
+  z-index: 3;
+  pointer-events: none;
+}
+/* LED 行駛軌道 */
+.stage-progress::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 5px;
+  height: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.1) 0,
+    rgba(0, 0, 0, 0.1) 5px,
+    transparent 5px,
+    transparent 10px
+  );
+  border-radius: 1px;
+  pointer-events: none;
 }
 
 .stage-gantt-wrapper {
@@ -603,6 +859,29 @@ export default {
   font-size: 14px;
   color: #7f8c8d;
   white-space: nowrap;
+  position: relative;
+  transform: translateY(var(--bounce, 0px));
+  will-change: transform;
+}
+
+/* 當前階段到期時間（灰字，卡片上方） */
+.stage-due {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 500;
+  color: #909399;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  animation: stage-due-in 0.4s ease 0.3s forwards;
+}
+
+@keyframes stage-due-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 .stage-item.pending {
@@ -618,7 +897,7 @@ export default {
   color: var(--stage-active-text);
   font-weight: bold;
   box-shadow: 0 2px 8px rgba(25, 135, 84, 0.3);
-  transform: scale(1.05);
+  transform: translateY(var(--bounce, 0px)) scale(1.05);
 }
 
 .stage-item.voting {
@@ -627,7 +906,7 @@ export default {
   color: var(--stage-voting-text);
   font-weight: bold;
   box-shadow: 0 2px 8px rgba(200, 35, 51, 0.3);
-  transform: scale(1.05);
+  transform: translateY(var(--bounce, 0px)) scale(1.05);
 }
 
 .stage-item.completed {
@@ -679,6 +958,8 @@ export default {
   color: #7f8c8d;
   white-space: nowrap;
   font-weight: 500;
+  transform: translateY(var(--bounce, 0px));
+  will-change: transform;
 }
 
 .stage-marker.start-marker {
