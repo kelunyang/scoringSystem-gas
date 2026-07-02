@@ -54,9 +54,5 @@
     "node": ">=18.0.0",
     "pnpm": ">=8.0.0"
   },
-  "packageManager": "pnpm@10.24.0",
-  "dependencies": {
-    "@tanstack/vue-virtual": "^3.13.12",
-    "pinia": "^3.0.4"
-  }
+  "packageManager": "pnpm@10.24.0"
 }
