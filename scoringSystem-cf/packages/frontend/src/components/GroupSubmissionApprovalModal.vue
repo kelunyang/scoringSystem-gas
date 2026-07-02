@@ -17,7 +17,7 @@
         </el-breadcrumb-item>
       </el-breadcrumb>
     </template>
-    <div class="drawer-body" v-loading="votingDataComposable.versionsLoading.value" element-loading-text="載入版本資料中..." ref="modalRoot">
+    <div ref="modalRoot" v-loading="votingDataComposable.versionsLoading.value" class="drawer-body" element-loading-text="載入版本資料中...">
       <!-- DrawerAlertZone - 統一的 Alert 管理 -->
       <DrawerAlertZone />
 
@@ -31,11 +31,11 @@
         <!-- 使用 VersionTimeline 組件 -->
         <VersionTimeline
           :versions="allVersions"
-          :currentVersionId="currentVersionId"
-          versionIdKey="submissionId"
-          createdTimeKey="submitTime"
-          displayNameKey="submitterDisplayName"
-          :formatTitleFn="(version: any, index: number) =>
+          :current-version-id="currentVersionId"
+          version-id-key="submissionId"
+          created-time-key="submitTime"
+          display-name-key="submitterDisplayName"
+          :format-title-fn="(version: any, index: number) =>
             index === allVersions.length - 1 ? '最終版本' : formatVersionStepTime(version.submitTime)"
           @version-change="handleVersionChange"
         >
@@ -91,14 +91,14 @@
 
         <!-- 模擬控制區 -->
         <SimulationControls
-          :simulatedRank="simulatedRank"
-          @update:simulatedRank="simulatedRank = $event"
-          :simulatedGroupCount="simulatedGroupCount"
-          @update:simulatedGroupCount="simulatedGroupCount = $event"
-          :totalActiveGroups="totalActiveGroups"
-          :totalProjectGroups="totalProjectGroups"
-          :totalPercentage="totalPercentage"
-          :showTotalPercentage="false"
+          :simulated-rank="simulatedRank"
+          :simulated-group-count="simulatedGroupCount"
+          :total-active-groups="totalActiveGroups"
+          :total-project-groups="totalProjectGroups"
+          :total-percentage="totalPercentage"
+          :show-total-percentage="false"
+          @update:simulated-rank="simulatedRank = $event"
+          @update:simulated-group-count="simulatedGroupCount = $event"
         />
 
         <!-- 權重分配預覽 -->
@@ -123,12 +123,12 @@
           <OurGroupChart
             :members="chartSelectedMembers"
             :rank="simulatedRank"
-            :simulatedRank="simulatedRank"
-            :simulatedGroupCount="simulatedGroupCount"
-            :reportReward="stageReward"
-            :allGroups="allGroups"
-            :currentGroupId="currentGroupId"
-            :totalPercentage="totalPercentage"
+            :simulated-rank="simulatedRank"
+            :simulated-group-count="simulatedGroupCount"
+            :report-reward="stageReward"
+            :all-groups="allGroups"
+            :current-group-id="currentGroupId"
+            :total-percentage="totalPercentage"
           />
 
           <!-- 舊版本參與度分配比較 (只在查看舊版本時顯示) -->
@@ -146,12 +146,12 @@
             <!-- D3.js 視覺化圖表 -->
             <ParticipationComparisonChart
               v-if="participationChanges.length > 0"
-              :participationChanges="participationChanges"
-              :groupMembers="groupMembers"
+              :participation-changes="participationChanges"
+              :group-members="groupMembers"
             />
 
             <!-- 變化摘要文字列表 -->
-            <div class="participation-changes" v-if="participationChanges.length > 0">
+            <div v-if="participationChanges.length > 0" class="participation-changes">
               <h4 style="margin: 15px 0 10px; color: #2c3e50; font-size: 14px;">
                 <i class="fas fa-list"></i> 詳細變化列表：
               </h4>
@@ -173,13 +173,13 @@
 
           <!-- 各組總點數比較圖 -->
           <AllGroupsChart
-            :selectedMembers="chartSelectedMembers"
-            :simulatedRank="simulatedRank"
-            :simulatedGroupCount="simulatedGroupCount"
-            :reportReward="stageReward"
-            :allGroups="allGroups"
-            :currentGroupId="currentGroupId"
-            :totalProjectGroups="totalProjectGroups"
+            :selected-members="chartSelectedMembers"
+            :simulated-rank="simulatedRank"
+            :simulated-group-count="simulatedGroupCount"
+            :report-reward="stageReward"
+            :all-groups="allGroups"
+            :current-group-id="currentGroupId"
+            :total-project-groups="totalProjectGroups"
             style="margin-top: 20px;"
           />
         </div>
@@ -240,12 +240,12 @@
           </div>
         </div>
         <VoteTrendTsumTsumChart
-          :voteData="tsumTsumVoteData"
-          :versionLabels="tsumTsumVersionLabels"
-          :versionStatuses="versionStatuses"
-          :consensusThreshold="votingData.totalMembers"
-          :currentUserEmail="user?.userEmail || ''"
-          chartTitle="投票趨勢"
+          :vote-data="tsumTsumVoteData"
+          :version-labels="tsumTsumVersionLabels"
+          :version-statuses="versionStatuses"
+          :consensus-threshold="votingData.totalMembers"
+          :current-user-email="user?.userEmail || ''"
+          chart-title="投票趨勢"
         />
       </div>
 
@@ -332,8 +332,8 @@
           <el-button
             v-if="isViewingOldVersion && !isFinalVersionApproved && !votingData.hasUserVoted && isCurrentUserParticipant"
             type="warning"
-            @click="showRestoreConfirmation"
             :disabled="submitting"
+            @click="showRestoreConfirmation"
           >
             <i class="fas fa-history"></i>
             恢復回舊版本
@@ -353,9 +353,9 @@
           <el-button
             v-if="!isViewingOldVersion && isFinalVersionSubmitted && !votingData.hasUserVoted && !votingData.isApproved && isCurrentUserParticipant"
             type="success"
-            @click="submitVote(true)"
             :disabled="submitting"
             :loading="submitting"
+            @click="submitVote(true)"
           >
             <i v-if="!submitting" class="fas fa-check-circle"></i>
             {{ submitting ? '投票中...' : '同意本組報告' }}
@@ -395,8 +395,8 @@
           <el-button
             v-if="!isViewingOldVersion && isFinalVersionSubmitted && !votingData.isApproved && !votingData.hasUserVoted && isCurrentUserParticipant"
             type="danger"
-            @click="showDeleteConfirmation"
             :disabled="submitting"
+            @click="showDeleteConfirmation"
           >
             <i class="fas fa-trash"></i>
             刪除報告重發
@@ -456,9 +456,9 @@
       <div class="drawer-actions">
         <el-button
           type="danger"
-          @click="confirmDelete"
           :disabled="deleteConfirmText.toUpperCase() !== 'DELETE' || deleting"
           :loading="deleting"
+          @click="confirmDelete"
         >
           <i v-if="!deleting" class="fas fa-trash-alt"></i>
           {{ deleting ? '刪除中...' : '確認刪除' }}
@@ -496,9 +496,9 @@
       <div class="drawer-actions">
         <el-button
           type="warning"
-          @click="confirmRestore"
           :disabled="restoreConfirmText.toUpperCase() !== 'RESTORE' || restoring"
           :loading="restoring"
+          @click="confirmRestore"
         >
           <i v-if="!restoring" class="fas fa-undo-alt"></i>
           {{ restoring ? '恢復中...' : '確認恢復' }}

@@ -1,12 +1,12 @@
 <template>
   <el-drawer
     :model-value="modelValue"
-    @update:model-value="$emit('update:modelValue', $event)"
     title="結算階段獎金"
     direction="ttb"
     size="100%"
     :close-on-click-modal="false"
     class="drawer-maroon"
+    @update:model-value="$emit('update:modelValue', $event)"
   >
     <template #header>
       <el-breadcrumb separator=">">
@@ -21,12 +21,12 @@
       </el-breadcrumb>
     </template>
 
-    <div class="drawer-body" v-loading="settling">
+    <div v-loading="settling" class="drawer-body">
       <!-- CRITICAL: DrawerAlertZone 必須是第一個元素 -->
       <DrawerAlertZone />
 
       <!-- 階段資訊 -->
-      <div class="form-section" v-if="stage">
+      <div v-if="stage" class="form-section">
         <h4><i class="fas fa-info-circle"></i> 階段資訊</h4>
         <div class="detail-row">
           <label>階段名稱:</label>
@@ -84,13 +84,13 @@
       <div class="drawer-actions">
         <el-button
           type="danger"
-          @click="handleConfirm"
           :disabled="!isConfirmed || settling"
+          @click="handleConfirm"
         >
           <i :class="settling ? 'fas fa-spinner fa-spin' : 'fas fa-calculator'"></i>
           {{ settling ? '結算中...' : '確定結算' }}
         </el-button>
-        <el-button @click="handleClose" :disabled="settling">取消</el-button>
+        <el-button :disabled="settling" @click="handleClose">取消</el-button>
       </div>
     </div>
   </el-drawer>

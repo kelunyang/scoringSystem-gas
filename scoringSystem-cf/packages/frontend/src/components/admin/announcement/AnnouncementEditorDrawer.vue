@@ -94,7 +94,7 @@
       </div>
 
       <!-- 預覽區塊 -->
-      <div class="form-section" v-if="form.content">
+      <div v-if="form.content" class="form-section">
         <h4><i class="fas fa-eye"></i> 內容預覽</h4>
         <div class="preview-container" :class="`preview-${form.type}`">
           <div class="preview-header">
@@ -111,14 +111,14 @@
       <div class="drawer-actions">
         <el-button
           type="primary"
-          @click="handleSave"
           :loading="saving"
           :disabled="!isFormValid"
+          @click="handleSave"
         >
           <i :class="isEditing ? 'fas fa-save' : 'fas fa-plus'"></i>
           {{ saving ? '儲存中...' : (isEditing ? '儲存變更' : '創建公告') }}
         </el-button>
-        <el-button @click="handleClose" :disabled="saving">
+        <el-button :disabled="saving" @click="handleClose">
           <i class="fas fa-times"></i>
           取消
         </el-button>

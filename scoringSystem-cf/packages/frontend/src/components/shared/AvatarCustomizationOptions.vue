@@ -28,8 +28,8 @@
             class="color-option"
             :style="{ backgroundColor: '#' + color.value }"
             :class="{ selected: options.skinColor === color.value }"
-            @click="$emit('update:option', 'skinColor', color.value)"
             :title="color.label"
+            @click="$emit('update:option', 'skinColor', color.value)"
           ></div>
         </div>
       </div>
@@ -43,8 +43,8 @@
             class="color-option"
             :style="{ backgroundColor: '#' + color.value }"
             :class="{ selected: options.hairColor === color.value }"
-            @click="$emit('update:option', 'hairColor', color.value)"
             :title="color.label"
+            @click="$emit('update:option', 'hairColor', color.value)"
           ></div>
         </div>
       </div>
@@ -58,8 +58,8 @@
             class="color-option"
             :style="{ backgroundColor: '#' + color.value }"
             :class="{ selected: options.backgroundColor === color.value }"
-            @click="$emit('update:option', 'backgroundColor', color.value)"
             :title="color.label"
+            @click="$emit('update:option', 'backgroundColor', color.value)"
           ></div>
         </div>
       </div>
@@ -73,8 +73,8 @@
             class="color-option"
             :style="{ backgroundColor: '#' + color.value }"
             :class="{ selected: options.clothesColor === color.value }"
-            @click="$emit('update:option', 'clothesColor', color.value)"
             :title="color.label"
+            @click="$emit('update:option', 'clothesColor', color.value)"
           ></div>
         </div>
       </div>
@@ -119,8 +119,8 @@
             class="color-option"
             :style="{ backgroundColor: '#' + color.value }"
             :class="{ selected: options.skinColor === color.value }"
-            @click="$emit('update:option', 'skinColor', color.value)"
             :title="color.label"
+            @click="$emit('update:option', 'skinColor', color.value)"
           ></div>
         </div>
       </div>
@@ -134,8 +134,8 @@
             class="color-option"
             :style="{ backgroundColor: '#' + color.value }"
             :class="{ selected: options.hairColor === color.value }"
-            @click="$emit('update:option', 'hairColor', color.value)"
             :title="color.label"
+            @click="$emit('update:option', 'hairColor', color.value)"
           ></div>
         </div>
       </div>
@@ -149,8 +149,8 @@
             class="color-option"
             :style="{ backgroundColor: '#' + color.value }"
             :class="{ selected: options.clothingColor === color.value }"
-            @click="$emit('update:option', 'clothingColor', color.value)"
             :title="color.label"
+            @click="$emit('update:option', 'clothingColor', color.value)"
           ></div>
         </div>
       </div>
@@ -167,8 +167,8 @@
             class="color-option"
             :style="{ backgroundColor: '#' + color.value }"
             :class="{ selected: options.skinColor === color.value }"
-            @click="$emit('update:option', 'skinColor', color.value)"
             :title="color.label"
+            @click="$emit('update:option', 'skinColor', color.value)"
           ></div>
         </div>
       </div>
@@ -182,8 +182,8 @@
             class="color-option"
             :style="{ backgroundColor: '#' + color.value }"
             :class="{ selected: options.hairColor === color.value }"
-            @click="$emit('update:option', 'hairColor', color.value)"
             :title="color.label"
+            @click="$emit('update:option', 'hairColor', color.value)"
           ></div>
         </div>
       </div>
@@ -197,8 +197,8 @@
             class="color-option"
             :style="{ backgroundColor: '#' + color.value }"
             :class="{ selected: options.clothingColor === color.value }"
-            @click="$emit('update:option', 'clothingColor', color.value)"
             :title="color.label"
+            @click="$emit('update:option', 'clothingColor', color.value)"
           ></div>
         </div>
       </div>
@@ -236,8 +236,8 @@
             class="color-option"
             :style="{ backgroundColor: '#' + color.value }"
             :class="{ selected: options.baseColor === color.value }"
-            @click="$emit('update:option', 'baseColor', color.value)"
             :title="color.label"
+            @click="$emit('update:option', 'baseColor', color.value)"
           ></div>
         </div>
       </div>
@@ -275,8 +275,8 @@
             class="color-option"
             :style="{ backgroundColor: '#' + color.value }"
             :class="{ selected: options.backgroundColor === color.value }"
-            @click="$emit('update:option', 'backgroundColor', color.value)"
             :title="color.label"
+            @click="$emit('update:option', 'backgroundColor', color.value)"
           ></div>
         </div>
       </div>
@@ -290,8 +290,8 @@
             class="color-option"
             :style="{ backgroundColor: '#' + color.value }"
             :class="{ selected: options.textColor === color.value }"
-            @click="$emit('update:option', 'textColor', color.value)"
             :title="color.label"
+            @click="$emit('update:option', 'textColor', color.value)"
           ></div>
         </div>
       </div>
@@ -308,8 +308,8 @@
             class="color-option"
             :style="{ backgroundColor: '#' + color.value }"
             :class="{ selected: options.rowColor === color.value }"
-            @click="$emit('update:option', 'rowColor', color.value)"
             :title="color.label"
+            @click="$emit('update:option', 'rowColor', color.value)"
           ></div>
         </div>
       </div>

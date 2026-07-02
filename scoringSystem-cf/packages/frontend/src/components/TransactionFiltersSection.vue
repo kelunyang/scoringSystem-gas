@@ -2,9 +2,9 @@
   <AdminFilterToolbar
     variant="default"
     :collapsible="true"
-    :activeFilterCount="activeFilterCount"
-    :expandedFilterCount="expandedFilterCount"
-    :showExport="false"
+    :active-filter-count="activeFilterCount"
+    :expanded-filter-count="expandedFilterCount"
+    :show-export="false"
     @reset-filters="handleClearFilters"
   >
     <!-- Banner: View Mode Badge -->
@@ -31,7 +31,6 @@
         <span class="filter-label"><i class="fas fa-calendar-alt"></i> 日期範圍：</span>
         <el-date-picker
           :model-value="dateRange"
-          @update:model-value="$emit('update:dateRange', $event)"
           type="daterange"
           range-separator="至"
           start-placeholder="開始日期"
@@ -40,6 +39,7 @@
           value-format="x"
           style="width: 280px;"
           clearable
+          @update:model-value="$emit('update:dateRange', $event)"
         />
       </div>
 
@@ -47,10 +47,10 @@
         <span class="filter-label"><i class="fas fa-user"></i> 使用者：</span>
         <el-input
           :model-value="userFilter"
-          @update:model-value="(val) => emit('update:userFilter', val)"
           placeholder="搜尋使用者名稱"
           clearable
           style="width: 220px;"
+          @update:model-value="(val) => emit('update:userFilter', val)"
         >
           <template #prefix>
             <i class="el-icon-search"></i>
@@ -66,7 +66,6 @@
         <span class="filter-label"><i class="fas fa-layer-group"></i> 階段：</span>
         <el-select
           :model-value="selectedStageIds"
-          @update:model-value="$emit('update:selectedStageIds', $event)"
           placeholder="選擇階段"
           multiple
           collapse-tags
@@ -74,6 +73,7 @@
           clearable
           style="width: 280px;"
           :disabled="!hasTransactions || stageOptions.length === 0"
+          @update:model-value="$emit('update:selectedStageIds', $event)"
         >
           <el-option
             v-for="option in stageOptions"
@@ -88,7 +88,6 @@
         <span class="filter-label"><i class="fas fa-tag"></i> 交易類型：</span>
         <el-select
           :model-value="selectedTransactionTypes"
-          @update:model-value="$emit('update:selectedTransactionTypes', $event)"
           placeholder="選擇交易類型"
           multiple
           collapse-tags
@@ -96,6 +95,7 @@
           clearable
           style="width: 280px;"
           :disabled="!hasTransactions"
+          @update:model-value="$emit('update:selectedTransactionTypes', $event)"
         >
           <el-option
             v-for="option in transactionTypeOptions"
@@ -110,11 +110,11 @@
         <span class="filter-label"><i class="fas fa-coins"></i> 點數：</span>
         <el-input
           :model-value="pointsFilter"
-          @update:model-value="(val) => emit('update:pointsFilter', val ? Number(val) : null)"
           type="number"
           placeholder="過濾點數"
           clearable
           style="width: 180px;"
+          @update:model-value="(val) => emit('update:pointsFilter', val ? Number(val) : null)"
         />
       </div>
 
@@ -122,10 +122,10 @@
         <span class="filter-label"><i class="fas fa-search"></i> 說明：</span>
         <el-input
           :model-value="descriptionFilter"
-          @update:model-value="(val) => emit('update:descriptionFilter', val)"
           placeholder="搜尋說明內容"
           clearable
           style="width: 280px;"
+          @update:model-value="(val) => emit('update:descriptionFilter', val)"
         >
           <template #prefix>
             <i class="el-icon-search"></i>
@@ -152,9 +152,9 @@
           v-if="canManageWallets"
           type="success"
           size="small"
-          @click="$emit('export-grades')"
           :loading="exportingGrades"
           :disabled="exportingGrades"
+          @click="$emit('export-grades')"
         >
           <i class="fas fa-graduation-cap"></i>
           <span class="btn-text">{{ exportingGrades ? '處理中...' : '輸出成績' }}</span>

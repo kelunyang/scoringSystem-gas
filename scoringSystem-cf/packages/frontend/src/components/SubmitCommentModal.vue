@@ -144,9 +144,9 @@
         <el-button
           v-else
           type="primary"
-          @click="submitComment"
           :disabled="!canSubmit"
           :loading="submitting"
+          @click="submitComment"
         >
           <i v-if="!submitting" class="fas fa-paper-plane"></i>
           送出

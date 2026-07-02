@@ -14,9 +14,9 @@
 
     <el-select
       :model-value="status"
-      @update:model-value="$emit('update:status', $event)"
       placeholder="全部狀態"
       style="width: 120px;"
+      @update:model-value="$emit('update:status', $event)"
     >
       <el-option label="全部狀態" value="" />
       <el-option label="活躍" value="active" />

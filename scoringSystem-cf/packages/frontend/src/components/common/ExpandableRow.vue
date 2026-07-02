@@ -3,8 +3,8 @@
     <!-- Trigger row with built-in chevron -->
     <div
       class="expandable-row__trigger"
-      @click="handleToggle"
       :class="{ 'is-expanded': isExpanded, 'is-loading': isLoading }"
+      @click="handleToggle"
     >
       <!-- Built-in expand/collapse icon -->
       <i
@@ -15,7 +15,7 @@
 
       <!-- Trigger content slot -->
       <div class="expandable-row__trigger-content">
-        <slot name="trigger" :isExpanded="isExpanded" :isLoading="isLoading"></slot>
+        <slot name="trigger" :is-expanded="isExpanded" :is-loading="isLoading"></slot>
       </div>
     </div>
 

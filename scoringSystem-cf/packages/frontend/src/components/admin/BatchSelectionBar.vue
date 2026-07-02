@@ -58,7 +58,7 @@
               即將為 {{ selectedCount }} 位使用者重設密碼
             </p>
 
-            <el-form :model="resetForm" :rules="resetRules" ref="resetFormRef">
+            <el-form ref="resetFormRef" :model="resetForm" :rules="resetRules">
               <el-form-item label="新密碼" prop="newPassword">
                 <el-input
                   v-model="resetForm.newPassword"

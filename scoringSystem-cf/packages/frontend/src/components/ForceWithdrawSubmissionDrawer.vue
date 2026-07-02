@@ -2,11 +2,11 @@
   <!-- Force Withdraw Submission Drawer -->
   <el-drawer
     :model-value="visible"
-    @update:model-value="$emit('update:visible', $event)"
     direction="ttb"
     size="100%"
     :close-on-click-modal="false"
     class="force-withdraw-drawer drawer-maroon"
+    @update:model-value="$emit('update:visible', $event)"
   >
     <template #header>
       <el-breadcrumb separator=">">
@@ -20,7 +20,7 @@
         </el-breadcrumb-item>
       </el-breadcrumb>
     </template>
-    <div class="drawer-body" v-if="submission">
+    <div v-if="submission" class="drawer-body">
       <!-- DrawerAlertZone 統一管理 Alerts -->
       <DrawerAlertZone />
 
@@ -48,7 +48,7 @@
               <i class="fas fa-exclamation-triangle"></i> 已核准
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="參與者" v-if="submission.authors">
+          <el-descriptions-item v-if="submission.authors" label="參與者">
             <div class="authors-list">
               <span v-for="(author, idx) in parseAuthors(submission.authors)" :key="idx" class="author-tag">
                 {{ author }}
@@ -90,16 +90,16 @@
       <div class="drawer-actions">
         <el-button
           type="danger"
-          @click="confirmWithdraw"
           :disabled="!isValidForm || isWithdrawing"
           :loading="isWithdrawing"
+          @click="confirmWithdraw"
         >
           <i class="fas fa-ban"></i>
           {{ isWithdrawing ? '撤回中...' : '確定強制撤回' }}
         </el-button>
         <el-button
-          @click="closeDrawer"
           :disabled="isWithdrawing"
+          @click="closeDrawer"
         >
           取消
         </el-button>

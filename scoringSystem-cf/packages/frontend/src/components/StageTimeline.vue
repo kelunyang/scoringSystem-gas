@@ -13,8 +13,8 @@
           <!-- 斜線 pattern（每個階段狀態一組顏色），indicator 所在線段套用 -->
           <pattern
             v-for="p in hatchPatterns"
-            :key="p.id"
             :id="p.id"
+            :key="p.id"
             patternUnits="userSpaceOnUse"
             :width="8"
             :height="8"
@@ -42,8 +42,8 @@
       <div v-else class="timeline-segments">
         <div
           v-for="(segment, index) in timelineSegments"
-          :key="'segment-' + index"
           v-show="segment.height > 0"
+          :key="'segment-' + index"
           class="timeline-segment"
           :class="[
             `segment-${segment.status}`,
@@ -82,8 +82,8 @@
       <!-- 階段節點 -->
       <div
         v-for="(stage, index) in normalizedStages"
-        :key="stage.id"
         v-show="stage && stage.id"
+        :key="stage.id"
         class="timeline-stage"
         :class="{
           'active': activeStageId === stage.id,
@@ -97,10 +97,10 @@
           : { top: getStagePosition(index) + '%' }"
         :data-stage-index="index"
         :data-stage-id="stage.id"
+        :title="getStageTooltip(stage)"
         @click="handleStageClick(stage.id || '')"
         @mouseenter="hoveredStageId = stage.id"
         @mouseleave="hoveredStageId = null"
-        :title="getStageTooltip(stage)"
       >
         <div class="stage-dot">
           <i v-if="stage.originalStatus === 'completed' || stage.originalStatus === 'archived'" class="fas fa-check"></i>

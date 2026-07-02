@@ -32,31 +32,31 @@
 
           <!-- Statistics Row -->
           <el-row :gutter="12" class="stats-row">
-            <el-col :xs="12" :sm="8" :md="6" v-if="props.groupData.finalRank || props.groupData.rank">
+            <el-col v-if="props.groupData.finalRank || props.groupData.rank" :xs="12" :sm="8" :md="6">
               <AnimatedStatistic title="排名 (r)" :value="(props.groupData.finalRank || props.groupData.rank)!" />
             </el-col>
-            <el-col :xs="12" :sm="8" :md="6" v-if="props.groupData.totalGroups">
+            <el-col v-if="props.groupData.totalGroups" :xs="12" :sm="8" :md="6">
               <AnimatedStatistic title="總組數 (N)" :value="props.groupData.totalGroups" />
             </el-col>
-            <el-col :xs="12" :sm="8" :md="6" v-if="props.groupData.allocatedPoints !== undefined">
+            <el-col v-if="props.groupData.allocatedPoints !== undefined" :xs="12" :sm="8" :md="6">
               <AnimatedStatistic title="組別獲得點數(點)" :value="props.groupData.allocatedPoints" />
             </el-col>
-            <el-col :xs="12" :sm="8" :md="6" v-if="props.projectConfig?.rewardPool">
+            <el-col v-if="props.projectConfig?.rewardPool" :xs="12" :sm="8" :md="6">
               <AnimatedStatistic title="總獎金池(點)" :value="props.projectConfig.rewardPool" />
             </el-col>
-            <el-col :xs="12" :sm="8" :md="6" v-if="props.projectConfig?.studentWeight !== undefined">
+            <el-col v-if="props.projectConfig?.studentWeight !== undefined" :xs="12" :sm="8" :md="6">
               <AnimatedStatistic
                 title="學生權重(%)"
                 :value="Math.round(props.projectConfig.studentWeight * 100)"
               />
             </el-col>
-            <el-col :xs="12" :sm="8" :md="6" v-if="props.projectConfig?.teacherWeight !== undefined">
+            <el-col v-if="props.projectConfig?.teacherWeight !== undefined" :xs="12" :sm="8" :md="6">
               <AnimatedStatistic
                 title="教師權重(%)"
                 :value="Math.round(props.projectConfig.teacherWeight * 100)"
               />
             </el-col>
-            <el-col :xs="12" :sm="8" :md="6" v-if="props.groupData.studentScore !== undefined">
+            <el-col v-if="props.groupData.studentScore !== undefined" :xs="12" :sm="8" :md="6">
               <!-- 小數值保留 el-statistic -->
               <el-statistic
                 title="學生評分"
@@ -64,7 +64,7 @@
                 :precision="2"
               />
             </el-col>
-            <el-col :xs="12" :sm="8" :md="6" v-if="props.groupData.teacherScore !== undefined">
+            <el-col v-if="props.groupData.teacherScore !== undefined" :xs="12" :sm="8" :md="6">
               <!-- 小數值保留 el-statistic -->
               <el-statistic
                 title="教師評分"

@@ -176,7 +176,7 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
 
     // 收集所有比例，找到全域最小值
     const allRatios = []
-    for (let rankKey in allTeamRoles) {
+    for (const rankKey in allTeamRoles) {
       if (allTeamRoles[rankKey] && allTeamRoles[rankKey].length > 0) {
         allTeamRoles[rankKey].forEach((role: any) => {
           if (role.ratio > 0) allRatios.push(role.ratio)
@@ -219,7 +219,7 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
 
     // 計算所有組的總權重來分配點數
     const allPeople: Array<{ finalWeight: number }> = []
-    for (let rankKey in allTeamRoles) {
+    for (const rankKey in allTeamRoles) {
       const rankWeight = rankWeights[rankKey]
       allTeamRoles[rankKey].forEach((role: any) => {
         const baseWeightUnits = role.ratio / globalMinRatio

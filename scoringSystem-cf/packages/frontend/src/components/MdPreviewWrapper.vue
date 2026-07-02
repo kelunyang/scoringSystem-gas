@@ -1,13 +1,13 @@
 <template>
   <div class="md-preview-wrapper">
     <MdPreview
-      :modelValue="processedContent"
+      :model-value="processedContent"
       :language="'zh-TW'"
-      :noMermaid="true"
-      :noKatex="true"
+      :no-mermaid="true"
+      :no-katex="true"
       :sanitize="handleSanitize"
-      :showCodeRowNumber="false"
-      :previewTheme="'default'"
+      :show-code-row-number="false"
+      :preview-theme="'default'"
     />
   </div>
 </template>

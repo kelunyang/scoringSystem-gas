@@ -2,13 +2,13 @@
   <div class="confirmation-input">
     <el-input
       :model-value="modelValue"
-      @update:model-value="$emit('update:modelValue', ($event as string).toUpperCase())"
       :placeholder="placeholder || `輸入 ${keyword} 以確認`"
       :size="size"
       :class="{ 'is-valid': isValid }"
       :disabled="disabled"
-      @keyup.enter="$emit('confirm')"
       clearable
+      @update:model-value="$emit('update:modelValue', ($event as string).toUpperCase())"
+      @keyup.enter="$emit('confirm')"
     >
       <template #prefix>
         <i :class="prefixIcon || 'fas fa-keyboard'"></i>

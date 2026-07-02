@@ -20,8 +20,8 @@
         </el-tooltip>
         <button
           class="btn btn-secondary"
-          @click="handleSubmit"
           :disabled="!canSubmit || loading"
+          @click="handleSubmit"
         >
           <i v-if="loading" class="fas fa-spinner fa-spin"></i>
           <span v-else>驗證email</span>

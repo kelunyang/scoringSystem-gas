@@ -647,7 +647,7 @@ export async function getStageComments(
 
     if (rootCommentIds.length > 0) {
       const placeholders = rootCommentIds.map(() => '?').join(',');
-      let repliesQuery = `
+      const repliesQuery = `
         SELECT
           c.commentId, c.stageId, c.content,
           c.authorEmail, c.mentionedGroups, c.mentionedUsers,

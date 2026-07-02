@@ -53,8 +53,8 @@
       :style="combinedDrawerStyle"
     >
       <div
-        class="drawer-content"
         v-loading="loading"
+        class="drawer-content"
         :element-loading-text="loadingText"
       >
         <slot></slot>

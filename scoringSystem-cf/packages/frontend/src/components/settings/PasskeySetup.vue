@@ -20,7 +20,7 @@
           <p class="status-hint">使用指紋、Face ID 或安全金鑰進行快速登入</p>
         </div>
       </div>
-      <el-button type="primary" @click="startRegistration" :loading="loading">
+      <el-button type="primary" :loading="loading" @click="startRegistration">
         <i class="fas fa-plus-circle"></i> 新增 Passkey
       </el-button>
     </div>
@@ -35,7 +35,7 @@
             <p class="status-hint">已註冊 {{ status?.credentialCount || 0 }} 個裝置</p>
           </div>
         </div>
-        <el-button size="small" @click="startRegistration" :loading="loading">
+        <el-button size="small" :loading="loading" @click="startRegistration">
           <i class="fas fa-plus"></i> 新增裝置
         </el-button>
       </div>

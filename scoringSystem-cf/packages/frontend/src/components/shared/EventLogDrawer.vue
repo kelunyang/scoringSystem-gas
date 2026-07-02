@@ -1,10 +1,10 @@
 <template>
   <el-drawer
     :model-value="modelValue"
-    @update:model-value="$emit('update:modelValue', $event)"
     direction="btt"
     size="100%"
     class="event-log-drawer drawer-navy"
+    @update:model-value="$emit('update:modelValue', $event)"
   >
     <template #header>
       <el-breadcrumb separator=">">

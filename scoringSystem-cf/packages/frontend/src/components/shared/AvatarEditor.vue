@@ -30,13 +30,13 @@
     <div class="avatar-controls-section">
       <!-- Regenerate Button -->
       <div v-if="showRegenerateButton" class="avatar-actions">
-        <el-button type="warning" size="small" @click="handleRegenerate" :loading="regenerating">
+        <el-button type="warning" size="small" :loading="regenerating" @click="handleRegenerate">
           <i class="fas fa-sync"></i> 重新生成
         </el-button>
       </div>
 
       <!-- Customization UI -->
-      <div v-if="customizationLayout === 'dropdown'" class="avatar-params-dropdown" v-click-outside="closeParamsDropdown">
+      <div v-if="customizationLayout === 'dropdown'" v-click-outside="closeParamsDropdown" class="avatar-params-dropdown">
         <el-button type="info" size="small" @click="toggleParamsDropdown">
           <i class="fas fa-sliders-h"></i> 調整參數
         </el-button>
@@ -64,7 +64,7 @@
 
       <!-- Save Actions -->
       <div v-if="showSaveButton && hasChanges" class="avatar-save-actions">
-        <el-button type="primary" size="small" @click="handleSave" :loading="saving">
+        <el-button type="primary" size="small" :loading="saving" @click="handleSave">
           <i class="fas fa-save"></i> 儲存
         </el-button>
         <el-button size="small" @click="handleCancel">

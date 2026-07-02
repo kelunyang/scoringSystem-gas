@@ -24,25 +24,25 @@
           @click="!props.disabled && !isItemDisabled(item) && moveToSelected(item)"
         >
           <div class="item-content">
-            <div class="content-text" v-if="!isExpanded(item)">
+            <div v-if="!isExpanded(item)" class="content-text">
               {{ truncateContent(item[displayFields.content]) }}
               <a
                 v-if="itemNeedsTruncation(item)"
-                @click.stop="toggleExpand(item)"
                 class="show-more-link"
+                @click.stop="toggleExpand(item)"
               >
                 點擊看更多
               </a>
             </div>
-            <div class="content-expanded" v-else>
+            <div v-else class="content-expanded">
               <MdPreviewWrapper :content="getItemContent(item)" class="markdown-content" />
-              <a @click.stop="toggleExpand(item)" class="collapse-link">摺疊評論</a>
+              <a class="collapse-link" @click.stop="toggleExpand(item)">摺疊評論</a>
             </div>
             <div class="item-meta">
               {{ getAuthorDisplay(item) }} · {{ formatTime(item[displayFields.timestamp]) }}
             </div>
           </div>
-          <div class="move-icon" v-if="!isItemDisabled(item)">→</div>
+          <div v-if="!isItemDisabled(item)" class="move-icon">→</div>
         </div>
 
         <EmptyState
@@ -61,9 +61,9 @@
     <div class="transfer-actions">
       <button
         class="action-btn"
-        @click="moveAllToSelected"
         :disabled="props.disabled || !canMoveAnyToSelected"
         title="全部移到右边"
+        @click="moveAllToSelected"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path d="M13 17L18 12L13 7M6 17L11 12L6 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -71,9 +71,9 @@
       </button>
       <button
         class="action-btn"
-        @click="moveAllToAvailable"
         :disabled="props.disabled || selectedItems.length === 0"
         title="全部移到左边"
+        @click="moveAllToAvailable"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path d="M11 17L6 12L11 7M18 17L13 12L18 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -102,36 +102,36 @@
         >
           <div class="rank-badge">{{ index + 1 }}</div>
           <div class="item-content">
-            <div class="content-text" v-if="!isExpanded(item)">
+            <div v-if="!isExpanded(item)" class="content-text">
               {{ truncateContent(item[displayFields.content]) }}
               <a
                 v-if="itemNeedsTruncation(item)"
-                @click.stop="toggleExpand(item)"
                 class="show-more-link"
+                @click.stop="toggleExpand(item)"
               >
                 點擊看更多
               </a>
             </div>
-            <div class="content-expanded" v-else>
+            <div v-else class="content-expanded">
               <MdPreviewWrapper :content="getItemContent(item)" class="markdown-content" />
-              <a @click.stop="toggleExpand(item)" class="collapse-link">摺疊評論</a>
+              <a class="collapse-link" @click.stop="toggleExpand(item)">摺疊評論</a>
             </div>
             <div class="item-meta">
               {{ getAuthorDisplay(item) }} · {{ formatTime(item[displayFields.timestamp]) }}
             </div>
           </div>
           <div class="item-actions">
-            <button @click="moveUp(index)" :disabled="props.disabled || index === 0" title="上移">
+            <button :disabled="props.disabled || index === 0" title="上移" @click="moveUp(index)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                 <path d="M18 15L12 9L6 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
-            <button @click="moveDown(index)" :disabled="props.disabled || index === selectedItems.length - 1" title="下移">
+            <button :disabled="props.disabled || index === selectedItems.length - 1" title="下移" @click="moveDown(index)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                 <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
-            <button @click="moveToAvailable(item)" :disabled="props.disabled" class="remove-btn" title="移除">
+            <button :disabled="props.disabled" class="remove-btn" title="移除" @click="moveToAvailable(item)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                 <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>

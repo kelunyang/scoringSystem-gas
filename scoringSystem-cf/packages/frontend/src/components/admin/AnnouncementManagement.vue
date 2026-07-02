@@ -196,7 +196,7 @@
                         <label>創建時間</label>
                         <div class="detail-value">{{ formatTime(announcement.createdAt) }}</div>
                       </div>
-                      <div class="detail-item" v-if="announcement.updatedAt">
+                      <div v-if="announcement.updatedAt" class="detail-item">
                         <label>最後更新</label>
                         <div class="detail-value">{{ formatTime(announcement.updatedAt) }}</div>
                       </div>

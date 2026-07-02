@@ -1,5 +1,5 @@
 <template>
-  <div class="transactions-container" v-loading="loading" element-loading-text="載入交易記錄中...">
+  <div v-loading="loading" class="transactions-container" element-loading-text="載入交易記錄中...">
     <table class="transactions-table">
       <thead>
         <tr>
@@ -66,7 +66,7 @@
           <!-- Expanded Details Row -->
           <tr v-if="isExpanded(transaction.transactionId)" class="transaction-details">
             <td :colspan="showUserColumn ? 8 : 7">
-              <div class="details-container" v-loading="isLoadingDetails(transaction.transactionId)" element-loading-text="載入詳情中...">
+              <div v-loading="isLoadingDetails(transaction.transactionId)" class="details-container" element-loading-text="載入詳情中...">
                 <!-- Transaction Description -->
                 <div v-if="transaction.description" class="detail-section">
                   <h4><i class="fas fa-file-text"></i> 交易說明</h4>

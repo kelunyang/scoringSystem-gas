@@ -1,12 +1,12 @@
 <template>
   <el-drawer
     :model-value="visible"
-    @update:model-value="handleVisibleChange"
     direction="btt"
     size="100%"
     :before-close="handleClose"
     :z-index="2000"
     class="drawer-navy"
+    @update:model-value="handleVisibleChange"
   >
     <template #header>
       <el-breadcrumb separator=">">
@@ -20,7 +20,7 @@
         </el-breadcrumb-item>
       </el-breadcrumb>
     </template>
-    <div class="analysis-content" v-loading="loading" element-loading-text="載入計票數據中...">
+    <div v-loading="loading" class="analysis-content" element-loading-text="載入計票數據中...">
 
       <!-- 計票說明 -->
       <div class="info-section">
@@ -53,7 +53,7 @@
       </div>
 
       <!-- 計票結果分析 -->
-      <div class="chart-section" v-if="!loading">
+      <div v-if="!loading" class="chart-section">
         <div class="section-header">
           <h3><i class="fas fa-trophy"></i> 投票結果表格</h3>
         </div>
@@ -101,7 +101,8 @@
               <tr>
                 <th class="candidate-header-label">投票者 \\ 候選組別</th>
                 <!-- Candidate groups as columns -->
-                <th v-for="candidate in candidateGroups"
+                <th
+v-for="candidate in candidateGroups"
                     :key="candidate.groupId"
                     :style="{ background: getCandidateHeaderColor(candidate.groupId), color: 'white' }">
                   <div>{{ candidate.groupName }}</div>
@@ -112,12 +113,14 @@
             <tbody>
               <!-- Each student voter as a row -->
               <tr v-for="(voter, index) in votersList" :key="voter.groupId">
-                <td class="voter-name"
+                <td
+class="voter-name"
                     :style="{ background: getVoterHeaderColor(voter.groupId), color: '#000' }">
                   {{ voter.proposerDisplayName || '學生' + (index + 1) }}({{ voter.proposerEmail || voter.groupId }})
                 </td>
                 <!-- This voter's ranking for each candidate -->
-                <td v-for="candidate in candidateGroups"
+                <td
+v-for="candidate in candidateGroups"
                     :key="candidate.groupId"
                     :style="getRankCellStyle(getVoteRank(voter.groupId, candidate.groupId))">
                   {{ getVoteRank(voter.groupId, candidate.groupId) || '-' }}
@@ -126,12 +129,14 @@
 
               <!-- Each teacher voter as a row -->
               <tr v-for="(teacher, index) in teacherVotes" :key="'teacher-' + index">
-                <td class="voter-name"
+                <td
+class="voter-name"
                     :style="{ background: getVoterHeaderColor(`teacher-${index}`), color: '#000' }">
                   {{ teacher.teacherDisplayName || '教師' + (index + 1) }}({{ teacher.teacherEmail }})
                 </td>
                 <!-- This teacher's ranking for each candidate -->
-                <td v-for="candidate in candidateGroups"
+                <td
+v-for="candidate in candidateGroups"
                     :key="candidate.groupId"
                     :style="getRankCellStyle(getTeacherVoteRank(teacher, candidate.groupId))">
                   {{ getTeacherVoteRank(teacher, candidate.groupId) || '-' }}
@@ -141,7 +146,8 @@
               <!-- Score rows at the bottom (transposed) -->
               <tr class="stats-row">
                 <td class="stats-label">學生分數 (70%)</td>
-                <td v-for="candidate in candidateGroups"
+                <td
+v-for="candidate in candidateGroups"
                     :key="candidate.groupId"
                     :style="{ background: getScoreColor(candidate.studentScore, 'student'), color: 'white' }">
                   <div class="score-amount">{{ candidate.studentScore?.toFixed(2) || '0.00' }}</div>
@@ -150,7 +156,8 @@
 
               <tr class="stats-row">
                 <td class="stats-label">教師分數 (30%)</td>
-                <td v-for="candidate in candidateGroups"
+                <td
+v-for="candidate in candidateGroups"
                     :key="candidate.groupId"
                     :style="{ background: getScoreColor(candidate.teacherScore, 'teacher'), color: 'white' }">
                   <div class="score-amount">{{ candidate.teacherScore?.toFixed(2) || '0.00' }}</div>
@@ -159,7 +166,8 @@
 
               <tr class="stats-row">
                 <td class="stats-label">加權總分</td>
-                <td v-for="candidate in candidateGroups"
+                <td
+v-for="candidate in candidateGroups"
                     :key="candidate.groupId"
                     :style="{ background: getScoreColor(candidate.totalScore, 'total'), color: 'white' }">
                   <div class="score-amount">{{ candidate.totalScore?.toFixed(2) || '0.00' }}</div>
@@ -168,7 +176,8 @@
 
               <tr class="stats-row">
                 <td class="stats-label">獲得獎金</td>
-                <td v-for="candidate in candidateGroups"
+                <td
+v-for="candidate in candidateGroups"
                     :key="candidate.groupId"
                     :style="{ background: getScoreColor(candidate.allocatedScore), color: 'white' }">
                   <div class="score-amount">🏆 {{ candidate.allocatedScore }} 點</div>
@@ -205,8 +214,8 @@
             {{ selectedGroup.groupName }} - 組內點數分配詳情
             <el-button
               size="small"
-              @click="selectedGroup = null"
               style="margin-left: 10px;"
+              @click="selectedGroup = null"
             >
               <i class="fas fa-times"></i> 關閉
             </el-button>

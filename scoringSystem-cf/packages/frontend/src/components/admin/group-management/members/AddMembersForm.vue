@@ -3,12 +3,12 @@
     <div class="form-row">
       <el-select
         :model-value="selectedUsers"
-        @update:model-value="$emit('update:selectedUsers', $event)"
         multiple
         filterable
         reserve-keyword
         placeholder="輸入用戶名稱或email進行搜尋..."
         style="flex: 1;"
+        @update:model-value="$emit('update:selectedUsers', $event)"
       >
         <el-option
           v-for="user in availableUsers"
@@ -41,9 +41,9 @@
       <el-select
         v-if="groupType === 'project'"
         :model-value="memberRole"
-        @update:model-value="$emit('update:memberRole', $event)"
         placeholder="選擇角色"
         style="width: 120px;"
+        @update:model-value="$emit('update:memberRole', $event)"
       >
         <el-option label="成員" value="member" />
         <el-option label="組長" value="leader" />
@@ -55,8 +55,8 @@
       >
         <button
           class="btn-primary btn-sm"
-          @click="$emit('add')"
           :disabled="adding || selectedUsers.length === 0"
+          @click="$emit('add')"
         >
           <i :class="adding ? 'fas fa-spinner fa-spin' : 'fas fa-plus'"></i>
           {{ adding ? '新增中...' : '新增成員' }}

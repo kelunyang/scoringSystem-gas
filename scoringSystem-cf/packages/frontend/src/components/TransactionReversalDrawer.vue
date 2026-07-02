@@ -2,11 +2,11 @@
   <!-- Transaction Reversal Drawer -->
   <el-drawer
     :model-value="visible"
-    @update:model-value="$emit('update:visible', $event)"
     direction="ttb"
     size="100%"
     :close-on-click-modal="false"
     class="transaction-reversal-drawer drawer-maroon"
+    @update:model-value="$emit('update:visible', $event)"
   >
     <template #header>
       <el-breadcrumb separator=">">
@@ -20,7 +20,7 @@
         </el-breadcrumb-item>
       </el-breadcrumb>
     </template>
-    <div class="drawer-body" v-if="transaction">
+    <div v-if="transaction" class="drawer-body">
       <!-- DrawerAlertZone 統一管理 Alerts -->
       <DrawerAlertZone />
 
@@ -53,7 +53,7 @@
           <el-descriptions-item label="交易時間">
             {{ formatTime(transaction.timestamp) }}
           </el-descriptions-item>
-          <el-descriptions-item label="相關內容" v-if="transaction.relatedSubmissionId || transaction.relatedCommentId">
+          <el-descriptions-item v-if="transaction.relatedSubmissionId || transaction.relatedCommentId" label="相關內容">
             <el-tag v-if="transaction.relatedSubmissionId" type="info" size="small">
               <i class="fas fa-file-alt"></i> 成果 ID: {{ transaction.relatedSubmissionId }}
             </el-tag>
@@ -96,16 +96,16 @@
       <div class="drawer-actions">
         <el-button
           type="danger"
-          @click="confirmReversal"
           :disabled="!isValidForm || isReversing"
           :loading="isReversing"
+          @click="confirmReversal"
         >
           <i class="fas fa-undo"></i>
           {{ isReversing ? '撤銷中...' : '確定撤銷交易' }}
         </el-button>
         <el-button
-          @click="closeDrawer"
           :disabled="isReversing"
+          @click="closeDrawer"
         >
           取消
         </el-button>

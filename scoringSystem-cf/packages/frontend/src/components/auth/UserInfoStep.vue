@@ -23,7 +23,7 @@
         :disabled="loading"
         @input="checkPasswordStrength"
       />
-      <div class="password-strength" v-if="passwordStrength">
+      <div v-if="passwordStrength" class="password-strength">
         <el-progress
           :percentage="getPasswordStrengthPercentage()"
           :color="getPasswordStrengthColor()"
@@ -45,7 +45,7 @@
         :disabled="loading"
         @input="checkPasswordMatch"
       />
-      <div class="field-status" v-if="passwordMatchStatus">
+      <div v-if="passwordMatchStatus" class="field-status">
         <span :class="passwordMatchStatus.type">{{ passwordMatchStatus.message }}</span>
       </div>
     </div>
@@ -76,15 +76,15 @@
     <div class="form-actions">
       <button
         class="btn btn-secondary"
-        @click="handleBack"
         :disabled="loading"
+        @click="handleBack"
       >
         返回上一步
       </button>
       <button
         class="btn btn-primary"
-        @click="handleSubmit"
         :disabled="!canSubmit || loading"
+        @click="handleSubmit"
       >
         <div v-if="loading" class="spinner"></div>
         {{ loading ? '註冊中...' : '註冊' }}

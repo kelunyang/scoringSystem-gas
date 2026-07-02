@@ -15,10 +15,10 @@
           <span class="filter-label">搜尋：</span>
           <el-input
             :model-value="searchText"
-            @update:model-value="$emit('update:searchText', $event)"
             placeholder="搜尋全域群組名稱"
             clearable
             style="width: 250px;"
+            @update:model-value="$emit('update:searchText', $event)"
           >
             <template #prefix>
               <i class="fas fa-search"></i>
@@ -30,9 +30,9 @@
           <span class="filter-label">狀態：</span>
           <el-select
             :model-value="statusFilter"
-            @update:model-value="$emit('update:statusFilter', $event)"
             placeholder="全部狀態"
             style="width: 150px;"
+            @update:model-value="$emit('update:statusFilter', $event)"
           >
             <el-option label="全部狀態" value="" />
             <el-option label="活躍" value="active" />
@@ -48,8 +48,8 @@
             <el-button
               type="danger"
               size="small"
-              @click="$emit('batch-deactivate')"
               :disabled="selectedGroups.size === 0"
+              @click="$emit('batch-deactivate')"
             >
               <i class="fas fa-times-circle"></i>
               <span class="btn-text">整批停用</span>
@@ -61,8 +61,8 @@
             <el-button
               type="success"
               size="small"
-              @click="$emit('batch-activate')"
               :disabled="selectedGroups.size === 0"
+              @click="$emit('batch-activate')"
             >
               <i class="fas fa-check-circle"></i>
               <span class="btn-text">整批啟用</span>
@@ -115,10 +115,10 @@
         <AddMembersForm
           v-if="addingMemberForGroup === group.groupId"
           :selected-users="selectedUsersToAdd"
-          @update:selected-users="$emit('update:selectedUsersToAdd', $event)"
           :available-users="availableUsersForGroup(group)"
           :adding="addingMember"
           group-type="global"
+          @update:selected-users="$emit('update:selectedUsersToAdd', $event)"
           @add="$emit('add-members', group)"
           @cancel="$emit('cancel-add-member')"
         />

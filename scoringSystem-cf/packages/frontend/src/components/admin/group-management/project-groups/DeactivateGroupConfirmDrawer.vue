@@ -7,7 +7,7 @@
     :before-close="handleClose"
     class="drawer-maroon"
   >
-    <div class="drawer-body" v-loading="loading" element-loading-text="處理中...">
+    <div v-loading="loading" class="drawer-body" element-loading-text="處理中...">
       <!-- Warning Section -->
       <div class="warning-section">
         <div class="warning-icon">
@@ -22,7 +22,7 @@
       </div>
 
       <!-- Group Info Section -->
-      <div class="form-section" v-if="group">
+      <div v-if="group" class="form-section">
         <h4><i class="fas fa-layer-group"></i> 群組資訊</h4>
 
         <div class="group-info-grid">
@@ -103,8 +103,8 @@
         </el-button>
         <el-button
           size="large"
-          @click="handleClose"
           :disabled="loading"
+          @click="handleClose"
         >
           <i class="fas fa-times"></i>
           取消

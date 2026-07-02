@@ -17,7 +17,7 @@
         </el-breadcrumb-item>
       </el-breadcrumb>
     </template>
-    <div class="drawer-body" v-loading="loading" element-loading-text="載入評論資料中...">
+    <div v-loading="loading" class="drawer-body" element-loading-text="載入評論資料中...">
       <!-- DrawerAlertZone for preview mode alerts -->
       <DrawerAlertZone />
 
@@ -66,11 +66,11 @@
 
         <VersionTimeline
           :versions="proposalVersions"
-          :currentVersionId="selectedVersionId"
-          versionIdKey="proposalId"
-          createdTimeKey="createdTime"
-          displayNameKey="authorEmail"
-          :formatTitleFn="(_version: any, index: number) =>
+          :current-version-id="selectedVersionId"
+          version-id-key="proposalId"
+          created-time-key="createdTime"
+          display-name-key="authorEmail"
+          :format-title-fn="(_version: any, index: number) =>
             index === proposalVersions.length - 1
               ? '最新版本'
               : `版本 ${index + 1}`"
@@ -125,12 +125,12 @@
       <!-- Two Column Comparison: When viewing old version -->
       <RankingComparison
         v-else
-        leftTitle="最新版本"
-        :rightTitle="`版本 ${proposalVersions.findIndex(p => p.proposalId === selectedVersionId) + 1}`"
-        :leftItems="latestProposalComments"
-        :rightItems="currentProposalComments"
-        itemKey="id"
-        itemLabel="author"
+        left-title="最新版本"
+        :right-title="`版本 ${proposalVersions.findIndex(p => p.proposalId === selectedVersionId) + 1}`"
+        :left-items="latestProposalComments"
+        :right-items="currentProposalComments"
+        item-key="id"
+        item-label="author"
         :item-display-fn="(item: any) => `${item.author}(${item.authorEmail})`"
       />
 
@@ -150,9 +150,9 @@
         <el-button
           v-if="!isSudoMode"
           type="primary"
-          @click="submitVote"
           :disabled="!canSubmit || isReadOnly"
           :loading="submitting"
+          @click="submitVote"
         >
           <i v-if="!submitting" class="fas fa-paper-plane"></i>
           {{ isViewingOldVersion ? '切回最新版本以投票' : '送出投票' }}
@@ -161,8 +161,8 @@
         <!-- 清除重選按鈕（SUDO 模式下隱藏） -->
         <el-button
           v-if="!isSudoMode"
-          @click="clearAll"
           :disabled="isReadOnly"
+          @click="clearAll"
         >
           <i class="fas fa-eraser"></i>
           清除重選

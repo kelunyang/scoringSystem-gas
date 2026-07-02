@@ -15,12 +15,12 @@
         </el-input>
         <el-button
           plain
-          @click="refreshProjects(); resetTimer()"
           class="refresh-button-with-progress"
           :style="{
             background: `linear-gradient(to right, #EEE 0%, #EEE ${progressPercentage}%, #ffffff ${progressPercentage}%, #ffffff 100%)`,
             color: '#000'
           }"
+          @click="refreshProjects(); resetTimer()"
         >
           <i class="fas fa-refresh"></i> 重新整理
         </el-button>
@@ -34,7 +34,7 @@
     </div>
 
     <!-- Content -->
-    <div class="content-area" v-loading="loading" element-loading-text="載入專案資料中...">
+    <div v-loading="loading" class="content-area" element-loading-text="載入專案資料中...">
       <div class="projects-grid">
         <ProjectCard
           v-for="project in projectsWithPermissions"
@@ -127,6 +127,7 @@
               <el-checkbox
                 v-if="member.role !== 'leader' && member.userEmail !== user?.userEmail && selectedGroupForManagement?.allowChange !== false"
                 :model-value="selectedMembersToRemove.includes(member.userEmail)"
+                class="member-checkbox"
                 @update:model-value="(val: string | number | boolean) => {
                   if (val) {
                     if (!selectedMembersToRemove.includes(member.userEmail)) {
@@ -137,7 +138,6 @@
                     if (idx > -1) selectedMembersToRemove.splice(idx, 1)
                   }
                 }"
-                class="member-checkbox"
               />
 
               <div class="member-info">
@@ -181,7 +181,7 @@
         </div>
 
         <!-- 新增成員區域 -->
-        <div v-if="selectedGroupForManagement?.allowChange !== false" class="form-section" v-loading="loadingAvailableUsers" element-loading-text="載入可用成員中...">
+        <div v-if="selectedGroupForManagement?.allowChange !== false" v-loading="loadingAvailableUsers" class="form-section" element-loading-text="載入可用成員中...">
           <h4><i class="fas fa-user-plus"></i> 新增成員</h4>
 
           <template v-if="!loadingAvailableUsers">
@@ -233,8 +233,8 @@
                   :key="email"
                   v-memo="[email]"
                   closable
-                  @close="removeMemberFromSelection(email)"
                   class="member-tag"
+                  @close="removeMemberFromSelection(email)"
                 >
                   <i class="fas fa-user"></i>
                   {{ getUserDisplayInfo(email) }}
@@ -260,9 +260,9 @@
           <!-- 群組資訊 - 永遠可見 -->
           <el-button
             type="primary"
-            @click="handleSaveGroupInfo"
             :disabled="!hasGroupInfoChanges || savingGroupInfo"
             :loading="savingGroupInfo"
+            @click="handleSaveGroupInfo"
           >
             <i class="fas fa-save"></i>
             {{ savingGroupInfo ? '儲存中...' : '儲存群組資訊' }}
@@ -272,9 +272,9 @@
           <el-button
             v-if="selectedGroupForManagement?.allowChange !== false"
             type="success"
-            @click="handleAddMembers"
             :disabled="selectedMembersToAdd.length === 0 || addingMembers"
             :loading="addingMembers"
+            @click="handleAddMembers"
           >
             <i class="fas fa-user-plus"></i>
             {{ addingMembers ? '新增中...' : '新增成員' }}

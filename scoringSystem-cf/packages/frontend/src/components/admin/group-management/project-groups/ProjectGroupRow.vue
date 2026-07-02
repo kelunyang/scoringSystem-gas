@@ -36,13 +36,13 @@
           >
             <el-switch
               :model-value="group.allowChange"
-              @click.stop="handleSwitchClick"
               inline-prompt
               active-text="允許"
               inactive-text="禁止"
               active-color="#13ce66"
               inactive-color="#ff4949"
               :disabled="updatingAllowChange"
+              @click.stop="handleSwitchClick"
             />
           </div>
         </td>
@@ -106,13 +106,13 @@
           <span style="font-size: 12px; color: #909399; margin-right: 4px;">異動:</span>
           <el-switch
             :model-value="group.allowChange"
-            @click.stop="handleSwitchClick"
             inline-prompt
             active-text="允許"
             inactive-text="禁止"
             active-color="#13ce66"
             inactive-color="#ff4949"
             :disabled="updatingAllowChange"
+            @click.stop="handleSwitchClick"
           />
         </div>
         <el-switch
@@ -152,8 +152,8 @@
                 <el-checkbox
                   :model-value="isAllSelected"
                   :indeterminate="isSomeSelected"
-                  @click.stop
                   class="inline-checkbox"
+                  @click.stop
                 />
                 全選
               </el-button>
@@ -215,8 +215,8 @@
               <el-checkbox
                 :model-value="isAllSelected"
                 :indeterminate="isSomeSelected"
-                @click.stop
                 class="inline-checkbox"
+                @click.stop
               />
               全選
             </el-button>
@@ -292,8 +292,8 @@
                     size="small"
                     :loading="updatingMemberEmail === member.userEmail"
                     :disabled="updatingMemberEmail === member.userEmail"
-                    @change="(newRole) => handleUpdateMemberRole(member, newRole)"
                     class="role-select-compact"
+                    @change="(newRole) => handleUpdateMemberRole(member, newRole)"
                   >
                     <el-option label="成員" value="member">
                       <i class="fas fa-user"></i> 成員

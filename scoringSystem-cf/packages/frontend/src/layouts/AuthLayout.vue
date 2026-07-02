@@ -25,13 +25,13 @@
       :show-close="false"
       :close-on-click-modal="false"
       :close-on-press-escape="true"
-      @close="handleClose"
       class="auth-drawer"
+      @close="handleClose"
     >
       <!-- 自訂 Header（不使用 template #header） -->
       <div class="drawer-header">
         <!-- 返回按鈕 -->
-        <button class="back-button" @click="handleClose" aria-label="返回">
+        <button class="back-button" aria-label="返回" @click="handleClose">
           <i class="fas fa-times"></i>
         </button>
         <h2>歡迎使用 {{ systemTitle || '評分系統' }}</h2>

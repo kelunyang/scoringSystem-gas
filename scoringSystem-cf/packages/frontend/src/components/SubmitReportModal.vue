@@ -37,7 +37,7 @@
         </div>
 
         <!-- 載入中狀態 -->
-        <div v-if="loadingHistoricalVersions" class="version-loading" v-loading="true" element-loading-text="載入歷史版本中...">
+        <div v-if="loadingHistoricalVersions" v-loading="true" class="version-loading" element-loading-text="載入歷史版本中...">
           <div class="loading-placeholder">載入歷史版本中...</div>
         </div>
 
@@ -47,8 +47,8 @@
             v-model="selectedHistoricalVersion"
             class="version-selector"
             :placeholder="readOnly ? '選擇版本檢視內容' : '選擇歷史版本以快速填入內容'"
-            @change="handleHistoricalVersionChange"
             :clearable="!readOnly"
+            @change="handleHistoricalVersionChange"
           >
             <el-option
               v-for="version in historicalVersions"
@@ -108,14 +108,14 @@
               <i class="fas fa-balance-scale"></i> 均分
             </button>
             <SimulationControls
-              :simulatedRank="simulatedRank"
-              @update:simulatedRank="simulatedRank = $event"
-              :simulatedGroupCount="simulatedGroupCount"
-              @update:simulatedGroupCount="simulatedGroupCount = $event"
-              :totalActiveGroups="totalActiveGroups"
-              :totalProjectGroups="totalProjectGroups"
-              :totalPercentage="totalPercentage"
-              :showTotalPercentage="true"
+              :simulated-rank="simulatedRank"
+              :simulated-group-count="simulatedGroupCount"
+              :total-active-groups="totalActiveGroups"
+              :total-project-groups="totalProjectGroups"
+              :total-percentage="totalPercentage"
+              :show-total-percentage="true"
+              @update:simulated-rank="simulatedRank = $event"
+              @update:simulated-group-count="simulatedGroupCount = $event"
             />
           </div>
         </div>
@@ -146,8 +146,8 @@
 
             <div class="contribution-controls">
               <el-slider
-                v-model="member.contribution"
                 :key="`slider-${member.email}`"
+                v-model="member.contribution"
                 :min="1"
                 :max="100"
                 :step="1"
@@ -157,8 +157,8 @@
                 @input="updateContributions"
               />
               <el-input-number
-                v-model="member.contribution"
                 :key="`input-${member.email}`"
+                v-model="member.contribution"
                 :min="1"
                 :max="100"
                 :step="1"
@@ -193,22 +193,22 @@
           <!-- 使用共享組件 -->
           <OurGroupChart
             :members="membersWithPoints as any"
-            :simulatedRank="simulatedRank"
-            :simulatedGroupCount="simulatedGroupCount"
-            :reportReward="reportReward"
-            :allGroups="allGroups"
-            :currentGroupId="currentGroup?.groupId"
-            :totalPercentage="totalPercentage"
+            :simulated-rank="simulatedRank"
+            :simulated-group-count="simulatedGroupCount"
+            :report-reward="reportReward"
+            :all-groups="allGroups"
+            :current-group-id="currentGroup?.groupId"
+            :total-percentage="totalPercentage"
           />
 
           <AllGroupsChart
-            :selectedMembers="membersWithPoints"
-            :simulatedRank="simulatedRank"
-            :simulatedGroupCount="simulatedGroupCount"
-            :reportReward="reportReward"
-            :allGroups="allGroupsDataCalculated"
-            :currentGroupId="currentGroup?.groupId"
-            :totalProjectGroups="totalProjectGroups"
+            :selected-members="membersWithPoints"
+            :simulated-rank="simulatedRank"
+            :simulated-group-count="simulatedGroupCount"
+            :report-reward="reportReward"
+            :all-groups="allGroupsDataCalculated"
+            :current-group-id="currentGroup?.groupId"
+            :total-project-groups="totalProjectGroups"
           />
 
         </div>
@@ -236,7 +236,7 @@
         >
           <i class="fas fa-info-circle"></i> 階段描述
         </el-button>
-        <el-button v-if="!readOnly" type="primary" @click="submitReport" :disabled="!canSubmit" :loading="submitting">
+        <el-button v-if="!readOnly" type="primary" :disabled="!canSubmit" :loading="submitting" @click="submitReport">
           <i v-if="!submitting" class="fas fa-paper-plane"></i>
           {{ submitting ? '提交中...' : '送出' }}
         </el-button>

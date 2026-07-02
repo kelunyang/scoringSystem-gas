@@ -1,5 +1,5 @@
 <template>
-  <div class="reply-comment-drawer" v-if="visible" @click="handleClose">
+  <div v-if="visible" class="reply-comment-drawer" @click="handleClose">
     <div class="drawer-content" @click.stop>
       <!-- 標題欄 -->
       <div class="drawer-header">
@@ -26,7 +26,7 @@
       <DrawerAlertZone />
 
       <!-- 原評論顯示 -->
-      <div class="original-comment-section" v-if="originalComment">
+      <div v-if="originalComment" class="original-comment-section">
         <div class="section-label">回覆給：</div>
         <div class="original-comment-card">
           <div class="comment-author">{{ originalComment.authorName }}</div>
@@ -50,7 +50,7 @@
 
       <!-- 操作按鈕 -->
       <div class="drawer-actions">
-        <el-button type="primary" @click="submitReply" :disabled="!canSubmit" :loading="submitting">
+        <el-button type="primary" :disabled="!canSubmit" :loading="submitting" @click="submitReply">
           <i v-if="!submitting" class="fas fa-paper-plane"></i>
           {{ submitting ? '送出中...' : '送出' }}
         </el-button>

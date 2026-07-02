@@ -1,11 +1,11 @@
 <template>
   <el-drawer
     :model-value="visible"
-    @update:model-value="$emit('update:visible', $event)"
     direction="ttb"
     size="100%"
     :close-on-click-modal="false"
     class="force-voting-drawer drawer-maroon"
+    @update:model-value="$emit('update:visible', $event)"
   >
     <template #header>
       <div class="drawer-breadcrumb">
@@ -22,7 +22,7 @@
       </div>
     </template>
 
-    <div class="drawer-body" v-loading="loading">
+    <div v-loading="loading" class="drawer-body">
       <!-- DrawerAlertZone 統一管理 Alerts -->
       <DrawerAlertZone />
 
@@ -95,17 +95,17 @@
           <el-button
             type="danger"
             size="large"
-            @click="confirmForceVoting"
             :disabled="!isValidForm || isProcessing"
             :loading="isProcessing"
+            @click="confirmForceVoting"
           >
             <i class="fas fa-vote-yea"></i>
             {{ isProcessing ? '處理中...' : '確認強制投票' }}
           </el-button>
           <el-button
             size="large"
-            @click="closeDrawer"
             :disabled="isProcessing"
+            @click="closeDrawer"
           >
             <i class="fas fa-times"></i>
             取消

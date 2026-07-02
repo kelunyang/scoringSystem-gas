@@ -31,7 +31,8 @@
               @click="handleRefresh"
               @complete="handleRefresh"
             >
-              <template #default="{
+              <template
+#default="{
                 isActive,
                 timeLeft,
                 progressPercentage,
@@ -311,8 +312,8 @@
               v-if="currentDrawerStage?.status === 'voting' && canTeacherVote"
               type="warning"
               size="small"
-              @click="modalManager.openTeacherVoteModal(currentDrawerStage)"
               :disabled="loadingTeacherVoteData"
+              @click="modalManager.openTeacherVoteModal(currentDrawerStage)"
             >
               <i v-if="loadingTeacherVoteData" class="fas fa-spinner fa-spin"></i>
               <i v-else class="fas fa-chalkboard-teacher"></i>
@@ -323,8 +324,8 @@
             <el-dropdown
               v-if="currentDrawerStage?.status === 'completed'"
               trigger="click"
-              @command="handleAnalysisCommand($event, currentDrawerStage)"
               :disabled="loadingVotingAnalysis"
+              @command="handleAnalysisCommand($event, currentDrawerStage)"
             >
               <el-button type="info" size="small" :disabled="loadingVotingAnalysis">
                 <i v-if="loadingVotingAnalysis" class="fas fa-spinner fa-spin"></i>
@@ -362,7 +363,7 @@
       description="請聯繫專案管理員添加階段"
     />
 
-    <div v-if="stages.length > 0" class="main-content" v-loading="loading" element-loading-text="載入專案資料中...">
+    <div v-if="stages.length > 0" v-loading="loading" class="main-content" element-loading-text="載入專案資料中...">
       <div class="content-area">
         <!-- 時間軸導航 -->
         <StageTimeline
@@ -375,6 +376,9 @@
         <div class="project-detail">
           <!-- 專案階段區域 -->
           <div
+            v-for="stage in stages"
+            :id="`stage-${stage.id}`"
+            :key="stage.id"
             class="stage-section"
             :class="[
               `status-${stage.status}`,
@@ -383,9 +387,6 @@
                 'stage-completed': stage.status === 'completed'
               }
             ]"
-            v-for="stage in stages"
-            :key="stage.id"
-            :id="`stage-${stage.id}`"
           >
             <!-- 頂部哨兵：用於 HUD 碰撞檢測 -->
             <div :id="`sentinel-top-${stage.id}`" class="stage-sentinel stage-sentinel-top"></div>
@@ -461,8 +462,8 @@
                   <button
                     class="btn btn-timeline"
                     :disabled="isInitialLoading"
-                    @click="toggleStageTimeline(stage as any)"
                     :title="stageTimelinesVisible.get(stage.id) ? '隱藏階段時間軸' : '顯示階段時間軸'"
+                    @click="toggleStageTimeline(stage as any)"
                   >
                     <i class="fa fa-timeline"></i>
                   </button>
@@ -470,16 +471,16 @@
                   <button
                     class="btn btn-info mobile-only"
                     :disabled="isInitialLoading"
-                    @click="openStageDescriptionDrawer(stage as any)"
                     title="檢視階段詳情與獎勵"
+                    @click="openStageDescriptionDrawer(stage as any)"
                   >
                     <i class="fa fa-info-circle"></i>
                   </button>
                   <!-- 歷史紀錄檢視 Dropdown -->
                   <el-dropdown
                     trigger="click"
-                    @command="handleHistoryViewCommand($event, stage as any)"
                     :disabled="isInitialLoading"
+                    @command="handleHistoryViewCommand($event, stage as any)"
                   >
                     <button
                       class="btn btn-timeline"
@@ -516,8 +517,8 @@
                   <button
                     v-if="stage.status === 'active' && canSubmit"
                     class="btn btn-primary"
-                    @click="handleReportAction(stage as any)"
                     :disabled="isInitialLoading"
+                    @click="handleReportAction(stage as any)"
                   >
                     {{ getReportButtonText(stage as any) }}
                   </button>
@@ -526,8 +527,8 @@
                   <button
                     v-if="canComment && (stage.status === 'active' || canManageStages)"
                     class="btn btn-tertiary"
-                    @click="handleOpenSubmitCommentModal(stage as any)"
                     :disabled="isInitialLoading"
+                    @click="handleOpenSubmitCommentModal(stage as any)"
                   >
                     張貼評論
                   </button>
@@ -536,8 +537,8 @@
                   <button
                     v-if="stage.status === 'voting' && canVote"
                     class="btn btn-secondary"
-                    @click="openVoteResultModal(stage as any)"
                     :disabled="isInitialLoading"
+                    @click="openVoteResultModal(stage as any)"
                   >
                     階段成果投票
                   </button>
@@ -546,8 +547,8 @@
                   <button
                     v-if="stage.status === 'voting' && canTeacherVote"
                     class="btn btn-secondary"
-                    @click="modalManager.openTeacherVoteModal(stage as any)"
                     :disabled="loadingTeacherVoteData || isInitialLoading"
+                    @click="modalManager.openTeacherVoteModal(stage as any)"
                   >
                     <i v-if="loadingTeacherVoteData" class="fas fa-spinner fa-spin"></i>
                     {{ loadingTeacherVoteData ? '載入中...' : '教師投票' }}
@@ -567,8 +568,8 @@
                   <el-dropdown
                     v-if="stage.status === 'completed'"
                     trigger="click"
-                    @command="handleAnalysisCommand($event, stage as any)"
                     :disabled="loadingVotingAnalysis || isInitialLoading"
+                    @command="handleAnalysisCommand($event, stage as any)"
                   >
                     <button class="btn btn-dark" :disabled="loadingVotingAnalysis || isInitialLoading">
                       <i v-if="loadingVotingAnalysis" class="fas fa-spinner fa-spin"></i>
@@ -590,13 +591,13 @@
             </div>
 
             <!-- 第二行：操作按鈕（小螢幕專用） -->
-            <div class="stage-action-controls mobile-only" v-if="hasActionButtons(stage as any)">
+            <div v-if="hasActionButtons(stage as any)" class="stage-action-controls mobile-only">
               <!-- 提交報告按鈕 -->
               <button
                 v-if="stage.status === 'active' && canSubmit"
                 class="btn btn-primary"
-                @click="handleReportAction(stage as any)"
                 :disabled="isInitialLoading"
+                @click="handleReportAction(stage as any)"
               >
                 {{ getReportButtonText(stage as any) }}
               </button>
@@ -605,8 +606,8 @@
               <button
                 v-if="canComment && (stage.status === 'active' || canManageStages)"
                 class="btn btn-tertiary"
-                @click="handleOpenSubmitCommentModal(stage as any)"
                 :disabled="isInitialLoading"
+                @click="handleOpenSubmitCommentModal(stage as any)"
               >
                 張貼評論
               </button>
@@ -615,8 +616,8 @@
               <button
                 v-if="stage.status === 'voting' && canVote"
                 class="btn btn-secondary"
-                @click="openVoteResultModal(stage as any)"
                 :disabled="isInitialLoading"
+                @click="openVoteResultModal(stage as any)"
               >
                 成果投票
               </button>
@@ -625,8 +626,8 @@
               <button
                 v-if="stage.status === 'voting' && canTeacherVote"
                 class="btn btn-secondary"
-                @click="modalManager.openTeacherVoteModal(stage as any)"
                 :disabled="loadingTeacherVoteData || isInitialLoading"
+                @click="modalManager.openTeacherVoteModal(stage as any)"
               >
                 <i v-if="loadingTeacherVoteData" class="fas fa-spinner fa-spin"></i>
                 {{ loadingTeacherVoteData ? '載入中...' : '教師投票' }}
@@ -646,8 +647,8 @@
               <el-dropdown
                 v-if="stage.status === 'completed'"
                 trigger="click"
-                @command="handleAnalysisCommand($event, stage as any)"
                 :disabled="loadingVotingAnalysis || isInitialLoading"
+                @command="handleAnalysisCommand($event, stage as any)"
               >
                 <button class="btn btn-dark" :disabled="loadingVotingAnalysis || isInitialLoading">
                   <i v-if="loadingVotingAnalysis" class="fas fa-spinner fa-spin"></i>
@@ -723,7 +724,7 @@
               <div class="stage-title-area">
                 <h2 class="stage-title">{{ stage.title }}</h2>
                 <div class="stage-description-wrapper">
-                  <p class="stage-description" v-if="!stage.showFullDescription">
+                  <p v-if="!stage.showFullDescription" class="stage-description">
                     {{ truncateDescription(stage.description || '') }}
                     <button
                       v-if="shouldShowFullDescriptionButton(stage)"
@@ -790,10 +791,10 @@
             <!-- 階段評論模式：顯示評論區域 -->
             <div v-if="stage.viewMode" class="stage-comments-section">
               <StageComments
-                :stage-id="stage.id"
-                :project-id="projectId"
                 :ref="`stageComments_${stage.id}`"
                 :key="`comments_${stage.id}_${stage.commentsRefreshKey || 0}`"
+                :stage-id="stage.id"
+                :project-id="projectId"
                 :user-email-to-display-name="userEmailToDisplayName"
                 :current-user-email="user?.userEmail"
                 :current-user-group-id="groupData.currentUserGroup.value?.groupId"

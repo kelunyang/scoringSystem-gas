@@ -27,7 +27,7 @@
         <h4><i class="fas fa-project-diagram"></i> 基本資訊</h4>
         <div class="form-group">
           <label>專案名稱 *</label>
-          <input type="text" v-model="editForm.projectName" class="form-input">
+          <input v-model="editForm.projectName" type="text" class="form-input">
         </div>
 
         <div class="form-group">
@@ -189,7 +189,7 @@
 
           <!-- Reset to Defaults Button -->
           <div class="config-actions">
-            <button class="btn-reset" @click="loadSystemDefaults" :disabled="loadingDefaults">
+            <button class="btn-reset" :disabled="loadingDefaults" @click="loadSystemDefaults">
               <i :class="loadingDefaults ? 'fas fa-spinner fa-spin' : 'fas fa-undo'"></i>
               {{ loadingDefaults ? '載入中...' : '恢復系統預設值' }}
             </button>
@@ -201,14 +201,14 @@
       <div class="drawer-actions">
         <el-button
           type="primary"
-          @click="handleSave"
           :loading="updating"
           :disabled="!editForm.projectName.trim() || !editForm.description.trim()"
+          @click="handleSave"
         >
           <i :class="editForm.projectId ? 'fas fa-save' : 'fas fa-plus'"></i>
           {{ updating ? (editForm.projectId ? '保存中...' : '創建中...') : (editForm.projectId ? '保存變更' : '創建專案') }}
         </el-button>
-        <el-button @click="handleClose" :disabled="updating">
+        <el-button :disabled="updating" @click="handleClose">
           <i class="fas fa-times"></i>
           取消
         </el-button>

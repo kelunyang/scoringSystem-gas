@@ -16,17 +16,17 @@
           v-if="modeOptions.length > 0"
           v-model="currentMode"
           :options="modeOptions"
-          @change="handleModeChange"
           class="mode-switcher"
           size="default"
+          @change="handleModeChange"
         />
 
         <!-- Action Buttons -->
         <div v-if="showActionButton" class="action-buttons-group">
           <button
             class="action-btn"
-            @click="handleActionClick"
             :disabled="actionButtonLoading"
+            @click="handleActionClick"
           >
             <i :class="actionIcon"></i>
             {{ actionLabel }}
@@ -81,8 +81,8 @@
               size="small"
               type="danger"
               :class="{ 'is-active': isPinned }"
-              @click="togglePin"
               class="pin-button"
+              @click="togglePin"
             >
               <i class="fas fa-thumbtack"></i>
             </el-button>
@@ -97,8 +97,8 @@
             plain
             circle
             size="small"
-            @click="scrollLeftNav"
             aria-label="向左滚动"
+            @click="scrollLeftNav"
           >
             <i class="fas fa-chevron-left"></i>
           </el-button>
@@ -126,8 +126,8 @@
             plain
             circle
             size="small"
-            @click="scrollRightNav"
             aria-label="向右滚动"
+            @click="scrollRightNav"
           >
             <i class="fas fa-chevron-right"></i>
           </el-button>
@@ -407,7 +407,7 @@ const currentUser = computed(() => props.user)
 // Compute dynamic page title based on current route
 const currentPageTitle = computed(() => {
   const routeName = route.name?.toString() || ''
-  let key = routeName.replace('admin-', '')
+  const key = routeName.replace('admin-', '')
 
   // Try exact match first
   let tab = visibleTabs.value.find((t: any) => t.key === key)
@@ -424,7 +424,7 @@ const currentPageTitle = computed(() => {
 // Compute dynamic page icon based on current route
 const currentPageIcon = computed(() => {
   const routeName = route.name?.toString() || ''
-  let key = routeName.replace('admin-', '')
+  const key = routeName.replace('admin-', '')
 
   // Try exact match first
   let tab = visibleTabs.value.find((t: any) => t.key === key)

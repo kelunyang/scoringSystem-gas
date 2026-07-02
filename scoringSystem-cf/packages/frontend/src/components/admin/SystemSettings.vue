@@ -47,9 +47,9 @@
               </el-tooltip>
               <el-button
                 type="success"
-                @click="testSmtpConnection"
                 :loading="testingSmtp"
                 icon="Connection"
+                @click="testSmtpConnection"
               >
                 測試 SMTP 連接
               </el-button>

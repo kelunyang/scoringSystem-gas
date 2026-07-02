@@ -56,7 +56,7 @@
         </el-breadcrumb>
       </template>
 
-      <div class="drawer-body" v-if="ladderStats">
+      <div v-if="ladderStats" class="drawer-body">
         <!-- 你的預估分數 -->
         <div v-if="queriedUserData" class="form-section user-score-section">
           <h4><i class="fas fa-user-graduate"></i> 你的預估分數</h4>

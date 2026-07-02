@@ -65,7 +65,7 @@ class ErrorHandler {
     } = options
 
     // 解析錯誤訊息
-    let message = this.parseErrorMessage(error)
+    const message = this.parseErrorMessage(error)
 
     // 記錄到錯誤日誌
     this.logError({

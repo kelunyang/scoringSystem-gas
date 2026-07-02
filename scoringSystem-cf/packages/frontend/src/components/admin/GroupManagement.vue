@@ -6,32 +6,32 @@
       <ProjectGroupsList
         :projects="projects"
         :selected-project-id="selectedProjectId"
-        @update:selected-project-id="handleProjectChange"
         :groups="groups"
         :loading="loading"
         :search-text="searchText"
-        @update:search-text="searchText = $event"
         :status-filter="statusFilter"
-        @update:status-filter="statusFilter = $event"
         :show-inactive="showInactive"
-        @update:show-inactive="showInactive = $event"
         :selected-groups="selectedProjectGroups"
         :expanded-group-id="expandedProjectGroupId"
         :members-map="projectGroupMembersMap"
         :loading-members="loadingProjectGroupMembers"
         :removing-member-email="removingMemberEmail"
+        @update:selected-project-id="handleProjectChange"
         :updating-group-id="updatingGroupId"
         :updating-member-email="updatingMemberEmail"
         :adding-member-for-group="addingMemberForProjectGroup"
+        @update:search-text="searchText = $event"
         :can-manage-roles="true"
+        @update:status-filter="statusFilter = $event"
         :pending-role-changes="pendingRoleChanges"
+        @update:show-inactive="showInactive = $event"
         :selected-users-to-add="selectedUsersToAdd"
-        @update:selected-users-to-add="selectedUsersToAdd = $event"
         :all-users="allUsers"
         :ungrouped-members="ungroupedMembers"
         :member-role="memberForm.role"
-        @update:member-role="memberForm.role = $event"
         :adding-member="addingMember"
+        @update:selected-users-to-add="selectedUsersToAdd = $event"
+        @update:member-role="memberForm.role = $event"
         @toggle-all="toggleAllProjectGroups"
         @toggle-expansion="toggleProjectGroupExpansion"
         @toggle-selection="toggleProjectGroupSelection"
@@ -61,9 +61,7 @@
         :groups="globalGroups"
         :loading="loading"
         :search-text="searchText"
-        @update:search-text="searchText = $event"
         :status-filter="statusFilter"
-        @update:status-filter="statusFilter = $event"
         :selected-groups="selectedGlobalGroups"
         :expanded-group-id="expandedGlobalGroupId"
         :members-map="globalGroupMembersMap"
@@ -71,9 +69,11 @@
         :removing-member-email="removingMemberEmail"
         :adding-member-for-group="addingMemberForGlobalGroup"
         :selected-users-to-add="selectedUsersToAdd"
-        @update:selected-users-to-add="selectedUsersToAdd = $event"
         :all-users="allUsers"
         :adding-member="addingMember"
+        @update:search-text="searchText = $event"
+        @update:status-filter="statusFilter = $event"
+        @update:selected-users-to-add="selectedUsersToAdd = $event"
         @create-global-group="createGlobalGroup"
         @toggle-all="toggleAllGlobalGroups"
         @toggle-expansion="toggleGlobalGroupExpansion"
@@ -173,7 +173,7 @@
       class="drawer-navy"
     >
 
-      <div class="drawer-body" v-loading="editingGroupData" element-loading-text="載入群組資料中...">
+      <div v-loading="editingGroupData" class="drawer-body" element-loading-text="載入群組資料中...">
         <div class="form-section">
           <h4><i class="fas fa-layer-group"></i> 群組基本資訊</h4>
 
@@ -185,8 +185,8 @@
           <div class="form-group">
             <label>描述</label>
             <el-input
-              type="textarea"
               v-model="editForm.description"
+              type="textarea"
               placeholder="輸入群組描述"
               :rows="3"
             />
@@ -200,7 +200,7 @@
         </div>
 
         <div class="form-actions">
-          <button class="btn-primary" @click="updateGroup" :disabled="updating || editingGroupData">
+          <button class="btn-primary" :disabled="updating || editingGroupData" @click="updateGroup">
             <i class="fas fa-save"></i>
             {{ updating ? '保存中...' : '保存變更' }}
           </button>
@@ -236,7 +236,6 @@ import { ElMessage } from 'element-plus'
 import GlobalGroupEditorModal from './group/GlobalGroupEditorModal.vue'
 import ProjectGroupsList from './group-management/project-groups/ProjectGroupsList.vue'
 import GlobalGroupsList from './group-management/global-groups/GlobalGroupsList.vue'
-import GroupStatsBar from './group-management/shared/GroupStatsBar.vue'
 import RemoveMemberConfirmDrawer from './group-management/shared/RemoveMemberConfirmDrawer.vue'
 import BatchUpdateRoleDrawer from './group-management/shared/BatchUpdateRoleDrawer.vue'
 import ProjectGroupEditorDrawer from './group-management/project-groups/ProjectGroupEditorDrawer.vue'
@@ -267,7 +266,6 @@ export default {
     GlobalGroupEditorModal,
     ProjectGroupsList,
     GlobalGroupsList,
-    GroupStatsBar,
     RemoveMemberConfirmDrawer,
     BatchUpdateRoleDrawer,
     ProjectGroupEditorDrawer,

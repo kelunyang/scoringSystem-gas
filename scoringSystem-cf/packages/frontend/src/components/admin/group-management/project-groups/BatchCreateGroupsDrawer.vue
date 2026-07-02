@@ -7,7 +7,7 @@
     :before-close="handleClose"
     class="drawer-navy"
   >
-    <div class="drawer-body" v-loading="creating" element-loading-text="批量建立中...">
+    <div v-loading="creating" class="drawer-body" element-loading-text="批量建立中...">
       <div class="form-section">
         <h4><i class="fas fa-layer-group"></i> 批量建立設定</h4>
 
@@ -42,11 +42,11 @@
       </div>
 
       <div class="drawer-actions">
-        <el-button type="primary" @click="handleCreate" :disabled="creating">
+        <el-button type="primary" :disabled="creating" @click="handleCreate">
           <i :class="creating ? 'fas fa-spinner fa-spin' : 'fas fa-plus'"></i>
           {{ creating ? '建立中...' : `建立 ${groupCount} 個群組` }}
         </el-button>
-        <el-button @click="handleClose" :disabled="creating">
+        <el-button :disabled="creating" @click="handleClose">
           <i class="fas fa-times"></i>
           取消
         </el-button>

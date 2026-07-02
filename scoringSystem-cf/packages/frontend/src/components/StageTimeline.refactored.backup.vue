@@ -5,8 +5,8 @@
       <div class="timeline-segments">
         <div
           v-for="(segment, index) in timelineSegments"
-          :key="'segment-' + index"
           v-show="segment.height > 0"
+          :key="'segment-' + index"
           class="timeline-segment"
           :class="`segment-${segment.status}`"
           :style="{
@@ -40,10 +40,10 @@
           [`status-${stage.originalStatus}`]: true
         }"
         :style="{ top: getStagePosition(index) + '%' }"
+        :title="getStageTooltip(stage)"
         @click="handleStageClick(stage.id)"
         @mouseenter="hoveredStageId = stage.id"
         @mouseleave="hoveredStageId = null"
-        :title="getStageTooltip(stage)"
       >
         <div class="stage-dot">
           <i v-if="stage.originalStatus === 'completed' || stage.originalStatus === 'archived'" class="fas fa-check"></i>

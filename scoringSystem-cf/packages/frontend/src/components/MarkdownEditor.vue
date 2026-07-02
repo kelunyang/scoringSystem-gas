@@ -3,7 +3,7 @@
     v-model="content"
     :placeholder="placeholder"
     :preview="false"
-    @update:modelValue="handleUpdate"
+    @update:model-value="handleUpdate"
   />
 </template>
 

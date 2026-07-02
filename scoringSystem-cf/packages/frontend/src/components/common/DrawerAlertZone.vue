@@ -34,8 +34,8 @@
         <button
           v-if="alert.closable"
           class="drawer-alert-close"
-          @click="removeAlert(alert.id)"
           type="button"
+          @click="removeAlert(alert.id)"
         >
           <i class="fas fa-times"></i>
         </button>
@@ -49,8 +49,8 @@
           :icon="expanded ? ArrowUp : ArrowDown"
           circle
           size="small"
-          @click="toggleExpanded"
           type="info"
+          @click="toggleExpanded"
         />
       </el-badge>
     </div>

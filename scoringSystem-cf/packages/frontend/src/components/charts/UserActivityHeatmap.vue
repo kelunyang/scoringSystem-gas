@@ -1,5 +1,5 @@
 <template>
-  <div class="user-activity-heatmap" ref="containerRef">
+  <div ref="containerRef" class="user-activity-heatmap">
     <div v-if="isLoading" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
       載入活動資料中...
@@ -19,8 +19,8 @@
       <div class="heatmap-header">
         <button
           class="nav-btn"
-          @click="navigatePrevious"
           :disabled="isLoading"
+          @click="navigatePrevious"
         >
           <i class="fas fa-angle-left"></i>
           <span class="nav-text">{{ navigationPreviousText }}</span>
@@ -31,9 +31,9 @@
           <button
             v-if="!isCurrent"
             class="today-btn"
-            @click="navigateToToday"
             :disabled="isLoading"
             title="回到今天"
+            @click="navigateToToday"
           >
             <i class="fas fa-calendar-day"></i>
             <span class="today-text">今天</span>
@@ -42,8 +42,8 @@
 
         <button
           class="nav-btn"
-          @click="navigateNext"
           :disabled="isLoading || isCurrent"
+          @click="navigateNext"
         >
           <span class="nav-text">{{ navigationNextText }}</span>
           <i class="fas fa-angle-right"></i>
@@ -51,7 +51,7 @@
       </div>
 
       <!-- Heatmap Canvas -->
-      <div class="heatmap-canvas" ref="chartContainerRef"></div>
+      <div ref="chartContainerRef" class="heatmap-canvas"></div>
 
       <!-- Legend -->
       <div class="heatmap-legend">
@@ -482,7 +482,7 @@ function calculateCellSize(
 ): { cellSize: number; cellPadding: number; datesToRender: string[] } {
   let cellSize: number
   let cellPadding: number
-  let datesToRender = dates
+  const datesToRender = dates
 
   if (props.displayMode === 'compact') {
     const availableWidth = containerWidth - CHART_CONFIG.CONTAINER_PADDING

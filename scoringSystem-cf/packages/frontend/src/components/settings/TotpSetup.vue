@@ -9,7 +9,7 @@
           <p class="status-hint">啟用後可使用 Google Authenticator 等 App 進行兩階段驗證</p>
         </div>
       </div>
-      <el-button type="primary" @click="startSetup" :loading="initLoading">
+      <el-button type="primary" :loading="initLoading" @click="startSetup">
         <i class="fas fa-plus-circle"></i> 啟用驗證器
       </el-button>
     </div>

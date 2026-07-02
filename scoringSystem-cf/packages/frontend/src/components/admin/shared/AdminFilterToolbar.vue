@@ -11,7 +11,7 @@
     </div>
 
     <!-- Main Toolbar -->
-    <div class="filter-toolbar" v-loading="loading">
+    <div v-loading="loading" class="filter-toolbar">
       <!-- Core Filters Section (Always Visible) -->
       <div class="filter-core" :class="`layout-${filtersLayout}`">
         <slot name="filters-core"></slot>
@@ -37,8 +37,8 @@
           <el-tooltip content="清除過濾條件" placement="top">
             <el-button
               size="small"
-              @click="handleResetFilters"
               :disabled="activeFilterCount === 0"
+              @click="handleResetFilters"
             >
               <i class="fas fa-filter-circle-xmark"></i>
               <span class="btn-text">清除過濾條件</span>
@@ -51,8 +51,8 @@
         <el-dropdown
           v-if="showExport && exportData && exportData.length > 0"
           trigger="click"
-          @command="handleExportCommand"
           class="export-dropdown"
+          @command="handleExportCommand"
         >
           <el-button type="primary" size="small" title="匯出">
             <i class="fas fa-download"></i>

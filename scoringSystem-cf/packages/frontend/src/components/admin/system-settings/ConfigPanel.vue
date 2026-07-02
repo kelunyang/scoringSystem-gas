@@ -7,9 +7,9 @@
           v-if="showReset"
           type="warning"
           size="small"
-          @click="handleReset"
           :loading="resetting"
           icon="RefreshLeft"
+          @click="handleReset"
         >
           重設為預設值
         </el-button>
@@ -22,10 +22,10 @@
           <el-button
             type="primary"
             size="small"
-            @click="handleSave"
             :loading="saving"
             :disabled="!hasChanges"
             icon="Check"
+            @click="handleSave"
           >
             儲存配置
           </el-button>
@@ -229,7 +229,7 @@
               <IconSelector
                 v-else-if="field.type === 'icon-selector'"
                 v-model="localValues[field.key]"
-                @update:modelValue="(val) => emit('update', field.key, val)"
+                @update:model-value="(val) => emit('update', field.key, val)"
               />
             </div>
 

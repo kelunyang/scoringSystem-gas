@@ -129,10 +129,6 @@ export default defineConfig(function (_a) {
                             if (packageName === 'diff') {
                                 return 'diff';
                             }
-                            // KaTeX
-                            if (packageName === 'katex') {
-                                return 'katex';
-                            }
                             // 物理引擎
                             if (packageName === 'matter-js') {
                                 return 'physics';

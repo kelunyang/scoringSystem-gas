@@ -81,8 +81,8 @@
               filterable
               placeholder="選擇用戶"
               style="width: 300px;"
-              @change="applyFilters"
               clearable
+              @change="applyFilters"
             >
               <el-option
                 v-for="user in availableUsers"
@@ -101,8 +101,8 @@
               filterable
               placeholder="選擇操作"
               style="width: 300px;"
-              @change="applyFilters"
               clearable
+              @change="applyFilters"
             >
               <el-option
                 v-for="action in availableActions"
@@ -121,8 +121,8 @@
               filterable
               placeholder="選擇實體類型"
               style="width: 300px;"
-              @change="applyFilters"
               clearable
+              @change="applyFilters"
             >
               <el-option
                 v-for="type in availableEntityTypes"
@@ -141,8 +141,8 @@
               filterable
               placeholder="選擇項目"
               style="width: 300px;"
-              @change="applyFilters"
               clearable
+              @change="applyFilters"
             >
               <el-option
                 v-for="project in availableProjects"
@@ -174,8 +174,8 @@
             <el-button
               size="small"
               :icon="Refresh"
-              @click="loadSystemLogs"
               :loading="loading"
+              @click="loadSystemLogs"
             >
               <span class="btn-text">重新整理</span>
             </el-button>
@@ -398,9 +398,9 @@
           <el-button
             type="primary"
             :icon="Search"
-            @click="searchLoginLogsBackend"
             :loading="loadingLoginLogs"
             :disabled="!hasActiveLoginFilters"
+            @click="searchLoginLogsBackend"
           >
             后端搜索（全部记录）
           </el-button>
@@ -408,8 +408,8 @@
           <!-- 重新整理按钮 -->
           <el-button
             :icon="Refresh"
-            @click="loadLoginLogs"
             :loading="loadingLoginLogs"
+            @click="loadLoginLogs"
           >
             重新整理（最近 500 条）
           </el-button>
@@ -532,7 +532,7 @@
                           {{ log.action === 'login_success' ? '登入成功' : '登入失敗' }}
                         </el-tag>
                       </el-descriptions-item>
-                      <el-descriptions-item label="驗證方式" v-if="log.action === 'login_success'">
+                      <el-descriptions-item v-if="log.action === 'login_success'" label="驗證方式">
                         <el-tag
                           :type="getLoginLogContext(log, 'twoFactorMethod') === 'totp' ? 'warning' : 'info'"
                           size="small"
@@ -550,10 +550,10 @@
                       <el-descriptions-item label="時區">
                         {{ getLoginLogContext(log, 'timezone') }}
                       </el-descriptions-item>
-                      <el-descriptions-item label="失敗原因" v-if="log.action === 'login_failed'">
+                      <el-descriptions-item v-if="log.action === 'login_failed'" label="失敗原因">
                         {{ getLoginLogContext(log, 'reason') }}
                       </el-descriptions-item>
-                      <el-descriptions-item label="嘗試次數" v-if="log.action === 'login_failed'">
+                      <el-descriptions-item v-if="log.action === 'login_failed'" label="嘗試次數">
                         {{ getLoginLogContext(log, 'attemptCount') }}
                       </el-descriptions-item>
                       <el-descriptions-item label="是否可疑" :span="2">
@@ -671,9 +671,9 @@
           <el-button
             type="primary"
             :icon="Search"
-            @click="searchEmailLogsBackend"
             :loading="loadingEmailLogs"
             :disabled="!hasActiveEmailFilters"
+            @click="searchEmailLogsBackend"
           >
             后端搜索（全部记录）
           </el-button>
@@ -681,8 +681,8 @@
           <!-- 重新整理按钮 -->
           <el-button
             :icon="Refresh"
-            @click="loadEmailLogs"
             :loading="loadingEmailLogs"
+            @click="loadEmailLogs"
           >
             重新整理（最近 500 条）
           </el-button>
@@ -806,7 +806,7 @@
                       <el-descriptions-item label="主旨" :span="2">
                         {{ log.subject }}
                       </el-descriptions-item>
-                      <el-descriptions-item label="錯誤訊息" :span="2" v-if="log.error">
+                      <el-descriptions-item v-if="log.error" label="錯誤訊息" :span="2">
                         <el-alert type="error" :closable="false">
                           {{ log.error }}
                         </el-alert>

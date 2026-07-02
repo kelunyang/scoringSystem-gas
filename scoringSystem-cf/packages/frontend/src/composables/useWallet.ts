@@ -487,8 +487,8 @@ export function useGlobalWalletBalance() {
       const allTransactions: NormalizedTransaction[] = []
       const byProject: Record<string, ProjectWalletData> = {}
       let totalBalance = 0
-      let isLoading = results.some(r => r.isLoading)
-      let isError = results.some(r => r.isError)
+      const isLoading = results.some(r => r.isLoading)
+      const isError = results.some(r => r.isError)
 
       results.forEach(result => {
         if (result.data) {

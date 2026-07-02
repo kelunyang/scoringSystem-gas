@@ -259,7 +259,7 @@ export async function voteOnRankingProposal(
 
     // Voting API only records votes, settlement determines final status
     // Success message shows voting result but does not imply final approval/rejection
-    let message = isUpdate ? 'Vote updated successfully' : 'Vote recorded successfully';
+    const message = isUpdate ? 'Vote updated successfully' : 'Vote recorded successfully';
 
     // Note: Auto-approval/rejection notifications removed - now handled by settlement API
     // Voting and settlement are separated in the new architecture

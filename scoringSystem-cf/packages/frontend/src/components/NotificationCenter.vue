@@ -3,12 +3,12 @@
     <!-- Notification Bell Button -->
     <el-button
       circle
-      @click="toggleNotificationDrawer"
       class="notification-bell"
       :class="{
         'has-notifications': unreadCount > 0 || errorLogCount > 0,
         'notification-bell--sidebar': props.variant === 'icon-only' || props.variant === 'sidebar'
       }"
+      @click="toggleNotificationDrawer"
     >
       <el-badge
         :value="totalBadgeCount"
@@ -102,8 +102,8 @@
                 <el-tooltip content="更新通知" placement="top">
                   <el-button
                     size="small"
-                    @click="refreshNotifications"
                     :loading="isLoadingNotifications"
+                    @click="refreshNotifications"
                   >
                     <i class="fas fa-sync"></i>
                     <span class="btn-text">更新</span>
@@ -114,9 +114,9 @@
                   <el-button
                     size="small"
                     type="success"
-                    @click="markAllAsRead"
                     :disabled="unreadCount === 0"
                     :loading="isMarkingAllRead"
+                    @click="markAllAsRead"
                   >
                     <i class="fas fa-check-double"></i>
                     <span class="btn-text">全部已讀</span>
@@ -126,8 +126,8 @@
                 <el-tooltip content="匯出" placement="top">
                   <el-button
                     size="small"
-                    @click="exportNotifications"
                     :disabled="notifications.length === 0"
+                    @click="exportNotifications"
                   >
                     <i class="fas fa-download"></i>
                     <span class="btn-text">匯出</span>
@@ -147,10 +147,10 @@
             <!-- Notification List -->
             <el-scrollbar
               class="notification-list-container"
-              @end-reached="loadMoreNotifications"
               :distance="10"
               role="region"
               aria-label="通知列表"
+              @end-reached="loadMoreNotifications"
             >
               <div v-if="isLoadingNotifications && currentPage === 1" class="loading-container">
                 <el-skeleton :rows="5" animated />
@@ -202,9 +202,9 @@
                     <el-button
                       v-if="!notification.isRead"
                       size="small"
-                      @click="markAsRead(notification.notificationId)"
                       :loading="isMarkingRead && currentOperatingId === notification.notificationId"
                       aria-label="標記為已讀"
+                      @click="markAsRead(notification.notificationId)"
                     >
                       <i class="fas fa-check"></i>
                     </el-button>
@@ -212,20 +212,20 @@
                     <el-button
                       size="small"
                       plain
-                      @click="copyNotificationAsJSON(notification)"
                       aria-label="複製為 JSON"
                       title="複製為 JSON"
+                      @click="copyNotificationAsJSON(notification)"
                     >
                       <i class="fas fa-copy"></i>
                     </el-button>
 
                     <el-button
                       size="small"
-                      @click="deleteNotification(notification.notificationId)"
                       :loading="isDeleting && currentOperatingId === notification.notificationId"
                       type="danger"
                       plain
                       aria-label="刪除通知"
+                      @click="deleteNotification(notification.notificationId)"
                     >
                       <i class="fas fa-trash"></i>
                     </el-button>
@@ -295,8 +295,8 @@
                 <el-button
                   size="small"
                   type="danger"
-                  @click="clearNotificationLog"
                   :disabled="filteredErrorLog.length === 0"
+                  @click="clearNotificationLog"
                 >
                   <i class="fas fa-trash-alt"></i>
                   清除全部
@@ -304,8 +304,8 @@
 
                 <el-button
                   size="small"
-                  @click="exportNotificationLog"
                   :disabled="filteredErrorLog.length === 0"
+                  @click="exportNotificationLog"
                 >
                   <i class="fas fa-download"></i>
                   匯出日誌
@@ -350,9 +350,9 @@
                     <el-button
                       size="small"
                       plain
-                      @click="copyNotificationLogAsJSON(notification)"
                       aria-label="複製為 JSON"
                       title="複製為 JSON"
+                      @click="copyNotificationLogAsJSON(notification)"
                     >
                       <i class="fas fa-copy"></i>
                     </el-button>
@@ -360,8 +360,8 @@
                       size="small"
                       type="danger"
                       text
-                      @click="removeNotification(String(notification.id))"
                       aria-label="刪除此通知記錄"
+                      @click="removeNotification(String(notification.id))"
                     >
                       <i class="fas fa-times"></i>
                     </el-button>

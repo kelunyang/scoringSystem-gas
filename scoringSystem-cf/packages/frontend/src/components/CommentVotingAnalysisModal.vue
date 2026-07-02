@@ -1,12 +1,12 @@
 <template>
   <el-drawer
     :model-value="visible"
-    @update:model-value="handleVisibleChange"
     direction="btt"
     size="100%"
     :before-close="handleClose"
     :z-index="2000"
     class="drawer-navy"
+    @update:model-value="handleVisibleChange"
   >
     <template #header>
       <el-breadcrumb separator=">">
@@ -20,7 +20,7 @@
         </el-breadcrumb-item>
       </el-breadcrumb>
     </template>
-    <div class="analysis-content" v-loading="loading" element-loading-text="載入計票數據中...">
+    <div v-loading="loading" class="analysis-content" element-loading-text="載入計票數據中...">
 
       <!-- 計票說明 -->
       <div class="info-section">
@@ -53,7 +53,7 @@
       </div>
 
       <!-- 評論計票結果分析 -->
-      <div class="chart-section" v-if="!loading">
+      <div v-if="!loading" class="chart-section">
         <div class="section-header">
           <h3><i class="fas fa-trophy"></i> 評論投票結果表格</h3>
         </div>
@@ -101,7 +101,8 @@
               <tr>
                 <th class="candidate-header-label">投票者 \\ 候選評論</th>
                 <!-- Candidate comments as columns -->
-                <th v-for="comment in candidateComments"
+                <th
+v-for="comment in candidateComments"
                     :key="comment.commentId"
                     :style="{ background: getCommentHeaderColor(comment.commentId), color: 'white' }">
                   <div>{{ comment.authorDisplayName || comment.authorEmail }}({{ comment.authorEmail }})</div>
@@ -113,12 +114,14 @@
             <tbody>
               <!-- Each student voter as a row -->
               <tr v-for="(voter, index) in votersList" :key="voter.authorEmail">
-                <td class="voter-name"
+                <td
+class="voter-name"
                     :style="{ background: getVoterHeaderColor(voter.authorEmail), color: '#000' }">
                   {{ voter.proposerDisplayName || '學生' + (index + 1) }}({{ voter.authorEmail }})
                 </td>
                 <!-- This voter's ranking for each comment -->
-                <td v-for="comment in candidateComments"
+                <td
+v-for="comment in candidateComments"
                     :key="comment.commentId"
                     :style="getRankCellStyle(getVoteRank(voter.authorEmail, comment.commentId))">
                   {{ getVoteRank(voter.authorEmail, comment.commentId) || '-' }}
@@ -127,12 +130,14 @@
 
               <!-- Each teacher voter as a row -->
               <tr v-for="(teacher, index) in teacherVotes" :key="'teacher-' + index">
-                <td class="voter-name"
+                <td
+class="voter-name"
                     :style="{ background: getVoterHeaderColor(`teacher-${index}`), color: '#000' }">
                   {{ teacher.teacherDisplayName || '教師' + (index + 1) }}({{ teacher.teacherEmail }})
                 </td>
                 <!-- This teacher's ranking for each comment -->
-                <td v-for="comment in candidateComments"
+                <td
+v-for="comment in candidateComments"
                     :key="comment.commentId"
                     :style="getRankCellStyle(getTeacherVoteRank(teacher, comment.commentId))">
                   {{ getTeacherVoteRank(teacher, comment.commentId) || '-' }}
@@ -142,7 +147,8 @@
               <!-- Score rows at the bottom (transposed) -->
               <tr class="stats-row">
                 <td class="stats-label">學生分數 (70%)</td>
-                <td v-for="comment in candidateComments"
+                <td
+v-for="comment in candidateComments"
                     :key="comment.commentId"
                     :style="{ background: getScoreColor(comment.studentScore, 'student'), color: 'white' }">
                   <div class="score-amount">{{ comment.studentScore?.toFixed(2) || '0.00' }}</div>
@@ -151,7 +157,8 @@
 
               <tr class="stats-row">
                 <td class="stats-label">教師分數 (30%)</td>
-                <td v-for="comment in candidateComments"
+                <td
+v-for="comment in candidateComments"
                     :key="comment.commentId"
                     :style="{ background: getScoreColor(comment.teacherScore, 'teacher'), color: 'white' }">
                   <div class="score-amount">{{ comment.teacherScore?.toFixed(2) || '0.00' }}</div>
@@ -160,7 +167,8 @@
 
               <tr class="stats-row">
                 <td class="stats-label">加權總分</td>
-                <td v-for="comment in candidateComments"
+                <td
+v-for="comment in candidateComments"
                     :key="comment.commentId"
                     :style="{ background: getScoreColor(comment.totalScore, 'total'), color: 'white' }">
                   <div class="score-amount">{{ comment.totalScore?.toFixed(2) || '0.00' }}</div>
@@ -169,7 +177,8 @@
 
               <tr class="stats-row">
                 <td class="stats-label">獲得獎金</td>
-                <td v-for="comment in candidateComments"
+                <td
+v-for="comment in candidateComments"
                     :key="comment.commentId"
                     :style="{ background: getScoreColor(comment.allocatedScore), color: 'white' }">
                   <div class="score-amount">🏆 {{ comment.allocatedScore || 0 }} 點</div>

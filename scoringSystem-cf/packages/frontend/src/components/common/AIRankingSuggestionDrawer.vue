@@ -107,19 +107,19 @@
             <i class="fas fa-info-circle"></i> 此提示會附加到 AI 評分標準後
           </div>
         </div>
-        <div class="form-hint" v-if="currentItems.length === 0">
+        <div v-if="currentItems.length === 0" class="form-hint">
           <i class="fas fa-info-circle"></i> 目前沒有可排名的{{ rankingTypeLabel }}
         </div>
-        <div class="form-hint" v-else-if="activeMode === 'comment' && maxCommentSelections">
+        <div v-else-if="activeMode === 'comment' && maxCommentSelections" class="form-hint">
           <i class="fas fa-info-circle"></i> 將從 {{ currentItems.length }} 個{{ rankingTypeLabel }}中，讓 AI 挑選並排名最優秀的 {{ maxCommentSelections }} 個
         </div>
-        <div class="form-hint" v-else>
+        <div v-else class="form-hint">
           <i class="fas fa-info-circle"></i> 將對 {{ currentItems.length }} 個{{ rankingTypeLabel }}進行 AI 排名分析
         </div>
       </div>
 
       <!-- 進度顯示區塊 -->
-      <div class="form-section" v-if="isProcessing">
+      <div v-if="isProcessing" class="form-section">
         <h4><i class="fas fa-spinner fa-spin"></i> 處理中</h4>
         <el-progress
           :percentage="progressPercent"
@@ -167,7 +167,7 @@
           <el-tag size="small" type="info" style="margin-left: 8px;">共 {{ history.length }} 筆</el-tag>
         </h4>
 
-        <div class="history-list" v-if="history.length > 0">
+        <div v-if="history.length > 0" class="history-list">
           <div
             v-for="query in history"
             :key="query.callId"
@@ -185,8 +185,8 @@
               <el-tag v-if="query.totalTokens" size="small">{{ query.totalTokens }} tokens</el-tag>
               <span class="requester">{{ query.userEmail }}</span>
             </div>
-            <div class="query-reason" v-if="query.reason">{{ query.reason }}</div>
-            <div class="query-status" v-if="query.status !== 'success'">
+            <div v-if="query.reason" class="query-reason">{{ query.reason }}</div>
+            <div v-if="query.status !== 'success'" class="query-status">
               <el-tag :type="getStatusType(query.status)" size="small">{{ getStatusLabel(query.status) }}</el-tag>
             </div>
           </div>
@@ -203,16 +203,16 @@
       </div>
 
       <!-- AI 排名結果預覽 -->
-      <div class="form-section" v-if="selectedQuery && selectedQuery.result">
+      <div v-if="selectedQuery && selectedQuery.result" class="form-section">
         <h4><i class="fas fa-list-ol"></i> AI 排名建議預覽</h4>
 
         <!-- 自定義提示顯示 -->
-        <div class="custom-prompt-display" v-if="selectedQuery.customPrompt">
+        <div v-if="selectedQuery.customPrompt" class="custom-prompt-display">
           <strong><i class="fas fa-comment-dots"></i> 使用的自定義提示：</strong>
           <span>{{ selectedQuery.customPrompt }}</span>
         </div>
 
-        <div class="ranking-reason" v-if="selectedQuery.reason">
+        <div v-if="selectedQuery.reason" class="ranking-reason">
           <strong>排名理由：</strong>{{ selectedQuery.reason }}
         </div>
 
@@ -294,17 +294,17 @@
         <el-button
           type="primary"
           size="large"
-          @click="queryAI"
           :loading="isProcessing"
           :disabled="selectedProviderIds.length === 0 || currentItems.length === 0"
+          @click="queryAI"
         >
           <i class="fas fa-search"></i> {{ queryButtonText }}
         </el-button>
         <el-button
           type="primary"
           size="large"
-          @click="applyRanking"
           :disabled="!selectedQuery || !selectedQuery.result"
+          @click="applyRanking"
         >
           <i class="fas fa-check"></i> 帶入 AI 排名結果
         </el-button>

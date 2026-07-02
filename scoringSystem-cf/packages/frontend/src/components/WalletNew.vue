@@ -9,8 +9,8 @@
           placeholder="選擇專案"
           filterable
           clearable
-          @change="onProjectChange"
           class="project-select"
+          @change="onProjectChange"
         >
           <el-option
             v-for="project in userProjects"
@@ -28,8 +28,8 @@
           placeholder="選擇使用者"
           filterable
           clearable
-          @change="onUserChange"
           class="user-select"
+          @change="onUserChange"
         >
           <el-option
             v-for="user in projectUsers"
@@ -45,8 +45,8 @@
           v-if="selectedProjectId"
           type="info"
           plain
-          @click="showProjectDescriptionDialog = true"
           class="project-details-btn"
+          @click="showProjectDescriptionDialog = true"
         >
           <i class="fa fa-info-circle"></i>
           <span class="btn-text">專案詳情</span>
@@ -58,9 +58,9 @@
           type="warning"
           size="small"
           :loading="loading"
-          @click="handleRefresh(); resetTimer()"
           class="refresh-button refresh-button-with-progress"
           :style="refreshButtonStyle"
+          @click="handleRefresh(); resetTimer()"
         >
           <i class="fa fa-refresh"></i>
           <span class="btn-text">重新整理</span>
@@ -184,7 +184,7 @@
     </PhysicsDrawerContainer>
 
     <!-- Content -->
-    <div class="content-wrapper" v-loading="loading || loadingProjects" element-loading-text="載入專案資料中...">
+    <div v-loading="loading || loadingProjects" class="content-wrapper" element-loading-text="載入專案資料中...">
       <!-- Main Content Card -->
       <div v-if="selectedProjectId" class="main-content-card">
         <!-- Header Section -->
@@ -207,17 +207,17 @@
           <!-- Filters with Points and Buttons (Navy Blue Style) -->
           <!-- Transaction Filters Section -->
           <TransactionFiltersSection
-            :can-view-all-users="canViewAllUsers"
-            :can-manage-wallets="canManageWallets"
-            :selected-user-email="selectedUserEmail"
-            :project-users="projectUsers"
-            :exporting-grades="exportingGrades"
             v-model:date-range="dateRange"
             v-model:points-filter="pointsFilter"
             v-model:description-filter="descriptionFilter"
             v-model:user-filter="userFilter"
             v-model:selected-stage-ids="selectedStageIds"
             v-model:selected-transaction-types="selectedTransactionTypes"
+            :can-view-all-users="canViewAllUsers"
+            :can-manage-wallets="canManageWallets"
+            :selected-user-email="selectedUserEmail"
+            :project-users="projectUsers"
+            :exporting-grades="exportingGrades"
             :stage-options="stageOptions"
             :transaction-type-options="transactionTypeOptions"
             :has-active-filters="hasActiveFilters"

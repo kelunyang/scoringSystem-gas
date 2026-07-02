@@ -603,7 +603,7 @@ export async function cloneStage(
     const timestamp = Date.now();
 
     // Use provided dates or calculate based on original duration
-    let newStartTime = startTime || Date.now();
+    const newStartTime = startTime || Date.now();
     let newEndTime = endTime;
 
     if (!newEndTime) {
@@ -743,7 +743,7 @@ export async function cloneStageToProjects(
     const batchStatements: ReturnType<typeof env.DB.prepare>[] = [];
 
     // Calculate dates
-    let newStartTime = startTime || Date.now();
+    const newStartTime = startTime || Date.now();
     let newEndTime = endTime;
     if (!newEndTime) {
       const originalDuration = (originalStage.endTime as number) - (originalStage.startTime as number);

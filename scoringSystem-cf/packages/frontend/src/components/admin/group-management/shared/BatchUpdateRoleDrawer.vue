@@ -7,7 +7,7 @@
     :before-close="handleClose"
     class="drawer-navy"
   >
-    <div class="drawer-body" v-loading="loading" element-loading-text="更新中...">
+    <div v-loading="loading" class="drawer-body" element-loading-text="更新中...">
       <!-- Info Section -->
       <div class="info-section">
         <div class="info-icon">
@@ -121,8 +121,8 @@
         </el-button>
         <el-button
           size="large"
-          @click="handleClose"
           :disabled="loading"
+          @click="handleClose"
         >
           <i class="fas fa-times"></i>
           取消

@@ -34,9 +34,9 @@
 
         <!-- Register Tab -->
         <RegisterForm
-          ref="registerFormRef"
           v-show="currentTab === 'register'"
-          @registerSuccess="handleRegisterSuccess"
+          ref="registerFormRef"
+          @register-success="handleRegisterSuccess"
         />
 
         <!-- Forgot Password Tab -->

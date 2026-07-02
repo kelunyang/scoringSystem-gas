@@ -90,8 +90,8 @@
             <el-button
               type="success"
               size="small"
-              @click="batchActivateUsers"
               :disabled="batchUpdatingStatus || selectedUserEmails.size === 0"
+              @click="batchActivateUsers"
             >
               <i class="fas fa-check-circle"></i>
               <span class="btn-text">全部啟用</span>
@@ -105,8 +105,8 @@
             <el-button
               type="danger"
               size="small"
-              @click="batchDeactivateUsers"
               :disabled="batchUpdatingStatus || selectedUserEmails.size === 0"
+              @click="batchDeactivateUsers"
             >
               <i class="fas fa-ban"></i>
               <span class="btn-text">全部停用</span>
@@ -118,8 +118,8 @@
         <el-button
           v-if="selectedUserEmails.size > 0"
           size="small"
-          @click="clearSelection"
           title="取消選擇"
+          @click="clearSelection"
         >
           <i class="fas fa-times"></i>
           <span class="btn-text">取消選擇</span>
@@ -147,7 +147,7 @@
     </el-card>
 
     <!-- User Table -->
-    <div class="table-container" v-loading="loading" element-loading-text="載入使用者資料中...">
+    <div v-loading="loading" class="table-container" element-loading-text="載入使用者資料中...">
       <table class="user-table">
         <!-- 響應式表頭 -->
         <ResponsiveTableHeader :actions-colspan="3">
@@ -238,8 +238,8 @@
                     v-if="isUserLocked(user)"
                     type="warning"
                     size="small"
-                    @click="openUnlockDrawer(user)"
                     title="解鎖此帳戶"
+                    @click="openUnlockDrawer(user)"
                   >
                     <i class="fas fa-unlock"></i>
                     解鎖帳戶
@@ -252,7 +252,7 @@
                     <i class="fas fa-key"></i>
                     重設密碼
                   </el-button>
-                  <el-button type="info" size="small" @click="viewLoginLogs(user)" title="查看該用戶的登入記錄">
+                  <el-button type="info" size="small" title="查看該用戶的登入記錄" @click="viewLoginLogs(user)">
                     <i class="fas fa-right-to-bracket"></i>
                     登入記錄
                   </el-button>
@@ -311,8 +311,8 @@
                   v-if="isUserLocked(user)"
                   type="warning"
                   size="small"
-                  @click.stop="openUnlockDrawer(user)"
                   title="解鎖此帳戶"
+                  @click.stop="openUnlockDrawer(user)"
                 >
                   <i class="fas fa-unlock"></i>
                   解鎖
@@ -325,7 +325,7 @@
                   <i class="fas fa-key"></i>
                   重設密碼
                 </el-button>
-                <el-button type="info" size="small" @click.stop="viewLoginLogs(user)" title="查看該用戶的登入記錄">
+                <el-button type="info" size="small" title="查看該用戶的登入記錄" @click.stop="viewLoginLogs(user)">
                   <i class="fas fa-right-to-bracket"></i>
                   記錄
                 </el-button>
@@ -341,9 +341,9 @@
               <div class="heatmap-section">
                 <UserActivityHeatmap
                   v-if="isUserExpansionReady(user) && !loading"
-                  :userEmail="user.userEmail"
-                  displayMode="compact"
-                  :compactDays="10"
+                  :user-email="user.userEmail"
+                  display-mode="compact"
+                  :compact-days="10"
                   @day-click="handleDayClick"
                 />
               </div>
@@ -354,10 +354,10 @@
                 class="detail-section"
               >
                 <UserActivityDetail
-                  :userEmail="user.userEmail"
+                  :user-email="user.userEmail"
                   :date="selectedDate?.toISOString().split('T')[0] || ''"
                   :events="selectedDayEvents"
-                  :canViewDetails="Boolean(canViewUserDetails(user))"
+                  :can-view-details="Boolean(canViewUserDetails(user))"
                 />
               </div>
             </ExpandableTableRow>
@@ -535,7 +535,7 @@
         </el-alert>
 
         <!-- User Info Display -->
-        <div class="user-info-display" v-if="unlockingUser">
+        <div v-if="unlockingUser" class="user-info-display">
           <h4>使用者資訊</h4>
           <div class="info-item">
             <span class="label">Email:</span>
@@ -549,7 +549,7 @@
             <span class="label">鎖定狀態:</span>
             <span class="value lock-status">{{ getLockStatusText(unlockingUser) }}</span>
           </div>
-          <div class="info-item" v-if="unlockingUser.lockReason">
+          <div v-if="unlockingUser.lockReason" class="info-item">
             <span class="label">鎖定原因:</span>
             <span class="value">{{ unlockingUser.lockReason }}</span>
           </div>

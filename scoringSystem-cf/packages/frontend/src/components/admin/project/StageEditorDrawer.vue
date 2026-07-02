@@ -18,7 +18,7 @@
         </el-breadcrumb-item>
       </el-breadcrumb>
     </template>
-    <div class="drawer-body" v-loading="loadingStageDetails" element-loading-text="載入階段詳情中...">
+    <div v-loading="loadingStageDetails" class="drawer-body" element-loading-text="載入階段詳情中...">
       <!-- DrawerAlertZone 統一管理 Alerts -->
       <DrawerAlertZone />
 
@@ -26,8 +26,8 @@
         <div class="form-group">
           <label>階段名稱 *</label>
           <input
-            type="text"
             v-model="editForm.stageName"
+            type="text"
             class="form-input"
             placeholder="輸入階段名稱"
           >
@@ -38,8 +38,8 @@
         <div class="form-group">
           <label>開始時間 *</label>
           <input
-            type="datetime-local"
             v-model="editForm.startTime"
+            type="datetime-local"
             class="form-input"
             :disabled="!!(isVotingLocked && editForm.stageId)"
             :title="isVotingLocked ? '本階段已有投票紀錄，無法修改時間' : ''"
@@ -48,8 +48,8 @@
         <div class="form-group">
           <label>結束時間 *</label>
           <input
-            type="datetime-local"
             v-model="editForm.endTime"
+            type="datetime-local"
             class="form-input"
             :disabled="!!(isVotingLocked && editForm.stageId)"
             :title="isVotingLocked ? '本階段已有投票紀錄，無法修改時間' : ''"
@@ -78,11 +78,11 @@
         <div class="form-row">
           <div class="form-group">
             <label>報告獎金池總額</label>
-            <input type="number" v-model="editForm.reportRewardPool" class="form-input" min="0" placeholder="總獎金將根據排名自動分配">
+            <input v-model="editForm.reportRewardPool" type="number" class="form-input" min="0" placeholder="總獎金將根據排名自動分配">
           </div>
           <div class="form-group">
             <label>評論獎金池總額</label>
-            <input type="number" v-model="editForm.commentRewardPool" class="form-input" min="0" placeholder="總獎金將根據排名自動分配">
+            <input v-model="editForm.commentRewardPool" type="number" class="form-input" min="0" placeholder="總獎金將根據排名自動分配">
           </div>
         </div>
       </div>
@@ -90,14 +90,14 @@
       <div class="drawer-actions">
         <el-button
           type="primary"
-          @click="handleSave"
           :disabled="savingStageDetails"
           :loading="savingStageDetails"
+          @click="handleSave"
         >
           <i v-if="!savingStageDetails" :class="editForm.stageId ? 'fas fa-save' : 'fas fa-plus'"></i>
           {{ savingStageDetails ? (editForm.stageId ? '儲存中...' : '創建中...') : (editForm.stageId ? '儲存變更' : '創建階段') }}
         </el-button>
-        <el-button @click="handleClose" :disabled="savingStageDetails">
+        <el-button :disabled="savingStageDetails" @click="handleClose">
           <i class="fas fa-times"></i> 取消
         </el-button>
       </div>

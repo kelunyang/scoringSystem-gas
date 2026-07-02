@@ -53,8 +53,8 @@
     <div class="form-actions">
       <button
         class="btn btn-primary"
-        @click="handleSubmit"
         :disabled="!canSubmit || loading"
+        @click="handleSubmit"
       >
         <div v-if="loading" class="spinner"></div>
         {{ loading ? '驗證中...' : '登入' }}

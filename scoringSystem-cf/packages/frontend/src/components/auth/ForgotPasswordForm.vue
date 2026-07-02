@@ -60,8 +60,8 @@
     <EmailVerificationStep
       v-if="!emailVerified && !resetSent"
       key="email-verification-step"
-      @submit="handleEmailSubmit"
       :loading="loading"
+      @submit="handleEmailSubmit"
     />
 
     <!-- Step 2: Two-Factor Verification -->
@@ -70,10 +70,10 @@
       key="twofactor-step"
       :user-email="userEmail"
       theme-color="#E17055"
-      @submit="handleTwoFactorSubmit"
-      @resend="handleResendCode"
       :loading="loading"
       :resend-loading="resendLoading"
+      @submit="handleTwoFactorSubmit"
+      @resend="handleResendCode"
     />
 
     <!-- Step 3: Project Selection -->
@@ -81,8 +81,8 @@
       v-else-if="codeVerified && !resetSent"
       key="project-selection-step"
       :projects="projects"
-      @submit="handleProjectSubmit"
       :loading="loading"
+      @submit="handleProjectSubmit"
     />
 
     <!-- Error Message -->

@@ -15,7 +15,7 @@
         </el-button>
       </div>
 
-      <div :class="embedded ? '' : 'card-content'" v-loading="loading">
+      <div v-loading="loading" :class="embedded ? '' : 'card-content'">
         <el-table v-if="providers.length > 0" :data="providers" stripe border style="width: 100%">
           <el-table-column prop="name" label="名稱" min-width="150" />
           <el-table-column prop="model" label="模型" min-width="180" />
@@ -24,17 +24,17 @@
             <template #default="{ row }">
               <el-switch
                 v-model="row.enabled"
-                @change="toggleEnabled(row as ProviderRow)"
                 :loading="row.updating"
+                @change="toggleEnabled(row as ProviderRow)"
               />
             </template>
           </el-table-column>
           <el-table-column label="操作" width="120" fixed="right" align="center">
             <template #default="{ row }">
-              <el-button size="small" @click="editProvider(row as ProviderRow)" circle title="編輯">
+              <el-button size="small" circle title="編輯" @click="editProvider(row as ProviderRow)">
                 <i class="fas fa-edit"></i>
               </el-button>
-              <el-button size="small" type="danger" @click="confirmDelete(row as ProviderRow)" circle title="刪除">
+              <el-button size="small" type="danger" circle title="刪除" @click="confirmDelete(row as ProviderRow)">
                 <i class="fas fa-trash"></i>
               </el-button>
             </template>
@@ -67,7 +67,7 @@
         </el-button>
       </div>
 
-      <div :class="embedded ? '' : 'card-content'" v-loading="promptsLoading">
+      <div v-loading="promptsLoading" :class="embedded ? '' : 'card-content'">
         <el-form label-position="top">
           <el-form-item label="成果排名評分標準">
             <el-input
@@ -92,7 +92,7 @@
           </el-form-item>
 
           <el-form-item>
-            <el-button type="primary" @click="savePromptConfig" :loading="savingPrompts">
+            <el-button type="primary" :loading="savingPrompts" @click="savePromptConfig">
               <i class="fas fa-save"></i> 儲存設定
             </el-button>
           </el-form-item>
@@ -116,7 +116,7 @@
         </div>
       </template>
       <div class="drawer-content">
-        <el-form :model="form" :rules="formRules" ref="formRef" label-position="top">
+        <el-form ref="formRef" :model="form" :rules="formRules" label-position="top">
           <el-form-item label="名稱" prop="name">
             <el-input v-model="form.name" placeholder="例如：DeepSeek V3" />
           </el-form-item>
@@ -149,14 +149,14 @@
           <el-button
             v-if="isEditing"
             type="success"
-            @click="testCurrentProvider"
             :loading="testingConnection"
+            @click="testCurrentProvider"
           >
             <i class="fas fa-plug"></i> 測試連線
           </el-button>
           <div class="drawer-actions-spacer"></div>
           <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="saveProvider" :loading="saving">
+          <el-button type="primary" :loading="saving" @click="saveProvider">
             {{ isEditing ? '更新' : '新增' }}
           </el-button>
         </div>

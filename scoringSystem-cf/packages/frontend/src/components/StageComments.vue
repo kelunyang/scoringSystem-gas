@@ -1,5 +1,5 @@
 <template>
-  <div class="stage-comments" v-loading="loading" element-loading-text="載入評論中...">
+  <div v-loading="loading" class="stage-comments" element-loading-text="載入評論中...">
     <EmptyState
       v-if="comments.length === 0 && !loading"
       parent-icon="fa-comments"
@@ -17,10 +17,11 @@
       :class="{ 'not-pinned': pinnedAuthorEmail && comment.author !== pinnedAuthorEmail }"
     >
       <!-- 評論排名狀態指示區 -->
-      <div class="comment-status-bar" v-if="!comment.isTeacherComment">
+      <div v-if="!comment.isTeacherComment" class="comment-status-bar">
         <!-- Active 階段：顯示資格狀態（三種狀態） -->
         <div v-if="stageStatus === 'active'" class="ranking-badges">
-          <div class="eligibility-postit" :class="{
+          <div
+class="eligibility-postit" :class="{
             'confirmed': comment.canBeVoted,
             'pending': !comment.canBeVoted && commentHasMentions(comment),
             'not-eligible': !comment.canBeVoted && !commentHasMentions(comment)
@@ -211,7 +212,7 @@
       </div>
       
       <!-- 教師評論標記 -->
-      <div class="comment-status-bar teacher-comment" v-if="comment.isTeacherComment">
+      <div v-if="comment.isTeacherComment" class="comment-status-bar teacher-comment">
         <div class="ranking-badges">
           <div class="status-badge teacher-label">
             老師的評論
@@ -240,7 +241,7 @@
       <div class="comment-content">
         <MdPreviewWrapper
           :content="comment.content"
-          :preProcess="getMentionProcessor()"
+          :pre-process="getMentionProcessor()"
         />
       </div>
       
@@ -266,7 +267,7 @@
           <div class="reply-content">
             <MdPreviewWrapper
               :content="reply.content"
-              :preProcess="getMentionProcessor()"
+              :pre-process="getMentionProcessor()"
             />
           </div>
         </div>
@@ -280,8 +281,8 @@
           <el-button
             type="primary"
             :loading="loadingMore"
-            @click="loadMoreComments"
             class="load-more-btn"
+            @click="loadMoreComments"
           >
             再載入 {{ commentPageSize }} 條評論
           </el-button>

@@ -87,8 +87,8 @@
           :title="`確定要重送 ${selectedLogs.length} 封郵件嗎？`"
           confirm-button-text="確定"
           cancel-button-text="取消"
-          @confirm="resendSelectedEmails"
           :disabled="selectedLogs.length === 0 || resending"
+          @confirm="resendSelectedEmails"
         >
           <template #reference>
             <el-badge :value="selectedLogs.length" :hidden="selectedLogs.length === 0">
@@ -133,8 +133,8 @@
             <th width="50">
               <el-checkbox
                 v-model="selectAll"
-                @change="toggleSelectAll"
                 :indeterminate="isIndeterminate"
+                @change="toggleSelectAll"
               />
             </th>
             <th>收件人</th>
@@ -185,8 +185,8 @@
                     :title="`確定要重送郵件給 ${log.recipient} 嗎？`"
                     confirm-button-text="確定"
                     cancel-button-text="取消"
-                    @confirm="resendSingleEmail(log)"
                     :disabled="resending"
+                    @confirm="resendSingleEmail(log)"
                   >
                     <template #reference>
                       <el-button
@@ -243,8 +243,8 @@
                   :title="`確定要重送郵件給 ${log.recipient} 嗎？`"
                   confirm-button-text="確定"
                   cancel-button-text="取消"
-                  @confirm="resendSingleEmail(log)"
                   :disabled="resending"
+                  @confirm="resendSingleEmail(log)"
                 >
                   <template #reference>
                     <el-button
@@ -312,7 +312,7 @@
                       <label>HTML 內容</label>
                       <div class="content-display" v-html="sanitizedHtmlBody"></div>
                     </div>
-                    <div class="detail-item" v-if="expandedLogDetails.textBody" style="margin-top: 15px;">
+                    <div v-if="expandedLogDetails.textBody" class="detail-item" style="margin-top: 15px;">
                       <label>純文字內容</label>
                       <div class="content-display">{{ expandedLogDetails.textBody }}</div>
                     </div>
@@ -332,7 +332,7 @@
                           {{ expandedLogDetails.status === 'sent' ? '發送成功' : '發送失敗' }}
                         </div>
                       </div>
-                      <div class="detail-item" v-if="expandedLogDetails.statusCode">
+                      <div v-if="expandedLogDetails.statusCode" class="detail-item">
                         <label>HTTP 狀態碼</label>
                         <div class="detail-value">{{ expandedLogDetails.statusCode }}</div>
                       </div>
@@ -356,7 +356,7 @@
                   </div>
 
                   <!-- Error Info (if failed) -->
-                  <div class="detail-section" v-if="expandedLogDetails.status === 'failed'">
+                  <div v-if="expandedLogDetails.status === 'failed'" class="detail-section">
                     <h4><i class="fas fa-exclamation-triangle"></i> 錯誤資訊</h4>
                     <div class="detail-grid">
                       <div class="detail-item">
@@ -371,7 +371,7 @@
                   </div>
 
                   <!-- Email Context -->
-                  <div class="detail-section" v-if="expandedLogDetails.emailContext">
+                  <div v-if="expandedLogDetails.emailContext" class="detail-section">
                     <h4><i class="fas fa-code"></i> 郵件上下文</h4>
                     <div class="content-display">
                       <MdPreviewWrapper :content="jsonToMarkdown(expandedLogDetails.emailContext)" />
@@ -384,8 +384,8 @@
                       :title="`確定要重送郵件給 ${expandedLogDetails.recipient} 嗎？`"
                       confirm-button-text="確定"
                       cancel-button-text="取消"
-                      @confirm="resendFromExpanded"
                       :disabled="resending"
+                      @confirm="resendFromExpanded"
                     >
                       <template #reference>
                         <el-button

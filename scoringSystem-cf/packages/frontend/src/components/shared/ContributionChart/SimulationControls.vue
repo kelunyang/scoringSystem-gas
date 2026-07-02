@@ -5,9 +5,9 @@
       <label>模擬排名:</label>
       <el-select
         :model-value="simulatedRank"
-        @update:model-value="emit('update:simulatedRank', $event)"
         class="rank-selector"
         size="small"
+        @update:model-value="emit('update:simulatedRank', $event)"
       >
         <el-option
           v-for="rank in simulatedGroupCount"
@@ -23,11 +23,11 @@
       <label>模擬組數: {{ simulatedGroupCount }}</label>
       <el-slider
         :model-value="simulatedGroupCount"
-        @update:model-value="handleGroupCountChange"
         :min="safeSliderMin"
         :max="totalProjectGroups"
         :marks="sliderMarks"
         class="group-count-slider"
+        @update:model-value="handleGroupCountChange"
       />
     </div>
 

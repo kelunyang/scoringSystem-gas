@@ -5,9 +5,9 @@
       <el-button
         type="primary"
         size="small"
-        @click="handleRefresh"
         :loading="loading"
         icon="Refresh"
+        @click="handleRefresh"
       >
         刷新統計
       </el-button>

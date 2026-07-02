@@ -7,12 +7,12 @@
           v-if="!isInFallbackMode"
           :src="avatarUrl"
           :alt="`${displayName || 'User'}的頭像`"
-          @load="handleAvatarLoad"
-          @error="handleAvatarError"
           :width="size"
           :height="size"
           class="avatar-image"
           :class="{ 'avatar-square': shape === 'square' }"
+          @load="handleAvatarLoad"
+          @error="handleAvatarError"
         />
 
         <!-- Fallback: initials -->
@@ -50,14 +50,14 @@
     <div v-if="showAdvancedOptions" class="avatar-controls">
       <!-- 重新生成和調整按鈕 -->
       <div class="control-buttons">
-        <el-button @click="regenerateAvatar" :loading="isRegenerating" size="default">
+        <el-button :loading="isRegenerating" size="default" @click="regenerateAvatar">
           <i class="fas fa-sync"></i>
           重新生成頭像
         </el-button>
 
         <!-- 參數調整下拉選單 -->
-        <div class="avatar-params-dropdown" v-click-outside="closeParamsDropdown">
-          <el-button @click="toggleParamsDropdown" size="default">
+        <div v-click-outside="closeParamsDropdown" class="avatar-params-dropdown">
+          <el-button size="default" @click="toggleParamsDropdown">
             <i class="fas fa-sliders-h"></i>
             調整頭像參數
             <i class="fas fa-chevron-down" :class="{ rotated: paramsDropdownOpen }"></i>
@@ -97,8 +97,8 @@
                     class="color-option"
                     :style="{ backgroundColor: '#' + color.value }"
                     :class="{ selected: currentOptions[paramGroup.key] === color.value }"
-                    @click="updateOption(paramGroup.key, color.value)"
                     :title="color.label"
+                    @click="updateOption(paramGroup.key, color.value)"
                   ></div>
                 </div>
 
@@ -124,7 +124,7 @@
 
       <!-- 保存/取消按鈕 -->
       <div v-if="hasChanges && showSaveButton" class="save-actions">
-        <el-button type="primary" @click="emitSave" :loading="isSaving">
+        <el-button type="primary" :loading="isSaving" @click="emitSave">
           儲存頭像設定
         </el-button>
         <el-button @click="cancelChanges">

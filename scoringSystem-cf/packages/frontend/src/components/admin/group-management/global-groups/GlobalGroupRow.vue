@@ -195,8 +195,8 @@
                 <el-checkbox
                   :model-value="isAllSelected"
                   :indeterminate="isSomeSelected"
-                  @click.stop
                   class="inline-checkbox"
+                  @click.stop
                 />
                 全選
               </el-button>
@@ -243,8 +243,8 @@
               <el-checkbox
                 :model-value="isAllSelected"
                 :indeterminate="isSomeSelected"
-                @click.stop
                 class="inline-checkbox"
+                @click.stop
               />
               全選
             </el-button>

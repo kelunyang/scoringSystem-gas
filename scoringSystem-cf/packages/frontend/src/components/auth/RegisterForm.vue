@@ -47,12 +47,12 @@
     <InvitationStep
       v-if="!invitationVerified"
       key="invitation-step"
-      @submit="handleInvitationSubmit"
-      @checkInvitation="handleInvitationCheck"
       :loading="loading"
-      :checkingInvitation="checkingInvitation"
-      :invitationStatus="invitationStatus"
-      :invitationStatusMessage="invitationStatusMessage"
+      :checking-invitation="checkingInvitation"
+      :invitation-status="invitationStatus"
+      :invitation-status-message="invitationStatusMessage"
+      @submit="handleInvitationSubmit"
+      @check-invitation="handleInvitationCheck"
     />
 
     <!-- Step 2: User Information -->
@@ -60,9 +60,9 @@
       v-else-if="!registrationComplete"
       key="userinfo-step"
       :target-email="targetEmail"
+      :loading="loading"
       @submit="handleRegisterSubmit"
       @back="handleBack"
-      :loading="loading"
     />
 
     <!-- Step 3: 2FA Setup (Passkey preferred) -->

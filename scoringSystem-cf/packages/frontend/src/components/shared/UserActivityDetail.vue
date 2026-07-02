@@ -68,8 +68,8 @@
             <el-button
               size="small"
               type="info"
-              @click="toggleEventContext(event)"
               :loading="isLoadingContext(event)"
+              @click="toggleEventContext(event)"
             >
               <i :class="isEventExpanded(event) ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
               {{ isEventExpanded(event) ? '隱藏詳情' : '檢視詳情' }}
@@ -338,12 +338,13 @@ async function loadEventContext(event: Event, eventKey: string): Promise<void> {
     ElMessage.error('載入事件詳情時發生錯誤')
   } finally {
     // CRITICAL: Check if component is still mounted before updating state
-    if (!isMounted.value) return
-
-    // Remove from loading set
-    const newLoadingIds = new Set(loadingContextIds.value)
-    newLoadingIds.delete(eventKey)
-    loadingContextIds.value = newLoadingIds
+    // (no early return here — a return inside finally would swallow exceptions)
+    if (isMounted.value) {
+      // Remove from loading set
+      const newLoadingIds = new Set(loadingContextIds.value)
+      newLoadingIds.delete(eventKey)
+      loadingContextIds.value = newLoadingIds
+    }
   }
 }
 

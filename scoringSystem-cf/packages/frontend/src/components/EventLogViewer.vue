@@ -84,8 +84,8 @@
             filterable
             placeholder="選擇用戶"
             style="width: 300px;"
-            @change="applyFilters"
             clearable
+            @change="applyFilters"
           >
             <el-option
               v-for="user in availableUsers"
@@ -116,8 +116,8 @@
           <el-button
             size="small"
             :icon="Refresh"
-            @click="refreshLogs"
             :loading="loading"
+            @click="refreshLogs"
           >
             <span class="btn-text">重新整理</span>
           </el-button>
@@ -128,7 +128,7 @@
     <!-- 事件列表 -->
     <div class="event-list">
       <!-- 原生 table + ExpandableTableRow -->
-      <table v-if="displayedLogs.length > 0" class="custom-table" v-loading="loading">
+      <table v-if="displayedLogs.length > 0" v-loading="loading" class="custom-table">
         <thead>
           <tr>
             <th style="width: 40px"></th>

@@ -8,7 +8,7 @@
     <template v-else>
       <!-- Mini-map 時間感知條 (3px) -->
       <div v-if="showMinimap && enableDrag" class="gantt-minimap">
-        <div class="minimap-bar" ref="minimapBar">
+        <div ref="minimapBar" class="minimap-bar">
           <div class="minimap-track"></div>
           <div class="minimap-viewport" :style="minimapStyle"></div>
         </div>
@@ -365,7 +365,7 @@ export default {
       const baseViewportDays = 60
       const ratio = baseViewportDays / baseProjectDays
 
-      let calculatedDays = totalDays * ratio
+      const calculatedDays = totalDays * ratio
 
       // 限制範圍：最少 7 天，最多 180 天
       return Math.max(7, Math.min(180, Math.round(calculatedDays)))

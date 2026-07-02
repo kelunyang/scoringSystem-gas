@@ -1,11 +1,11 @@
 <template>
   <el-drawer
     :model-value="visible"
-    @update:model-value="$emit('update:visible', $event)"
     direction="btt"
     size="100%"
     :close-on-click-modal="false"
     class="pause-stage-drawer drawer-navy"
+    @update:model-value="$emit('update:visible', $event)"
   >
     <template #header>
       <div class="drawer-breadcrumb">
@@ -22,7 +22,7 @@
       </div>
     </template>
 
-    <div class="drawer-body" v-loading="loading">
+    <div v-loading="loading" class="drawer-body">
       <!-- DrawerAlertZone 統一管理 Alerts -->
       <DrawerAlertZone />
 
@@ -82,17 +82,17 @@
           <el-button
             type="warning"
             size="large"
-            @click="confirmPause"
             :disabled="!isValidForm || isProcessing"
             :loading="isProcessing"
+            @click="confirmPause"
           >
             <i class="fas fa-pause"></i>
             {{ isProcessing ? '處理中...' : '確認暫停階段' }}
           </el-button>
           <el-button
             size="large"
-            @click="closeDrawer"
             :disabled="isProcessing"
+            @click="closeDrawer"
           >
             <i class="fas fa-times"></i>
             取消

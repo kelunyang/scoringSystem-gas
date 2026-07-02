@@ -74,8 +74,8 @@
                 <div class="password-section">
                   <el-button
                     v-if="!editingPassword && !editingProfile"
-                    @click="startEditPassword"
                     size="default"
+                    @click="startEditPassword"
                   >
                     <i class="fas fa-key"></i> 修改密碼
                   </el-button>
@@ -101,7 +101,7 @@
                         size="default"
                         @input="checkPasswordStrength"
                       />
-                      <div class="password-strength" v-if="passwordForm.newPassword">
+                      <div v-if="passwordForm.newPassword" class="password-strength">
                         <el-progress
                           :percentage="passwordStrengthPercentage"
                           :color="passwordStrengthColor"
@@ -128,7 +128,7 @@
                 <div class="profile-actions">
                   <!-- Profile editing buttons -->
                   <template v-if="editingProfile">
-                    <el-button type="primary" @click="saveProfile" :loading="savingProfile">
+                    <el-button type="primary" :loading="savingProfile" @click="saveProfile">
                       <i class="fas fa-save"></i> 儲存修改
                     </el-button>
                     <el-button @click="cancelEditProfile">
@@ -138,7 +138,7 @@
 
                   <!-- Password editing buttons -->
                   <template v-else-if="editingPassword">
-                    <el-button type="primary" @click="savePassword" :loading="changingPassword">
+                    <el-button type="primary" :loading="changingPassword" @click="savePassword">
                       <i class="fas fa-save"></i> 儲存密碼
                     </el-button>
                     <el-button @click="cancelEditPassword">
@@ -180,8 +180,8 @@
                     :step="5"
                     :marks="sliderMarks"
                     show-stops
-                    @change="handleRefreshTimerChange"
                     class="refresh-timer-slider"
+                    @change="handleRefreshTimerChange"
                   />
                   <div class="timer-value-display">
                     <span class="value-number">{{ refreshTimerValue }}</span>
@@ -282,8 +282,8 @@
                     :marks="commentPageSizeMarks"
                     show-stops
                     :disabled="savingCommentPageSize"
-                    @change="handleCommentPageSizeChange"
                     class="comment-page-slider"
+                    @change="handleCommentPageSizeChange"
                   />
                   <div class="comment-value-display">
                     <span class="value-number">{{ commentPageSize }}</span>
@@ -292,7 +292,7 @@
                 </div>
               </div>
 
-              <el-button type="warning" size="small" @click="resetCommentPageSize" :loading="savingCommentPageSize">
+              <el-button type="warning" size="small" :loading="savingCommentPageSize" @click="resetCommentPageSize">
                 <i class="fas fa-undo"></i> 重置 (3則)
               </el-button>
             </div>
@@ -321,8 +321,8 @@
             <div class="heatmap-container">
               <UserActivityHeatmap
                 v-if="user?.userEmail"
-                :userEmail="user.userEmail"
-                displayMode="full"
+                :user-email="user.userEmail"
+                display-mode="full"
                 @day-click="handleDayClick"
               />
             </div>
@@ -336,10 +336,10 @@
                 </el-button>
               </div>
               <UserActivityDetail
-                :userEmail="user.userEmail"
+                :user-email="user.userEmail"
                 :date="selectedDate"
                 :events="selectedDayEvents"
-                :canViewDetails="true"
+                :can-view-details="true"
               />
             </div>
           </div>
@@ -371,6 +371,21 @@ export default {
     TotpSetup,
     PasskeySetup
   },
+  directives: {
+    'click-outside': {
+      beforeMount(el, binding) {
+        el.clickOutsideEvent = function(event) {
+          if (!(el === event.target || el.contains(event.target))) {
+            binding.value()
+          }
+        }
+        document.addEventListener('click', el.clickOutsideEvent)
+      },
+      unmounted(el) {
+        document.removeEventListener('click', el.clickOutsideEvent)
+      }
+    }
+  },
   props: {
     user: {
       type: Object,
@@ -385,6 +400,7 @@ export default {
       default: 0
     }
   },
+  emits: ['user-command'],
   data() {
     return {
       // Auto-refresh timer setting (in minutes)
@@ -536,7 +552,16 @@ export default {
       return []
     }
   },
-  emits: ['user-command'],
+  mounted() {
+    this.loadRefreshTimer()
+    this.loadStageDisplayPreference()
+    this.loadAutoOpenNotificationPreference()
+    this.loadCommentPageSizePreference()
+
+    const { setPageTitle, clearProjectTitle } = useBreadcrumb()
+    setPageTitle('用戶設置')
+    clearProjectTitle()
+  },
   methods: {
     // Auto-refresh timer methods
     loadRefreshTimer() {
@@ -880,31 +905,6 @@ export default {
         this.passwordStrength = { level: 'medium', message: '密碼強度：中等' }
       } else {
         this.passwordStrength = { level: 'strong', message: '密碼強度：強' }
-      }
-    }
-  },
-  mounted() {
-    this.loadRefreshTimer()
-    this.loadStageDisplayPreference()
-    this.loadAutoOpenNotificationPreference()
-    this.loadCommentPageSizePreference()
-
-    const { setPageTitle, clearProjectTitle } = useBreadcrumb()
-    setPageTitle('用戶設置')
-    clearProjectTitle()
-  },
-  directives: {
-    'click-outside': {
-      beforeMount(el, binding) {
-        el.clickOutsideEvent = function(event) {
-          if (!(el === event.target || el.contains(event.target))) {
-            binding.value()
-          }
-        }
-        document.addEventListener('click', el.clickOutsideEvent)
-      },
-      unmounted(el) {
-        document.removeEventListener('click', el.clickOutsideEvent)
       }
     }
   }

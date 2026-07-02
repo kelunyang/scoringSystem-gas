@@ -1,13 +1,13 @@
 <template>
   <el-drawer
     :model-value="modelValue"
-    @update:model-value="$emit('update:modelValue', $event)"
     direction="btt"
     size="100%"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
     :show-close="settlementStatus === 'completed' || settlementStatus === 'idle'"
     class="drawer-navy"
+    @update:model-value="$emit('update:modelValue', $event)"
   >
     <template #header>
       <el-breadcrumb separator=">">
@@ -55,7 +55,7 @@
                 <div class="validation-warnings" v-html="buildValidationWarningMessage(settlementValidation)"></div>
 
                 <div class="validation-actions">
-                  <el-button type="danger" @click="forceSettle" :loading="(settlementStatus as SettlementStatus) === 'settling'">
+                  <el-button type="danger" :loading="(settlementStatus as SettlementStatus) === 'settling'" @click="forceSettle">
                     <i class="fas fa-exclamation-triangle"></i> 強制結算
                   </el-button>
                   <el-button @click="closeDrawer">
@@ -102,19 +102,19 @@
         <!-- Details if available -->
         <div v-if="settlementProgress.details" class="progress-details">
           <el-divider content-position="left">詳細資訊</el-divider>
-          <div class="detail-item" v-if="settlementProgress.details.teacherVoteCount !== undefined">
+          <div v-if="settlementProgress.details.teacherVoteCount !== undefined" class="detail-item">
             <span class="label">教師投票數：</span>
             <span class="value">{{ settlementProgress.details.teacherVoteCount }}</span>
           </div>
-          <div class="detail-item" v-if="settlementProgress.details.studentVoteCount !== undefined">
+          <div v-if="settlementProgress.details.studentVoteCount !== undefined" class="detail-item">
             <span class="label">學生投票數：</span>
             <span class="value">{{ settlementProgress.details.studentVoteCount }}</span>
           </div>
-          <div class="detail-item" v-if="settlementProgress.details.groupCount !== undefined">
+          <div v-if="settlementProgress.details.groupCount !== undefined" class="detail-item">
             <span class="label">參與組數：</span>
             <span class="value">{{ settlementProgress.details.groupCount }}</span>
           </div>
-          <div class="detail-item" v-if="settlementProgress.details.totalRewardDistributed !== undefined">
+          <div v-if="settlementProgress.details.totalRewardDistributed !== undefined" class="detail-item">
             <span class="label">總獎勵：</span>
             <span class="value">{{ settlementProgress.details.totalRewardDistributed }} 點</span>
           </div>
@@ -165,8 +165,8 @@
             <el-button
               type="text"
               size="small"
-              @click="selectedSettlementGroup = null"
               style="margin-left: 10px;"
+              @click="selectedSettlementGroup = null"
             >
               <i class="fas fa-times"></i> 關閉
             </el-button>

@@ -92,7 +92,7 @@
     </AdminFilterToolbar>
 
     <!-- Statistics Card -->
-    <el-card class="stats-card" v-if="statistics">
+    <el-card v-if="statistics" class="stats-card">
       <el-row :gutter="20">
         <el-col :xs="12" :sm="6" :md="4">
           <AnimatedStatistic title="總請求數" :value="statistics.total || 0" />
@@ -215,7 +215,7 @@
 
               <!-- 展開區域：詳細資訊 -->
               <template #default>
-                <div class="ai-log-expanded-detail" v-loading="loadingDetail && expandedLogId === log.callId">
+                <div v-loading="loadingDetail && expandedLogId === log.callId" class="ai-log-expanded-detail">
                   <template v-if="expandedLogDetails.log">
                     <!-- Basic Info -->
                     <div class="detail-section">
@@ -308,7 +308,7 @@
                     </div>
 
                     <!-- Custom Prompt -->
-                    <div class="detail-section" v-if="expandedLogDetails.log.customPrompt">
+                    <div v-if="expandedLogDetails.log.customPrompt" class="detail-section">
                       <h4><i class="fas fa-comment-alt"></i> 自訂 Prompt</h4>
                       <div class="content-display">
                         {{ expandedLogDetails.log.customPrompt }}
@@ -316,7 +316,7 @@
                     </div>
 
                     <!-- Result Section -->
-                    <div class="detail-section" v-if="expandedLogDetails.log.result">
+                    <div v-if="expandedLogDetails.log.result" class="detail-section">
                       <h4><i class="fas fa-list-ol"></i> 排名結果</h4>
                       <div class="content-display">
                         <MdPreviewWrapper :content="jsonToMarkdown(expandedLogDetails.log.result)" />
@@ -324,7 +324,7 @@
                     </div>
 
                     <!-- AI Reason -->
-                    <div class="detail-section" v-if="expandedLogDetails.log.reason">
+                    <div v-if="expandedLogDetails.log.reason" class="detail-section">
                       <h4><i class="fas fa-lightbulb"></i> AI 解釋</h4>
                       <div class="content-display">
                         {{ expandedLogDetails.log.reason }}
@@ -332,7 +332,7 @@
                     </div>
 
                     <!-- Thinking Process -->
-                    <div class="detail-section" v-if="expandedLogDetails.log.thinkingProcess">
+                    <div v-if="expandedLogDetails.log.thinkingProcess" class="detail-section">
                       <h4>
                         <i class="fas fa-brain"></i> 思考過程
                         <el-tag size="small" type="info" style="margin-left: 10px;">DeepSeek Reasoning</el-tag>
@@ -347,7 +347,7 @@
                     </div>
 
                     <!-- BT Mode Section -->
-                    <div class="detail-section" v-if="expandedLogDetails.log.serviceType === 'ranking_bt' && expandedLogDetails.log.btComparisons">
+                    <div v-if="expandedLogDetails.log.serviceType === 'ranking_bt' && expandedLogDetails.log.btComparisons" class="detail-section">
                       <h4><i class="fas fa-balance-scale"></i> BT 配對比較</h4>
                       <div class="bt-comparisons">
                         <div
@@ -358,13 +358,13 @@
                           <span class="comparison-index">#{{ index + 1 }}</span>
                           <span class="comparison-items">{{ comparison.itemA }} vs {{ comparison.itemB }}</span>
                           <span class="comparison-winner">勝者: {{ comparison.winner }}</span>
-                          <span class="comparison-reason" v-if="comparison.reason">{{ comparison.reason }}</span>
+                          <span v-if="comparison.reason" class="comparison-reason">{{ comparison.reason }}</span>
                         </div>
                       </div>
                     </div>
 
                     <!-- BT Strength Params -->
-                    <div class="detail-section" v-if="expandedLogDetails.log.serviceType === 'ranking_bt' && expandedLogDetails.log.btStrengthParams">
+                    <div v-if="expandedLogDetails.log.serviceType === 'ranking_bt' && expandedLogDetails.log.btStrengthParams" class="detail-section">
                       <h4><i class="fas fa-chart-bar"></i> BT 能力值</h4>
                       <div class="content-display">
                         <MdPreviewWrapper :content="jsonToMarkdown(expandedLogDetails.log.btStrengthParams)" />
@@ -372,7 +372,7 @@
                     </div>
 
                     <!-- Multi-Agent Section -->
-                    <div class="detail-section" v-if="expandedLogDetails.log.serviceType === 'ranking_multi_agent'">
+                    <div v-if="expandedLogDetails.log.serviceType === 'ranking_multi_agent'" class="detail-section">
                       <h4><i class="fas fa-users"></i> Multi-Agent 辯論詳情</h4>
                       <div class="detail-grid">
                         <div class="detail-item">
@@ -388,14 +388,14 @@
                           </div>
                         </div>
                       </div>
-                      <div class="detail-item" v-if="expandedLogDetails.log.debateCritique" style="margin-top: 15px;">
+                      <div v-if="expandedLogDetails.log.debateCritique" class="detail-item" style="margin-top: 15px;">
                         <label>辯論評論</label>
                         <div class="content-display">{{ expandedLogDetails.log.debateCritique }}</div>
                       </div>
                     </div>
 
                     <!-- Child Calls -->
-                    <div class="detail-section" v-if="expandedLogDetails.childCalls && expandedLogDetails.childCalls.length > 0">
+                    <div v-if="expandedLogDetails.childCalls && expandedLogDetails.childCalls.length > 0" class="detail-section">
                       <h4><i class="fas fa-sitemap"></i> 子請求 ({{ expandedLogDetails.childCalls.length }})</h4>
                       <div class="child-calls-list">
                         <div
@@ -405,7 +405,7 @@
                           @click="expandChildLog(child)"
                         >
                           <span class="child-provider">{{ child.providerName }}</span>
-                          <span class="child-round" v-if="child.debateRound">Round {{ child.debateRound }}</span>
+                          <span v-if="child.debateRound" class="child-round">Round {{ child.debateRound }}</span>
                           <span class="child-status" :style="{ color: getStatusColor(child.status) }">
                             {{ getStatusText(child.status) }}
                           </span>
@@ -415,7 +415,7 @@
                     </div>
 
                     <!-- Parent Call -->
-                    <div class="detail-section" v-if="expandedLogDetails.parentCall">
+                    <div v-if="expandedLogDetails.parentCall" class="detail-section">
                       <h4><i class="fas fa-level-up-alt"></i> 父請求</h4>
                       <div class="parent-call-info" @click="expandChildLog(expandedLogDetails.parentCall!)">
                         <span class="parent-id">{{ expandedLogDetails.parentCall.callId }}</span>
@@ -426,7 +426,7 @@
                     </div>
 
                     <!-- Error Info -->
-                    <div class="detail-section" v-if="expandedLogDetails.log.status === 'failed' || expandedLogDetails.log.status === 'timeout'">
+                    <div v-if="expandedLogDetails.log.status === 'failed' || expandedLogDetails.log.status === 'timeout'" class="detail-section">
                       <h4><i class="fas fa-exclamation-triangle"></i> 錯誤資訊</h4>
                       <div class="content-display error-message">
                         {{ expandedLogDetails.log.errorMessage || '未記錄錯誤訊息' }}

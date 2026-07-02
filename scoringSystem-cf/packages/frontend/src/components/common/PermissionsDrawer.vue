@@ -122,7 +122,7 @@
                 </div>
               </template>
             </el-alert>
-            <el-button type="warning" @click="handleExitSudo" class="sudo-exit-btn">
+            <el-button type="warning" class="sudo-exit-btn" @click="handleExitSudo">
               <i class="fas fa-sign-out-alt"></i> 退出 Sudo 模式
             </el-button>
           </div>

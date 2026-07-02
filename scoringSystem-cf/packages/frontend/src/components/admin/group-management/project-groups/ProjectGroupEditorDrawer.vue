@@ -26,8 +26,8 @@
         <div class="form-group">
           <label>描述</label>
           <el-input
-            type="textarea"
             v-model="form.description"
+            type="textarea"
             placeholder="輸入群組描述（可選）"
             :rows="3"
             maxlength="200"
@@ -51,7 +51,7 @@
       </div>
 
       <div class="drawer-actions">
-        <el-button type="primary" @click="handleSave" :loading="saving" :disabled="saving || !canSave">
+        <el-button type="primary" :loading="saving" :disabled="saving || !canSave" @click="handleSave">
           <i class="fas fa-save"></i>
           {{ saving ? '保存中...' : '保存' }}
         </el-button>

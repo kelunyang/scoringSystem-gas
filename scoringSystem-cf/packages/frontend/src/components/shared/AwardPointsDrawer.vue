@@ -59,8 +59,8 @@
         <div class="selection-header">
           <el-checkbox
             v-model="selectAll"
-            @change="handleSelectAll"
             :indeterminate="isIndeterminate"
+            @change="handleSelectAll"
           >
             全選 ({{ selectedUsers.length }}/{{ filteredUsers.length }})
           </el-checkbox>
@@ -161,7 +161,7 @@
       </div>
 
       <!-- Preview Summary -->
-      <div class="summary-section" v-if="selectedUsers.length > 0">
+      <div v-if="selectedUsers.length > 0" class="summary-section">
         <h4><i class="fas fa-info-circle"></i> 發放預覽</h4>
         <div class="summary-content">
           <div class="summary-item">
@@ -184,7 +184,7 @@
       </div>
 
       <!-- Confirmation Input -->
-      <div class="confirmation-section" v-if="selectedUsers.length > 0">
+      <div v-if="selectedUsers.length > 0" class="confirmation-section">
         <h4><i class="fas fa-shield-alt"></i> 確認發放</h4>
         <ConfirmationInput
           v-model="confirmText"
@@ -209,14 +209,14 @@
       <div class="drawer-actions">
         <el-button
           type="success"
-          @click="handleSubmit"
           :loading="isSubmitting"
           :disabled="!canSubmit"
+          @click="handleSubmit"
         >
           <i class="fas fa-paper-plane"></i>
           {{ isSubmitting ? '發放中...' : '確認發放' }}
         </el-button>
-        <el-button @click="handleClose" :disabled="isSubmitting">
+        <el-button :disabled="isSubmitting" @click="handleClose">
           <i class="fas fa-times"></i> 取消
         </el-button>
       </div>

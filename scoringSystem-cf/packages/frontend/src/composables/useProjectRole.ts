@@ -60,7 +60,7 @@ export function useProjectRole(projectId: string | Ref<string | null>) {
   const projectIdValue = computed(() => typeof projectId === 'string' ? projectId : projectId.value)
 
   const userQuery = useCurrentUser()
-  const viewersQuery = useProjectViewers(projectIdValue || '')
+  const viewersQuery = useProjectViewers(projectIdValue.value || '')
   const { hasAnyPermission } = usePermissions()
 
   /**

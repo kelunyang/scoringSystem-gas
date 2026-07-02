@@ -19,7 +19,7 @@
       </el-breadcrumb>
     </template>
 
-    <div v-if="editingUser" class="user-edit-form" v-loading="loadingUserData" element-loading-text="載入用戶資料中...">
+    <div v-if="editingUser" v-loading="loadingUserData" class="user-edit-form" element-loading-text="載入用戶資料中...">
       <!-- User Basic Info -->
       <div class="form-section">
         <h4><i class="fas fa-user"></i> 基本資料</h4>
@@ -180,8 +180,8 @@
             </el-select>
             <el-button
               type="primary"
-              @click="handleAddToGlobalGroup"
               :disabled="!selectedGlobalGroupToAdd"
+              @click="handleAddToGlobalGroup"
             >
               <i class="fas fa-plus"></i>
               添加到群組
@@ -226,11 +226,11 @@
                   <label>允許成員變更：</label>
                   <el-switch
                     v-model="projectGroup.allowChange"
-                    @change="handleUpdateGroupAllowChange(projectGroup)"
                     :disabled="updatingGroupSettings.has(`${projectGroup.projectId}-${projectGroup.groupId}`)"
                     :loading="updatingGroupSettings.has(`${projectGroup.projectId}-${projectGroup.groupId}`)"
                     active-color="#13ce66"
                     inactive-color="#ff4949"
+                    @change="handleUpdateGroupAllowChange(projectGroup)"
                   />
                 </div>
                 <div class="group-actions">
@@ -270,9 +270,9 @@
       <div class="drawer-actions">
         <el-button
           type="primary"
-          @click="handleSave"
           :loading="savingEditingUser"
           :disabled="!hasUserChanges"
+          @click="handleSave"
         >
           <i class="fas fa-save"></i>
           {{ savingEditingUser ? '保存中...' : '保存變更' }}

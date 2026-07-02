@@ -95,8 +95,8 @@
           :title="`確定要發送 ${((selectedNotifications || []).filter(n => !n.emailSent).length)} 封通知郵件嗎？`"
           confirm-button-text="確定"
           cancel-button-text="取消"
-          @confirm="sendSelectedEmails"
           :disabled="((selectedNotifications || []).length) === 0 || sendingEmails"
+          @confirm="sendSelectedEmails"
         >
           <template #reference>
             <el-badge :value="(selectedNotifications || []).length" :hidden="((selectedNotifications || []).length) === 0">
@@ -184,8 +184,8 @@
                 <td @click.stop>
                   <el-checkbox
                     :model-value="isSelected(notification.notificationId)"
-                    @change="toggleSelection(notification.notificationId)"
                     :aria-label="`選擇通知: ${notification.title}`"
+                    @change="toggleSelection(notification.notificationId)"
                   />
                 </td>
                 <td>{{ notification.targetUserEmail }}</td>
@@ -217,8 +217,8 @@
                     :title="`確定要發送通知郵件給 ${notification.targetUserEmail} 嗎？`"
                     confirm-button-text="確定"
                     cancel-button-text="取消"
-                    @confirm="sendSingleEmail(notification)"
                     :disabled="notification.emailSent || sendingEmails"
+                    @confirm="sendSingleEmail(notification)"
                   >
                     <template #reference>
                       <el-button
@@ -263,8 +263,8 @@
                 <td @click.stop>
                   <el-checkbox
                     :model-value="isSelected(notification.notificationId)"
-                    @change="toggleSelection(notification.notificationId)"
                     :aria-label="`選擇通知: ${notification.title}`"
+                    @change="toggleSelection(notification.notificationId)"
                   />
                 </td>
                 <td colspan="2">
@@ -293,8 +293,8 @@
                   :title="`確定要發送通知郵件給 ${notification.targetUserEmail} 嗎？`"
                   confirm-button-text="確定"
                   cancel-button-text="取消"
-                  @confirm="sendSingleEmail(notification)"
                   :disabled="notification.emailSent || sendingEmails"
+                  @confirm="sendSingleEmail(notification)"
                 >
                   <template #reference>
                     <el-button
@@ -339,11 +339,11 @@
                       <label>創建時間</label>
                       <div class="detail-value">{{ formatTime(notification.createdTime) }}</div>
                     </div>
-                    <div class="detail-item" v-if="notification.readTime">
+                    <div v-if="notification.readTime" class="detail-item">
                       <label>讀取時間</label>
                       <div class="detail-value">{{ formatTime(notification.readTime) }}</div>
                     </div>
-                    <div class="detail-item" v-if="notification.emailSentTime">
+                    <div v-if="notification.emailSentTime" class="detail-item">
                       <label>郵件發送時間</label>
                       <div class="detail-value">{{ formatTime(notification.emailSentTime) }}</div>
                     </div>

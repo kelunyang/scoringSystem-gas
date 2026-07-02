@@ -30,19 +30,19 @@
 
       <!-- Stage Rewards Section -->
       <div v-if="reportReward !== undefined || commentReward !== undefined || (stageStatus === 'active' && endTime)" class="stage-rewards-section">
-        <div class="reward-item" v-if="reportReward !== undefined">
+        <div v-if="reportReward !== undefined" class="reward-item">
           <span class="reward-label">
             <i class="fas fa-file-alt"></i> 報告獎金
           </span>
           <span class="reward-value">{{ reportReward }}</span>
         </div>
-        <div class="reward-item" v-if="commentReward !== undefined">
+        <div v-if="commentReward !== undefined" class="reward-item">
           <span class="reward-label">
             <i class="fas fa-comment-dots"></i> 評論獎金
           </span>
           <span class="reward-value">{{ commentReward }}</span>
         </div>
-        <div class="reward-item deadline-item" v-if="stageStatus === 'active' && endTime">
+        <div v-if="stageStatus === 'active' && endTime" class="reward-item deadline-item">
           <span class="reward-label">
             <i class="fas fa-clock"></i> 截止時間
           </span>

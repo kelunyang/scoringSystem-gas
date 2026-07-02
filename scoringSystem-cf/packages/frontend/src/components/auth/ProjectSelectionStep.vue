@@ -33,8 +33,8 @@
     <div class="form-group">
       <el-checkbox
         v-model="allParticipated"
-        @change="handleAllParticipatedChange"
         :disabled="loading"
+        @change="handleAllParticipatedChange"
       >
         我都參加過了（顯示的專案我全部都有參加）
       </el-checkbox>
@@ -43,8 +43,8 @@
     <div class="form-actions">
       <button
         class="btn btn-primary"
-        @click="handleSubmit"
         :disabled="!canSubmit || loading || !turnstileToken"
+        @click="handleSubmit"
       >
         <div v-if="loading" class="spinner"></div>
         {{ loading ? '發送中...' : '送出重設連結' }}

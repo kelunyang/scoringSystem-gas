@@ -6,9 +6,9 @@
         <label><i class="fas fa-project-diagram"></i> 當前專案:</label>
         <el-select
           :model-value="selectedProjectId"
-          @update:model-value="$emit('update:selectedProjectId', $event)"
           placeholder="-- 請選擇專案 --"
           style="width: 300px"
+          @update:model-value="$emit('update:selectedProjectId', $event)"
         >
           <el-option
             v-for="project in projects"
@@ -19,9 +19,9 @@
         </el-select>
         <el-button
           type="primary"
-          @click="$emit('open-viewer-management')"
           :disabled="!selectedProjectId"
           style="margin-left: 12px;"
+          @click="$emit('open-viewer-management')"
         >
           <i class="fas fa-users-cog"></i>
           專案參與者設定
@@ -47,10 +47,10 @@
             <span class="filter-label">搜尋：</span>
             <el-input
               :model-value="searchText"
-              @update:model-value="$emit('update:searchText', $event)"
               placeholder="搜尋專案群組名稱"
               clearable
               style="width: 250px;"
+              @update:model-value="$emit('update:searchText', $event)"
             >
               <template #prefix>
                 <i class="fas fa-search"></i>
@@ -62,9 +62,9 @@
             <span class="filter-label">狀態：</span>
             <el-select
               :model-value="statusFilter"
-              @update:model-value="$emit('update:statusFilter', $event)"
               placeholder="全部狀態"
               style="width: 150px;"
+              @update:model-value="$emit('update:statusFilter', $event)"
             >
               <el-option label="全部狀態" value="" />
               <el-option label="活躍" value="active" />
@@ -76,10 +76,10 @@
             <span class="filter-label">顯示已停用：</span>
             <el-switch
               :model-value="showInactive"
-              @update:model-value="(val: string | number | boolean) => emit('update:showInactive', Boolean(val))"
               inline-prompt
               active-text="顯示"
               inactive-text="隱藏"
+              @update:model-value="(val: string | number | boolean) => emit('update:showInactive', Boolean(val))"
             />
           </div>
         </template>
@@ -91,8 +91,8 @@
               <el-button
                 type="danger"
                 size="small"
-                @click="$emit('batch-deactivate')"
                 :disabled="selectedGroups.size === 0"
+                @click="$emit('batch-deactivate')"
               >
                 <i class="fas fa-times-circle"></i>
                 <span class="btn-text">整批停用</span>
@@ -104,8 +104,8 @@
               <el-button
                 type="success"
                 size="small"
-                @click="$emit('batch-activate')"
                 :disabled="selectedGroups.size === 0"
+                @click="$emit('batch-activate')"
               >
                 <i class="fas fa-check-circle"></i>
                 <span class="btn-text">整批啟用</span>
@@ -117,8 +117,8 @@
               <el-button
                 type="warning"
                 size="small"
-                @click="$emit('batch-lock')"
                 :disabled="selectedGroups.size === 0"
+                @click="$emit('batch-lock')"
               >
                 <i class="fas fa-lock"></i>
                 <span class="btn-text">整批鎖定</span>
@@ -130,8 +130,8 @@
               <el-button
                 type="info"
                 size="small"
-                @click="$emit('batch-unlock')"
                 :disabled="selectedGroups.size === 0"
+                @click="$emit('batch-unlock')"
               >
                 <i class="fas fa-unlock"></i>
                 <span class="btn-text">整批解鎖</span>
@@ -191,12 +191,12 @@
           <AddMembersForm
             v-if="addingMemberForGroup === group.groupId"
             :selected-users="selectedUsersToAdd"
-            @update:selected-users="$emit('update:selectedUsersToAdd', $event)"
             :available-users="availableUsersForGroup(group)"
             :member-role="memberRole"
-            @update:member-role="$emit('update:memberRole', $event)"
             :adding="addingMember"
             group-type="project"
+            @update:selected-users="$emit('update:selectedUsersToAdd', $event)"
+            @update:member-role="$emit('update:memberRole', $event)"
             @add="$emit('add-members', group)"
             @cancel="$emit('cancel-add-member')"
           />

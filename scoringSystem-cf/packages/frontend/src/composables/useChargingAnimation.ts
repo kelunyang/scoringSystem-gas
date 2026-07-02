@@ -66,7 +66,7 @@ export function useChargingAnimation(options: ChargingAnimationOptions = {}) {
   // 內部變數
   let animationFrameId: number | null = null
   let units: ChargingUnit[] = []
-  let chargedUnits = new Set<string>()
+  const chargedUnits = new Set<string>()
   let intersectionStop: (() => void) | null = null
 
   // 配置變數

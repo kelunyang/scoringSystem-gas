@@ -19,7 +19,7 @@
     </template>
 
     <div class="drawer-body">
-      <div class="content-area" v-loading="loadingViewers" element-loading-text="載入存取者清單中...">
+      <div v-loading="loadingViewers" class="content-area" element-loading-text="載入存取者清單中...">
 
         <!-- Collapsible Add Viewer Section -->
         <el-collapse-transition>
@@ -76,8 +76,8 @@
             <div class="search-users-area">
               <label class="search-label">搜尋使用者</label>
               <el-input
-                type="textarea"
                 v-model="newViewerSearchText"
+                type="textarea"
                 placeholder="輸入使用者的 Email 或顯示名稱（可輸入部分內容）"
                 :rows="3"
                 class="search-textarea"
@@ -92,9 +92,9 @@
                 </el-select>
                 <el-button
                   type="primary"
-                  @click="handleSearch"
                   :loading="searchingUsers"
                   :disabled="!newViewerSearchText.trim()"
+                  @click="handleSearch"
                 >
                   <i class="fas fa-search"></i> 搜尋
                 </el-button>
@@ -110,17 +110,17 @@
                 <div class="results-actions">
                   <el-button
                     size="small"
-                    @click="selectAllSearchResults"
                     :disabled="searchResults.length === 0"
                     title="選擇全部搜尋結果"
+                    @click="selectAllSearchResults"
                   >
                     <i class="fas fa-check-double"></i> 選擇全部
                   </el-button>
                   <el-button
                     size="small"
-                    @click="deselectAllSearchResults"
                     :disabled="selectedUsers.length === 0"
                     title="取消所有選擇"
+                    @click="deselectAllSearchResults"
                   >
                     <i class="fas fa-times-circle"></i> 取消選擇全部
                   </el-button>
@@ -140,7 +140,7 @@
                     @change="toggleUserSelection(user.userEmail)"
                     @click.stop
                   />
-                  <div class="user-avatar" v-if="user.avatarSeed">
+                  <div v-if="user.avatarSeed" class="user-avatar">
                     <img
                       :src="getAvatarUrl(user)"
                       :alt="user.displayName"
@@ -153,10 +153,10 @@
                   </div>
                   <el-select
                     :model-value="getUserRole(user.userEmail)"
-                    @change="updateUserRole(user.userEmail, $event)"
-                    @click.stop
                     size="small"
                     class="user-role-select"
+                    @change="updateUserRole(user.userEmail, $event)"
+                    @click.stop
                   >
                     <el-option label="教師" value="teacher" />
                     <el-option label="觀察者" value="observer" />
@@ -253,14 +253,14 @@
                       @change="toggleAllViewers"
                     />
                   </th>
-                  <th @click="handleSort('displayName')" class="sortable-header">
+                  <th class="sortable-header" @click="handleSort('displayName')">
                     使用者
                     <i
                       class="fas sort-icon"
                       :class="getSortIcon('displayName')"
                     ></i>
                   </th>
-                  <th @click="handleSort('userEmail')" class="sortable-header">
+                  <th class="sortable-header" @click="handleSort('userEmail')">
                     Email
                     <i
                       class="fas sort-icon"
@@ -280,7 +280,7 @@
                   </td>
                   <td>
                     <div class="user-info">
-                      <div class="user-avatar" v-if="viewer.avatarSeed">
+                      <div v-if="viewer.avatarSeed" class="user-avatar">
                         <img
                           :src="getAvatarUrl(viewer)"
                           :alt="viewer.displayName"
@@ -294,9 +294,9 @@
                   <td class="viewer-actions">
                     <el-select
                       :model-value="viewer.role"
-                      @change="(newRole) => handleUpdateRole(viewer.userEmail, newRole)"
                       size="small"
                       class="role-select-inline"
+                      @change="(newRole) => handleUpdateRole(viewer.userEmail, newRole)"
                     >
                       <el-option label="教師" value="teacher" />
                       <el-option label="觀察者" value="observer" />
@@ -348,8 +348,8 @@
           <el-button
             type="success"
             size="large"
-            @click="handleAddSelected"
             :disabled="selectedUsers.length === 0"
+            @click="handleAddSelected"
           >
             <i class="fas fa-user-plus"></i> 新增選取的使用者
           </el-button>
@@ -363,8 +363,8 @@
           <el-button
             type="warning"
             size="large"
-            @click="handleMarkUnassigned"
             :loading="markingUnassigned"
+            @click="handleMarkUnassigned"
           >
             <i class="fas fa-exclamation-triangle"></i> 標記未分組成員
           </el-button>

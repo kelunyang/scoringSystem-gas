@@ -24,7 +24,7 @@
       <DrawerAlertZone />
 
       <!-- 可滚动内容区 -->
-      <div class="content-area" v-loading="invitationsLoading">
+      <div v-loading="invitationsLoading" class="content-area">
 
         <!-- 1. 生成新邀请码区块 -->
         <div class="form-section">
@@ -34,8 +34,8 @@
           <div class="form-group">
             <label>受邀者Email <span class="required">*</span></label>
             <el-input
-              type="textarea"
               v-model="inviteForm.targetEmails"
+              type="textarea"
               placeholder="輸入受邀者的Email地址，一行一個"
               :rows="4"
             />
@@ -90,13 +90,13 @@
                 :key="groupId"
                 color="#f39c12"
                 closable
-                @close="removeDefaultGlobalGroup(groupId)"
                 :style="{
                   marginRight: '8px',
                   marginBottom: '4px',
                   color: '#fff',
                   fontWeight: '500'
                 }"
+                @close="removeDefaultGlobalGroup(groupId)"
               >
                 <i class="fas fa-crown" style="margin-right: 4px; color: #fff;"></i>
                 {{ getGlobalGroupById(groupId)?.groupName || groupId }}
@@ -121,8 +121,8 @@
                 <el-button
                   type="primary"
                   :icon="CopyDocument"
-                  @click="copyInviteCode"
                   size="default"
+                  @click="copyInviteCode"
                 >
                   複製邀請碼
                 </el-button>
@@ -136,8 +136,8 @@
                     type="primary"
                     size="small"
                     :icon="CopyDocument"
-                    @click="copySpecificCode(result.invitationCode)"
                     text
+                    @click="copySpecificCode(result.invitationCode)"
                   >
                     複製
                   </el-button>
@@ -219,9 +219,9 @@
                 type="default"
                 size="small"
                 :icon="Refresh"
-                @click="loadInvitations"
                 :loading="invitationsLoading"
                 title="重新載入"
+                @click="loadInvitations"
               >
                 <span class="btn-text">重新載入</span>
               </el-button>
@@ -230,8 +230,8 @@
 
           <!-- 表格 -->
         <el-table
-          :data="filteredInvitations"
           v-loading="invitationsLoading"
+          :data="filteredInvitations"
           element-loading-text="載入邀請碼資料中..."
           stripe
           border
@@ -335,9 +335,9 @@
           type="primary"
           size="large"
           :icon="Plus"
-          @click="handleGenerateInvite"
           :loading="generating"
           :disabled="validEmailCount === 0"
+          @click="handleGenerateInvite"
         >
           {{ generating ? '生成中...' : '生成邀請碼' }}
         </el-button>
@@ -361,7 +361,7 @@
       <div class="form-section">
         <h4><i class="fas fa-info-circle"></i> 邀請碼詳細信息</h4>
 
-        <div class="detail-grid" v-if="selectedInvitation">
+        <div v-if="selectedInvitation" class="detail-grid">
           <div class="detail-item">
             <span class="detail-label">邀請碼：</span>
             <span class="detail-value code-display">{{ selectedInvitation.invitationCode }}</span>
@@ -389,7 +389,7 @@
             <span class="detail-value">{{ formatTime(selectedInvitation.expiryTime) }}</span>
           </div>
 
-          <div class="detail-item" v-if="selectedInvitation.defaultGlobalGroups && selectedInvitation.defaultGlobalGroups.length > 0">
+          <div v-if="selectedInvitation.defaultGlobalGroups && selectedInvitation.defaultGlobalGroups.length > 0" class="detail-item">
             <span class="detail-label">預設全域群組：</span>
             <div class="detail-value">
               <el-tag
@@ -406,7 +406,7 @@
       </div>
 
       <!-- Deactivate Confirmation Section -->
-      <div class="form-section" v-if="confirmAction === 'deactivate'">
+      <div v-if="confirmAction === 'deactivate'" class="form-section">
         <h4><i class="fas fa-exclamation-triangle"></i> 停用確認</h4>
 
         <el-alert
@@ -433,7 +433,7 @@
       </div>
 
       <!-- Reactivate Confirmation Section -->
-      <div class="form-section" v-if="confirmAction === 'reactivate'">
+      <div v-if="confirmAction === 'reactivate'" class="form-section">
         <h4><i class="fas fa-check-circle"></i> 重新啟用確認</h4>
 
         <el-alert
@@ -488,10 +488,10 @@
     <div class="drawer-body">
       <div class="content-area">
         <!-- Email Status Section -->
-        <div class="form-section" v-loading="emailStatusLoading">
+        <div v-loading="emailStatusLoading" class="form-section">
           <h4><i class="fas fa-history"></i> 郵件發送記錄</h4>
 
-          <div class="detail-grid" v-if="emailStatus">
+          <div v-if="emailStatus" class="detail-grid">
             <div class="detail-item">
               <span class="detail-label">上次發送時間：</span>
               <span class="detail-value">
@@ -520,7 +520,7 @@
               <span class="detail-value">{{ emailStatus.attempts }} 次</span>
             </div>
 
-            <div class="detail-item" v-if="emailStatus.lastError">
+            <div v-if="emailStatus.lastError" class="detail-item">
               <span class="detail-label">錯誤訊息：</span>
               <span class="detail-value" style="color: #f56c6c;">{{ emailStatus.lastError }}</span>
             </div>
@@ -537,7 +537,7 @@
         </div>
 
         <!-- Invitation Details Section -->
-        <div class="form-section" v-if="selectedInvitationForResend">
+        <div v-if="selectedInvitationForResend" class="form-section">
           <h4><i class="fas fa-info-circle"></i> 邀請碼詳細信息</h4>
 
           <div class="detail-grid">
