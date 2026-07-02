@@ -1,0 +1,98 @@
+# Options API → `<script setup>` 遷移計畫
+
+> 產出日期：2026-07-02
+> 前置條件：**使用者先將工作區 WIP（44 檔）commit 落地**，再開新對話執行
+> 現狀：146 個 Vue 組件中 136 個（93%）已是 `<script setup lang="ts">`，殘留 11 檔約 24,000 行
+
+## 目標
+
+1. 全部組件統一為 `<script setup lang="ts">`（Composition API + TS）
+2. 逐檔清空 `eslint.config.js` 中 `vue/block-lang` 的 7 檔豁免清單
+3. 順手清償轉換檔案內的 `no-explicit-any` 債（轉換時必然要定型別，一魚兩吃）
+
+## 殘留清單與轉換順序
+
+安排原則：由小到大熱身、WIP 檔案殿後、三巨頭補測試後才動。
+
+### 第一波：小檔熱身（單檔單 commit）
+
+| # | 檔案 | 行數 | 現狀 | 特殊注意 |
+|---|------|------|------|----------|
+| 1 | `components/TurnstileWidget.vue` | 242 | 純 JS | 操作全域 `window.turnstile`（index.html 載入的外部 script）；需宣告 global 型別 |
+| 2 | `components/admin/user/UserEditorDrawer.vue` | 845 | TS + Options | CLAUDE.md 引用它當 Drawer 範例，轉換後確認文件仍準確 |
+| 3 | `components/admin/project/ViewerManagementDrawer.vue` | 1,082 | 純 JS | Drawer 標準結構，參考 UserEditorDrawer 轉換模式 |
+
+### 第二波：中型檔
+
+| # | 檔案 | 行數 | 現狀 | 特殊注意 |
+|---|------|------|------|----------|
+| 4 | `components/charts/StageGanttChart.vue` | 1,515 | 純 JS | D3 由 CDN 全域載入（`declare const d3`）；大量 template ref 與命令式 DOM 操作，轉換時 `this.$refs` → `useTemplateRef` |
+| 5 | `components/StageComments.vue` | 1,546 | TS + Options | 已有型別，主要是結構搬遷 |
+| 6 | `components/UserSettings.vue` | 1,589 | 純 JS | 表單重、含 2FA/passkey 設定入口，轉換後人工驗證各設定流程 |
+
+### 第三波：WIP 檔案（等使用者 WIP commit 後）
+
+| # | 檔案 | 行數 | 現狀 | 特殊注意 |
+|---|------|------|------|----------|
+| 7 | `components/TopBarUserControls.vue` | 1,007 | 純 JS | 2026-07 已做過 blinkAnimationClass watcher 重構，轉換時保留該模式；徽章輪播、煙火動畫有 `$nextTick`/`$el` 用法要改 `nextTick`/template ref |
+| 8 | `components/ProjectCard.vue` | 1,251 | 純 JS | WIP 檔 |
+
+### 第四波：管理後台三巨頭（先補測試再動）
+
+| # | 檔案 | 行數 | 現狀 | 特殊注意 |
+|---|------|------|------|----------|
+| 9 | `components/admin/GroupManagement.vue` | 2,783 | 純 JS（options + `setup()` 混合） | 已有 `setup()` 區塊，轉換相對機械：把 options 區塊（data/computed/methods）併入 setup 再改 script setup |
+| 10 | `components/admin/UserManagement.vue` | 5,235 | TS + Options | **先補組件測試**（見驗證策略） |
+| 11 | `components/admin/ProjectManagement.vue` | 6,822 | TS + Options | 最大最核心；**先補組件測試**；建議轉換前先拆分子組件（stages 面板、gantt 區、settlement 區各自抽離），拆完每塊 <2000 行再轉 |
+
+## 每檔轉換模式（標準步驟）
+
+1. `git commit` 前置：確認該檔工作區乾淨
+2. 結構搬遷：
+   - `data()` → `ref()` / `reactive()`（單值用 ref，整包表單物件用 reactive）
+   - `computed: {}` → `computed(() => ...)`
+   - `methods: {}` → 普通函式
+   - `watch: {}` → `watch()` / `watchEffect()`
+   - 生命週期：`mounted` → `onMounted`，`beforeUnmount` → `onBeforeUnmount`
+   - `props` → `defineProps<Props>()`（withDefaults 補預設值）；`emits` → `defineEmits<...>()`
+   - `this.$refs.x` → `useTemplateRef('x')`；`this.$nextTick` → `nextTick`
+   - `this.$emit` → emit；`inject/provide` options → 函式版
+3. 補型別：轉換過程中順手把該檔的 `any` 清掉（`no-explicit-any` 債）
+4. 若在 block-lang 豁免清單 → 從 `eslint.config.js` 移除該檔
+5. 驗證（見下）→ 單檔 commit：`refactor(vue): <檔名> Options API → script setup`
+
+### 常見地雷
+
+- **模板隱式暴露**：Options API 的 data/methods 全部自動暴露給模板；script setup 只暴露頂層綁定。轉完 `vue-tsc` 會抓漏，但**動態存取**（`$options`、字串索引）抓不到，需 grep 檢查
+- **`this` 逃逸**：傳給第三方 callback 的 method 若依賴 `this`，轉換後閉包行為改變——D3 圖表（StageGanttChart）最容易踩
+- **mixin**：若遇到 mixins 要先內聯成 composable
+- **`expose`**：父組件透過 ref 呼叫子組件方法的情況，script setup 需明確 `defineExpose`——轉換前先 grep 父層有無 `.value.someMethod()` 呼叫
+
+## 驗證策略
+
+每檔 gate（缺一不可）：
+```bash
+pnpm type-check && pnpm lint   # vue-tsc + eslint 0 error
+pnpm test && pnpm build
+pnpm test:e2e                  # 5 個 smoke
+```
+加上該檔功能的手動冒煙（dev server 操作一輪）。
+
+**三巨頭前置**：現有測試防護只有 smoke e2e，不足以保護 5000+ 行的轉換。動 UserManagement/ProjectManagement 前，先用 @vue/test-utils + happy-dom 補「渲染 + 關鍵互動」層級的組件測試（列表渲染、篩選、開啟 drawer、送出表單各一條），再開始轉換。
+
+## 建議的對話切分
+
+- 對話 A：第一波 3 檔（熱身、確立模式）
+- 對話 B：第二波 3 檔
+- 對話 C：第三波 2 檔（WIP 落地後）
+- 對話 D：GroupManagement + UserManagement 補測試與轉換
+- 對話 E：ProjectManagement 拆分子組件 → 轉換（必要時再拆多個對話）
+
+每個對話開頭引用本文件即可接手。
+
+## 完成定義
+
+- [ ] 146/146 組件皆為 `<script setup lang="ts">`
+- [ ] `eslint.config.js` 的 `vue/block-lang` 豁免區塊整段刪除
+- [ ] 轉換檔案內 `no-explicit-any` 歸零（全域歸零另見 2026-summer-todo）
+- [ ] 全 gate 綠燈 + production 部署驗證
