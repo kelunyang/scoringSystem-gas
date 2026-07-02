@@ -14,7 +14,6 @@
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./src/*"
@@ -61,6 +60,7 @@
     "node_modules",
     "dist",
     "bak",
+    "**/*.backup.vue",
     "**/__tests__/**",
     "src/test/**"
   ]

@@ -94,7 +94,7 @@
               top: `${physics.positions.value.get(stage.id)?.y ?? -20}px`,
               opacity: physics.positions.value.has(stage.id) ? '1' : '0'
             }
-          : { top: getStagePosition(index) + '%' }"
+          : { top: getStagePosition(index as number) + '%' }"
         :data-stage-index="index"
         :data-stage-id="stage.id"
         :title="getStageTooltip(stage)"

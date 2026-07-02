@@ -9,7 +9,6 @@
     "emitDeclarationOnly": true,
     "outDir": "./dist",
     "noImplicitReturns": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
       "@db/*": ["./src/db/*"],
