@@ -24,17 +24,17 @@
             <template #default="{ row }">
               <el-switch
                 v-model="row.enabled"
-                @change="toggleEnabled(row)"
+                @change="toggleEnabled(row as ProviderRow)"
                 :loading="row.updating"
               />
             </template>
           </el-table-column>
           <el-table-column label="操作" width="120" fixed="right" align="center">
             <template #default="{ row }">
-              <el-button size="small" @click="editProvider(row)" circle title="編輯">
+              <el-button size="small" @click="editProvider(row as ProviderRow)" circle title="編輯">
                 <i class="fas fa-edit"></i>
               </el-button>
-              <el-button size="small" type="danger" @click="confirmDelete(row)" circle title="刪除">
+              <el-button size="small" type="danger" @click="confirmDelete(row as ProviderRow)" circle title="刪除">
                 <i class="fas fa-trash"></i>
               </el-button>
             </template>

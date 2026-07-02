@@ -247,16 +247,16 @@
 
             <el-table-column label="狀態" align="center" width="140">
               <template #default="{ row }">
-                <span :title="getSwitchTooltip(row)">
+                <span :title="getSwitchTooltip(row as Invitation)">
                   <el-switch
                     :model-value="row.status === 'active'"
-                    :disabled="!canToggleStatus(row)"
+                    :disabled="!canToggleStatus(row as Invitation)"
                     :loading="togglingInvites.has(row.invitationId)"
                     active-text="啟用"
                     inactive-text="停用"
                     active-color="#67c23a"
                     inactive-color="#909399"
-                    @change="() => handleToggleInviteStatus(row)"
+                    @change="() => handleToggleInviteStatus(row as Invitation)"
                   />
                 </span>
               </template>
@@ -294,7 +294,7 @@
                     size="small"
                     :icon="Message"
                     :loading="resendingInvites.has(row.invitationId)"
-                    @click="openResendDrawer(row)"
+                    @click="openResendDrawer(row as Invitation)"
                   >
                     重發郵件
                   </el-button>
