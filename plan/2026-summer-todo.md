@@ -24,7 +24,15 @@
 | B8 | CDN：KaTeX 0.16.44、Font Awesome 6.7.2 + SRI（cdnjs 尚無 KaTeX 0.17）| ✅ production 前後端皆已部署 |
 
 **環境**：Node 20（EOL）→ 24 LTS、pnpm 10.24。
-**遺留待辦**：lint 債 2227 warnings（`eslint.config.js` 中標記 `TODO(lint-debt)` 的規則逐類清理後升回 error）；FA 7 / KaTeX 0.17（等 cdnjs 同步）留待下次。
+
+### 追加：lint 債清償（2026-07-02 完成）
+
+正確性規則的 ~500 處違規已全數修復並升回 error（no-unused-vars、preserve-caught-error、no-useless-assignment、no-case-declarations、no-useless-escape、ban-ts-comment、no-unused-expressions、no-empty-object-type、vue/no-unused-vars、vue/no-side-effects-in-computed-properties、vue/no-mutating-props[shallowOnly]）。含兩個行為保全重構：Dashboard 權限快取去反應化、TopBar 閃爍阈值偵測移到 watcher。
+
+**遺留待辦**：
+- `no-explicit-any` 約 1600 處維持 warn（型別大翻修另案，逐模組清理後升 error）
+- 7 個遺留 JS SFC 轉 `<script lang="ts">` 後自 `eslint.config.js` 的 block-lang 豁免清單移除
+- FA 7 / KaTeX 0.17（等 cdnjs 同步）留待下次
 
 ---
 
