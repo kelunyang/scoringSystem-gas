@@ -239,7 +239,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, inject, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, inject, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'

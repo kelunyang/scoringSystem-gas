@@ -19,7 +19,6 @@ import {
   getSystemScoringDefaults,
   validateScoringConfig,
   SCORING_CONFIG_KEYS,
-  type ScoringConfig,
 } from '../../utils/scoring-config'
 
 // ============================================================================

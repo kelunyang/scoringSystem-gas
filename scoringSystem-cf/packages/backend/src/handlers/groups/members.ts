@@ -6,7 +6,6 @@
 import type { Env} from '@/types';
 import { successResponse, errorResponse } from '@utils/response';
 import { generateId } from '@utils/id-generator';
-import { parseJSON, stringifyJSON } from '@utils/json';
 import { hasProjectPermission as checkProjectPermission, hasGlobalPermission } from '@utils/permissions';
 import { logProjectOperation } from '@utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
@@ -351,7 +350,6 @@ export async function listProjectGroups(
     const isAdmin = await checkGlobalPermission(env, userEmail, 'system_admin');
     const hasViewPermission = await hasProjectPermission(env, userEmail, projectId, 'view');
 
-    const userId = await getUserId(env, userEmail);
     const isProjectMember = await env.DB.prepare(`
       SELECT COUNT(*) as count FROM usergroups WHERE projectId = ? AND userEmail = ?
     `).bind(projectId, userEmail).first();
@@ -466,26 +464,6 @@ async function hasProjectPermission(
   const userId = await getUserId(env, userEmail);
   if (!userId) return false;
   return await checkProjectPermission(env.DB, userId, projectId, permission);
-}
-
-// Legacy function - should be phased out
-async function _checkGlobalPermission_OLD(env: Env, userEmail: string, permission: string): Promise<boolean> {
-  const result = await env.DB.prepare(`
-    SELECT gg.globalPermissions
-    FROM globalusergroups gug
-    JOIN globalgroups gg ON gug.globalGroupId = gg.globalGroupId
-    JOIN users u ON gug.userEmail = u.userEmail
-    WHERE u.userEmail = ?
-  `).bind(userEmail).all();
-
-  for (const row of result.results) {
-    const permissions = parseJSON<string[]>(row.globalPermissions as string, []);
-    if (permissions.includes(permission)) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 // Logging is now handled by centralized utils/logging module

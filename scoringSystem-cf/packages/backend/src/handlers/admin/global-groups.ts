@@ -5,7 +5,7 @@
 
 import { Env } from '../../types';
 import { successResponse, errorResponse } from '../../utils/response';
-import { parseJSON, stringifyJSON } from '../../utils/json';
+import { stringifyJSON } from '../../utils/json';
 import { generateId } from '../../utils/id-generator';
 import { logGlobalOperation, generateChanges } from '../../utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';

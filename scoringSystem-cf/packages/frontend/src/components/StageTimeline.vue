@@ -151,9 +151,7 @@ import type { Stage } from '@/types'
 
 // ==================== 常量定义 ====================
 const COLLISION_TOLERANCE = 8
-const MS_PER_DAY = 1000 * 60 * 60 * 24
 const TOOLTIP_AUTO_HIDE_DELAY = 5000  // 5 秒自動隱藏
-const TOOLTIP_FADE_IN_DURATION = 500   // 0.5 秒淡入
 const TOOLTIP_FADE_OUT_DURATION = 2000 // 2 秒淡出
 const isDev = import.meta.env.DEV
 
@@ -334,7 +332,6 @@ function useTimelineMapping(normalizedStages: any) {
     const position = (cumulative.midCumulative / totalDuration) * 100
 
     if (isDev && index < 5) {
-      const _stage = normalizedStages.value[index]
       // console.log(`📍 階段 ${index} (${_stage.title || _stage.shortTitle}):`, {
       //   duration: `${(cumulative.duration / MS_PER_DAY).toFixed(1)} 天`,
       //   cumulativeRange: `${(cumulative.startCumulative / totalDuration * 100).toFixed(1)}% - ${(cumulative.endCumulative / totalDuration * 100).toFixed(1)}%`,
@@ -444,7 +441,7 @@ const scrollingTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 
 // ==================== 使用 Composables ====================
 const normalizedStages = useNormalizedStages(toRef(props, 'stages'))
-const { projectTimeRange, timelineSegments, getStagePosition, mapPageToTimeline } =
+const { projectTimeRange, timelineSegments, getStagePosition } =
   useTimelineMapping(normalizedStages)
 
 // Stage IDs（需要在 useViewportStageTracking 之前定義）
@@ -559,7 +556,6 @@ async function initPhysics() {
     { id: END_ID, y: H, status: lastStatus }
   ]
   orderedTargets.value = chain
-  const nSeg = chain.length - 1
 
   // onUpdate：用 setVelocity 實作彈簧（frame 單位，dt/mass 無關，數值穩定）
   // 每幀讀取 body.velocity.y → 加彈簧/耦合 → 阻尼 → clamp → 寫回
@@ -843,7 +839,7 @@ watch(scrollProgress, () => {
 })
 
 // Hover 自動隱藏邏輯（帶淡入淡出動畫）
-watch(hoveredStageId, async (newId, oldId) => {
+watch(hoveredStageId, async (newId, _oldId) => {
   // 清除所有相關計時器
   clearHoverTimer()
   clearFadeOutTimer()

@@ -148,7 +148,7 @@ export async function handleRpcResponse<T>(
       const errorData = await response.json() as { error?: { message?: string } };
       throw new Error(errorData.error?.message || 'API request failed');
     } catch (e) {
-      throw new Error(`API request failed with status ${response.status}`);
+      throw new Error(`API request failed with status ${response.status}`, { cause: e });
     }
   }
 

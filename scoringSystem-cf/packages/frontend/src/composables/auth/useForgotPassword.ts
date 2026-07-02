@@ -6,7 +6,7 @@
 import { ref, computed, onBeforeUnmount } from 'vue';
 import { rpcClient } from '@/utils/rpc-client';
 import type { Ref, ComputedRef } from 'vue';
-import type { ForgotPasswordData, EmailVerificationResponse, Project, TwoFactorData } from '../../types/auth';
+import type { EmailVerificationResponse, Project } from '../../types/auth';
 
 export interface UseForgotPasswordReturn {
   loading: Ref<boolean>;
@@ -241,7 +241,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
         }
       });
 
-      const response = await httpResponse.json();
+      await httpResponse.json();
 
       // Always show success (security feature)
       resetSent.value = true;
@@ -268,16 +268,6 @@ export function useForgotPassword(): UseForgotPasswordReturn {
       return true; // Always return true for security
     } finally {
       loading.value = false;
-    }
-  }
-
-  /**
-   * Handle "all participated" checkbox change
-   */
-  function handleAllParticipatedChange(checked: boolean) {
-    if (checked) {
-      // Clear project selection when checking "all participated"
-      selectedProjectIds.value = [];
     }
   }
 

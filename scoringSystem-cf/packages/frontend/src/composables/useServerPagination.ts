@@ -1,4 +1,4 @@
-import { ref, computed, watch, onUnmounted, type Ref, type ComputedRef } from 'vue'
+import { ref, computed, watch, onUnmounted, type Ref } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 
 /**

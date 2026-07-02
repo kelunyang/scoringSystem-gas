@@ -182,7 +182,7 @@ export interface Props {
   isReversing: (transactionId: string) => boolean
 }
 
-const props = defineProps<Props>()
+defineProps<Props>()
 
 const emit = defineEmits<{
   (e: 'toggle-transaction', transaction: Transaction): void

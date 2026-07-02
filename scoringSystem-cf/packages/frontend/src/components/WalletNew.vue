@@ -375,14 +375,11 @@ import { useWindowInfiniteScroll } from '@/composables/useWindowInfiniteScroll'
 // Utilities
 import {
   calculateStagesWithEarnings,
-  calculateWalletSummary,
   getStageClass,
-  formatTime,
   getTransactionTypeText,
   isTransactionReversed
 } from '@/utils/walletHelpers'
 import { exportWalletCSV } from '@/utils/csvExport'
-import { sanitizeHtml } from '@/utils/sanitize'
 
 // ===== Props & Emits =====
 const props = defineProps({
@@ -426,12 +423,6 @@ const selectedProjectDescription = ref('')
 const showProjectDescriptionDialog = ref(false)
 
 // ===== Type Definitions =====
-interface LadderData {
-  scoreRangeMin?: number
-  scoreRangeMax?: number
-  [key: string]: any
-}
-
 interface StageGrowthData {
   topUser?: any
   targetUser?: any
@@ -546,12 +537,6 @@ const totalTransactions = computed(() => {
 })
 const hasMoreTransactions = computed(() => infiniteTransactionsQuery.hasNextPage.value ?? false)
 
-// 當前餘額（從第一頁取得）
-const currentBalance = computed(() => {
-  const pages = infiniteTransactionsQuery.data.value?.pages
-  return pages?.[0]?.currentBalance || 0
-})
-
 // Wallet Leaderboard - 使用 TanStack Query 自動管理
 const leaderboardQuery = useWalletLeaderboard(selectedProjectId)
 const loadingLadder = computed(() => leaderboardQuery.isLoading.value)
@@ -636,7 +621,7 @@ async function handleRefresh() {
   await queryClient.invalidateQueries({ queryKey: ['project', 'core'] })
 }
 
-const { progressPercentage, remainingMinutes, resetTimer } = useAutoRefresh(handleRefresh)
+const { progressPercentage, resetTimer } = useAutoRefresh(handleRefresh)
 
 // ===== Computed =====
 
@@ -1090,13 +1075,6 @@ function getCurrentUserDisplay() {
     return user ? user.displayName : selectedUserEmail.value
   }
   return props.user?.displayName || props.user?.userEmail || '當前用戶'
-}
-
-/**
- * 處理用戶命令
- */
-function handleUserCommand(command: string) {
-  emit('user-command', command)
 }
 
 /**

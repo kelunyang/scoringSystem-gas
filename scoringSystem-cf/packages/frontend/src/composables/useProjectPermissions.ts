@@ -15,7 +15,7 @@
  */
 
 import { computed, unref, type Ref, type ComputedRef } from 'vue'
-import type { Project, AuthUser, Group } from '@/types'
+import type { Project, AuthUser } from '@/types'
 import { useSudoStore } from '@/stores/sudo'
 
 /**

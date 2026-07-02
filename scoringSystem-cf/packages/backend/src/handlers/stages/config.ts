@@ -6,7 +6,6 @@
 import type { Env } from '@/types';
 import { successResponse, errorResponse } from '@utils/response';
 import { parseJSON, stringifyJSON } from '@utils/json';
-import { generateId } from '@utils/id-generator';
 import { logProjectOperation } from '@utils/logging';
 
 /**

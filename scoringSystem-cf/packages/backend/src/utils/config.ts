@@ -286,47 +286,6 @@ export const UPDATABLE_CONFIG_KEYS = Object.keys(CONFIG_KEY_MAP);
  */
 export type ConfigKey = keyof typeof CONFIG_KEY_MAP;
 
-/**
- * Configuration value types
- */
-type ConfigValueType = {
-  SYSTEM_TITLE: string;
-  BRANDING_ICON: string;
-  SESSION_TIMEOUT: number;
-  PASSWORD_SALT_ROUNDS: number;
-  INVITE_CODE_TIMEOUT: number;
-  MAX_PROJECT_NAME_LENGTH: number;
-  WEB_APP_URL: string;
-  TURNSTILE_SITE_KEY: string;
-  TURNSTILE_SECRET_KEY: string;
-  TURNSTILE_ENABLED: string;
-  MAX_2FA_FAILED_ATTEMPTS: number;
-  MAX_CONCURRENT_PROJECTS: number;
-  MAX_GROUP_NAME_LENGTH: number;
-  MAX_GROUPS_PER_PROJECT: number;
-  MAX_MEMBERS_PER_GROUP: number;
-  MAX_STAGE_DURATION_DAYS: number;
-  LOG_LEVEL: string;
-  LOG_CONSOLE: string;
-  MAX_BATCH_EMAIL_SIZE: number;
-  EMAIL_BATCH_DELAY_MS: number;
-  MAX_EMAILS_PER_HOUR: number;
-  // SMTP Configuration
-  SMTP_HOST: string;
-  SMTP_PORT: number;
-  SMTP_USERNAME: string;
-  SMTP_PASSWORD: string;
-  SMTP_FROM_NAME: string;
-  SMTP_FROM_EMAIL: string;
-  // AI Configuration
-  AI_RATE_LIMIT_PER_MINUTE: number;
-  AI_RATE_LIMIT_PER_HOUR: number;
-  // Scoring System Configuration
-  DEFAULT_STUDENT_RANKING_WEIGHT: number;
-  DEFAULT_TEACHER_RANKING_WEIGHT: number;
-  DEFAULT_MAX_COMMENT_SELECTIONS: number;
-  DEFAULT_COMMENT_REWARD_PERCENTILE: number;
-};
 
 /**
  * Get a typed configuration value with automatic type inference

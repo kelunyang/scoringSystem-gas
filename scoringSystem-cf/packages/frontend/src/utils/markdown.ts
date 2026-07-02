@@ -25,7 +25,7 @@ export function countMarkdownWords(text: string | null | undefined): number {
 
   // 移除 Markdown 標記
   const plainText = text
-    .replace(/[#*_`\[\]()]/g, '') // 移除標記符號
+    .replace(/[#*_`[\]()]/g, '') // 移除標記符號
     .replace(/\n+/g, ' ') // 換行轉空格
     .trim()
 
@@ -47,7 +47,7 @@ export function getMarkdownSummary(text: string | null | undefined, maxLength: n
 
   // 移除標記符號並轉為純文本
   const plainText = text
-    .replace(/[#*_`\[\]()]/g, '')
+    .replace(/[#*_`[\]()]/g, '')
     .replace(/\n+/g, ' ')
     .trim()
 

@@ -16,20 +16,20 @@
         :members-map="projectGroupMembersMap"
         :loading-members="loadingProjectGroupMembers"
         :removing-member-email="removingMemberEmail"
-        @update:selected-project-id="handleProjectChange"
         :updating-group-id="updatingGroupId"
         :updating-member-email="updatingMemberEmail"
         :adding-member-for-group="addingMemberForProjectGroup"
-        @update:search-text="searchText = $event"
         :can-manage-roles="true"
-        @update:status-filter="statusFilter = $event"
         :pending-role-changes="pendingRoleChanges"
-        @update:show-inactive="showInactive = $event"
         :selected-users-to-add="selectedUsersToAdd"
         :all-users="allUsers"
         :ungrouped-members="ungroupedMembers"
         :member-role="memberForm.role"
         :adding-member="addingMember"
+        @update:selected-project-id="handleProjectChange"
+        @update:search-text="searchText = $event"
+        @update:status-filter="statusFilter = $event"
+        @update:show-inactive="showInactive = $event"
         @update:selected-users-to-add="selectedUsersToAdd = $event"
         @update:member-role="memberForm.role = $event"
         @toggle-all="toggleAllProjectGroups"
@@ -249,13 +249,10 @@ import {
   useCreateGlobalGroup,
   useUpdateGlobalGroup,
   useToggleGlobalGroupStatus,
-  useAddUserToGlobalGroup,
   useRemoveUserFromGlobalGroup,
   useBatchAddUsersToGlobalGroup,
   useBatchRemoveUsersFromGlobalGroup
 } from '@/composables/admin/useGlobalGroups'
-import EmptyState from '@/components/shared/EmptyState.vue'
-import { formatTime } from '@/utils/helpers'
 import { useExpandable } from '@/composables/useExpandable'
 import { handleError, showSuccess } from '@/utils/errorHandler'
 import { ElMessageBox } from 'element-plus'
@@ -283,7 +280,7 @@ export default {
       default: ''
     }
   },
-  setup(props) {
+  setup() {
     const route = useRoute()
     const router = useRouter()
 
@@ -293,7 +290,6 @@ export default {
     const createGlobalGroupMutation = useCreateGlobalGroup()
     const updateGlobalGroupMutation = useUpdateGlobalGroup()
     const toggleGlobalGroupStatusMutation = useToggleGlobalGroupStatus()
-    const addUserToGroupMutation = useAddUserToGlobalGroup()
     const removeUserFromGroupMutation = useRemoveUserFromGlobalGroup()
     const batchAddUsersMutation = useBatchAddUsersToGlobalGroup()
     const batchRemoveUsersMutation = useBatchRemoveUsersFromGlobalGroup()
@@ -311,7 +307,6 @@ export default {
 
     // Get current projectId and groupId from route params
     const currentProjectId = computed(() => route.params.projectId || '')
-    const currentGroupId = computed(() => route.params.groupId || '')
 
     const projects = shallowRef([])
     const groups = shallowRef([])
@@ -382,8 +377,6 @@ export default {
     const searchingUsers = ref(false)
     const selectedViewers = ref([])
     const batchRole = ref('')
-    const viewerSortField = ref('displayName')
-    const viewerSortOrder = ref('asc')
 
     // Inline expansion state for groups - using useExpandable composable
     const {
@@ -391,8 +384,6 @@ export default {
       contentMap: projectGroupMembersMap,
       loadingIds: loadingProjectGroupMembers,
       toggleExpansion: toggleProjectGroupExpansionLogic,
-      isExpanded: isProjectGroupExpanded,
-      isLoading: isProjectGroupLoading,
     } = useExpandable({ singleMode: true })
 
     const {
@@ -400,8 +391,6 @@ export default {
       contentMap: globalGroupMembersMap,
       loadingIds: loadingGlobalGroupMembers,
       toggleExpansion: toggleGlobalGroupExpansionLogic,
-      isExpanded: isGlobalGroupExpanded,
-      isLoading: isGlobalGroupLoading,
     } = useExpandable({ singleMode: true })
 
     const addingMemberForProjectGroup = ref(null)

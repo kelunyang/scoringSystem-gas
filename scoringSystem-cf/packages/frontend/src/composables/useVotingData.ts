@@ -10,7 +10,7 @@
  */
 
 import { computed, type Ref, isRef, ref } from 'vue'
-import { useQuery, useMutation, useQueryClient, type UseQueryReturnType } from '@tanstack/vue-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { rpcClient } from '@/utils/rpc-client'
 
 // ===== 类型定义 =====

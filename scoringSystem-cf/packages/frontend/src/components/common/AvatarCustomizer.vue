@@ -364,7 +364,7 @@ const handleAvatarLoad = (): void => {
   }
 }
 
-const handleAvatarError = async (event: Event): Promise<void> => {
+const handleAvatarError = async (_event: Event): Promise<void> => {
   console.warn('⚠️ Avatar load error, attempt:', retryCount.value + 1)
 
   if (isRetrying.value) return

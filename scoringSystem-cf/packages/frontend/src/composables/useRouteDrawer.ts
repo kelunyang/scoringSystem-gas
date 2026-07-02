@@ -8,7 +8,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import type { Project, Stage } from '@/types'
+import type { Stage } from '@/types'
 import type { PermissionFlags } from './useProjectPermissions'
 
 /**

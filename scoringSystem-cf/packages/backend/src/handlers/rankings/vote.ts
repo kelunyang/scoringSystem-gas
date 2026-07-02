@@ -6,7 +6,6 @@
 import type { Env } from '../../types';
 import { successResponse, errorResponse } from '../../utils/response';
 import { generateId } from '../../utils/id-generator';
-import { queueSingleNotification } from '../../queues/notification-producer';
 import { logProjectOperation, logApiAction } from '../../utils/logging';
 
 /**

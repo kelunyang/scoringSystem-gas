@@ -21,16 +21,12 @@ import { zValidator } from '@hono/zod-validator';
 import { authMiddleware } from '../middleware/auth';
 import { checkProjectPermission, checkIsTeacherOrAbove } from '../middleware/permissions';
 import {
-  getUserWallet,
   getUserTransactions,
   awardPoints,
-  reverseTransaction,
-  getAllProjectTransactions
+  reverseTransaction
 } from '../handlers/wallets/transactions';
 import {
-  getWalletLeaderboard,
   getProjectWalletLadder,
-  getGroupWealthStats,
   exportProjectWalletSummary,
   getStageGrowthData
 } from '../handlers/wallets/leaderboard';

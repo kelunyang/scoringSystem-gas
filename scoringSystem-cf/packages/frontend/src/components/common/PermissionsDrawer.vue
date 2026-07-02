@@ -219,8 +219,7 @@ const {
   currentRolePermissions,
   switchRole,
   getRoleLabel,
-  getRoleIcon,
-  getRolePermissions
+  getRoleIcon
 } = useRoleSwitch(
   projectIdRef,
   projectCore,

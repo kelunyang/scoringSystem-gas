@@ -259,10 +259,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-// @ts-ignore - icons-vue package type issue
-import { Refresh, Search } from '@element-plus/icons-vue'
+import { Refresh } from '@element-plus/icons-vue'
 import { useDebounceFn } from '@vueuse/core'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import { rpcClient } from '@/utils/rpc-client'
@@ -324,7 +323,7 @@ const currentPage = ref(1)
 const pageSize = ref(50)
 
 // Filter persistence (localStorage)
-const { filters, isLoaded: filtersLoaded } = useFilterPersistence('eventLogViewer', {
+const { filters } = useFilterPersistence('eventLogViewer', {
   displayLimit: 50,
   dateRange: null as [string, string] | null,
   selectedUsers: [] as string[],
@@ -364,8 +363,6 @@ const loadingResourceIds = ref<Set<string>>(new Set())
 // 事件详情展开（行内展开）
 const expandedEventId = ref<string | null>(null)
 
-// CSV 匯出
-const exporting = ref(false)
 
 // 计算属性
 // 計算唯一資源類型
@@ -759,71 +756,6 @@ const getResourceTypeLabel = (type: string): string => {
     'settlement': '结算'
   }
   return labels[type] || type
-}
-
-const exportToCsv = async () => {
-  if (displayedLogs.value.length === 0) {
-    ElMessage.warning('沒有可匯出的事件記錄')
-    return
-  }
-
-  exporting.value = true
-
-  try {
-    // CSV header
-    const headers = ['时间', '用户', '操作', '资源类型', '详情']
-    const rows = [headers]
-
-    // Process each log entry
-    displayedLogs.value.forEach(log => {
-      const row = [
-        formatTimestamp(log.timestamp),
-        log.displayName || '-',
-        getActionLabel(log.action || ''),
-        getResourceTypeLabel(log.resourceType || ''),
-        log.details ? JSON.stringify(log.details) : '-'
-      ]
-      rows.push(row)
-    })
-
-    // Convert to CSV string
-    const csvContent = rows.map(row =>
-      row.map(cell => {
-        // Escape quotes and wrap in quotes if contains comma, quote, or newline
-        const cellStr = String(cell || '')
-        if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
-          return `"${cellStr.replace(/"/g, '""')}"`
-        }
-        return cellStr
-      }).join(',')
-    ).join('\n')
-
-    // Add UTF-8 BOM for Excel compatibility with Chinese characters
-    const BOM = '\uFEFF'
-    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' })
-
-    // Generate filename with date
-    const date = new Date().toISOString().split('T')[0]
-    const filename = `事件日誌_${date}.csv`
-
-    // Create download link and trigger download
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    link.setAttribute('download', filename)
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-
-    ElMessage.success(`已匯出 ${displayedLogs.value.length} 筆事件記錄`)
-  } catch (error) {
-    console.error('CSV 匯出失敗:', error)
-    ElMessage.error('CSV 匯出失敗：' + getErrorMessage(error))
-  } finally {
-    exporting.value = false
-  }
 }
 
 // 生命周期

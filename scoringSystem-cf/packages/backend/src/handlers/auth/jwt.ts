@@ -82,7 +82,7 @@ export async function verifyToken(
   } catch (error) {
     // Token verification failed (expired, invalid signature, etc.)
     const message = error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Token verification failed: ${message}`);
+    throw new Error(`Token verification failed: ${message}`, { cause: error });
   }
 }
 

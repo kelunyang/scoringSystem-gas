@@ -80,7 +80,7 @@ const props = defineProps<{
   addingMemberForGroup: string | null
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   'toggle-all': []
   'toggle-expansion': [group: GlobalGroup]
   'toggle-selection': [groupId: string]

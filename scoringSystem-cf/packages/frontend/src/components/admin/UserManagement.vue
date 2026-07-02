@@ -635,7 +635,7 @@
   </div>
 </template>
 <script lang="ts">
-import { ref, reactive, computed, onMounted, watch, onErrorCaptured, onUnmounted, nextTick, inject, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted, watch, onErrorCaptured, nextTick, inject, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { useDebounceFn } from '@vueuse/core'
@@ -647,7 +647,6 @@ import { useWindowInfiniteScroll } from '@/composables/useWindowInfiniteScroll'
 import { rpcClient } from '@/utils/rpc-client'
 import { adminApi } from '@/api/admin'
 // TanStack Query composables for admin operations
-import { useAdminUsers, useGlobalGroupsList, type ExtendedUser as AdminExtendedUser } from '@/composables/admin/useAdminUsers'
 import {
   useUpdateUserStatus,
   useBatchUpdateUserStatus,
@@ -656,11 +655,10 @@ import {
   useUpdateUserProfile
 } from '@/composables/admin/useUserMutations'
 import {
-  useGlobalGroups,
   useAddUserToGlobalGroup,
   useRemoveUserFromGlobalGroup
 } from '@/composables/admin/useGlobalGroups'
-import { getAvatarUrl, parseAvatarOptions, generateDicebearUrl } from '@/utils/avatar'
+import { parseAvatarOptions } from '@/utils/avatar'
 import type { User, GlobalGroup } from '@repo/shared'
 
 // Extended User type for admin display
@@ -751,10 +749,10 @@ export default {
     const router = useRouter()
 
     // Permission checks
-    const { hasPermission, hasAnyPermission } = usePermissions()
+    const { hasAnyPermission } = usePermissions()
 
     // Authentication state (Vue 3 Best Practice)
-    const { user, userEmail, isAuthenticated } = useAuth()
+    const { userEmail } = useAuth()
 
     const canManageUsers = computed(() =>
       hasAnyPermission(['manage_users', 'system_admin'])
@@ -2896,7 +2894,7 @@ export default {
 
         const texts = permissions.map((p: string) => permissionTexts[p] || p).join(', ')
         return texts || '無特殊權限'
-      } catch (e) {
+      } catch {
         return '無特殊權限'
       }
     }

@@ -4,7 +4,6 @@
  */
 
 import { z } from 'zod';
-import { SessionIdSchema } from './common';
 
 /**
  * Project data schema for creation

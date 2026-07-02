@@ -6,7 +6,6 @@
 import type { Env } from '@/types';
 import { successResponse, errorResponse } from '@utils/response';
 import { generateId, ID_PREFIXES } from '@utils/id-generator';
-import { stringifyJSON } from '@utils/json';
 import { logGlobalOperation } from '@utils/logging';
 import { sanitizePlainText, sanitizeDescription } from '@utils/sanitize';
 import { getConfigValue } from '@utils/config';

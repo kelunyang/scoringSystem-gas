@@ -10,7 +10,7 @@
 
 import type { UseQueryReturnType } from '@tanstack/vue-query'
 import { useQuery } from '@tanstack/vue-query'
-import { computed, ref, type Ref } from 'vue'
+import { computed, type Ref } from 'vue'
 import type { ComputedRef } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { useAuth } from './useAuth'

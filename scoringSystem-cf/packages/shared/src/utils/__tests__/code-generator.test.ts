@@ -82,7 +82,7 @@ describe('code-generator', () => {
       const expected = (iterations * 12) / 27;
       const tolerance = expected * 0.2; // 20% tolerance
 
-      for (const [char, count] of charCounts) {
+      for (const count of charCounts.values()) {
         expect(count).toBeGreaterThan(expected - tolerance);
         expect(count).toBeLessThan(expected + tolerance);
       }

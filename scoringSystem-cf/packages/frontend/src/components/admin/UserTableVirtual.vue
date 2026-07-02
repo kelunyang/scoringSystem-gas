@@ -87,13 +87,6 @@ const emit = defineEmits<Emits>()
 const scrollContainer = ref<HTMLElement>()
 const expandedRows = ref<Set<number>>(new Set())
 
-// Calculate dynamic row height based on expansion
-const getRowSize = (index: number) => {
-  const baseHeight = 60 // Base row height
-  const expansionHeight = 200 // Expansion panel height
-  return expandedRows.value.has(index) ? baseHeight + expansionHeight : baseHeight
-}
-
 const virtualizer = useVirtualizer({
   count: computed(() => props.users.length) as unknown as number,
   getScrollElement: () => scrollContainer.value as Element | null,

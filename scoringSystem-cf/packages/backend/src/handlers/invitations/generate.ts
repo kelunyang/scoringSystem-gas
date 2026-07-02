@@ -9,7 +9,6 @@ import { generateId } from '../../utils/id-generator';
 import { parseJSON, stringifyJSON } from '../../utils/json';
 import { sendInvitationEmail, sendBatchInvitationEmails } from './email';
 import { logGlobalOperation } from '../../utils/logging';
-import { getConfigValue } from '../../utils/config';
 import { generateInvitationCode as generateCode } from '@repo/shared/utils/code-generator';
 
 /**

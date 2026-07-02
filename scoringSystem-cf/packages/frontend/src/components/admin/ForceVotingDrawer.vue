@@ -137,7 +137,7 @@ const emit = defineEmits<{
 }>()
 
 // Drawer Alerts
-const { addAlert, clearAlerts, warning, error } = useDrawerAlerts()
+const { clearAlerts, warning, error } = useDrawerAlerts()
 
 // State
 const loading = ref(false)

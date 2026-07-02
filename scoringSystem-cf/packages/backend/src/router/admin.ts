@@ -81,7 +81,6 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import type { Env } from '../types';
 import { authMiddleware } from '../middleware/auth';
-import { batchEmailRateLimitMiddleware } from '../middleware/rate-limit';
 import { hasGlobalPermission, GLOBAL_PERMISSIONS } from '../utils/permissions';
 import { errorResponse } from '../utils/response';
 import {
@@ -160,7 +159,6 @@ import {
 // System handlers
 import {
   getSystemStats,
-  getSystemEventLogs,
   getSystemLogs,
   getLogStatistics,
   getEntityDetails
@@ -182,7 +180,6 @@ import {
   sendSingleNotification,
   sendBatchNotifications,
   deleteNotificationAdmin,
-  getNotificationStatistics,
   getPendingEmailNotifications,
   getNotificationPatrolStatistics
 } from '../handlers/notifications/admin';
@@ -1604,7 +1601,6 @@ app.post(
   '/robots/notification-patrol',
   zValidator('json', NotificationPatrolRequestSchema),
   async (c) => {
-    const user = c.get('user');
     const body = c.req.valid('json');
 
     // Execute notification patrol
@@ -1803,9 +1799,6 @@ app.post(
   '/smtp/update-config',
   zValidator('json', UpdateSmtpConfigRequestSchema),
   async (c) => {
-    const user = c.get('user');
-    const body = c.req.valid('json');
-
     // Note: SMTP configuration is managed via environment variables (.dev.vars or production env)
     // This endpoint returns success but actual config changes require env var updates
     return c.json({
@@ -1826,7 +1819,6 @@ app.post(
   '/smtp/test-connection',
   zValidator('json', TestSmtpConnectionRequestSchema),
   async (c) => {
-    const user = c.get('user');
     const body = c.req.valid('json');
 
     try {

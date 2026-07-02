@@ -8,18 +8,6 @@ import { successResponse, errorResponse } from '../../utils/response';
 import type { AnnouncementType } from '@repo/shared/schemas/announcements';
 
 /**
- * Public announcement data (limited fields for security)
- */
-interface PublicAnnouncement {
-  announcementId: string;
-  title: string;
-  content: string;
-  startTime: number;
-  endTime: number;
-  type: AnnouncementType;
-}
-
-/**
  * Database announcement row type
  */
 interface AnnouncementRow {

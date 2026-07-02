@@ -2,7 +2,7 @@
  * Composable for calculating date ranges in compact and full modes
  */
 
-import { createDateString, type ParsedDate } from '@/utils/date'
+import { createDateString } from '@/utils/date'
 
 export interface DateRange {
   start: string

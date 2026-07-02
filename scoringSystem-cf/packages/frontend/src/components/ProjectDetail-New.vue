@@ -35,11 +35,8 @@
 #default="{
                 isActive,
                 timeLeft,
-                progressPercentage,
                 loading: btnLoading,
-                disabled,
-                themeColor,
-                contrastColor
+                disabled
               }">
                 <!-- 初次載入狀態（disabled=true）-->
                 <span v-if="disabled" class="blend-text">
@@ -1004,7 +1001,7 @@
  */
 
 import { ref, reactive, computed, watch, watchEffect, onMounted, onBeforeUnmount, nextTick, provide, type Ref } from 'vue'
-import type { Stage, Comment, Group, Submission, Notification } from '@/types'
+import type { Stage, Comment, Group } from '@/types'
 import type { ExtendedStage } from '@/composables/useStageContentManagement'
 import TopBarUserControls from './TopBarUserControls.vue'
 import StageTimeline from './StageTimeline.vue'
@@ -1025,8 +1022,6 @@ import TeacherVoteModal from './TeacherVoteModal.vue'
 import VotingAnalysisModal from './VotingAnalysisModal.vue'
 import CommentVotingAnalysisModal from './CommentVotingAnalysisModal.vue'
 import ReplyCommentDrawer from './ReplyCommentDrawer.vue'
-import AvatarGroup from './common/AvatarGroup.vue'
-import StatNumberDisplay from './shared/StatNumberDisplay.vue'
 import AnimatedStatistic from './shared/AnimatedStatistic.vue'
 import EventLogDrawer from './shared/EventLogDrawer.vue'
 import StageDescriptionDrawer from './shared/StageDescriptionDrawer.vue'
@@ -1038,7 +1033,7 @@ import dayjs from 'dayjs'
 import { InfoFilled } from '@element-plus/icons-vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { dedupRequest } from '@/utils/request-dedup'
-import { getStageColor, getStageTextColor } from '@repo/shared'
+import { getStageColor } from '@repo/shared'
 import NumberFlow from '@number-flow/vue'
 
 // ===== Composables =====
@@ -1050,9 +1045,9 @@ import { useModalManager } from '@/composables/useModalManager'
 import { useConsensusWarning } from '@/composables/useConsensusWarning'
 import { useRoute } from 'vue-router'
 import { useDataLoadingTracker } from '@/composables/useDataLoadingTracker'
-import { useProjectCore, useStages, useStageComments } from '@/composables/useProjectDetail'
+import { useProjectCore, useStages } from '@/composables/useProjectDetail'
 import { useWalletLeaderboard, extractTopWealthRankings } from '@/composables/useWallet'
-import { useStageSettlementRankings, mapSettlementToGroups } from '@/composables/useSettlementData'
+import { mapSettlementToGroups } from '@/composables/useSettlementData'
 import { useStageInfoDrawer } from '@/composables/useStageInfoDrawer'
 import { useCoordinatedDrawer } from '@/composables/useCoordinatedDrawer'
 import { usePointCalculation } from '@/composables/usePointCalculation'
@@ -1121,11 +1116,6 @@ const { userId } = useAuth()
 
 // ===== SUDO Mode Store =====
 const sudoStore = useSudoStore()
-const isSudoActive = computed(() => {
-  return sudoStore.isActive &&
-         sudoStore.projectId === projectId.value &&
-         !!sudoStore.targetUser
-})
 
 // ===== TanStack Query Client =====
 // Initialize queryClient in setup stage for use in event handlers
@@ -1542,7 +1532,6 @@ const canVote = computed(() => permissions.canVote.value)
 const canComment = computed(() => permissions.canComment.value)
 const canManageStages = computed(() => permissions.canManageStages.value)
 const canTeacherVote = computed(() => permissions.canTeacherVote.value)
-const canViewAll = computed(() => permissions.canViewAll.value)
 
 // 計算專案總組數（active 狀態的組別）
 const totalProjectGroups = computed(() => {
@@ -1678,7 +1667,7 @@ const stageMentionCounts = computed(() => {
 //  時間軸階段數據
 const timelineStages = computed(() => {
   return stages.value.map((stage: ExtendedStage, index: number) => {
-    let timelineStatus = 'upcoming'
+    let timelineStatus: string
 
     switch (stage.status) {
       case 'completed':
@@ -1890,8 +1879,8 @@ function truncateDescription(description: string) {
     .replace(/\*\*(.*?)\*\*/g, '$1')
     .replace(/\*(.*?)\*/g, '$1')
     .replace(/<u>(.*?)<\/u>/g, '$1')
-    .replace(/\[([^\]]*)\]\([^\)]*\)/g, '$1')
-    .replace(/!\[([^\]]*)\]\([^\)]*\)/g, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '')
     .replace(/^\* /gm, '')
     .replace(/^\d+\. /gm, '')
 
@@ -1968,19 +1957,6 @@ function getLoadingText(progress: number): string {
 }
 
 /**
- * 格式化成員名稱（從 composable 引用）
- */
-const formatMemberNames = groupData.formatMemberNames
-
-/**
- * 切換群組報告顯示
- */
-function toggleGroupReport(group: Group) {
-  // 直接修改屬性，確保響應式更新
-  group.showReport = !group.showReport
-}
-
-/**
  * 計算已繳交成果數
  */
 function getSubmittedCount(stage: ExtendedStage | undefined): number {
@@ -2016,13 +1992,6 @@ function toggleAllGroupReports(stage: ExtendedStage | undefined) {
   }
 }
 
-/**
- * 切換甘特圖抽屜
- */
-function toggleGanttDrawer() {
-  ganttDrawer.toggle()
-}
-
 // ===== 動態馬路效果（階段訊息抽屜相關）=====
 
 /**
@@ -2044,15 +2013,6 @@ function widenStageRoad(stageId: string) {
   activeStageIdForRoad.value = stageId
 
   console.log(`🛣️ 馬路加寬：階段 ${stageId}`)
-}
-
-function resetStageRoad() {
-  if (activeStageIdForRoad.value) {
-    const element = document.getElementById(`stage-${activeStageIdForRoad.value}`)
-    element?.classList.remove('active-stage')
-    activeStageIdForRoad.value = null
-    console.log('🛣️ 馬路恢復原狀')
-  }
 }
 
 // ===== 階段訊息抽屜輔助函數 =====
@@ -2098,15 +2058,6 @@ function getStageStatusText(stage?: ExtendedStage): string {
   }
 
   return statusTextMap[stage.status] || stage.status
-}
-
-/**
- * 截斷文字（用於抽屜中的描述）
- */
-function truncate(text: string | null | undefined, maxLength: number): string {
-  if (!text) return ''
-  if (text.length <= maxLength) return text
-  return text.substring(0, maxLength) + '...'
 }
 
 /**
@@ -2200,27 +2151,6 @@ const stageCountdown = computed(() => {
   if (days > 0) return `${days}d ${hours}h`
   if (hours > 0) return `${hours}h ${minutes}m`
   return `${minutes}m`
-})
-
-/**
- * 組內完成狀態（該組繳交人數）
- */
-const groupCompletionStatus = computed(() => {
-  const stage = currentDrawerStage.value
-  if (!stage) return null
-
-  const groupData = stageGroupDataMap.value.get(stage.id)
-  if (!groupData) return null
-
-  // 根據 viewMode 計算完成人數
-  const isCommentMode = stage.viewMode === true
-  const completedCount = isCommentMode
-    ? (groupData.commentedMembers?.length || 0)
-    : (groupData.submittedMembers?.length || 0)
-
-  const totalCount = groupData.members?.length || 0
-
-  return { completed: completedCount, total: totalCount }
 })
 
 /**
@@ -2398,30 +2328,6 @@ function scrollToStage(stageId: string, fromUrl = false) {
       }
     })
   }
-}
-
-/**
- * 尋找最早的執行中階段
- */
-function findEarliestActiveStage() {
-  const activeStages = stages.value.filter((stage: ExtendedStage) => {
-    const status = stage.status
-    return status === 'active' || status === 'voting'
-  })
-
-  if (activeStages.length === 0) {
-    return null
-  }
-
-  if (activeStages.length === 1) {
-    return activeStages[0]
-  }
-
-  return activeStages.reduce((earliest: ExtendedStage, current: ExtendedStage) => {
-    const earliestStartTime = earliest.startTime || 0
-    const currentStartTime = current.startTime || 0
-    return currentStartTime < earliestStartTime ? current : earliest
-  })
 }
 
 /**
@@ -2668,15 +2574,6 @@ function openVoteResultModal(stage: ExtendedStage, readOnly = false) {
  */
 function openSubmitReportModal(stage: ExtendedStage) {
   submitReportReadOnly.value = false
-  const activeGroupsCount = stage.groups?.length || 1
-  modalManager.openSubmitReportModal(stage, activeGroupsCount)
-}
-
-/**
- * SUDO 模式：打開成果版本檢視（唯讀）
- */
-function openSubmitReportModalReadOnly(stage: ExtendedStage) {
-  submitReportReadOnly.value = true
   const activeGroupsCount = stage.groups?.length || 1
   modalManager.openSubmitReportModal(stage, activeGroupsCount)
 }
@@ -3415,12 +3312,12 @@ async function loadMentionData() {
     if (stage.comments && Array.isArray(stage.comments)) {
       stage.comments.forEach((comment: Comment) => {
         // 解析 mentionedUsers
-        let mentionedUsers = []
+        let mentionedUsers
         try {
           mentionedUsers = typeof comment.mentionedUsers === 'string'
             ? JSON.parse(comment.mentionedUsers)
             : (comment.mentionedUsers || [])
-        } catch (e) {
+        } catch {
           mentionedUsers = []
         }
 
@@ -3911,13 +3808,6 @@ function processUrlParams() {
       )
     }, 300) // Wait for scroll animation
   }
-}
-
-/**
- * Handle drawer close - clear URL action parameter
- */
-function handleDrawerClose() {
-  routeDrawer.clearAction()
 }
 
 onMounted(() => {

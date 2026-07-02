@@ -19,7 +19,6 @@ import {
   buildSubmissionForceWithdrawnEmailContent,
 } from './email-templates';
 import { sendEmail, EmailTrigger } from '../services/email-service';
-import { generateId } from '../utils/id-generator';
 import { logGlobalOperation } from '../utils/logging';
 import { getSystemTitle } from '../utils/email';
 import { getConfigValue } from '../utils/config';

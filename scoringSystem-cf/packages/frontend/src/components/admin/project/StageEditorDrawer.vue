@@ -113,7 +113,6 @@ import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import { getStageStatusText, type StageStatus } from '@/utils/stageStatus'
-import type { Stage as SharedStage } from '@/types'
 
 // ===== Drawer Breadcrumb =====
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
@@ -233,10 +232,6 @@ function handleClose(): void {
 
 function handleSave(): void {
   emit('save', editForm.value)
-}
-
-function handleClearError(): void {
-  emit('clear-error')
 }
 
 // ===== Watchers for Alerts =====

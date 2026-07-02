@@ -5,7 +5,6 @@
  */
 
 import { Context } from 'hono'
-import type { Env } from '../../types'
 import { errorResponse, successResponse } from '../../utils/response'
 import { logProjectOperation } from '../../utils/logging'
 import { checkProjectPermission } from '../../middleware/permissions'

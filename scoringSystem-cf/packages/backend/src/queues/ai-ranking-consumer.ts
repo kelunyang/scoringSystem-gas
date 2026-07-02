@@ -4,7 +4,7 @@
 
 import type { MessageBatch } from '@cloudflare/workers-types';
 import type { Env } from '../types';
-import type { AIRankingItem, BTComparison, MultiAgentRound1Result, MultiAgentRound2Result } from '@repo/shared';
+import type { AIRankingItem, MultiAgentRound1Result, MultiAgentRound2Result } from '@repo/shared';
 import { AIRankingQueueMessageSchema } from './types';
 import {
   getAIProviderById,
@@ -27,8 +27,7 @@ import {
   completeAIServiceCall,
   failAIServiceCall,
   completeBTRankingCall,
-  completeMultiAgentRankingCall,
-  createMultiAgentSubCall
+  completeMultiAgentRankingCall
 } from '../db/ai-service';
 import { logProjectOperation } from '../utils/logging';
 

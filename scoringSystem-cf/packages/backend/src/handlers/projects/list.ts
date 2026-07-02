@@ -718,7 +718,7 @@ async function listProjectsForUser(
     return { projects: userProjects, totalCount };
   } catch (error) {
     console.error('List projects for user error:', error);
-    throw new Error(`Failed to list projects: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(`Failed to list projects: ${error instanceof Error ? error.message : 'Unknown error'}`, { cause: error });
   }
 }
 
@@ -1025,42 +1025,6 @@ async function listAllProjectsForAdmin(
 }
 
 /**
- * Apply filters to project list
- */
-function applyFilters(
-  projects: ProjectWithDetails[],
-  filters: { status?: string; createdBy?: string; tagId?: string; includeStages?: boolean },
-  userId: string | null
-): ProjectWithDetails[] {
-  let filtered = projects;
-
-  if (filters.status) {
-    filtered = filtered.filter(p => p.status === filters.status);
-  }
-
-  if (filters.createdBy === 'me') {
-    // For admin view only (regular users don't have isCreator field)
-    filtered = filtered.filter(p => (p as any).isCreator === true);
-  }
-
-  // DISABLED: Tags system has been disabled
-  /*
-  if (filters.tagId) {
-    // For admin view only (regular users don't have tags field)
-    filtered = filtered.filter(p => {
-      const tags = (p as any).tags;
-      return tags && Array.isArray(tags) && tags.some((tag: any) => tag.tagId === filters.tagId);
-    });
-  }
-  */
-
-  // Sort by last modified
-  filtered.sort((a, b) => b.lastModified - a.lastModified);
-
-  return filtered;
-}
-
-/**
  * Helper functions
  */
 
@@ -1141,17 +1105,3 @@ async function getProjectTags(env: Env, projectId: string): Promise<any[]> {
 }
 */
 
-async function getProjectStages(env: Env, projectId: string): Promise<any[]> {
-  const result = await env.DB.prepare(`
-    SELECT stageId, stageName, stageOrder,
-           startTime, endTime,
-           status,
-           description, reportRewardPool, commentRewardPool
-    FROM stages_with_status
-    WHERE projectId = ?
-      AND archivedTime IS NULL
-    ORDER BY stageOrder
-  `).bind(projectId).all();
-
-  return result.results as any[];
-}

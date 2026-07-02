@@ -408,7 +408,7 @@ import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
-import { useNotificationFilters, type Notification, type NotificationType } from '@/composables/useNotificationFilters'
+import { type Notification, type NotificationType } from '@/composables/useNotificationFilters'
 import { useNotificationSelection } from '@/composables/useNotificationSelection'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
@@ -438,34 +438,12 @@ const sendingEmails = ref(false)
 
 
 // Filter persistence (localStorage)
-const { filters, isLoaded: filtersLoaded } = useFilterPersistence('notificationManagement', {
+const { filters } = useFilterPersistence('notificationManagement', {
   searchText: '',
   emailSentFilter: 'all' as 'all' | 'sent' | 'not_sent',
   readFilter: 'all' as 'all' | 'read' | 'unread',
   typeFilter: 'all' as NotificationType | 'all',
   displayLimit: 100
-})
-
-// Create reactive refs for backward compatibility with useNotificationFilters
-const searchText = computed({
-  get: () => filters.value.searchText,
-  set: (val) => { filters.value.searchText = val }
-})
-const emailSentFilter = computed({
-  get: () => filters.value.emailSentFilter,
-  set: (val) => { filters.value.emailSentFilter = val }
-})
-const readFilter = computed({
-  get: () => filters.value.readFilter,
-  set: (val) => { filters.value.readFilter = val }
-})
-const typeFilter = computed({
-  get: () => filters.value.typeFilter,
-  set: (val) => { filters.value.typeFilter = val }
-})
-const displayLimit = computed({
-  get: () => filters.value.displayLimit,
-  set: (val) => { filters.value.displayLimit = val }
 })
 
 // Create temporary refs to pass to useNotificationFilters
@@ -552,7 +530,6 @@ const {
 // Infinite scroll (using composable for client-side pagination)
 const {
   displayedItems: displayedNotifications,
-  loadingMore: clientLoadingMore,
   scrollDisabled,
   loadMore
 } = useInfiniteScroll(filteredNotifications, { pageSize: 50 })

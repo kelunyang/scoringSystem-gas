@@ -252,13 +252,6 @@ function isLoadingContext(event: Event): boolean {
 }
 
 /**
- * Get event context from cache
- */
-function getEventContext(event: Event): any {
-  return eventContexts.value.get(getEventKey(event))
-}
-
-/**
  * Load event context
  */
 async function loadEventContext(event: Event, eventKey: string): Promise<void> {

@@ -655,7 +655,7 @@ export async function batchCalculateReactionUsers(
         if (Array.isArray(users)) {
           users.forEach(u => allMentionedUsers.add(u));
         }
-      } catch (e) { /* ignore */ }
+      } catch { /* ignore */ }
     }
 
     if (comment.mentionedGroups) {
@@ -664,7 +664,7 @@ export async function batchCalculateReactionUsers(
         if (Array.isArray(groups)) {
           groups.forEach(g => allMentionedGroups.add(g));
         }
-      } catch (e) { /* ignore */ }
+      } catch { /* ignore */ }
     }
   }
 
@@ -751,7 +751,7 @@ export async function batchCalculateReactionUsers(
             }
           }
         }
-      } catch (e) { /* ignore */ }
+      } catch { /* ignore */ }
     }
 
     // 處理 mentionedGroups
@@ -768,7 +768,7 @@ export async function batchCalculateReactionUsers(
             }
           }
         }
-      } catch (e) { /* ignore */ }
+      } catch { /* ignore */ }
     }
 
     result.set(comment.commentId, Array.from(reactionUsers));
@@ -808,7 +808,7 @@ export async function batchCalculateReplyUsers(
         if (Array.isArray(users)) {
           users.forEach(u => allMentionedUsers.add(u));
         }
-      } catch (e) { /* ignore */ }
+      } catch { /* ignore */ }
     }
 
     if (comment.mentionedGroups) {
@@ -817,7 +817,7 @@ export async function batchCalculateReplyUsers(
         if (Array.isArray(groups)) {
           groups.forEach(g => allMentionedGroups.add(g));
         }
-      } catch (e) { /* ignore */ }
+      } catch { /* ignore */ }
     }
   }
 
@@ -917,7 +917,7 @@ export async function batchCalculateReplyUsers(
             }
           }
         }
-      } catch (e) { /* ignore */ }
+      } catch { /* ignore */ }
     }
 
     // 處理 mentionedGroups
@@ -934,7 +934,7 @@ export async function batchCalculateReplyUsers(
             }
           }
         }
-      } catch (e) { /* ignore */ }
+      } catch { /* ignore */ }
     }
 
     result.set(comment.commentId, Array.from(replyUsersMap.values()));

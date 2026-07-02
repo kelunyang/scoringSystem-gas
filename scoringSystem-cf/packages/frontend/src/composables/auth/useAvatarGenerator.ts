@@ -3,7 +3,7 @@
  * Provides random avatar generation for user registration
  */
 
-import type { AvatarStyle, AvatarOptions } from '../../types/auth';
+import type { AvatarStyle } from '../../types/auth';
 
 export interface UseAvatarGeneratorReturn {
   generateRandomOptions: (style: AvatarStyle) => Record<string, any>;

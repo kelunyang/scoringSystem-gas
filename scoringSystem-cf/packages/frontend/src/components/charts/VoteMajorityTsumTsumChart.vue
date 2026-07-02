@@ -756,7 +756,7 @@ function hideTooltip(): void {
           .style('opacity', 0)
           .remove()
       }
-    } catch (e) {
+    } catch {
       // 如果出錯，直接清理
       d3.selectAll('.vote-tooltip').remove()
     }

@@ -9,8 +9,7 @@ import {
   PasswordSchema,
   DisplayNameSchema,
   SessionIdSchema,
-  TurnstileTokenSchema,
-  AvatarConfigSchema
+  TurnstileTokenSchema
 } from './common';
 
 /**

@@ -10,8 +10,6 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { Env } from '../types';
 import { authMiddleware } from '../middleware/auth';
-import { requireSystemAdmin } from '../middleware/permissions';
-import { getSecretsChecklist } from '../handlers/system/settings';
 import { getSystemLogs, getLogStatistics } from '../handlers/admin/system';
 import { getConfigValue } from '../utils/config';
 import { hasGlobalPermission, GLOBAL_PERMISSIONS } from '../utils/permissions';

@@ -31,7 +31,6 @@ interface PointCalculationOptions {
  */
 export function usePointCalculation(options: PointCalculationOptions = {}) {
   const {
-    simulatedGroupCount,
     totalProjectGroups,
     totalActiveGroups
   } = options

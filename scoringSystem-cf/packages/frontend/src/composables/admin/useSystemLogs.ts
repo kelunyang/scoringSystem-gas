@@ -11,7 +11,7 @@
  */
 
 import type { UseInfiniteQueryReturnType, UseQueryReturnType, UseMutationReturnType } from '@tanstack/vue-query'
-import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
+import { useInfiniteQuery, useQuery, useMutation } from '@tanstack/vue-query'
 import { computed, type Ref, type ComputedRef } from 'vue'
 import { fetchWithAuth, type ApiResponse } from '@/utils/api-helpers'
 import { useCurrentUser } from '@/composables/useAuth'

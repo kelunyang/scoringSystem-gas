@@ -6,7 +6,7 @@ import type { Env } from '../../types';
 import { hashPassword, validatePasswordStrength } from './password';
 import { generateToken } from './jwt';
 import { generateUserId } from '../../utils/id-generator';
-import { errorResponse, successResponse, ERROR_CODES } from '../../utils/response';
+import { ERROR_CODES } from '../../utils/response';
 import type { ApiResponse } from '../../utils/response';
 import { safeJsonStringify } from '../../utils/json';
 import { logGlobalOperation } from '../../utils/logging';

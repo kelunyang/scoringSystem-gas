@@ -168,16 +168,6 @@ import { ref, computed } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { Search, Filter } from '@element-plus/icons-vue'
 
-interface FilterState {
-  searchText: string
-  statusFilter: '' | 'active' | 'inactive'
-  roleFilter: '' | 'admin' | 'pm' | 'reviewer' | 'user'
-  lockFilter: '' | 'locked' | 'unlocked'
-  twoFactorFilter: '' | 'enabled' | 'disabled'
-  emailVerifiedFilter: '' | 'verified' | 'unverified'
-  dateRange: [Date, Date] | null
-}
-
 export interface Props {
   searchText?: string
   statusFilter?: '' | 'active' | 'inactive'

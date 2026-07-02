@@ -6,7 +6,6 @@
 import type { Env } from '../../types';
 import { successResponse, errorResponse } from '../../utils/response';
 import { formatNotificationEmail } from '../../utils/email';
-import { generateId } from '../../utils/id-generator';
 import { getTypedConfig } from '../../utils/config';
 import { queueAdminNotificationEmail } from '../../queues/email-producer';
 

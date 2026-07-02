@@ -129,7 +129,7 @@ export const SubmissionStatus = z.enum(['draft', 'submitted', 'archived']);
 export const JsonStringSchema = z.string().transform((str, ctx) => {
   try {
     return JSON.parse(str);
-  } catch (e) {
+  } catch {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: 'Invalid JSON string'

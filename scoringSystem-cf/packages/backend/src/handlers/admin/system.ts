@@ -289,18 +289,6 @@ export async function getSystemLogs(
     const result = await env.DB.prepare(query).bind(...params).all();
 
     const logs = result.results?.map((log: any) => {
-      // Parse context if it's a JSON string
-      let parsedContext = log.context;
-      if (typeof log.context === 'string') {
-        parsedContext = parseJSON(log.context, {});
-      }
-
-      // Parse relatedEntities if it's a JSON string
-      let parsedRelatedEntities = log.relatedEntities;
-      if (typeof log.relatedEntities === 'string') {
-        parsedRelatedEntities = parseJSON(log.relatedEntities, {});
-      }
-
       return {
         logId: log.logId,
         level: log.level,

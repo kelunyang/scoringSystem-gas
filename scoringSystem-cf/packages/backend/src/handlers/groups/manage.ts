@@ -6,8 +6,8 @@
 import type { Env } from '@/types';
 import { successResponse, errorResponse } from '@utils/response';
 import { generateId } from '@utils/id-generator';
-import { parseJSON, stringifyJSON } from '@utils/json';
-import { hasProjectPermission as checkProjectPermission, hasGlobalPermission } from '@utils/permissions';
+import { parseJSON } from '@utils/json';
+import { hasProjectPermission as checkProjectPermission } from '@utils/permissions';
 import { logProjectOperation, generateChanges } from '@utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
 import { getGroupMemberEmails } from '@utils/notifications';

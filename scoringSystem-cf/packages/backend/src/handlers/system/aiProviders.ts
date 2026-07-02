@@ -4,7 +4,7 @@
  */
 
 import type { Env } from '../../types';
-import type { AIProvider, AIRankingPromptConfig } from '@repo/shared';
+import type { AIRankingPromptConfig } from '@repo/shared';
 import { successResponse, errorResponse, ERROR_CODES } from '../../utils/response';
 import {
   getAIProvidersPublic,
@@ -86,6 +86,7 @@ export async function createAIProvider(
     });
 
     // Return without apiKey
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- excluded from rest
     const { apiKey, ...publicProvider } = newProvider;
 
     return successResponse({
@@ -152,6 +153,7 @@ export async function updateAIProviderHandler(
     }
 
     // Return without apiKey
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- excluded from rest
     const { apiKey, ...publicProvider } = updatedProvider;
 
     return successResponse({

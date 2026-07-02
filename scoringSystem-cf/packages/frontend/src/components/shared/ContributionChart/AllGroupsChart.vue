@@ -18,7 +18,6 @@ import { useD3Chart } from '@/composables/useD3Chart'
 import { usePointCalculation } from '@/composables/usePointCalculation'
 import { useChargingAnimation, type ChargingUnit } from '@/composables/useChargingAnimation'
 import type { GroupClickData } from '@/types/components'
-import EmptyState from '@/components/shared/EmptyState.vue'
 
 export interface Member {
   email: string
@@ -250,7 +249,7 @@ function renderChart(): void {
         .style('opacity', 0.5)
 
       // 2. 繪製充能層（初始不可見，動畫時逐組點亮）
-      const weightBlocks = svg.selectAll('.weight-block')
+      svg.selectAll('.weight-block')
         .data(blocks)
         .enter()
         .append('rect')
@@ -286,7 +285,6 @@ function renderChart(): void {
               .duration(150)
               .attr('transform', function(this: Element) {
                 const rect = this as SVGRectElement
-                const y = parseFloat(rect.getAttribute('y') || '0')
                 const height = parseFloat(rect.getAttribute('height') || '0')
                 return `translate(0, ${-height * 0.1}) scale(1, 1.2)`
               } as any)

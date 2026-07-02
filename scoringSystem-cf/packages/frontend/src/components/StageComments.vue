@@ -293,19 +293,17 @@ class="eligibility-postit" :class="{
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, ref, watch, toRef, type DefineComponent } from 'vue'
-import { ElBadge, ElButton, ElMessage, ElTooltip } from 'element-plus'
+import { computed, defineComponent, watch, toRef, type DefineComponent } from 'vue'
+import { ElMessage } from 'element-plus'
 import StatNumberContent from '@/components/shared/StatNumberContent.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import AvatarGroup from '@/components/common/AvatarGroup.vue'
 import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 import { processMentions } from '@/utils/mention-processor'
-import { useProjectRole } from '@/composables/useProjectRole'
 import { getNumericPermissionLevel } from '@/composables/useProjectPermissions'
 import { useInfiniteStageComments, flattenInfiniteComments, getInfiniteCommentsTotal, getInfiniteVotingEligible } from '@/composables/useProjectDetail'
 import { rpcClient } from '@/utils/rpc-client'
 import { generateAvatarUrl } from '@/utils/walletHelpers'
-import { handleError } from '@/utils/errorHandler'
 
 // Explicit type annotation to avoid TS2742 error with number-flow module
 const component: DefineComponent<any, any, any> = defineComponent({
@@ -690,7 +688,7 @@ const component: DefineComponent<any, any, any> = defineComponent({
             ? JSON.parse(comment.mentionedGroups)
             : comment.mentionedGroups
           hasGroups = Array.isArray(groups) && groups.length > 0
-        } catch (e) {
+        } catch {
           hasGroups = false
         }
       }
@@ -705,7 +703,7 @@ const component: DefineComponent<any, any, any> = defineComponent({
             ? JSON.parse(comment.mentionedUsers)
             : comment.mentionedUsers
           hasUsers = Array.isArray(users) && users.length > 0
-        } catch (e) {
+        } catch {
           hasUsers = false
         }
       }
@@ -726,7 +724,7 @@ const component: DefineComponent<any, any, any> = defineComponent({
             ? JSON.parse(comment.mentionedGroups)
             : comment.mentionedGroups
           hasGroups = Array.isArray(groups) && groups.length > 0
-        } catch (e) {
+        } catch {
           hasGroups = false
         }
       }
@@ -741,7 +739,7 @@ const component: DefineComponent<any, any, any> = defineComponent({
             ? JSON.parse(comment.mentionedUsers)
             : comment.mentionedUsers
           hasUsers = Array.isArray(users) && users.length > 0
-        } catch (e) {
+        } catch {
           hasUsers = false
         }
       }

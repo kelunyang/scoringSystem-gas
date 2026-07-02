@@ -3,8 +3,6 @@
  * Extracted from UserManagement.vue to follow DRY principle
  */
 
-import type { User } from '@repo/shared'
-
 /**
  * Generic avatar data interface
  * Any object with these fields can be used for avatar generation

@@ -280,7 +280,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, type Ref, type ComponentPublicInstance } from 'vue'
+import { ref, computed, watch } from 'vue'
 import SimulationControls from './shared/ContributionChart/SimulationControls.vue'
 import OurGroupChart from './shared/ContributionChart/OurGroupChart.vue'
 import AllGroupsChart from './shared/ContributionChart/AllGroupsChart.vue'
@@ -505,24 +505,6 @@ const allGroupsDataCalculated = computed(() => {
   )
 
   return result
-})
-
-const safeSliderMin = computed<number>(() => {
-  const min = Math.max(1, props.totalActiveGroups)
-  const max = props.totalProjectGroups
-
-  if (min > max) {
-    console.error('🚨 [SubmitReportModal] Slider 參數異常！', {
-      totalActiveGroups: props.totalActiveGroups,
-      totalProjectGroups: props.totalProjectGroups,
-      calculatedMin: min,
-      calculatedMax: max,
-      issue: '已提交組數 > 專案總組數（不應該發生）'
-    })
-    return Math.min(min, max)
-  }
-
-  return min
 })
 
 // Watch

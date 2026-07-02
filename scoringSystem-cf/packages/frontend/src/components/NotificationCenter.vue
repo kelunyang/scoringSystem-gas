@@ -510,7 +510,6 @@ const levelFilterOptions = [
 // ===== TanStack Query - Notification Count =====
 const {
   data: unreadCountData,
-  isLoading: isLoadingCount,
   refetch: refetchCount
 } = useNotificationCount()
 
@@ -563,7 +562,6 @@ const notifications = computed(() => {
 
 const totalCount = computed(() => notificationData.value?.totalCount || 0)
 const hasMore = computed(() => notificationData.value?.hasMore || false)
-const disableInfiniteScroll = computed(() => isFetchingNotifications.value || !hasMore.value)
 
 // ===== TanStack Mutations =====
 const { mutate: markAsReadMutate, isPending: isMarkingRead } = useMarkNotificationAsRead()
@@ -637,10 +635,6 @@ function toggleNotificationDrawer() {
     refetchCount()
     refetchNotifications()
   }
-}
-
-function closeDrawer() {
-  showDrawer.value = false
 }
 
 function refreshNotifications() {

@@ -6,7 +6,6 @@
 import type { Env } from '@/types';
 import { successResponse, errorResponse } from '@utils/response';
 import { generateId } from '@utils/id-generator';
-import { stringifyJSON } from '@utils/json';
 import { logProjectOperation } from '@utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
 
@@ -144,7 +143,7 @@ async function getReactionStatsForComment(
   env: Env,
   commentId: string,
   userEmail: string,
-  projectId: string
+  _projectId: string
 ): Promise<{
   reactions: Array<{ type: string; count: number; users: string[] }>;
   userReaction: string | null;
@@ -220,7 +219,7 @@ async function getReactionStatsForComment(
       if (comment.mentionedUsers) {
         mentionedUsers = JSON.parse(comment.mentionedUsers as string);
       }
-    } catch (e) {
+    } catch {
       // Ignore parse errors
     }
     const hasMentions = mentionedGroups.length > 0 || mentionedUsers.length > 0;

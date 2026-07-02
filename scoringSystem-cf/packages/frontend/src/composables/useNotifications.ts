@@ -40,7 +40,7 @@ export interface NotificationListResponse {
  */
 export function useNotificationCount(): UseQueryReturnType<number, Error> {
   // Vue 3 Best Practice: Use unified useAuth() composable
-  const { token, isAuthenticated } = useAuth()
+  const { token } = useAuth()
 
   return useQuery({
     queryKey: ['notificationCount'],
@@ -106,7 +106,7 @@ export function useNotificationCount(): UseQueryReturnType<number, Error> {
  */
 export function useNotifications(options: NotificationListOptions | ComputedRef<NotificationListOptions> = {}): UseQueryReturnType<NotificationListResponse, Error> {
   // Vue 3 Best Practice: Use unified useAuth() composable
-  const { token, isAuthenticated } = useAuth()
+  const { token } = useAuth()
 
   const optionsRef = isRef(options) ? options : ref(options)
   const page: ComputedRef<number> = computed(() => optionsRef.value.page || 1)

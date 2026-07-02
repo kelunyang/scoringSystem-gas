@@ -202,7 +202,7 @@ export interface Props {
   embedded?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   embedded: false
 })
 
@@ -294,20 +294,6 @@ const formRules: FormRules = {
 // ========== Methods ==========
 
 /**
- * Refresh providers list (trigger TanStack Query refetch)
- */
-function refreshProviders(): void {
-  aiProvidersQuery.refetch()
-}
-
-/**
- * Refresh prompts config (trigger TanStack Query refetch)
- */
-function refreshPrompts(): void {
-  aiPromptsQuery.refetch()
-}
-
-/**
  * Show add provider dialog
  */
 function showAddDialog(): void {
@@ -387,7 +373,7 @@ async function toggleEnabled(provider: ProviderRow): Promise<void> {
       enabled: provider.enabled
     })
     // Success message is handled by the mutation's onSuccess
-  } catch (error) {
+  } catch {
     // Revert on error
     provider.enabled = !provider.enabled
     // Error message is handled by the mutation's onError

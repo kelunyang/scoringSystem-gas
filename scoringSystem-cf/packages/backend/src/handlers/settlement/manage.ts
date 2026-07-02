@@ -6,7 +6,6 @@
 import type { Env } from '../../types';
 import { successResponse, errorResponse } from '../../utils/response';
 import { generateId } from '../../utils/id-generator';
-import { checkProjectPermission } from '../../middleware/permissions';
 
 /**
  * Reverse a settlement

@@ -854,10 +854,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watchEffect, inject, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watchEffect, inject, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-// @ts-ignore - Icon component used inline
 import { Refresh, Search } from '@element-plus/icons-vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
@@ -865,10 +864,9 @@ import { adminApi } from '@/api/admin'
 import { getErrorMessage } from '@/utils/errorHandler'
 // TanStack Query composables
 import { useLogStatistics, useEntityDetails } from '@/composables/admin/useSystemLogs'
-import { useQueryClient } from '@tanstack/vue-query'
 import { sanitizeHtml } from '@/utils/sanitize'
 import { useDebounceFn } from '@vueuse/core'
-import type { LogEntry, LogFilterOptions, SystemLogsRequest, EmailLog, LogStatistics } from '@repo/shared/types/admin'
+import type { LogEntry, SystemLogsRequest, EmailLog } from '@repo/shared/types/admin'
 import { EmailStatus } from '@repo/shared/types/admin'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import { useWindowInfiniteScroll } from '@/composables/useWindowInfiniteScroll'
@@ -885,26 +883,18 @@ const router = useRouter()
 const registerRefresh = inject<(fn: (() => void) | null) => void>('registerRefresh', () => {})
 
 // ==================== TanStack Query ====================
-const queryClient = useQueryClient()
 const logStatisticsQuery = useLogStatistics()
 const entityDetailsMutation = useEntityDetails()
 
 // ==================== 常數定義 ====================
 const DEFAULT_DISPLAY_LIMIT = 50 // 降低預設值提升效能
 const MAX_LOG_FETCH_LIMIT = 500
-const SEARCH_DEBOUNCE_MS = 300
 const KEYWORD_DEBOUNCE_MS = 300 // 統一為 300ms，避免搜尋延遲過長
 
 // ==================== 模式切換器 ====================
 type LogMode = 'standard' | 'login' | 'email'
 
 const currentLogMode = ref<LogMode>('standard')
-
-const logModeOptions = [
-  { label: '標準 Log', value: 'standard' },
-  { label: '登入記錄', value: 'login' },
-  { label: 'Email 記錄', value: 'email' }
-]
 
 // ==================== Reactive Variables (Declared Early to Avoid TDZ) ====================
 
@@ -932,9 +922,6 @@ const pageSize = ref(100)
 
 // Standard Logs 搜索模式状态
 const standardLogsSearchMode = ref<'frontend' | 'backend'>('frontend')
-
-// 自動後端搜尋狀態（用於顯示「正在自動搜尋後端」提示）
-const autoSearchingBackend = ref(false)
 
 // ==================== LoginLogsView 狀態 (Declared Early to Avoid TDZ) ====================
 const loadingLoginLogs = ref(false)
@@ -965,7 +952,7 @@ const loginLogsSearchMode = ref<'frontend' | 'backend'>('frontend')
 const totalLoginLogsCount = ref<number | null>(null)
 
 // Filter persistence (localStorage)
-const { filters, isLoaded: filtersLoaded } = useFilterPersistence('systemLogs', {
+const { filters } = useFilterPersistence('systemLogs', {
   dateRange: null as [string, string] | null,
   selectedLevel: '',
   selectedUsers: [] as string[],
@@ -1513,9 +1500,6 @@ const contextData = ref<any>(null)
 const loadingEntity = ref(false)
 const expandingId = ref<string | null>(null)
 
-// CSV 匯出
-const exporting = ref(false)
-
 // Permission scope
 const permissionScopeText = computed(() => {
   return '查看範圍: 全系統 (系統管理員)'
@@ -1634,7 +1618,7 @@ const displayedLoginLogs = computed(() => {
           if (context.userEmail) {
             matchUserEmail = context.userEmail.toLowerCase().includes(keyword)
           }
-        } catch (e) {
+        } catch {
           // 解析失败，忽略
         }
       }
@@ -1959,13 +1943,6 @@ const handleResetFilters = () => {
   }
 }
 
-const handleSearchModeChange = () => {
-  // 切換模式時重新載入資料
-  currentPage.value = 1
-  searchKeyword.value = ''
-  loadSystemLogs()
-}
-
 // handleKeywordSearch 已移除 - 改用 debouncedUpdateSearchKeyword
 
 const handlePageSizeChange = (newSize: number) => {
@@ -2048,7 +2025,7 @@ const fetchEntityDetails = async (log: LogEntry) => {
     if (log.relatedEntities) {
       try {
         relatedEntitiesData.value = JSON.parse(log.relatedEntities)
-      } catch (e) {
+      } catch {
         relatedEntitiesData.value = null
       }
     } else {
@@ -2059,7 +2036,7 @@ const fetchEntityDetails = async (log: LogEntry) => {
     if (log.context) {
       try {
         contextData.value = typeof log.context === 'string' ? JSON.parse(log.context) : log.context
-      } catch (e) {
+      } catch {
         contextData.value = null
       }
     } else {
@@ -2076,7 +2053,7 @@ const fetchEntityDetails = async (log: LogEntry) => {
       if (log.context) {
         try {
           contextData.value = typeof log.context === 'string' ? JSON.parse(log.context) : log.context
-        } catch (e) {
+        } catch {
           contextData.value = null
         }
       } else {
@@ -2234,75 +2211,6 @@ const formatFieldValue = (key: string | number, value: unknown): string => {
   return String(value)
 }
 
-// CSV 工具函數 - 優化效能
-const buildCsvRow = (cells: (string | number | undefined)[]): string => {
-  return cells.map(cell => {
-    const cellStr = String(cell ?? '-')
-    // 使用 regex 一次檢查所有特殊字元
-    if (/[,"\n]/.test(cellStr)) {
-      return `"${cellStr.replace(/"/g, '""')}"`
-    }
-    return cellStr
-  }).join(',')
-}
-
-const exportToCsv = async () => {
-  if (displayedLogs.value.length === 0) {
-    ElMessage.warning('沒有可匯出的日志記錄')
-    return
-  }
-
-  exporting.value = true
-
-  try {
-    // 使用 StringBuilder pattern 提升效能
-    const csvLines: string[] = [
-      buildCsvRow(['时间', '级别', '用户', '操作', '实体类型', '函数名', '详情'])
-    ]
-
-    // 單次迴圈處理所有日誌
-    for (const log of displayedLogs.value) {
-      csvLines.push(buildCsvRow([
-        formatTimestamp(log.createdAt),
-        log.level,
-        log.displayName,
-        getActionLabel(log.action || ''),
-        getEntityTypeLabel(log.entityType || ''),
-        log.functionName,
-        log.message
-      ]))
-    }
-
-    // Add UTF-8 BOM for Excel compatibility with Chinese characters
-    const BOM = '\uFEFF'
-    const blob = new Blob([BOM + csvLines.join('\n')], {
-      type: 'text/csv;charset=utf-8;'
-    })
-
-    // Generate filename with date
-    const date = new Date().toISOString().split('T')[0]
-    const filename = `系統日誌_${date}.csv`
-
-    // Create download link and trigger download
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    link.setAttribute('download', filename)
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-
-    ElMessage.success(`已匯出 ${displayedLogs.value.length} 筆日志記錄`)
-  } catch (error: unknown) {
-    console.error('CSV 匯出失敗:', error)
-    ElMessage.error('CSV 匯出失敗：' + getErrorMessage(error))
-  } finally {
-    exporting.value = false
-  }
-}
-
 const handleToggleLoginExpansion = (log: LogEntry) => {
   if (expandedLoginLogId.value === log.logId) {
     expandedLoginLogId.value = null
@@ -2317,7 +2225,7 @@ const getLoginLogContext = (log: LogEntry, field: string) => {
   try {
     const context = typeof log.context === 'string' ? JSON.parse(log.context) : log.context
     return context[field] || '-'
-  } catch (e) {
+  } catch {
     return '-'
   }
 }
@@ -2331,7 +2239,7 @@ const getLoginLogLocation = (log: LogEntry) => {
     const city = context.city || null
 
     return city ? `${country}, ${city}` : country
-  } catch (e) {
+  } catch {
     return '-'
   }
 }
@@ -2341,7 +2249,7 @@ const parseLoginLogContext = (log: LogEntry) => {
 
   try {
     return typeof log.context === 'string' ? JSON.parse(log.context) : log.context
-  } catch (e) {
+  } catch {
     return {}
   }
 }
@@ -2386,7 +2294,7 @@ const parseEmailContext = (log: EmailLog): Record<string, unknown> => {
 
   try {
     return typeof log.emailContext === 'string' ? JSON.parse(log.emailContext) : (log.emailContext as Record<string, unknown>)
-  } catch (e) {
+  } catch {
     return {}
   }
 }

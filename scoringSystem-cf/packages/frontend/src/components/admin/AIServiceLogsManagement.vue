@@ -485,7 +485,6 @@ import type {
   AIServiceLog,
   AIServiceType,
   AIServiceStatus,
-  AIRankingType,
   AIServiceStatisticsResponse
 } from '@repo/shared/types/admin'
 
@@ -511,7 +510,6 @@ const BATCH_SIZE = 50
 const totalCount = ref<number>(0)
 const currentOffset = ref<number>(0)
 const hasMore = computed(() => logs.value.length < totalCount.value)
-const autoSearchingBackend = ref<boolean>(false)
 
 // Expanded row state
 const expandedLogId = ref<string | null>(null)
@@ -523,7 +521,7 @@ const expandedLogDetails = ref<{
 const loadingDetail = ref<boolean>(false)
 
 // Filters (persisted to localStorage)
-const { filters, isLoaded: filtersLoaded } = useFilterPersistence('aiServiceLogsManagement', {
+const { filters } = useFilterPersistence('aiServiceLogsManagement', {
   searchText: '',
   serviceType: 'all' as string,
   statusFilter: 'all' as string,
@@ -683,20 +681,6 @@ const searchWithBackendFilters = async () => {
     loading.value = false
   }
 }
-
-// 🆕 直接監聽 filter 變化（取代原本的間接觸發）
-const debouncedFilterChange = useDebounceFn(async () => {
-  // 正在載入中，不要再觸發
-  if (loading.value || loadingMore.value) return
-
-  // 重設 displayCount
-  displayCount.value = 50
-
-  // 🆕 有 filter 時，直接觸發後端搜尋
-  if (hasActiveFilters.value) {
-    await searchWithBackendFilters()
-  }
-}, 300)
 
 // 追蹤是否已初始化完成（用於避免 watch 在掛載時觸發）
 const isFilterWatchReady = ref(false)

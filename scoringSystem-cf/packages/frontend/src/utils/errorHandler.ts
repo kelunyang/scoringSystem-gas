@@ -4,7 +4,7 @@
  */
 
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
-import type { ErrorHandlerOptions, ErrorLogEntry } from '@/types/utils'
+import type { ErrorLogEntry } from '@/types/utils'
 import { getUserPreferences, setUserPreference } from './userPreferences'
 
 interface ApiError {

@@ -454,7 +454,7 @@ export async function handlePasswordReset(
   userEmail: string,
   selectedProjectIds: string[],
   allParticipated: boolean,
-  turnstileToken?: string
+  _turnstileToken?: string
 ): Promise<ApiResponse> {
   try {
     // Validate inputs

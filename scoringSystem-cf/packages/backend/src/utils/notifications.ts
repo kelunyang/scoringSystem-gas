@@ -229,48 +229,6 @@ export async function createBatchNotifications(
 }
 
 /**
- * 推送通知到用戶的 WebSocket 連接
- *
- * @param env - Cloudflare 環境綁定
- * @param userEmail - 用戶郵箱
- * @param notification - 通知數據
- */
-async function pushNotificationToUser(
-  env: Env,
-  userEmail: string,
-  notification: any
-): Promise<void> {
-  try {
-    // 獲取用戶 ID
-    const user = await env.DB.prepare(`
-      SELECT userId FROM users WHERE userEmail = ?
-    `).bind(userEmail).first();
-
-    if (!user) {
-      console.warn(`[pushNotificationToUser] User not found: ${userEmail}`);
-      return;
-    }
-
-    // 獲取用戶的 NotificationHub Durable Object
-    const id = env.NOTIFICATION_HUB.idFromName(user.userId as string);
-    const stub = env.NOTIFICATION_HUB.get(id);
-
-    // 廣播通知消息
-    await stub.fetch(new Request('https://internal/broadcast', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'notification',
-        data: notification
-      })
-    }));
-  } catch (error) {
-    // 推送失敗不應影響通知創建
-    console.error('[pushNotificationToUser] Error:', error);
-  }
-}
-
-/**
  * 獲取群組所有成員的郵箱
  *
  * @param env - Cloudflare 環境綁定
@@ -307,7 +265,7 @@ export async function getGroupMemberEmails(
 export async function getStageMemberEmails(
   env: Env,
   projectId: string,
-  stageId: string
+  _stageId: string
 ): Promise<string[]> {
   try {
     const result = await env.DB.prepare(`

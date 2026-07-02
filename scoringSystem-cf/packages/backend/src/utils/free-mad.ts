@@ -387,7 +387,7 @@ export function parseRound2Response(
       changed: typeof parsed.changed === 'boolean' ? parsed.changed : false,
       critique: typeof parsed.critique === 'string' ? parsed.critique : undefined
     };
-  } catch (error) {
+  } catch {
     // If parsing fails, assume no change
     return {
       providerId,

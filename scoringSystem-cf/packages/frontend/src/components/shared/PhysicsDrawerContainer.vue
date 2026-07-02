@@ -92,7 +92,7 @@
  */
 
 import { ref, computed, watch } from 'vue'
-import { useDrawerPhysics, type DrawerPhysicsOptions } from '@/composables/useDrawerPhysics'
+import { useDrawerPhysics } from '@/composables/useDrawerPhysics'
 
 export interface Props {
   modelValue: boolean              // v-model for open/close state
@@ -162,11 +162,6 @@ const maxHeightPx = computed(() => {
 })
 
 // === 初始化物理引擎 ===
-const modelValueRef = computed({
-  get: () => props.modelValue,
-  set: (v) => emit('update:modelValue', v)
-})
-
 const physics = useDrawerPhysics({
   maxHeight: maxHeightPx.value,
   bounce: props.bounce,
@@ -288,7 +283,7 @@ watch(handleRef, (el) => {
 }, { immediate: true })
 
 // === 監聯 maxHeight 變化 ===
-watch(maxHeightPx, (newValue) => {
+watch(maxHeightPx, (_newValue) => {
   // 如果抽屜已開啟且高度變化，重新設置
   if (physics.isOpen.value) {
     physics.open()

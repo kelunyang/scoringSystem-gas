@@ -465,7 +465,7 @@ export default {
           avatarOptions: this.user?.avatarOptions || {}
         }
       },
-      set(value) {
+      set(_value) {
         // This will be handled by the @change event
       }
     },

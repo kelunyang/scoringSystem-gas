@@ -2,14 +2,11 @@
  * @fileoverview Vue 组件 Props 和 Emits 类型定义
  */
 
-// @ts-nocheck - This file exports types that may not all be used
 import type {
   Project,
   Stage,
   Submission,
-  Group,
   User,
-  Comment,
   Notification
 } from './models'
 

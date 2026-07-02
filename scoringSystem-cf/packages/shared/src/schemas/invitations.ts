@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod';
-import { EmailSchema, TurnstileTokenSchema, SessionIdSchema } from './common';
+import { EmailSchema, TurnstileTokenSchema } from './common';
 
 /**
  * Generate invitation code request schema

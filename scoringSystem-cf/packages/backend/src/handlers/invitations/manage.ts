@@ -298,7 +298,7 @@ export async function deleteInvitation(
  * automatically calculates 'expired' status based on expiryTime.
  * Kept for backward compatibility.
  */
-export async function cleanupExpiredInvitations(env: Env): Promise<number> {
+export async function cleanupExpiredInvitations(_env: Env): Promise<number> {
   try {
     // No-op: Status is auto-calculated by VIEW
     // Expired invitations are automatically shown as 'expired' in queries

@@ -5,8 +5,6 @@
  * Used for Passkey authentication (biometric/hardware key 2FA)
  */
 
-import { constantTimeCompare } from '@repo/shared/utils/secure-compare';
-
 // ─── Base64URL Encoding/Decoding (RFC 4648 Section 5) ───
 
 /**
@@ -112,24 +110,27 @@ export function decodeCbor(buffer: Uint8Array): any {
       case 1: // Negative integer
         return -1 - readLength(additionalInfo);
 
-      case 2: // Byte string
+      case 2: { // Byte string
         const byteLength = readLength(additionalInfo);
         return readBytes(byteLength);
+      }
 
-      case 3: // Text string
+      case 3: { // Text string
         const textLength = readLength(additionalInfo);
         const textBytes = readBytes(textLength);
         return new TextDecoder().decode(textBytes);
+      }
 
-      case 4: // Array
+      case 4: { // Array
         const arrayLength = readLength(additionalInfo);
         const array: any[] = [];
         for (let i = 0; i < arrayLength; i++) {
           array.push(decode());
         }
         return array;
+      }
 
-      case 5: // Map
+      case 5: { // Map
         const mapLength = readLength(additionalInfo);
         const map: Record<string, any> = {};
         for (let i = 0; i < mapLength; i++) {
@@ -138,6 +139,7 @@ export function decodeCbor(buffer: Uint8Array): any {
           map[String(key)] = value;
         }
         return map;
+      }
 
       case 7: // Special (true, false, null, etc.)
         if (additionalInfo === 20) return false;
@@ -332,19 +334,9 @@ function derToRaw(derSignature: Uint8Array): Uint8Array {
   }
 
   // Parse R
-  if (derSignature[offset++] !== 0x02) {
+  if (derSignature[offset] !== 0x02) {
     throw new Error('Invalid DER signature: expected 0x02 for R');
   }
-  let rLength = derSignature[offset++];
-  let rStart = offset;
-  // Skip leading zero if present (used for positive number representation)
-  if (derSignature[rStart] === 0x00 && rLength > 32) {
-    rStart++;
-    rLength--;
-  }
-  const r = derSignature.slice(rStart, rStart + Math.min(rLength, 32));
-  offset = rStart + rLength - (derSignature[rStart - 1] === 0x00 ? 0 : 0);
-  offset = rStart - 1 + derSignature[rStart - 1] + (derSignature[rStart - 2] === 0x00 ? 1 : 0);
 
   // Re-parse from scratch for robustness
   offset = 2;

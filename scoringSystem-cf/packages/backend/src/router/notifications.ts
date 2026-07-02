@@ -30,20 +30,9 @@ import {
   NotificationFilters
 } from '../handlers/notifications/manage';
 import {
-  listAllNotifications,
-  sendSingleNotification,
-  sendBatchNotifications,
-  deleteNotificationAdmin,
-  getNotificationStatistics
-} from '../handlers/notifications/admin';
-import {
   GetUserNotificationsRequestSchema,
   MarkNotificationAsReadRequestSchema,
-  DeleteNotificationRequestSchema,
-  AdminListNotificationsRequestSchema,
-  AdminSendNotificationRequestSchema,
-  AdminSendBatchNotificationsRequestSchema,
-  AdminDeleteNotificationRequestSchema
+  DeleteNotificationRequestSchema
 } from '@repo/shared/schemas/notifications';
 
 

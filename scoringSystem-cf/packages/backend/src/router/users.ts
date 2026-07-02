@@ -22,15 +22,11 @@ import {
   updateUserProfile,
   updateUserAvatar,
   regenerateAvatarSeed,
-  generateAvatarData,
-  deactivateUser
+  generateAvatarData
 } from '../handlers/users/profile';
 import {
   searchUsers
 } from '../handlers/users/search';
-import {
-  getUserStats
-} from '../handlers/users/projects';
 import {
   getUserDisplayNames
 } from '../handlers/users/display-names';

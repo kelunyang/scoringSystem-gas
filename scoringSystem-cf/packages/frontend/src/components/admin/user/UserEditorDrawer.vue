@@ -288,7 +288,7 @@
 
 <script lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 import AvatarEditor from '@/components/shared/AvatarEditor.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'

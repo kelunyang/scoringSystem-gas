@@ -15,14 +15,6 @@ const RATE_LIMIT_PREFIX = 'rate_limit:email:';
 const AI_RATE_LIMIT_PREFIX = 'rate_limit:ai:';
 
 /**
- * Rate limit configuration
- */
-interface RateLimitConfig {
-  maxRequestsPerHour: number;
-  windowMs: number;
-}
-
-/**
  * Get rate limit info from KV
  */
 async function getRateLimitInfo(

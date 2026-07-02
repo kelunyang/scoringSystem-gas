@@ -398,7 +398,7 @@ const emit = defineEmits<{
 // ========== Composables ==========
 
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
-const { addAlert, clearAlerts, error: showAlertError, info: showAlertInfo } = useDrawerAlerts()
+const { clearAlerts, error: showAlertError, info: showAlertInfo } = useDrawerAlerts()
 const websocket = useWebSocketStore()
 
 // ========== State ==========

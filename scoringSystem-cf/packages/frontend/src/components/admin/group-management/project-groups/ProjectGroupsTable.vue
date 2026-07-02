@@ -90,7 +90,7 @@ const props = defineProps<{
   pendingRoleChanges?: Map<string, 'member' | 'leader'>
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   'toggle-all': []
   'toggle-expansion': [group: ProjectGroup]
   'toggle-selection': [groupId: string]

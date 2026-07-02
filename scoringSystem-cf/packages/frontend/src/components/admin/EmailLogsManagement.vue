@@ -520,11 +520,10 @@ const resending = ref<boolean>(false)
 const totalCount = ref<number>(0)
 const currentOffset = ref<number>(0)
 const hasMore = computed(() => logs.value.length < totalCount.value)
-const autoSearchingBackend = ref<boolean>(false)
 
 // Filters
 // Filter persistence (localStorage)
-const { filters, isLoaded: filtersLoaded } = useFilterPersistence('emailLogsManagement', {
+const { filters } = useFilterPersistence('emailLogsManagement', {
   searchText: '',
   triggerFilter: 'all',
   statusFilter: 'all',
@@ -548,10 +547,6 @@ const statusFilter = computed({
 const dateRange = computed({
   get: () => filters.value.dateRange,
   set: (val) => { filters.value.dateRange = val }
-})
-const displayLimit = computed({
-  get: () => filters.value.displayLimit,
-  set: (val) => { filters.value.displayLimit = val }
 })
 
 // 計算啟用的過濾器數量
@@ -708,20 +703,6 @@ watch(selectedLogs, (newVal: EmailLog[]) => {
   }
 })
 
-// 🆕 直接監聽 filter 變化，觸發後端搜尋
-const debouncedFilterChange = useDebounceFn(() => {
-  // 正在載入中，不要再觸發
-  if (loading.value || loadingMore.value) return
-
-  // 重設 displayCount
-  displayCount.value = 50
-
-  // 如果有 filter，直接觸發後端搜尋
-  if (hasActiveFilters.value) {
-    console.log('📧 [Filter Change] Triggering backend search with filters...')
-    loadEmailLogs(false, true) // withFilters = true
-  }
-}, 300)
 
 // 追蹤是否已初始化完成（用於避免 watch 在掛載時觸發）
 const isFilterWatchReady = ref(false)
@@ -1091,20 +1072,6 @@ const getTriggerText = (trigger: string): string => {
     'resend': '重送'
   }
   return triggerMap[trigger] || trigger
-}
-
-const getTriggerClass = (trigger: string): string => {
-  const classMap: Record<string, string> = {
-    'notification_patrol': 'trigger-notification',
-    'invitation': 'trigger-invitation',
-    'password_reset': 'trigger-password',
-    'password_reset_2fa': 'trigger-password',
-    'account_locked': 'trigger-security',
-    'system_announcement': 'trigger-announcement',
-    'manual_admin': 'trigger-admin',
-    'resend': 'trigger-resend'
-  }
-  return classMap[trigger] || 'trigger-default'
 }
 
 const getTriggerTagType = (trigger: string): 'success' | 'warning' | 'info' | 'danger' | 'primary' => {

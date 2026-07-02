@@ -3,7 +3,7 @@
  * Centralized state management for breadcrumb navigation and document title
  */
 
-import type { Ref, ComputedRef } from 'vue'
+import type { ComputedRef } from 'vue'
 import { ref, computed, watchEffect } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
 

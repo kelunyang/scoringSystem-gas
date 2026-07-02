@@ -96,23 +96,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, inject, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, inject, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { usePermissions } from '@/composables/usePermissions'
-import { useFeaturePermission } from '@/composables/usePermissionConfig'
 import { useSystemStats } from '@/composables/admin/useSystemStats'
-import EmptyState from '@/components/shared/EmptyState.vue'
 import SystemStatsCard from '@/components/admin/system-settings/SystemStatsCard.vue'
 import ConfigPanel from '@/components/admin/system-settings/ConfigPanel.vue'
 import AIProvidersSettings from '@/components/admin/AIProvidersSettings.vue'
 import { systemConfigCategories } from '@/config/admin-settings-config'
-import { rpcClient } from '@/utils/rpc-client'
 import { adminApi } from '@/api/admin'
 import {
   useUpdateProperties,
   useResetProperties,
-  useTestSmtpConnection,
-  useTestCloudflareEmail
+  useTestSmtpConnection
 } from '@/composables/admin/useSystemProperties'
 import type { PropertiesConfig } from '@/types/admin-properties'
 
@@ -120,7 +116,6 @@ import type { PropertiesConfig } from '@/types/admin-properties'
 const updatePropertiesMutation = useUpdateProperties()
 const resetPropertiesMutation = useResetProperties()
 const testSmtpMutation = useTestSmtpConnection()
-const testCfEmailMutation = useTestCloudflareEmail()
 
 // ============================================================================
 // Vue 3 Composition API with TypeScript
@@ -132,7 +127,6 @@ const testCfEmailMutation = useTestCloudflareEmail()
 const {
   systemStats,
   invitationStats,
-  logStats: logStatsFromComposable,
   isLoading: statsLoading,
   refreshAll: refreshAllStats
 } = useSystemStats()
@@ -141,9 +135,8 @@ const {
 // Register refresh function with parent SystemAdmin
 const registerRefresh = inject<(fn: (() => void) | null) => void>('registerRefresh', () => {})
 
-const { hasPermission } = usePermissions()
-const saving = ref<boolean>(false)
-const cleaning = ref<boolean>(false)
+// (call kept for its query-subscription side effect)
+usePermissions()
 
 // PropertiesService 配置相關
 // 不設初始值，等待從 API 載入
@@ -157,45 +150,8 @@ const loadingProperties = ref<boolean>(false)
 const savingProperties = ref<boolean>(false)
 const resettingProperties = ref<boolean>(false)
 const testingSmtp = ref<boolean>(false)
-const testingCfEmail = ref<boolean>(false)
 
 
-
-const formatTime = (timestamp: number | null | undefined): string => {
-  if (!timestamp) return '-'
-  return new Date(timestamp).toLocaleString('zh-TW')
-}
-
-const getActionClass = (action: string): string => {
-  if (action.includes('created') || action.includes('registered')) return 'action-create'
-  if (action.includes('updated') || action.includes('modified')) return 'action-update'
-  if (action.includes('deleted') || action.includes('removed')) return 'action-delete'
-  if (action.includes('login') || action.includes('logout')) return 'action-auth'
-  return 'action-other'
-}
-
-const getActionText = (action: string): string => {
-  const actionMap: Record<string, string> = {
-    'user_registered': '用戶註冊',
-    'user_login': '用戶登入',
-    'user_logout': '用戶登出',
-    'project_created': '創建專案',
-    'project_updated': '更新專案',
-    'project_archived': '封存專案',
-    'group_created': '創建群組',
-    'group_updated': '更新群組',
-    'group_deleted': '刪除群組',
-    'user_added_to_group': '新增群組成員',
-    'user_removed_from_group': '移除群組成員',
-    'invitation_generated': '生成邀請碼',
-    'invitation_used': '使用邀請碼',
-    'password_reset_by_admin': '管理員重設密碼',
-    'tag_created': '建立標籤',
-    'tag_updated': '更新標籤',
-    'tag_deleted': '刪除標籤'
-  }
-  return actionMap[action] || action
-}
 
 
 /**
@@ -216,46 +172,10 @@ const loadAllStats = async (): Promise<void> => {
 
 
 
-const cleanupInvitations = async (): Promise<void> => {
-  if (!confirm('確定要清理過期的邀請碼嗎？')) {
-    return
-  }
-
-  try {
-    cleaning.value = true
-
-    // TODO: Backend endpoint /invitations/cleanup-expired does not exist yet
-    // Need to implement this endpoint in the backend first
-    ElMessage.warning('清理功能暫時無法使用，後端 API 尚未實作')
-    return
-
-    // const httpResponse = await rpcClient.invitations['cleanup-expired'].$post({
-    //   json: {}
-    // })
-    // const result = await httpResponse.json()
-
-    // if (result.success) {
-    //   ElMessage.success(`已清理 ${result.data?.cleanedCount || 0} 個過期邀請碼`)
-    //   await refreshAllStats()
-    // } else {
-    //   ElMessage.error('清理失敗: ' + (result.error?.message || '未知錯誤'))
-    // }
-  } catch (error) {
-    console.error('Error cleaning invitations:', error)
-    ElMessage.error('清理失敗')
-  } finally {
-    cleaning.value = false
-  }
-}
 
 
 // 根據 functionName 判斷日誌類型
 // Removed apiCall method - now using centralized apiClient
-
-const formatNumber = (value: number | string | null | undefined): string => {
-  if (!value && value !== 0) return '0'
-  return Number(value).toLocaleString('zh-TW')
-}
 
 /**
  * 刷新設定頁面所有數據
@@ -369,7 +289,7 @@ const confirmResetProperties = async (): Promise<void> => {
     )
 
     await resetProperties()
-  } catch (error) {
+  } catch {
     // User cancelled
   }
 }
@@ -421,28 +341,6 @@ const testSmtpConnection = async (): Promise<void> => {
   }
 }
 
-/**
- * 測試 Cloudflare Email Service 連接
- * 會寄送測試郵件到當前管理員的郵箱
- */
-const testCloudflareEmail = async (): Promise<void> => {
-  // Validation - check if EMAIL_FROM_EMAIL is configured
-  if (!propertiesConfig.value.EMAIL_FROM_EMAIL) {
-    ElMessage.warning('請先設定寄件者郵箱 (EMAIL_FROM_EMAIL)')
-    return
-  }
-
-  testingCfEmail.value = true
-  try {
-    await testCfEmailMutation.mutateAsync()
-    // Success message is handled by the mutation's onSuccess
-  } catch (error) {
-    console.error('測試 Cloudflare Email 失敗:', error)
-    // Error message is handled by the mutation's onError
-  } finally {
-    testingCfEmail.value = false
-  }
-}
 
 onMounted(() => {
   // 統計數據由 TanStack Query composable 自動載入

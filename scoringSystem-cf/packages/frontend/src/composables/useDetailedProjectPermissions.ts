@@ -32,7 +32,7 @@ import type { Group, Project, AuthUser } from '@/types'
  * @returns {Object} Detailed permissions object
  */
 export function useDetailedProjectPermissions({ userData, project }: { userData: Ref<AuthUser>; project: Ref<Project> }) {
-  const { hasAnyPermission } = usePermissions()
+  usePermissions()
 
   /**
    * Comprehensive permission calculation

@@ -172,7 +172,6 @@ export async function listAnnouncements(
     const totalCount = rows.length > 0 ? rows[0].totalCount : 0;
 
     // Process results
-    const now = Date.now();
     const announcements: AnnouncementWithStatus[] = rows.map(row => ({
       announcementId: row.announcementId,
       title: row.title,

@@ -970,7 +970,7 @@ export default {
 
     // ==================== Tooltip ====================
 
-    const showTooltip = (event, stage, barType = 'solid') => {
+    const showTooltip = (event, stage, _barType = 'solid') => {
       // 拖曳模式下不顯示 tooltip
       if (props.enableDrag) return
 
@@ -1141,12 +1141,10 @@ export default {
 
       // 實現彈性邊界行為
       if (newStart.valueOf() < fullStartTime) {
-        const overshoot = fullStartTime - newStart.valueOf()
         newStart = dayjs(fullStartTime)
         newEnd = dayjs(newStart.valueOf() + viewportDuration)
         velocity.value *= 0.5 // 邊界阻尼
       } else if (newEnd.valueOf() > fullEndTime) {
-        const overshoot = newEnd.valueOf() - fullEndTime
         newEnd = dayjs(fullEndTime)
         newStart = dayjs(newEnd.valueOf() - viewportDuration)
         velocity.value *= 0.5 // 邊界阻尼

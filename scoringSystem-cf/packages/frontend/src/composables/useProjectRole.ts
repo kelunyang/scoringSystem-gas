@@ -10,7 +10,7 @@
  * project-specific role checking.
  */
 
-import { ref, computed, type Ref } from 'vue'
+import { computed, type Ref } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { rpcClient } from '@/utils/rpc-client'
 import { useCurrentUser } from './useAuth'

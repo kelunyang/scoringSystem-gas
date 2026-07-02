@@ -250,7 +250,7 @@ export async function updateUserStatus(
     const previousStatus = user.status;
 
     // Get admin user ID for logging
-    const admin = await env.DB.prepare(`
+    await env.DB.prepare(`
       SELECT userId FROM users WHERE userEmail = ?
     `).bind(adminEmail).first();
 
@@ -389,7 +389,7 @@ export async function updateUserProfile(
     params.push(userData.userEmail);
 
     // Get admin user ID for logging
-    const admin = await env.DB.prepare(`
+    await env.DB.prepare(`
       SELECT userId FROM users WHERE userEmail = ?
     `).bind(adminEmail).first();
 
@@ -658,8 +658,8 @@ export async function batchUpdateUserStatus(
 export async function batchResetPassword(
   env: Env,
   userEmails: string[],
-  newPassword: string,
-  adminEmail: string
+  _newPassword: string,
+  _adminEmail: string
 ): Promise<Response> {
   try {
     if (!userEmails || userEmails.length === 0) {
@@ -932,8 +932,8 @@ async function sendAccountUnlockedEmail(
   displayName: string,
   unlockReason: string,
   unlockedBy: string,
-  previousLockCount: number,
-  resetLockCount: boolean
+  _previousLockCount: number,
+  _resetLockCount: boolean
 ): Promise<void> {
   try {
     // Queue the email for asynchronous processing

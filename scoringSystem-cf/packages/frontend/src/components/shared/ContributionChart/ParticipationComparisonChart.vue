@@ -16,7 +16,6 @@ import type { Ref } from 'vue'
 import * as d3 from 'd3'
 import { useD3Chart } from '@/composables/useD3Chart'
 import { useAvatar } from '@/composables/useAvatar'
-import EmptyState from '@/components/shared/EmptyState.vue'
 
 interface ParticipationChange {
   email: string
@@ -64,7 +63,7 @@ function getMemberInfo(email: string): GroupMember {
 }
 
 // 調色盤生成：為每個成員分配獨特顏色
-function getMemberColor(index: number, total: number): string {
+function getMemberColor(index: number, _total: number): string {
       const colors = [
         '#409eff', // 藍色
         '#67c23a', // 綠色
@@ -126,7 +125,6 @@ function renderChart(): void {
         .attr('height', height)
 
       const chartWidth = width - margin.left - margin.right
-      const chartHeight = height - margin.top - margin.bottom
 
       // 創建主圖表組
       const chart = svg.append('g')
@@ -177,7 +175,7 @@ function renderChart(): void {
       const barGap = 60
 
       // 繪製舊版本堆疊條形圖
-      const oldBars = chart.selectAll('.bar-old-segment')
+      chart.selectAll('.bar-old-segment')
         .data(oldStackData)
         .enter()
         .append('rect')
@@ -202,7 +200,7 @@ function renderChart(): void {
         .on('mouseout', () => tooltip.style('opacity', 0))
 
       // 繪製新版本堆疊條形圖（根據變化調整顏色亮度）
-      const newBars = chart.selectAll('.bar-new-segment')
+      chart.selectAll('.bar-new-segment')
         .data(newStackData)
         .enter()
         .append('rect')

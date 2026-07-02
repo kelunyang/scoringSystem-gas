@@ -97,7 +97,7 @@
 import { ref, computed } from 'vue'
 import { Lock, Unlock, View } from '@element-plus/icons-vue'
 import type { User } from '@repo/shared'
-import { getAvatarUrl, generateInitialsAvatar } from '@/utils/avatar'
+import { getAvatarUrl } from '@/utils/avatar'
 
 export interface Props {
   user: User

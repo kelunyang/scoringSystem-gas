@@ -240,7 +240,7 @@ const currentMode = computed({
 
     return ''
   },
-  set: (value) => {
+  set: (_value) => {
     // Navigation handled by handleModeChange
   }
 })

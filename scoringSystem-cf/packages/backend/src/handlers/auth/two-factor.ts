@@ -5,7 +5,6 @@
  */
 
 import { Env } from '../../types';
-import { getSystemTitle } from '../../utils/email';
 import { logGlobalOperation } from '../../utils/logging';
 import { queueTwoFactorCodeEmail } from '../../queues/email-producer';
 import { generateVerificationCode as generateCode } from '@repo/shared/utils/code-generator';
@@ -269,7 +268,7 @@ export async function sendVerificationCodeEmail(
   env: Env,
   userEmail: string,
   verificationCode: string,
-  context: 'login' | 'password_reset' = 'login'
+  _context: 'login' | 'password_reset' = 'login'
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // Validate email address

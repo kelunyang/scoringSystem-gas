@@ -19,7 +19,7 @@
  */
 
 import { computed, type ComputedRef, type Ref } from 'vue'
-import { useQuery, useQueries, type UseQueryReturnType } from '@tanstack/vue-query'
+import { useQuery, type UseQueryReturnType } from '@tanstack/vue-query'
 import { adminApi } from '@/api/admin'
 import { rpcClient } from '@/utils/rpc-client'
 import type { LogStatistics } from '@repo/shared/types/admin'

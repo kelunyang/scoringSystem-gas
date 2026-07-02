@@ -80,19 +80,6 @@ function isGeminiNativeAPI(baseUrl: string): boolean {
 }
 
 /**
- * Check if provider is Gemini (any variant - native or OpenAI-compatible)
- *
- * @param baseUrl - Provider's base URL
- * @returns true if provider is Gemini
- */
-function isGeminiProvider(baseUrl: string): boolean {
-  const lowerUrl = baseUrl.toLowerCase();
-  return lowerUrl.includes('gemini') ||
-         lowerUrl.includes('generativelanguage') ||
-         lowerUrl.includes('googleapis.com/v1beta/openai');
-}
-
-/**
  * Check if provider is DeepSeek (supports reasoning_content)
  *
  * @param baseUrl - Provider's base URL
@@ -245,7 +232,7 @@ export async function getAIProviders(kv: KVNamespace): Promise<AIProvider[]> {
  */
 export async function getAIProvidersPublic(kv: KVNamespace): Promise<AIProviderPublic[]> {
   const providers = await getAIProviders(kv);
-  return providers.map(({ apiKey, ...rest }) => rest);
+  return providers.map(({ apiKey: _apiKey, ...rest }) => rest);
 }
 
 /**
@@ -706,12 +693,12 @@ async function callGeminiNativeAPI(
       };
     } catch (parseError) {
       console.error('Failed to parse Gemini response:', content);
-      throw new Error(`Failed to parse Gemini response: ${parseError}`);
+      throw new Error(`Failed to parse Gemini response: ${parseError}`, { cause: parseError });
     }
   } catch (error) {
     // Handle abort/timeout
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`Gemini API timeout after ${timeoutMs}ms`);
+      throw new Error(`Gemini API timeout after ${timeoutMs}ms`, { cause: error });
     }
     throw error;
   } finally {
@@ -818,7 +805,7 @@ async function callAIProviderStreaming(
             if (delta?.content) {
               content += delta.content;
             }
-          } catch (parseError) {
+          } catch {
             // Skip malformed JSON chunks (can happen with partial data)
             console.warn('Failed to parse SSE chunk:', trimmedLine);
           }
@@ -842,12 +829,12 @@ async function callAIProviderStreaming(
       };
     } catch (parseError) {
       console.error('Failed to parse AI streaming response:', content);
-      throw new Error(`Failed to parse AI response: ${parseError}`);
+      throw new Error(`Failed to parse AI response: ${parseError}`, { cause: parseError });
     }
   } catch (error) {
     // Handle abort/timeout
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`AI API timeout after ${timeoutMs}ms`);
+      throw new Error(`AI API timeout after ${timeoutMs}ms`, { cause: error });
     }
     throw error;
   } finally {
@@ -959,12 +946,12 @@ export async function callAIProvider(
       };
     } catch (parseError) {
       console.error('Failed to parse AI response:', content);
-      throw new Error(`Failed to parse AI response: ${parseError}`);
+      throw new Error(`Failed to parse AI response: ${parseError}`, { cause: parseError });
     }
   } catch (error) {
     // Handle abort/timeout
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`AI API timeout after ${effectiveTimeout}ms`);
+      throw new Error(`AI API timeout after ${effectiveTimeout}ms`, { cause: error });
     }
     throw error;
   } finally {

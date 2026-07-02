@@ -18,7 +18,6 @@
 import { fetchWithAuth, type ApiResponse } from '@/utils/api-helpers'
 import type {
   // User Management
-  User,
   UserListRequest,
   UserListResponse,
   UpdateUserStatusRequest,
@@ -35,7 +34,6 @@ import type {
   ProjectGroupMembership,
 
   // Global Groups
-  GlobalGroup,
   GlobalGroupListRequest,
   GlobalGroupListResponse,
   GlobalGroupMembersResponse,
@@ -53,8 +51,6 @@ import type {
   // System
   SystemStats,
   LogStatistics,
-  LogEntry,
-  LogFilterOptions,
   SystemLogsRequest,
   SystemLogsResponse,
   EntityDetailsRequest,
@@ -88,10 +84,8 @@ import type {
 
   // System Properties
   SystemProperty,
-  UpdatePropertyRequest,
   UpdatePropertiesRequest,
   UpdatePropertiesResponse,
-  ResetPropertyRequest,
 
   // SMTP
   SmtpConfig,

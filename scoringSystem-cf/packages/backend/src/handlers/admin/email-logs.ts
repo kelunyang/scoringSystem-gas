@@ -39,10 +39,6 @@ interface EmailLogFilters {
 /**
  * Database result types
  */
-interface CountResult {
-  total: number;
-}
-
 interface AggregatedStatsResult {
   total: number;
   sent: number;
@@ -59,13 +55,6 @@ interface DateStatsResult {
   date: string;
   count: number;
   status: string;
-}
-
-/**
- * Permission check result
- */
-interface PermissionCheckResult {
-  hasPermission: number;
 }
 
 /**
@@ -225,7 +214,7 @@ export async function getEmailLogs(
     const totalCount = logs.length > 0 ? logs[0].totalCount : 0;
 
     // Remove totalCount from each log entry
-    const cleanLogs = logs.map(({ totalCount, ...log }) => log as EmailLog);
+    const cleanLogs = logs.map(({ totalCount: _totalCount, ...log }) => log as EmailLog);
 
     return successResponse({
       logs: cleanLogs,

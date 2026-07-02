@@ -10,7 +10,7 @@
     <transition-group name="alert-list" tag="div" class="alert-list">
       <!-- 預設只顯示最新一個，展開後顯示所有（最多 10 個） -->
       <div
-        v-for="(alert, index) in displayedAlerts"
+        v-for="alert in displayedAlerts"
         :key="alert.id"
         class="drawer-alert-item"
         :class="`drawer-alert-item--${alert.type}`"

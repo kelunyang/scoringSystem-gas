@@ -141,7 +141,7 @@ export class NotificationHub {
     let payload: SessionPayload;
     try {
       payload = await verifyToken(token, this.env.JWT_SECRET);
-    } catch (error) {
+    } catch {
       return new Response('Invalid or expired token', { status: 401 });
     }
 

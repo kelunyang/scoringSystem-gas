@@ -4,9 +4,9 @@
  */
 
 import type { Context, MiddlewareHandler } from 'hono';
-import type { Env, AuthUser, HonoVariables, SudoTargetUser } from '../types';
+import type { Env, AuthUser, HonoVariables } from '../types';
 import { verifyToken } from '../handlers/auth/jwt';
-import { errorResponse, ERROR_CODES, jsonResponse } from '../utils/response';
+import { errorResponse, ERROR_CODES } from '../utils/response';
 import { processSudoHeaders } from './sudo';
 import { createSudoSafeDB } from '../utils/sudo-db-proxy';
 
@@ -71,7 +71,7 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: HonoV
     let payload;
     try {
       payload = await verifyToken(sessionId, c.env.JWT_SECRET);
-    } catch (error) {
+    } catch {
       return errorResponse(ERROR_CODES.INVALID_SESSION, 'Invalid or expired session');
     }
 

@@ -155,7 +155,7 @@ export function isValidJson(value: string): boolean {
 export function prettyJson(obj: any, indent: number = 2): string {
   try {
     return JSON.stringify(obj, null, indent);
-  } catch (error) {
+  } catch {
     return String(obj);
   }
 }

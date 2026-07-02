@@ -15,7 +15,7 @@
  * }
  */
 
-import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
+import { ref, computed, watch, type Ref } from 'vue'
 import { useAuth } from './useAuth'
 import type { AIQueryHistoryItem } from '@repo/shared'
 

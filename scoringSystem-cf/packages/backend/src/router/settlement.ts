@@ -20,7 +20,6 @@ import {
   getReversePreview,
   getSettlementHistory,
   getSettlementDetails,
-  getSettlementTransactions,
   getStageSettlementRankings,
   getCommentSettlementRankings
 } from '../handlers/settlement/manage';

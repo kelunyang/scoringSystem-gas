@@ -89,7 +89,7 @@ export function useAvatar(): AvatarReturn {
       if (typeof member.avatarOptions === 'string') {
         try {
           options = JSON.parse(member.avatarOptions)
-        } catch (e) {
+        } catch {
           console.warn('Failed to parse avatarOptions:', member.avatarOptions)
           options = {}
         }
@@ -190,7 +190,7 @@ export function useAvatar(): AvatarReturn {
       if (typeof vote.voterAvatarOptions === 'string') {
         try {
           options = JSON.parse(vote.voterAvatarOptions)
-        } catch (e) {
+        } catch {
           console.warn('Failed to parse voterAvatarOptions:', vote.voterAvatarOptions)
           options = {}
         }

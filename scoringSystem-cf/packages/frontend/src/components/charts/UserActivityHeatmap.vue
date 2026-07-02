@@ -99,11 +99,11 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, shallowRef, nextTick, markRaw } from 'vue'
-import type { Ref, ComputedRef, ShallowRef } from 'vue'
+import type { Ref, ShallowRef } from 'vue'
 import * as d3 from 'd3'
 import { useD3Chart } from '@/composables/useD3Chart'
 import { useActivityData } from '@/composables/useActivityData'
-import type { ActivityData, ActivityStats } from '@/composables/useActivityData'
+import type { ActivityStats } from '@/composables/useActivityData'
 import {
   calculateCompactDateRange,
   calculateFullDateRange,
@@ -113,7 +113,6 @@ import {
 } from '@/composables/useDateRange'
 import { formatDateRange as formatRange } from '@/utils/date'
 import { CHART_CONFIG } from '@/constants/chartConfig'
-import EmptyState from '@/components/shared/EmptyState.vue'
 
 export interface Props {
   userEmail: string

@@ -5,13 +5,12 @@
 
 import type { Env } from '@/types';
 import { successResponse, errorResponse } from '@utils/response';
-import { parseJSON, stringifyJSON } from '@utils/json';
+import { stringifyJSON } from '@utils/json';
 import { generateId } from '@utils/id-generator';
 import { logProjectOperation } from '@utils/logging';
 import { queueBatchNotifications } from '../../queues/notification-producer';
 import {
   calculateReactionUsers,
-  calculateReplyUsers,
   batchCheckCommentsHaveHelpfulReaction,
   batchCalculateReactionUsers,
   batchCalculateReplyUsers,
@@ -74,7 +73,7 @@ async function checkReplyPermission(
         if (mentionedUsers.includes(userEmail)) {
           return true;
         }
-      } catch (e) {
+      } catch {
         // Ignore parse errors
       }
     }
@@ -100,7 +99,7 @@ async function checkReplyPermission(
             return true;
           }
         }
-      } catch (e) {
+      } catch {
         // Ignore parse errors
       }
     }
@@ -262,46 +261,6 @@ async function validateMentionedGroups(
     console.error('Validate mentioned groups error:', error);
     // On error, consider all groups invalid for safety
     return { valid: false, invalidGroups: mentionedGroupIds };
-  }
-}
-
-/**
- * Derive group IDs from mentioned users
- * Each user belongs to exactly one active group (6-layer security model)
- */
-async function deriveGroupsFromMentionedUsers(
-  env: Env,
-  projectId: string,
-  mentionedUsers: string[]
-): Promise<string[]> {
-  if (!mentionedUsers || mentionedUsers.length === 0) {
-    return [];
-  }
-
-  try {
-    const placeholders = mentionedUsers.map(() => '?').join(',');
-    const query = `
-      SELECT DISTINCT ug.groupId
-      FROM usergroups ug
-      INNER JOIN groups g ON ug.groupId = g.groupId
-      WHERE ug.userEmail IN (${placeholders})
-        AND ug.isActive = 1
-        AND ug.projectId = ?
-        AND g.projectId = ?
-        AND g.status = 'active'
-    `;
-
-    const params = [...mentionedUsers, projectId, projectId];
-    const result = await env.DB.prepare(query).bind(...params).all();
-
-    if (result.success && result.results) {
-      return result.results.map((row: any) => row.groupId);
-    }
-
-    return [];
-  } catch (error) {
-    console.error('Derive groups from mentioned users error:', error);
-    return [];
   }
 }
 
@@ -905,7 +864,7 @@ export async function getStageComments(
               votingEligible = true;
               break;
             }
-          } catch (e) {
+          } catch {
             // Ignore parse errors
           }
         }

@@ -120,7 +120,7 @@ app.get('/health', async (c) => {
       const result = await c.env.DB.prepare('SELECT COUNT(*) as count FROM users').first();
       userCount = (result?.count as number) || 0;
       dbInitialized = userCount > 0;
-    } catch (error) {
+    } catch {
       // Table doesn't exist or database error
       dbInitialized = false;
     }

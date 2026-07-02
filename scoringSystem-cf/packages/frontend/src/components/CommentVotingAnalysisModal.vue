@@ -361,7 +361,6 @@ const votersList = ref<Voter[]>([])
 const teacherVotes = ref<TeacherVote[]>([])
 const commentRewardPool = ref<number>(0)
 const voteData = ref<StudentVote[]>([])
-const stackedBarChart = ref<HTMLElement | null>(null)
 const commentColorMap = ref<Map<string, string>>(new Map())
 const voterColorMap = ref<Map<string, string>>(new Map())
 
@@ -991,10 +990,6 @@ const handleClose = (): void => {
 }
 
 // ================== Computed Properties ==================
-
-const totalAllocatedScore = computed<number>(() => {
-  return Math.round(candidateComments.value.reduce((sum, c) => sum + c.allocatedScore, 0) * 100) / 100
-})
 
 const hasRewardsToDisplay = computed<boolean>(() => {
   return commentRewardPool.value > 0 && candidateComments.value.some(c => c.allocatedScore > 0)

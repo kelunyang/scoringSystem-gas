@@ -67,17 +67,6 @@ export interface TransactionFilters {
 }
 
 /**
- * Wallet leaderboard entry
- */
-interface LeaderboardEntry {
-  userId: string
-  userEmail: string
-  displayName: string
-  balance: number
-  rank: number
-}
-
-/**
  * Wallet ladder response (full API response)
  * Contains global min/max for accurate score estimation across all permission levels
  */
@@ -99,15 +88,6 @@ interface ProjectWalletData {
   projectName: string
   balance: number
   transactions: NormalizedTransaction[]
-}
-
-/**
- * Global wallet balance result
- */
-interface GlobalWalletBalanceData {
-  totalBalance: number
-  byProject: Record<string, ProjectWalletData>
-  allTransactions: NormalizedTransaction[]
 }
 
 /**

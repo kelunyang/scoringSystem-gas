@@ -627,12 +627,7 @@ import {
   Plus,
   Message,
   CopyDocument,
-  Refresh,
-  List,
-  Search,
-  CircleClose,
-  Loading,
-  PieChart
+  Refresh
 } from '@element-plus/icons-vue'
 
 // Types
@@ -865,15 +860,6 @@ const formatTime = (timestamp: number | null | undefined): string | null => {
   return new Date(timestamp).toLocaleString('zh-TW')
 }
 
-const getInvitationStatusClass = (invitation: Invitation): string => {
-  const now = Date.now()
-  if (invitation.status === 'deactivated') return 'deactivated'
-  if (invitation.status === 'used') return 'used'
-  if (invitation.expiryTime <= now) return 'expired'
-  if (invitation.status === 'active') return 'active'
-  return ''
-}
-
 const getInvitationStatusText = (invitation: Invitation): string => {
   const now = Date.now()
   if (invitation.status === 'deactivated') return '已停用'
@@ -1028,7 +1014,7 @@ const handleGenerateInvite = async (): Promise<void> => {
             failedEmails: batch // Include the specific emails that failed
           }
         }
-      } catch (error) {
+      } catch {
         return {
           success: false,
           batchIndex,

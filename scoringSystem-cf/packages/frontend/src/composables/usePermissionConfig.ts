@@ -20,7 +20,7 @@ import permissionConfig from '@/config/permissionConfig.json'
  * const visibleTabs = getVisibleTabs('systemAdmin')
  */
 export function usePermissionConfig() {
-  const { hasPermission, hasAnyPermission, hasAllPermissions, isLoading } = usePermissions()
+  const { hasAnyPermission, hasAllPermissions, isLoading } = usePermissions()
 
   /**
    * Check if a component/feature should be visible based on config

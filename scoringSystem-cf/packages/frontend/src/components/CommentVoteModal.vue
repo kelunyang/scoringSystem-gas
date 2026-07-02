@@ -76,7 +76,7 @@
               : `版本 ${index + 1}`"
           @version-change="onVersionChange"
         >
-          <template #description="{ version, index }: { version: unknown; index: number }">
+          <template #description="{ version }: { version: unknown }">
             <div class="version-description">
               <div>提交時間：{{ formatVoteTime((version as ProposalVersion).createdTime) }}</div>
               <div>已選評論：{{ JSON.parse((version as ProposalVersion).rankingData).length }} 則</div>
@@ -186,7 +186,6 @@ import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { usePointCalculation } from '@/composables/usePointCalculation'
 import { useSudoStore } from '@/stores/sudo'
-import type { Group } from '@repo/shared'
 
 // Drawer Breadcrumb
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
@@ -315,31 +314,13 @@ const emit = defineEmits<{
 }>()
 
 // Vue 3 Best Practice: Use unified useAuth() composable
-const { user: authUser, userEmail: authUserEmail } = useAuth()
+const { userEmail: authUserEmail } = useAuth()
 
 // ========== Computed ==========
 
 const localVisible = computed({
   get: () => props.visible,
   set: (val) => emit('update:visible', val)
-})
-
-// 從父組件傳入的評論列表，過濾 + 轉換格式（避免重複 API 呼叫）
-const processedStageComments = computed((): Comment[] => {
-  if (!props.stageComments || props.stageComments.length === 0) {
-    return []
-  }
-
-  return props.stageComments
-    .filter((c: any) => c.canBeVoted === true)
-    .map((c: any) => ({
-      id: c.commentId || c.id,
-      content: c.content.substring(0, 50) + (c.content.length > 50 ? '...' : ''),
-      fullContent: c.content,
-      author: c.authorName || c.author || c.authorEmail,
-      authorEmail: c.authorEmail,
-      timestamp: c.createdTime || c.timestamp
-    }))
 })
 
 // ========== Reactive State ==========
@@ -608,10 +589,6 @@ const chartHintText = computed((): string => {
 
 // ========== Methods ==========
 
-function handleClose(): void {
-  emit('update:visible', false)
-}
-
 async function checkVotingEligibility(): Promise<void> {
   loadingEligibility.value = true
   try {
@@ -693,7 +670,6 @@ async function loadStageComments(): Promise<void> {
           timestamp: comment.createdTime
         }))
 
-      const currentUserEmailValue = getCurrentUserEmail()
       initializeComments(comments)
       buildCommentsMap(comments)
     }

@@ -18,7 +18,6 @@ import { useD3Chart } from '@/composables/useD3Chart'
 import { usePointCalculation } from '@/composables/usePointCalculation'
 import { useAvatar } from '@/composables/useAvatar'
 import { useChargingAnimation, type ChargingUnit } from '@/composables/useChargingAnimation'
-import EmptyState from '@/components/shared/EmptyState.vue'
 
 export interface Member {
   email: string

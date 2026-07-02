@@ -89,7 +89,7 @@ export async function readGlobalData(db: D1Database): Promise<GlobalData> {
   } catch (error) {
     console.error('Failed to read global data:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Database read error: ${message}`);
+    throw new Error(`Database read error: ${message}`, { cause: error });
   }
 }
 
@@ -176,7 +176,7 @@ export async function readProjectData(
   } catch (error) {
     console.error('Failed to read project data:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Database read error: ${message}`);
+    throw new Error(`Database read error: ${message}`, { cause: error });
   }
 }
 
@@ -210,7 +210,7 @@ export async function insertRow(
   } catch (error) {
     console.error(`Failed to insert row into ${tableName}:`, error);
     const message = error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Database insert error: ${message}`);
+    throw new Error(`Database insert error: ${message}`, { cause: error });
   }
 }
 
@@ -247,7 +247,7 @@ export async function updateRow(
   } catch (error) {
     console.error(`Failed to update row in ${tableName}:`, error);
     const message = error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Database update error: ${message}`);
+    throw new Error(`Database update error: ${message}`, { cause: error });
   }
 }
 
@@ -274,7 +274,7 @@ export async function deleteRow(
   } catch (error) {
     console.error(`Failed to delete row from ${tableName}:`, error);
     const message = error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Database delete error: ${message}`);
+    throw new Error(`Database delete error: ${message}`, { cause: error });
   }
 }
 
@@ -294,7 +294,7 @@ export async function executeQuery(
   } catch (error) {
     console.error('Failed to execute query:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Database query error: ${message}`);
+    throw new Error(`Database query error: ${message}`, { cause: error });
   }
 }
 
@@ -317,6 +317,6 @@ export async function executeBatch(
   } catch (error) {
     console.error('Failed to execute batch:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Database batch error: ${message}`);
+    throw new Error(`Database batch error: ${message}`, { cause: error });
   }
 }

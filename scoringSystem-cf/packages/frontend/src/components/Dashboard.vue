@@ -321,9 +321,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, shallowRef, watchEffect, unref, watch } from 'vue'
-import type { Ref, ComputedRef } from 'vue'
+import type { Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessageBox, ElMessage } from 'element-plus'
 import ProjectCard from './ProjectCard.vue'
 import TopBarUserControls from './TopBarUserControls.vue'
 import EventLogDrawer from './shared/EventLogDrawer.vue'
@@ -336,7 +335,6 @@ import {
   useGroupMembers,
   useProjectGroups,
   useAvailableGroupUsers,
-  useAddGroupMember,
   useBatchAddGroupMembers,
   useRemoveGroupMember,
   useUpdateGroup
@@ -346,7 +344,7 @@ import { showSuccess, showWarning, handleError } from '@/utils/errorHandler'
 import { useBreadcrumb } from '@/composables/useBreadcrumb'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import { getAvatarUrl, generateInitialsAvatar } from '@/utils/avatar'
-import type { AuthUser, Project, Group, User, Member } from '@/types'
+import type { AuthUser, Project, Group, Member } from '@/types'
 import type { GroupMember } from '@/composables/useGroupManagement'
 import type { PermissionFlags } from '@/composables/useProjectPermissions'
 
@@ -389,7 +387,6 @@ const projectGroupsQuery = useProjectGroups(selectedProjectId)
 const availableUsersQuery = useAvailableGroupUsers(selectedProjectId)
 
 // 3. Mutations
-const addMemberMutation = useAddGroupMember()
 const batchAddMembersMutation = useBatchAddGroupMembers()
 const removeMemberMutation = useRemoveGroupMember()
 const updateGroupMutation = useUpdateGroup()
@@ -406,7 +403,6 @@ const selectedProject: Ref<Project | null> = ref(null)
 const selectedGroupForManagement: Ref<Group | null> = ref(null)
 const selectedMembersToAdd: Ref<string[]> = ref([]) // 選中要加入的成員
 const addingMembers: Ref<boolean> = ref(false) // 批量加入狀態
-const savingChanges: Ref<boolean> = ref(false) // 統一保存狀態（保留以維持向後相容）
 const savingGroupInfo: Ref<boolean> = ref(false) // 群組資訊儲存狀態
 
 // 未分組成員追蹤
@@ -497,9 +493,10 @@ interface ProjectWithPermissions extends Project {
   permissions: PermissionFlags
 }
 
-// Permission calculation cache for memoization (using shallowRef for Map)
-// Cache stores the complete project object with permissions to ensure stable references
-const permissionCache = shallowRef(new Map<string, ProjectWithPermissions>())
+// Permission calculation cache for memoization（純記憶化快取，刻意非反應式：
+// computed 已直接依賴 props.user，快取本身不需觸發重算，
+// 用 ref 反而會讓 computed 內寫入造成 side effect / 重算迴圈）
+const permissionCache = { current: new Map<string, ProjectWithPermissions>() }
 const currentUserId = shallowRef<string | null | undefined>(null)
 
 // Auto-clear cache when user changes (watchEffect)
@@ -507,8 +504,7 @@ watchEffect(() => {
   const userId = props.user?.userId
 
   if (userId !== currentUserId.value) {
-    // Create new Map to trigger reactivity
-    permissionCache.value = new Map()
+    permissionCache.current = new Map()
     currentUserId.value = userId ?? null
   }
 })
@@ -517,7 +513,7 @@ watchEffect(() => {
 const projectsWithPermissions = computed(() => {
   const globalPermissions = props.user?.permissions || []
   const userId = props.user?.userId
-  const cache = permissionCache.value
+  const cache = permissionCache.current
 
   // Batch cache updates to avoid creating multiple Map instances
   let cacheUpdated = false
@@ -546,7 +542,8 @@ const projectsWithPermissions = computed(() => {
 
   // Only update cache Map once if there were changes
   if (cacheUpdated) {
-    permissionCache.value = newCache
+    // eslint-disable-next-line vue/no-side-effects-in-computed-properties -- 純記憶化快取（非反應式物件），不影響反應鏈
+    permissionCache.current = newCache
   }
 
   return result
@@ -556,31 +553,6 @@ const projectsWithPermissions = computed(() => {
 const currentGroupMembers = computed(() => {
   const data = groupMembersQuery.data?.value || groupMembersQuery.data
   return (data && 'members' in data) ? data.members || [] : []
-})
-
-const otherProjectGroupMembers = computed(() => {
-  const allGroups = projectGroupsQuery.data?.value || projectGroupsQuery.data
-  const currentGroupId = selectedGroupId.value
-
-  // Ensure allGroups is an array
-  if (!Array.isArray(allGroups)) {
-    return []
-  }
-
-  // Filter out current group and collect all members from other groups
-  const otherMembers: Array<Member & { groupName: string; groupId: string }> = []
-  allGroups.forEach(group => {
-    if (group.groupId !== currentGroupId && group.members) {
-      group.members.forEach((member: Member) => {
-        otherMembers.push({
-          ...member,
-          groupName: group.groupName,
-          groupId: group.groupId
-        })
-      })
-    }
-  })
-  return otherMembers
 })
 
 const loadingAvailableUsers = computed(() => {
@@ -632,13 +604,6 @@ const hasGroupInfoChanges = computed(() => {
   )
 })
 
-// Check if there are unsaved changes (legacy, kept for compatibility)
-const hasChanges = computed(() => {
-  if (!selectedGroupForManagement.value) return false
-  const hasPendingMembers = selectedMembersToAdd.value.length > 0
-  return hasGroupInfoChanges.value || hasPendingMembers
-})
-
 // ========================================
 // Methods
 // ========================================
@@ -647,11 +612,6 @@ const enterProject = (project: Project) => {
   console.log('進入專案:', project)
   // 發送事件到父組件 App.vue
   emit('enter-project', project)
-}
-
-const getRankDisplay = (rank: any) => {
-  const medals = ['🥇', '🥈', '🥉']
-  return rank <= 3 ? medals[rank - 1] : `${rank}.`
 }
 
 const loadUngroupedMembers = async (projectId: string) => {
@@ -729,47 +689,6 @@ const openGroupMemberManagement = async (project: Project) => {
   console.log('🔧 [DEBUG] Drawer opened, queries will fetch data')
 }
 
-// Handle save changes - open confirmation drawer for members, direct save for group info (legacy)
-const handleSaveChanges = async () => {
-  if (!selectedProject.value || !selectedGroupForManagement.value) return
-
-  savingChanges.value = true
-
-  try {
-    // 1. Save group info if changed
-    if (groupEditForm.groupName.trim() !== (selectedGroupForManagement.value.groupName || '') ||
-        groupEditForm.description.trim() !== (selectedGroupForManagement.value.description || '')) {
-      await updateGroupInfo()
-    }
-
-    // 2. Open confirmation drawer for adding members
-    if (selectedMembersToAdd.value.length > 0) {
-      // Build member objects for confirmation drawer with avatar info
-      membersToAddForConfirmation.value = selectedMembersToAdd.value.map(email => {
-        const user = availableUsersForGroup.value.find(u => u.userEmail === email) as any
-        return {
-          userEmail: email,
-          displayName: user?.displayName || email,
-          role: 'member',
-          avatarSeed: user?.avatarSeed,
-          avatarStyle: user?.avatarStyle,
-          avatarOptions: user?.avatarOptions
-        } as Member
-      })
-      showAddMemberDrawer.value = true
-      savingChanges.value = false // Reset flag since we're going to drawer
-      return
-    }
-
-    showSuccess('所有變更已儲存')
-  } catch (error) {
-    console.error('保存變更失敗:', error)
-    handleError(error as Error, { action: '儲存變更', type: 'error' })
-  } finally {
-    savingChanges.value = false
-  }
-}
-
 // Handle save group info only (separated from member operations)
 const handleSaveGroupInfo = async () => {
   if (!hasGroupInfoChanges.value) return
@@ -837,7 +756,7 @@ const batchAddMembersToGroup = async () => {
   addingMembers.value = true
   try {
     // Use batch mutation instead of sequential API calls
-    const result = await batchAddMembersMutation.mutateAsync({
+    await batchAddMembersMutation.mutateAsync({
       projectId: selectedProject.value.projectId,
       groupId: selectedGroupForManagement.value.groupId,
       members: selectedMembersToAdd.value.map(email => ({
@@ -871,19 +790,6 @@ const removeMemberFromSelection = (email: string) => {
 const getUserDisplayInfo = (email: string) => {
   const user = availableUsersForGroup.value.find(u => u.userEmail === email)
   return user ? (user.displayName || email) : email
-}
-
-// Add member using TanStack Query mutation
-const addMemberToGroup = async (user: User) => {
-  if (!selectedProject.value || !selectedGroupForManagement.value) return
-
-  await addMemberMutation.mutateAsync({
-    projectId: selectedProject.value.projectId,
-    groupId: selectedGroupForManagement.value.groupId,
-    userEmail: user.userEmail,
-    role: 'member'
-  })
-  // No manual refetch needed - mutation handles query invalidation
 }
 
 // Remove member - open confirmation drawer
@@ -1064,7 +970,7 @@ const refreshProjects = () => {
 // ========================================
 // Auto-refresh Timer
 // ========================================
-const { progressPercentage, remainingMinutes, resetTimer } = useAutoRefresh(refreshProjects)
+const { progressPercentage, resetTimer } = useAutoRefresh(refreshProjects)
 
 // ========================================
 // Lifecycle Hooks

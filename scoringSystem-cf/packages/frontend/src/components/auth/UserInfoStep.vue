@@ -96,7 +96,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { ElMessage } from 'element-plus';
-import type { RegisterData, AvatarStyle } from '../../types/auth';
+import type { RegisterData } from '../../types/auth';
 import * as AvatarConfig from '../../utils/avatarConfig';
 import AvatarEditor from '@/components/shared/AvatarEditor.vue';
 import type { AvatarData } from '@/components/shared/AvatarEditor.vue';
@@ -122,7 +122,7 @@ const emit = defineEmits<{
 }>();
 
 // Use avatar generator composable
-const { getRandomSeed, generateRandomOptions } = useAvatarGenerator();
+const { getRandomSeed } = useAvatarGenerator();
 
 // Turnstile
 const { token: turnstileToken, onVerify, onError, onExpired } = useTurnstile();

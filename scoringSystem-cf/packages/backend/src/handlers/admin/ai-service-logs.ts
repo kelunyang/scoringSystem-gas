@@ -280,7 +280,7 @@ export async function getAIServiceLogs(
     const totalCount = logs.length > 0 ? logs[0].totalCount : 0;
 
     // Remove totalCount from each log entry
-    const cleanLogs = logs.map(({ totalCount, ...log }) => log as AIServiceLog);
+    const cleanLogs = logs.map(({ totalCount: _totalCount, ...log }) => log as AIServiceLog);
 
     return successResponse({
       logs: cleanLogs,

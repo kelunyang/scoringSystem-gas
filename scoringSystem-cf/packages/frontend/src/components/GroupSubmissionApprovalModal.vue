@@ -39,7 +39,7 @@
             index === allVersions.length - 1 ? '最終版本' : formatVersionStepTime(version.submitTime)"
           @version-change="handleVersionChange"
         >
-          <template #description="{ version, index }">
+          <template #description="{ version }">
             <div class="version-step-description">
               <div class="submitter-line">
                 提交者：{{ getSubmitterDisplayName(version) }}
@@ -543,7 +543,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue'
 import * as d3 from 'd3'
 import { html as diff2html } from 'diff2html'
 import { createTwoFilesPatch } from 'diff'
@@ -626,8 +626,6 @@ const emit = defineEmits<{
 
 // ===== Composables =====
 const {
-  generateMemberAvatarUrl,
-  generateMemberInitials,
   handleMemberAvatarError: handleAvatarError,
   getVoterAvatarUrl,
   getVoterDisplayName,
@@ -716,7 +714,6 @@ const votingData = computed(() => {
 const selectedVersion = ref('') // 當前選中的版本ID
 const currentVersionId = ref('') // 當前活躍版本ID
 const currentVersionData = ref<any>(null) // 當前版本詳細資料
-const currentVersionVotingData = ref<any>(null) // 當前選中版本的投票數據
 const showRestoreDialog = ref(false)
 const restoreConfirmText = ref('')
 const restoring = ref(false)
@@ -727,9 +724,6 @@ const showStageDescriptionDrawer = ref(false)
 // 煙火動畫狀態
 const showFireworks = ref(false)
 const fireworkEmojis = ['🎉', '✨', '🎊', '⭐', '💫', '🌟', '🎆', '🎇']
-
-// D3.js tooltip reference
-const currentTooltip = ref<any>(null)
 
 // ===== Computed Properties =====
 const localVisible = computed({
@@ -870,35 +864,6 @@ const isFinalVersionSubmitted = computed(() => {
 const isFinalVersionApproved = computed(() => {
   const finalVersion = finalVersionData.value
   return finalVersion && finalVersion.status === 'approved'
-})
-
-// 安全的slider最小值，確保不會是0且不會大於max
-const safeSliderMin = computed(() => {
-  const min = Math.max(1, totalActiveGroups.value)
-  const max = props.totalProjectGroups
-
-  // ✅ 檢查是否出現不合理的 min > max 情況
-  if (min > max) {
-    console.error('🚨 [GroupSubmissionApprovalModal] Slider 參數異常！', {
-      totalActiveGroups: totalActiveGroups.value,
-      totalProjectGroups: props.totalProjectGroups,
-      calculatedMin: min,
-      calculatedMax: max,
-      issue: '已提交組數 > 專案總組數（不應該發生）'
-    })
-
-    // ✅ 顯示錯誤給用戶
-    ElMessage.error({
-      message: `數據異常：繳交組數 (${totalActiveGroups.value}) 超過專案總組數 (${max})，請聯繫管理員`,
-      duration: 0,  // 不自動關閉，強制用戶注意
-      showClose: true
-    })
-
-    // 強制修正：使用 Math.min 限制在 max 以內（防止崩潰）
-    return Math.min(min, max)
-  }
-
-  return min
 })
 
 const finalVersionContentMarkdown = computed(() => {
@@ -1494,17 +1459,6 @@ function formatDateTime(timestamp: number | string | undefined) {
   })
 }
 
-function formatVersionTime(timestamp: number) {
-  if (!timestamp) return ''
-  const date = new Date(timestamp)
-  return date.toLocaleDateString('zh-TW', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
 function formatVersionStepTime(timestamp: number | string | undefined) {
   if (!timestamp) return ''
   const date = new Date(timestamp)
@@ -1521,14 +1475,6 @@ function formatVersionStepTime(timestamp: number | string | undefined) {
 function getSubmitterDisplayName(versionData: any) {
   if (!versionData) return ''
   return versionData.submitterName || versionData.submitter?.split('@')[0] || '未知用戶'
-}
-
-function getStepStatus(version: any, index: number) {
-  // 只有 submitted 版本顯示藍色，其他都不顯示狀態圖示
-  if (version.status === 'submitted') {
-    return 'process'  // 藍色高亮
-  }
-  return ''  // 空字串 = 無狀態圖示，只顯示灰色數字
 }
 
 function getVersionStatusText(version: any) {
@@ -1550,11 +1496,6 @@ function getVersionStatusText(version: any) {
   }
 
   return ''
-}
-
-function getSubmitterName(email: string) {
-  if (!email) return ''
-  return getUserDisplayName(email)
 }
 
 // ✅ Phase 3 优化：loadAllVersions 已由 useVotingData composable 取代

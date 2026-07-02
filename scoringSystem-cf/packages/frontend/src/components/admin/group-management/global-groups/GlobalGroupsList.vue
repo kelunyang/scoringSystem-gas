@@ -130,8 +130,6 @@
 <script setup lang="ts">
 import { computed, toRef } from 'vue'
 import GlobalGroupsTable from './GlobalGroupsTable.vue'
-import GlobalGroupBatchActions from './GlobalGroupBatchActions.vue'
-import GroupFilters from '../shared/GroupFilters.vue'
 import AddMembersForm from '../members/AddMembersForm.vue'
 import { useGroupFiltering } from '@/composables/useGroupFiltering'
 import type { GlobalGroup, GroupMember, User } from '@/types/group-management'

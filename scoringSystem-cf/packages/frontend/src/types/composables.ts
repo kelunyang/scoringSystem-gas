@@ -2,10 +2,8 @@
  * @fileoverview Composables 返回值类型定义
  */
 
-// @ts-nocheck - This file exports types that may not all be used
 import type { Ref, ComputedRef } from 'vue'
 import type {
-  User,
   AuthUser,
   Project,
   Stage,

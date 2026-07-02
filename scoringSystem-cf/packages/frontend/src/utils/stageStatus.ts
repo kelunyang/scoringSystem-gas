@@ -248,7 +248,7 @@ export function getStageTimeRemaining(stage: Stage | null | undefined): StageTim
   const hours = Math.floor((timeLeft % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000))
   const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000))
 
-  let text = ''
+  let text: string
   if (days > 0) {
     text = `${days}天${hours}小時`
   } else if (hours > 0) {

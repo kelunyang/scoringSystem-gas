@@ -3,26 +3,17 @@
  * Tracks failed login attempts and auto-disables accounts after threshold
  */
 
-import { verifyPassword, hashPassword } from './password';
+import { verifyPassword } from './password';
 import { generateToken } from './jwt';
 import { errorResponse, successResponse, ERROR_CODES } from '../../utils/response';
 import type { ApiResponse } from '../../utils/response';
 import { parseJSON } from '../../utils/json';
 import { logGlobalOperation } from '../../utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
-import { sendEmail, EmailTrigger } from '../../services/email-service';
-import { queueAccountLockedEmail, queuePasswordResetEmail } from '../../queues/email-producer';
+import { queueAccountLockedEmail } from '../../queues/email-producer';
 import type { Env } from '../../types';
 import { notifyAdmins, logSecurityAction, disableUserAccount } from '../../utils/security';
 import { PASSWORD_SECURITY, TWO_FA_SECURITY, SECURITY_ACTION } from '../../config/security';
-
-/**
- * Failed login attempt tracking
- */
-interface FailedAttempt {
-  userEmail: string;
-  timestamp: number;
-}
 
 /**
  * Request context from Cloudflare
@@ -260,7 +251,7 @@ export async function authenticateUser(
               { level: 'error' }
             );
             // Re-throw to prevent login
-            throw new Error('Critical security operation failed');
+            throw new Error('Critical security operation failed', { cause: error });
           }
 
           // Send notification to user about account disable (WebSocket + Email)

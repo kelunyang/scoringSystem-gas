@@ -218,9 +218,6 @@ const props = defineProps({
   }
 })
 
-// D3 library check
-let d3Loaded = false
-
 // Algorithm explanation drawer state
 const showAlgorithmDrawer = ref(false)
 const showActualValues = ref(false)
@@ -325,7 +322,6 @@ const queriedUserData = computed(() => {
  */
 async function ensureD3Loaded() {
   if (window.d3) {
-    d3Loaded = true
     return true
   }
 
@@ -333,7 +329,6 @@ async function ensureD3Loaded() {
     const script = document.createElement('script')
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js'
     script.onload = () => {
-      d3Loaded = true
       resolve(true)
     }
     script.onerror = () => {

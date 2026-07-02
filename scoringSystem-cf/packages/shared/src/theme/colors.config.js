@@ -17,7 +17,7 @@
  * - Voting: Bootstrap 5 Danger 深紅色
  * - Completed: 深灰色（加深至完全通過 AA 標準）
  */
-export var STAGE_COLORS = {
+export const STAGE_COLORS = {
     pending: {
         background: '#f39c12',
         text: '#000000',
@@ -147,11 +147,11 @@ export function getStageColorConfig(status) {
  */
 export function getStageGradient(status) {
     if (!status || !(status in STAGE_COLORS)) {
-        var config_1 = STAGE_COLORS.completed;
-        return "linear-gradient(90deg, ".concat(config_1.background, " 0%, ").concat(config_1.gradient.start, " 15%, ").concat(config_1.gradient.end, " 85%, ").concat(config_1.background, " 100%)");
+        const config = STAGE_COLORS.completed;
+        return `linear-gradient(90deg, ${config.background} 0%, ${config.gradient.start} 15%, ${config.gradient.end} 85%, ${config.background} 100%)`;
     }
-    var config = STAGE_COLORS[status];
-    return "linear-gradient(90deg, ".concat(config.background, " 0%, ").concat(config.gradient.start, " 15%, ").concat(config.gradient.end, " 85%, ").concat(config.background, " 100%)");
+    const config = STAGE_COLORS[status];
+    return `linear-gradient(90deg, ${config.background} 0%, ${config.gradient.start} 15%, ${config.gradient.end} 85%, ${config.background} 100%)`;
 }
 /**
  * 檢查配色是否符合 WCAG AA 標準
@@ -160,7 +160,7 @@ export function getStageGradient(status) {
  * @returns 是否符合 WCAG AA 標準 (對比度 >= 4.5:1)
  */
 export function isWCAGCompliant(status) {
-    var config = STAGE_COLORS[status];
+    const config = STAGE_COLORS[status];
     return config.contrast >= 4.5;
 }
 /**
@@ -183,7 +183,7 @@ export function getAllStageStatuses() {
  *
  * 所有配色均符合 WCAG 2.0 AA 標準（對比度 ≥ 4.5:1）
  */
-export var BUTTON_COLORS = {
+export const BUTTON_COLORS = {
     success: {
         background: '#198754',
         text: '#ffffff',
@@ -299,7 +299,7 @@ export function getButtonColorConfig(type) {
  * @returns 是否符合 WCAG AA 標準 (對比度 >= 4.5:1)
  */
 export function isButtonWCAGCompliant(type) {
-    var config = BUTTON_COLORS[type];
+    const config = BUTTON_COLORS[type];
     return config.contrast >= 4.5;
 }
 /**
