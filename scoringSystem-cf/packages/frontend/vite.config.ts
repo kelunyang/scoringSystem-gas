@@ -97,83 +97,42 @@ export default defineConfig(({ command, mode }) => ({
   },
   build: {
     outDir: 'dist',
-    minify: command === 'build' ? 'esbuild' : false,  // 只在 build 时压缩，dev 模式保留代码
-    rollupOptions: {
+    // Vite 8 (Rolldown)：minify 交由 rolldownOptions.output.minify 控制
+    // （需要 compress.dropConsole，頂層 minify 選項不支援細部設定）
+    minify: false,
+    cssMinify: 'lightningcss',
+    rolldownOptions: {
       output: {
-        // 使用函數形式的 manualChunks 進行代碼分割
-        // 支援 pnpm 的 .pnpm 資料夾結構
-        manualChunks(id: string) {
-          if (id.includes('node_modules')) {
-            // 處理 pnpm 的 .pnpm 資料夾結構
-            const modulePath = id.split('node_modules/')[1]
-            if (!modulePath) return 'vendor'
-
-            let packageName: string
-            if (modulePath.startsWith('.pnpm/')) {
-              // pnpm 結構: .pnpm/package@version/node_modules/package
-              const parts = modulePath.split('/')
-              const scopedName = parts[1] // e.g., "vue@3.4.15" or "@vue+runtime-core@3.4.15"
-              if (scopedName.startsWith('@')) {
-                // Scoped package: @vue+runtime-core@3.4.15 -> @vue/runtime-core
-                packageName = scopedName.split('@')[0].replace('+', '/')
-                if (!packageName) packageName = '@' + scopedName.split('@')[1].split('+')[0]
-              } else {
-                packageName = scopedName.split('@')[0]
-              }
-            } else {
-              // 標準 node_modules 結構
-              packageName = modulePath.split('/')[0]
-              if (packageName.startsWith('@')) {
-                packageName = modulePath.split('/').slice(0, 2).join('/')
-              }
-            }
-
-            // 按依賴類型分組
-            // Vue 生態系統
-            if (packageName === 'vue' || packageName.startsWith('@vue/') ||
-                packageName === 'vue-router' || packageName.startsWith('@vueuse/')) {
-              return 'vue-vendor'
-            }
-            // Element Plus UI 框架
-            if (packageName === 'element-plus' || packageName.startsWith('@element-plus/')) {
-              return 'element-plus'
-            }
-            // TanStack (Query + Table)
-            if (packageName.startsWith('@tanstack/')) {
-              return 'tanstack'
-            }
+        // Oxc minifier：等價於舊 esbuild.drop = ['console', 'debugger']
+        minify: command === 'build'
+          ? { mangle: true, compress: { dropConsole: true, dropDebugger: true }, codegen: true }
+          : false,
+        // Rolldown 的 advancedChunks 取代函式版 manualChunks。
+        // regex 比對 resolved id 結尾的 /node_modules/<pkg>/ 路徑段，
+        // pnpm（.pnpm/xxx/node_modules/<pkg>/）與扁平結構皆適用。
+        // 依序比對，第一個命中的分組生效（順序保留舊函式的行為，
+        // 含舊有行為：@vueuse/* 全部進 vue-vendor，原 animation 分組從未命中故移除）。
+        advancedChunks: {
+          // false = 僅依模組自身 id 分組（等同舊 manualChunks 語意）；
+          // 預設 true 會讓先命中的分組遞迴吞掉其依賴（element-plus 會吞掉 vue）
+          includeDependenciesRecursively: false,
+          groups: [
+            { name: 'element-plus', test: /node_modules\/(element-plus\/|@element-plus\/)/ },
+            { name: 'vue-vendor', test: /node_modules\/(vue\/|vue-router\/|@vue\/|@vueuse\/)/ },
+            { name: 'tanstack', test: /node_modules\/@tanstack\// },
             // Markdown 渲染相關（不含 diff2html，它有複雜的內部依賴需要保留在 vendor）
-            if (['marked', 'dompurify'].includes(packageName)) {
-              return 'markdown'
-            }
-            // Diff 比對工具（highlight.js, diff2html 等保留在 vendor 讓 Rollup 處理依賴）
-            if (packageName === 'diff') {
-              return 'diff'
-            }
-            // 物理引擎
-            if (packageName === 'matter-js') {
-              return 'physics'
-            }
-            // 動畫庫（@vueuse/motion, @vueuse/gesture）
-            if (packageName.startsWith('@vueuse/motion') || packageName.startsWith('@vueuse/gesture')) {
-              return 'animation'
-            }
-            // 其他 node_modules 分到 vendor chunk
-            return 'vendor'
-          }
-          return undefined
+            { name: 'markdown', test: /node_modules\/(marked|dompurify)\// },
+            { name: 'diff', test: /node_modules\/diff\// },
+            { name: 'physics', test: /node_modules\/matter-js\// },
+            { name: 'vendor', test: /node_modules\// }
+          ]
         }
       }
     },
     cssCodeSplit: true,  // 啟用 CSS 分割
     copyPublicDir: true
   },
-  // 明確配置 esbuild - dev 模式保留 console，build 模式移除
-  esbuild: {
-    drop: command === 'build' ? ['console', 'debugger'] : []
-  },
   define: {
-    'process.env.NODE_ENV': JSON.stringify(mode),
     '__VUE_PROD_DEVTOOLS__': mode !== 'development',
     '__VUE_OPTIONS_API__': true
   },

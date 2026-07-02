@@ -77,3 +77,7 @@ temp/
 
 # Auto-generated theme files
 packages/frontend/src/styles/_theme-generated.scss
+
+# tsc 不慎轉譯 vite.config.ts 的產物（正確輸出已導向 node_modules/.tmp）
+packages/frontend/vite.config.js
+packages/frontend/vite.config.d.ts
