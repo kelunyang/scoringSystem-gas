@@ -13,6 +13,9 @@ export default defineConfig({
   // 測試文件目錄
   testDir: './tests/e2e',
 
+  // 專案的 e2e 檔案以 .e2e-spec.ts 命名，不在 Playwright 預設 testMatch 範圍內
+  testMatch: '**/*.e2e-spec.ts',
+
   // 並行執行測試
   fullyParallel: true,
 

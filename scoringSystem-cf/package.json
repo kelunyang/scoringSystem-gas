@@ -42,13 +42,13 @@
     "db:migrate": "pnpm --filter @repo/backend run db:migrate"
   },
   "devDependencies": {
-    "@types/node": "^20.10.6",
-    "@vitest/coverage-v8": "^4.0.17",
-    "@vitest/ui": "^4.0.17",
+    "@types/node": "^24.13.2",
+    "@vitest/coverage-v8": "^4.1.9",
+    "@vitest/ui": "^4.1.9",
     "eslint": "^8.57.0",
-    "prettier": "^3.2.4",
+    "prettier": "^3.9.4",
     "typescript": "^5.7.2",
-    "vitest": "^4.0.17"
+    "vitest": "^4.1.9"
   },
   "engines": {
     "node": ">=18.0.0",

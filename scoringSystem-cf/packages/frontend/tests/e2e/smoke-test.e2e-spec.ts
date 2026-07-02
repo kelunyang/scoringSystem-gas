@@ -31,8 +31,8 @@ test.describe('Frontend Smoke Tests', () => {
     // 等待網路閒置 (所有 API 請求完成)
     await page.waitForLoadState('networkidle');
 
-    // 驗證頁面標題包含 "評分系統" 或 "Scoring System"
-    await expect(page).toHaveTitle(/評分系統|Scoring System/i);
+    // 驗證頁面標題（router meta 會產生如「首頁 > 專案」的麵包屑標題）
+    await expect(page).toHaveTitle(/首頁|評分系統|Scoring System/i);
 
     // 驗證 Vue app 已掛載 (使用 first() 避免多個 #app 的衝突)
     const app = page.locator('#app').first();
