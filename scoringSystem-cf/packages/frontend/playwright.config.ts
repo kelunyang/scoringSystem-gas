@@ -16,6 +16,9 @@ export default defineConfig({
   // 專案的 e2e 檔案以 .e2e-spec.ts 命名，不在 Playwright 預設 testMatch 範圍內
   testMatch: '**/*.e2e-spec.ts',
 
+  // 單一測試逾時：Vite 冷啟 + WSL /mnt/d 慢 IO 需要更長的首次載入時間
+  timeout: 120 * 1000,
+
   // 並行執行測試
   fullyParallel: true,
 
@@ -39,6 +42,9 @@ export default defineConfig({
   use: {
     // 前端 dev server 地址
     baseURL: 'http://localhost:5173',
+
+    // Vite 冷啟時 dep optimization 會觸發頁面重載（WSL 慢 IO 下更久），放寬導航逾時
+    navigationTimeout: 90 * 1000,
 
     // 失敗重試時記錄追蹤
     trace: 'on-first-retry',

@@ -95,13 +95,6 @@ export default defineConfig(({ command, mode }) => ({
   optimizeDeps: {
     include: ['@repo/shared']
   },
-  css: {
-    preprocessorOptions: {
-      scss: {
-        api: 'modern-compiler'
-      }
-    }
-  },
   build: {
     outDir: 'dist',
     minify: command === 'build' ? 'esbuild' : false,  // 只在 build 时压缩，dev 模式保留代码
