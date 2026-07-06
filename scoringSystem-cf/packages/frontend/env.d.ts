@@ -3,23 +3,19 @@
 // Vue 模块声明
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
-  const component: DefineComponent<{}, {}, any>
+  const component: DefineComponent
   export default component
-}
-
-// 环境变量类型定义
-interface ImportMetaEnv {
-  readonly VITE_API_URL?: string
-  readonly VITE_TURNSTILE_SITE_KEY?: string
-  readonly VITE_APP_TITLE?: string
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv
 }
 
 // 全局类型声明
 declare global {
+  // 环境变量类型定义（与 vite/client 的 ImportMetaEnv 合并）
+  interface ImportMetaEnv {
+    readonly VITE_API_URL?: string
+    readonly VITE_TURNSTILE_SITE_KEY?: string
+    readonly VITE_APP_TITLE?: string
+  }
+
   interface Window {
     // Cloudflare API URL (injected by build)
     CLOUDFLARE_API_URL?: string
