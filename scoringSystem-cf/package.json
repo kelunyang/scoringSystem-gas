@@ -39,7 +39,8 @@
     "test:security:report": "cd packages/security-tests && bash -c 'source venv/bin/activate 2>/dev/null || true && pytest -v --html=reports/security_report.html --self-contained-html'",
     "test:security:setup": "cd packages/security-tests && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt",
     "db:create": "pnpm --filter @repo/backend run db:create",
-    "db:migrate": "pnpm --filter @repo/backend run db:migrate"
+    "db:migrate": "pnpm --filter @repo/backend run db:migrate",
+    "test:e2e:preview": "pnpm --filter @repo/frontend test:e2e:preview"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

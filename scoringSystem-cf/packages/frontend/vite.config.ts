@@ -68,7 +68,7 @@ ${Object.entries(BUTTON_COLORS).map(([type, config]) => `// ${type}: ${config.de
       const outputDir = resolve(__dirname, 'src/styles')
       try {
         mkdirSync(outputDir, { recursive: true })
-      } catch (e) {
+      } catch {
         // 目錄已存在，忽略錯誤
       }
 
@@ -106,27 +106,15 @@ export default defineConfig(({ command, mode }) => ({
         // Oxc minifier：等價於舊 esbuild.drop = ['console', 'debugger']
         minify: command === 'build'
           ? { mangle: true, compress: { dropConsole: true, dropDebugger: true }, codegen: true }
-          : false,
-        // Rolldown 的 advancedChunks 取代函式版 manualChunks。
-        // regex 比對 resolved id 結尾的 /node_modules/<pkg>/ 路徑段，
-        // pnpm（.pnpm/xxx/node_modules/<pkg>/）與扁平結構皆適用。
-        // 依序比對，第一個命中的分組生效（順序保留舊函式的行為，
-        // 含舊有行為：@vueuse/* 全部進 vue-vendor，原 animation 分組從未命中故移除）。
-        advancedChunks: {
-          // false = 僅依模組自身 id 分組（等同舊 manualChunks 語意）；
-          // 預設 true 會讓先命中的分組遞迴吞掉其依賴（element-plus 會吞掉 vue）
-          includeDependenciesRecursively: false,
-          groups: [
-            { name: 'element-plus', test: /node_modules\/(element-plus\/|@element-plus\/)/ },
-            { name: 'vue-vendor', test: /node_modules\/(vue\/|vue-router\/|@vue\/|@vueuse\/)/ },
-            { name: 'tanstack', test: /node_modules\/@tanstack\// },
-            // Markdown 渲染相關（不含 diff2html，它有複雜的內部依賴需要保留在 vendor）
-            { name: 'markdown', test: /node_modules\/(marked|dompurify)\// },
-            { name: 'diff', test: /node_modules\/diff\// },
-            { name: 'physics', test: /node_modules\/matter-js\// },
-            { name: 'vendor', test: /node_modules\// }
-          ]
-        }
+          : false
+        // 注意：不要在此加 advancedChunks 手動分組。
+        // 2026-07 曾以 advancedChunks(includeDependenciesRecursively: false)
+        // 重建舊 manualChunks 的 vendor 分組，導致 vendor ↔ vue-vendor 跨 chunk
+        // 循環引用、模組初始化順序錯亂，production 白屏
+        // （TypeError: v is not a function，dev 模式正常所以 e2e 沒抓到）。
+        // Rolldown 預設自動分塊實測更優：總體積相同、3.4MB vendor 巨石被
+        // 打散為細粒度共享塊、快取粒度更細。若未來要重新引入手動分組，
+        // 只加葉子型套件（無反向依賴者），且必須通過 preview-smoke 瀏覽器驗證。
       }
     },
     cssCodeSplit: true,  // 啟用 CSS 分割

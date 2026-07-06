@@ -16,6 +16,9 @@ export default defineConfig({
   // 專案的 e2e 檔案以 .e2e-spec.ts 命名，不在 Playwright 預設 testMatch 範圍內
   testMatch: '**/*.e2e-spec.ts',
 
+  // preview-smoke 需要 production build + vite preview，由 playwright.preview.config.ts 專門執行
+  testIgnore: '**/preview-smoke.e2e-spec.ts',
+
   // 單一測試逾時：Vite 冷啟 + WSL /mnt/d 慢 IO 需要更長的首次載入時間
   timeout: 120 * 1000,
 
