@@ -29,6 +29,12 @@
 
 正確性規則的 ~500 處違規已全數修復並升回 error（no-unused-vars、preserve-caught-error、no-useless-assignment、no-case-declarations、no-useless-escape、ban-ts-comment、no-unused-expressions、no-empty-object-type、vue/no-unused-vars、vue/no-side-effects-in-computed-properties、vue/no-mutating-props[shallowOnly]）。含兩個行為保全重構：Dashboard 權限快取去反應化、TopBar 閃爍阈值偵測移到 watcher。
 
+### 追加：Vite 8 白屏事故與修復（2026-07-02）
+
+Batch 6b 的 advancedChunks 手動分組造成 production 白屏（dev 正常、e2e 全綠所以漏掉）。
+已修復（改用 Rolldown 預設分塊）並補上 `pnpm test:e2e:preview` 防護網。
+完整事故紀錄與其他踩坑見 **[pitfalls.md](pitfalls.md)**。
+
 **遺留待辦**：
 - `no-explicit-any` 約 1600 處維持 warn（型別大翻修另案，逐模組清理後升 error；Options API 遷移時順手清償轉換檔）
 - Options API → script setup 遷移：殘留 11 檔約 2.4 萬行，完整計畫見 [options-api-migration.md](options-api-migration.md)（含 block-lang 豁免清單清空）
