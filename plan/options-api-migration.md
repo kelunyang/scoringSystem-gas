@@ -9,8 +9,14 @@
 - **前置 WIP 落地**：✅ 完成（分 5 個 commit：2FA 改造、同名次排名、強制清票、雙 ESC、config 補落地）
 - **第一波**：✅ 完成（TurnstileWidget `fe5b189`、UserEditorDrawer `f552bcf`、ViewerManagementDrawer `6cd17c2`）
 - **第二波**：✅ 完成（StageGanttChart `38dcf04`、StageComments `9f7b878`、UserSettings `fd76d60`）
-- **第三、四波**：待辦（block-lang 豁免剩 3 檔：ProjectCard、TopBarUserControls、GroupManagement；另 UserManagement/ProjectManagement 為 TS+Options）
-- 執行修正註記：StageGanttChart 實際是 npm `d3` + `@types/d3`（非 CDN 全域），且內部原本就是 `setup()` 寫法、無 `this` 逃逸問題；StageComments 順手刪除死碼（handleReply/isCommentEligible/未使用的 initial* props）；UserSettings 刪除未使用的 click-outside 指令
+- **第三波**：✅ 完成（ProjectCard `454b75f`（泛型組件）、TopBarUserControls `2fded06`）
+- **第四波**：GroupManagement ✅ 完成（`fa19411`）；**`vue/block-lang` 豁免區塊已整段刪除**（完成定義 #2 達成）
+- **殘留**：UserManagement（5,235 行）、ProjectManagement（6,822 行），皆 TS+Options；依驗證策略**先補組件測試再轉換**，建議各開一個對話（對話 D/E）
+- 執行修正註記：
+  - StageGanttChart 實際是 npm `d3` + `@types/d3`（非 CDN 全域），且內部原本就是 `setup()` 寫法、無 `this` 逃逸問題
+  - GroupManagement 也已是純 `setup()`（文件寫的混合式已被先前重構清掉），轉換 = 搬殼 + 2,200 行型別化
+  - 型別化揪出真 bug：GlobalGroupsTable 對 API 回傳的權限陣列 JSON.parse 會 throw 誤報「格式錯誤」（已修）
+  - 死碼順手清除：StageComments（handleReply/isCommentEligible/initial* props）、UserSettings（click-outside 指令）、TopBarUserControls（userBadges 相容 computed）、GroupManagement（removingMember/stats/createProjectGroup）
 
 ## 目標
 

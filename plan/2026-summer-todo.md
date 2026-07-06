@@ -37,7 +37,7 @@ Batch 6b 的 advancedChunks 手動分組造成 production 白屏（dev 正常、
 
 **遺留待辦**（2026-07-06 更新進度）：
 - `no-explicit-any` 維持 warn，隨遷移逐檔清償中（1141 → 1109 warnings）
-- Options API → script setup 遷移：✅ 第一、二波完成（6 檔），殘留 5 檔（第三波 ProjectCard/TopBarUserControls、第四波三巨頭），block-lang 豁免 7 → 3 檔，見 [options-api-migration.md](options-api-migration.md)
+- Options API → script setup 遷移：✅ 一至三波 + GroupManagement 完成（9 檔），**block-lang 豁免區塊已整段刪除**；僅剩 UserManagement/ProjectManagement 兩巨頭（先補組件測試再轉），見 [options-api-migration.md](options-api-migration.md)
 - ✅ FA 7.0.1 完成（2026-07-06，含 --fa-width:auto 還原 v6 寬度行為）；KaTeX 0.17 續等 cdnjs（仍停在 0.16.44）
 
 ---
