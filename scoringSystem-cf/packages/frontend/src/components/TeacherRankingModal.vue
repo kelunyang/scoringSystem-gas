@@ -21,7 +21,7 @@
       </el-breadcrumb>
     </template>
 
-    <div class="drawer-body" v-loading="loading" element-loading-text="載入教師排名資料中...">
+    <div v-loading="loading" class="drawer-body" element-loading-text="載入教師排名資料中...">
       <!-- DrawerAlertZone for unified alerts -->
       <DrawerAlertZone />
 
@@ -51,9 +51,10 @@
             item-label="groupName"
             :disabled="submitting"
             :show-actions="true"
+            :enable-grouping="true"
             @update:items="updateRankings"
           >
-            <template #default="{ item, index }: { item: any; index: number }">
+            <template #default="{ item }: { item: any }">
               <div class="group-info">
                 <div class="group-name">{{ item.groupName }}</div>
                 <div class="group-description">{{ item.description || '無描述' }}</div>
@@ -85,9 +86,9 @@
         <el-button
           v-if="!isViewingOldVersion"
           type="primary"
-          @click="submitTeacherRanking"
           :disabled="teacherRankings.length === 0"
           :loading="submitting"
+          @click="submitTeacherRanking"
         >
           <i v-if="!submitting" class="fas fa-save"></i>
           提交教師排名
@@ -100,7 +101,7 @@
           <i class="fas fa-arrow-left"></i>
           返回最新版本
         </el-button>
-        <el-button @click="() => handleClose()" :disabled="submitting">
+        <el-button :disabled="submitting" @click="() => handleClose()">
           <i class="fas fa-times"></i>
           取消
         </el-button>
@@ -119,12 +120,16 @@ import DrawerAlertZone from './common/DrawerAlertZone.vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
+import { useStageConsensusAlert } from '@/composables/useStageConsensusAlert'
 
 // Drawer Breadcrumb
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 
 // Drawer Alerts
 const { info, clearAlerts } = useDrawerAlerts()
+
+// 組內共識未完成提醒（成果排名 drawer）
+const { checkPendingConsensus } = useStageConsensusAlert()
 
 // ==================== 接口定義 ====================
 
@@ -224,15 +229,6 @@ const selectedVersionRankings = computed<RankingItem[]>(() => {
       rank: ranking.rank
     }
   })
-})
-
-// 當前步驟索引（用於時間軸高亮）
-const currentStepIndex = computed<number>(() => {
-  if (!selectedVersionId.value || rankingVersions.value.length === 0) {
-    return 0
-  }
-  const index = rankingVersions.value.findIndex(v => v.versionId === selectedVersionId.value)
-  return index >= 0 ? index : 0
 })
 
 // ==================== 方法定義 ====================
@@ -340,10 +336,10 @@ const submitTeacherRanking = async (): Promise<void> => {
   try {
     submitting.value = true
 
-    // 準備排名資料
+    // 準備排名資料（採用元件計算的 dense 弱序 rank，同名共用同一 rank）
     const rankings = teacherRankings.value.map((group, index) => ({
       groupId: group.groupId,
-      rank: index + 1
+      rank: typeof group.rank === 'number' ? group.rank : index + 1
     }))
 
     const httpResponse = await (rpcClient.api.rankings as any).submit.$post({
@@ -401,12 +397,6 @@ const formatVersionDescription = (version: Version): string => {
   return `提交者：${version.teacherDisplayName || version.teacherEmail || '未知'}`
 }
 
-const formatDateTime = (timestamp: number | string): string => {
-  if (!timestamp) return ''
-  const date = new Date(typeof timestamp === 'number' ? timestamp : parseInt(timestamp))
-  return date.toLocaleString('zh-TW')
-}
-
 // ==================== 監聽器 ====================
 
 watch(() => props.visible, (newVal) => {
@@ -415,6 +405,7 @@ watch(() => props.visible, (newVal) => {
     info('您具有總PM權限，可以為此階段的各組提交教師排名，此排名將作為最終評分的重要依據', '教師權限')
     initializeRankings()
     loadVersionHistory()
+    checkPendingConsensus(props.projectId, props.stageId)
   } else {
     clearAlerts()
     resetData()

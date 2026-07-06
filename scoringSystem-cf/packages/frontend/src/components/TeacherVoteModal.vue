@@ -21,7 +21,7 @@
       </el-breadcrumb>
     </template>
 
-    <div class="drawer-body" v-loading="loading" element-loading-text="載入投票資料中...">
+    <div v-loading="loading" class="drawer-body" element-loading-text="載入投票資料中...">
       <!-- Drawer Alert Zone -->
       <DrawerAlertZone />
 
@@ -60,18 +60,22 @@
               item-label="groupName"
               :disabled="submittingSubmissions || isSubmissionPreviewMode"
               :show-actions="true"
+              :enable-grouping="true"
               @update:items="updateSubmissionRankings"
             >
-              <template #default="{ item, index }: { item: any; index: number }">
-                <div class="group-info">
+              <template #default="{ item }: { item: any }">
+                <div class="group-info" :class="{ 'not-in-version': isSubmissionNotInLatestVersion(item) }">
                   <div class="group-header">
                     <div class="group-name">{{ item.groupName }}</div>
-                    <div class="submission-time" v-if="item.submitTime">
+                    <div v-if="item.submitTime" class="submission-time">
                       {{ formatSubmissionTime(item.submitTime) }}
                     </div>
                   </div>
+                  <div v-if="isSubmissionNotInLatestVersion(item)" class="not-in-version-note">
+                    <i class="fas fa-circle-exclamation"></i> 未列於此次排名中
+                  </div>
                   <div class="group-members">{{ formatGroupMembers(item) }}</div>
-                  <div class="submission-preview" v-if="item.reportContent">
+                  <div v-if="item.reportContent" class="submission-preview">
                     {{ truncateContent(item.reportContent) }}
                   </div>
                 </div>
@@ -202,9 +206,9 @@
           v-if="activeTab === 'submissions' && !isViewingOldSubmissionVersion && rankedSubmissions.length > 0"
           type="primary"
           size="large"
-          @click="submitSubmissionRankings"
           :loading="submittingSubmissions"
           :disabled="loading || isSubmissionPreviewMode"
+          @click="submitSubmissionRankings"
         >
           <i class="fas fa-trophy"></i>
           提交成果排名
@@ -215,9 +219,9 @@
           v-if="activeTab === 'comments' && !isViewingOldCommentVersion && rankedComments.length > 0"
           type="primary"
           size="large"
-          @click="submitCommentRankings"
           :loading="submittingComments"
           :disabled="loading || isCommentPreviewMode"
+          @click="submitCommentRankings"
         >
           <i class="fas fa-comments"></i>
           提交評論排名
@@ -293,6 +297,7 @@ import { getErrorMessage } from '@/utils/errorHandler'
 import { useAuth } from '@/composables/useAuth'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
+import { useStageConsensusAlert } from '@/composables/useStageConsensusAlert'
 import { usePointCalculation } from '@/composables/usePointCalculation'
 
 // Drawer Breadcrumb
@@ -300,6 +305,9 @@ const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 
 // Drawer Alerts
 const { addAlert, clearAlerts } = useDrawerAlerts()
+
+// 組內共識未完成提醒（成果排名/投票 drawer）
+const { checkPendingConsensus } = useStageConsensusAlert()
 
 // Point Calculation
 const { calculateRankWeights } = usePointCalculation()
@@ -415,7 +423,8 @@ const emit = defineEmits<{
 }>()
 
 // Vue 3 Best Practice: Use unified useAuth() composable
-const { user: authUser } = useAuth()
+// (call kept for its query-subscription side effect)
+useAuth()
 
 // ========== Reactive State ==========
 
@@ -585,28 +594,13 @@ const commentReward = computed((): number => {
   return props.commentReward || 500
 })
 
-// AllGroupsChart 整合：教師選中成果排名的組別（視為單一單位）
-const submissionSelectedMembers = computed((): Member[] => {
-  if (rankedSubmissions.value.length === 0) return []
-
-  const firstGroup = rankedSubmissions.value[0]
-  // 將整組視為單一單位，每個成員平均分配 100%
-  const memberCount = firstGroup.memberNames?.length || 1
-  const contribution = Math.round(100 / memberCount)
-
-  return firstGroup.memberNames.map((name, idx) => ({
-    email: `${firstGroup.groupId}_member_${idx}`,
-    displayName: name,
-    contribution: idx === 0 ? contribution + (100 - contribution * memberCount) : contribution
-  }))
-})
-
 // 將教師排名的成果轉換為「組」資料（Settlement Mode）
 const rankedSubmissionsAsGroups = computed(() => {
   const globalMinRatio = 5  // 統一基準單位 (5%)
 
-  return rankedSubmissions.value.map((submission, idx) => {
-    const rank = idx + 1
+  return rankedSubmissions.value.map((submission: any, idx) => {
+    // 同名群組共用同一 dense rank，預覽點數時亦反映平手
+    const rank = typeof submission.rank === 'number' ? submission.rank : idx + 1
     const memberNames = submission.memberNames || []
     const memberCount = memberNames.length || 1
 
@@ -614,7 +608,7 @@ const rankedSubmissionsAsGroups = computed(() => {
     const basePercentage = Math.floor(100 / memberCount / 5) * 5
     const remainder = 100 - (basePercentage * memberCount)
 
-    const members = memberNames.map((name, memberIdx) => {
+    const members = memberNames.map((name: string, memberIdx: number) => {
       let contribution = basePercentage
       if (memberIdx < remainder / 5) contribution += 5
 
@@ -650,7 +644,6 @@ const rankedSubmissionsAsGroupsWithPoints = computed(() => {
 
   const groupCount = groups.length
   const rankWeights = calculateRankWeights(groupCount) as Record<number, number>
-  const globalMinRatio = 5
 
   // Calculate total weight
   let totalWeight = 0
@@ -683,17 +676,6 @@ const rankedSubmissionsAsGroupsWithPoints = computed(() => {
 // Vue 3 Best Practice: Use props instead of accessing parent component
 const submissionReward = computed((): number => {
   return props.submissionReward || 1000
-})
-
-// Vue 3 Best Practice: Use props and useAuth() composable
-const currentUserGroupId = computed((): string | null => {
-  // 1. 優先從 props 獲取
-  if (props.currentUserGroupId !== undefined && props.currentUserGroupId !== null) {
-    return props.currentUserGroupId
-  }
-
-  // 2. 從 useAuth() 獲取用戶的 groupId
-  return (authUser.value as any)?.groupId || null
 })
 
 // AI 輔助建議：當前排名類型（用於決定初始顯示模式）
@@ -789,13 +771,16 @@ function handleApplyAIRanking(ranking: string[], mode: 'submission' | 'comment')
  * @param version - 要載入的版本數據
  */
 function loadSubmissionRankingsToEditor(version: Version): void {
-  // 建立 submissionId -> 原始 Submission 的映射
+  // 建立 submissionId -> 原始 Submission 的映射（rankedSubmissions 為最新可投票名單）
   const submissionMap = new Map(rankedSubmissions.value.map(s => [s.submissionId, s]))
+  const usedIds = new Set<string>()
 
   // 根據歷史排名重新排序，並補充完整資料
   const reorderedSubmissions: Submission[] = version.rankings
+    .slice()
     .sort((a, b) => a.rank - b.rank)
     .map(ranking => {
+      usedIds.add(ranking.targetId)
       const original = submissionMap.get(ranking.targetId)
       if (original) {
         return { ...original }
@@ -813,7 +798,13 @@ function loadSubmissionRankingsToEditor(version: Version): void {
     })
     .filter(s => s.submissionId)
 
-  rankedSubmissions.value = reorderedSubmissions
+  // 補上目前可投票（approved）但不在此版本排名中的成果（例如清空投票後新通過組內共識的組），
+  // 排在末位，避免可投票名單在檢視/送出時遺漏新組別。
+  const appendedSubmissions = rankedSubmissions.value.filter(
+    s => s.submissionId && !usedIds.has(s.submissionId)
+  )
+
+  rankedSubmissions.value = [...reorderedSubmissions, ...appendedSubmissions]
 }
 
 /**
@@ -860,7 +851,11 @@ async function loadVersionHistory(autoEnterPreview: boolean = false): Promise<vo
     const submissionVersionsResponse = await httpResponse1.json()
 
     if (submissionVersionsResponse.success && submissionVersionsResponse.data) {
-      submissionVersions.value = submissionVersionsResponse.data.versions || []
+      // 後端依 createdTime DESC 回傳（最新在前），但前端一律以「陣列最後一筆」視為最新版本，
+      // 因此這裡統一改為依 createdTime 升冪排序，確保 [length-1] 永遠是最新版本。
+      submissionVersions.value = (submissionVersionsResponse.data.versions || [])
+        .slice()
+        .sort((a: Version, b: Version) => Number(a.createdTime) - Number(b.createdTime))
 
       if (submissionVersions.value.length > 0) {
         const latestVersion = submissionVersions.value[submissionVersions.value.length - 1]
@@ -891,7 +886,10 @@ async function loadVersionHistory(autoEnterPreview: boolean = false): Promise<vo
     const commentVersionsResponse = await httpResponse2.json()
 
     if (commentVersionsResponse.success && commentVersionsResponse.data) {
-      commentVersions.value = commentVersionsResponse.data.versions || []
+      // 同上：依 createdTime 升冪排序，確保 [length-1] 為最新版本
+      commentVersions.value = (commentVersionsResponse.data.versions || [])
+        .slice()
+        .sort((a: Version, b: Version) => Number(a.createdTime) - Number(b.createdTime))
 
       if (commentVersions.value.length > 0) {
         const latestVersion = commentVersions.value[commentVersions.value.length - 1]
@@ -1033,46 +1031,20 @@ function handleCommentVersionChange(versionId: string): void {
   }
 }
 
-function backToLatestSubmission(): void {
-  if (submissionVersions.value.length > 0) {
-    const latestVersion = submissionVersions.value[submissionVersions.value.length - 1]
-    selectedSubmissionVersionId.value = latestVersion.versionId
-    // 退出預覽模式
-    loadedSubmissionVersionId.value = null
-    clearAlerts()
-  }
-}
-
-function backToLatestComment(): void {
-  if (commentVersions.value.length > 0) {
-    const latestVersion = commentVersions.value[commentVersions.value.length - 1]
-    selectedCommentVersionId.value = latestVersion.versionId
-    // 退出預覽模式
-    loadedCommentVersionId.value = null
-    clearAlerts()
-  }
-}
-
-function exitSubmissionPreviewMode(): void {
+async function exitSubmissionPreviewMode(): Promise<void> {
   loadedSubmissionVersionId.value = null
-  // 返回最新版本
-  if (submissionVersions.value.length > 0) {
-    const latestVersion = submissionVersions.value[submissionVersions.value.length - 1]
-    selectedSubmissionVersionId.value = latestVersion.versionId
-  }
   clearAlerts()
-  ElMessage.success('已退出檢視模式，可重新編輯投票')
+  // 重新載入最新可投票名單，避免停在被覆蓋的舊版本資料
+  await loadTeacherVoteData()
+  ElMessage.success('已退出檢視模式，已載入最新可投票名單')
 }
 
-function exitCommentPreviewMode(): void {
+async function exitCommentPreviewMode(): Promise<void> {
   loadedCommentVersionId.value = null
-  // 返回最新版本
-  if (commentVersions.value.length > 0) {
-    const latestVersion = commentVersions.value[commentVersions.value.length - 1]
-    selectedCommentVersionId.value = latestVersion.versionId
-  }
   clearAlerts()
-  ElMessage.success('已退出檢視模式，可重新編輯投票')
+  // 重新載入最新可投票名單，避免停在被覆蓋的舊版本資料
+  await loadTeacherVoteData()
+  ElMessage.success('已退出檢視模式，已載入最新可投票名單')
 }
 
 function formatVersionTitle(version: Version, index: number): string {
@@ -1099,6 +1071,25 @@ function formatVersionDescription(version: Version): string {
 
 function updateSubmissionRankings(newRankings: Submission[]): void {
   rankedSubmissions.value = newRankings
+}
+
+// 最新已提交版本所包含的 submissionId（用於標記「未列於此次排名」的新組）
+const latestVersionSubmissionIds = computed(
+  () => new Set(latestSubmissionRankings.value.map(r => r.submissionId))
+)
+
+/**
+ * 判斷某成果是否「不在最新已提交的教師排名版本中」
+ * （例如清空投票後新通過組內共識的組，被補進可投票名單但尚未排入此版本）
+ * 僅在「唯讀檢視模式」標記；一旦回到可編輯（重新投票）模式就不標記，因為使用者正在設定新排名。
+ */
+function isSubmissionNotInLatestVersion(item: any): boolean {
+  return (
+    (isSubmissionPreviewMode.value || isViewingOldSubmissionVersion.value) &&
+    latestSubmissionRankings.value.length > 0 &&
+    !!item?.submissionId &&
+    !latestVersionSubmissionIds.value.has(item.submissionId)
+  )
 }
 
 async function loadTeacherVoteData(): Promise<void> {
@@ -1213,7 +1204,7 @@ async function loadTeacherVoteData(): Promise<void> {
         .map((comment: any) => {
           // 將 mentionedGroups ID 轉換為顯示名稱
           let mentionedGroups: string[] = []
-          let mentionedGroupNames: string[] = []
+          let mentionedGroupNames: string[]
           try {
             if (comment.mentionedGroups) {
               mentionedGroups = typeof comment.mentionedGroups === 'string'
@@ -1260,6 +1251,9 @@ async function loadTeacherVoteData(): Promise<void> {
       rankedComments.value = []
     }
 
+    // ===== 4. 檢查是否有組別未完成組內共識（無法參與投票） =====
+    await checkPendingConsensus(props.projectId, props.stageId)
+
   } catch (error) {
     console.error('❌ [TeacherVoteModal] 載入教師投票數據失敗:', error)
     ElMessage.error('載入投票數據失敗')
@@ -1298,11 +1292,12 @@ async function submitSubmissionRankings(): Promise<void> {
   try {
     submittingSubmissions.value = true
 
-    const submissionRankings = rankedSubmissions.value.map((submission, index) => ({
+    const submissionRankings = rankedSubmissions.value.map((submission: any, index) => ({
       type: 'submission' as const,
       targetId: submission.submissionId,
       groupId: submission.groupId,
-      rank: index + 1
+      // 採用元件計算的 dense 弱序 rank（同名共用同一 rank），回退為位置序
+      rank: typeof submission.rank === 'number' ? submission.rank : index + 1
     }))
 
     const httpResponse = await (rpcClient.api.rankings as any)['teacher-comprehensive-vote'].$post({
@@ -1408,11 +1403,6 @@ function handleClose(done?: () => void): void {
       emit('update:visible', false)
     }
   }
-}
-
-// Vue 3 Best Practice: Use useAuth() composable
-function getCurrentUserEmail(): string {
-  return authUser.value?.userEmail || ''
 }
 
 // ========== Watchers ==========
@@ -1621,6 +1611,24 @@ watch(activeTab, (newTab) => {
 .group-info, .comment-info {
   flex: 1;
   min-width: 0;
+}
+
+/* 未列於此次排名中的成果（新通過共識、補進可投票名單的組） */
+.group-info.not-in-version {
+  border: 2px dashed #e6a23c;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fffbf0;
+}
+
+.not-in-version-note {
+  color: #e6a23c;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .group-header, .comment-header {

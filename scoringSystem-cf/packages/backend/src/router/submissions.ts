@@ -23,6 +23,7 @@ import { requireActiveStage } from '../middleware/require-stage-status';
 import {
   submitDeliverable,
   getStageSubmissions,
+  getStageConsensusStatus,
   getSubmissionDetails,
   // updateSubmission, // DEPRECATED - not used by frontend
   deleteSubmission,
@@ -150,6 +151,31 @@ app.post(
     );
 
     return response;
+  }
+);
+
+/**
+ * Get per-group intra-group consensus (approval) status for a stage.
+ * Used by ranking/voting drawers to warn about groups that cannot vote.
+ * Body: { projectId, stageId }
+ */
+app.post(
+  '/stage-consensus-status',
+  zValidator('json', ListSubmissionsRequestSchema),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+
+    const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
+    if (!hasPermission) {
+      return c.json({
+        success: false,
+        error: 'Insufficient permissions to view consensus status',
+        errorCode: 'ACCESS_DENIED'
+      }, 403);
+    }
+
+    return await getStageConsensusStatus(c.env, body.projectId, body.stageId);
   }
 );
 

@@ -7,6 +7,7 @@ import type { Env } from '../../types';
 import { successResponse, errorResponse } from '../../utils/response';
 import { generateId } from '../../utils/id-generator';
 import { logApiAction } from '../../utils/logging';
+import { validateWeakOrder } from '@repo/shared';
 
 /**
  * Submit individual stage ranking vote
@@ -61,11 +62,11 @@ export async function submitStageRankingVote(
       return errorResponse('EMPTY_RANKINGS', 'Rankings array cannot be empty');
     }
 
-    // Check for duplicate ranks
+    // Validate ranks form a valid weak ordering (ties/同名 allowed, tiers must be
+    // contiguous from 1 with no gaps)
     const ranks = rankings.map(r => r.rank);
-    const uniqueRanks = new Set(ranks);
-    if (ranks.length !== uniqueRanks.size) {
-      return errorResponse('DUPLICATE_RANKS', 'Each group must have a unique rank');
+    if (!validateWeakOrder(ranks)) {
+      return errorResponse('INVALID_RANKS', 'Ranks must form a valid weak ordering (ties allowed, tiers contiguous from 1)');
     }
 
     // Verify all groups exist in the project

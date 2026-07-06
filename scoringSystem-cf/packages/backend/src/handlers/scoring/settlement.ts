@@ -29,6 +29,7 @@ import { queueBatchNotifications } from '../../queues/notification-producer';
 import { getStageMemberEmails } from '@utils/notifications';
 import { getEffectiveScoringConfig, calculateCommentRewardLimit } from '@utils/scoring-config';
 import { generateId } from '@utils/id-generator';
+import { denseRanksToMidRanks } from '@repo/shared';
 
 /**
  * Settlement step constants
@@ -220,7 +221,7 @@ export async function previewStageScores(
 
     // Calculate rankings and scores
     const rewardPool = (stage.reportRewardPool as number) || 0;
-    const { rankings, scores, weightedScores, studentScores, teacherScores } = calculateWeightedScoresFromVotes(
+    const { rankings, scores, weightedScores } = calculateWeightedScoresFromVotes(
       teacherVotes,
       studentVotes,
       rewardPool
@@ -1184,6 +1185,20 @@ function _calculateScoresFromVotesCore<T extends string>(
   studentScores: Record<T, number>;
   teacherScores: Record<T, number>;
 } {
+  // Normalize each voter's dense weak-order ranks into mid-ranks before averaging.
+  // This is the linchpin of fairness for the tie (同名) mechanism: mid-rank keeps
+  // every ballot's total rank mass at N(N+1)/2, so ties cannot inflate scores.
+  // Strict (all-unique) ballots normalize to themselves, so existing data is
+  // unaffected.
+  teacherVotes = teacherVotes.map(vote => ({
+    voterEmail: vote.voterEmail,
+    rankings: denseRanksToMidRanks(vote.rankings) as Record<T, number>
+  }));
+  studentVotes = studentVotes.map(vote => ({
+    voterEmail: vote.voterEmail,
+    rankings: denseRanksToMidRanks(vote.rankings) as Record<T, number>
+  }));
+
   // Collect all items (groups/comments) from both teacher and student votes
   const itemIds = new Set<T>();
   teacherVotes.forEach(vote => {
@@ -1405,7 +1420,7 @@ function _calculateScoresFromVotesCore<T extends string>(
  * @param teacherWeight - Weight for teacher ranking (0-1, default 0.3)
  * @returns Object containing rankings, scores, and weighted scores
  */
-function calculateWeightedScoresFromVotes(
+export function calculateWeightedScoresFromVotes(
   teacherVotes: Array<{ voterEmail: string; rankings: Record<string, number> }>,
   studentVotes: Array<{ voterEmail: string; rankings: Record<string, number> }>,
   totalPoints: number,

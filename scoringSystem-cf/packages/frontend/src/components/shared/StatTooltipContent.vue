@@ -9,7 +9,7 @@
     <div v-if="time" class="tooltip-row">
       <strong>時間:</strong> {{ time }}
     </div>
-    <div v-if="customMessage" class="tooltip-row">
+    <div v-if="customMessage" class="tooltip-row tooltip-message">
       {{ customMessage }}
     </div>
   </div>
@@ -51,5 +51,10 @@ defineProps({
 
 .tooltip-row:last-child {
   margin-bottom: 0;
+}
+
+/* customMessage 支援以換行符呈現多行（例如未投票成員清單） */
+.tooltip-message {
+  white-space: pre-line;
 }
 </style>

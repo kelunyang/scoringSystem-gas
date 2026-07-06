@@ -62,6 +62,9 @@ export interface RankingProposal {
   votes: VoteRecord[]
   userVote: 'support' | 'oppose' | null | 1 | -1
   votingResult: 'agree' | 'disagree' | 'tie' | 'no_votes'
+  withdrawnTime?: number | null
+  withdrawnBy?: string | null
+  withdrawnReason?: string | null
 }
 
 /**

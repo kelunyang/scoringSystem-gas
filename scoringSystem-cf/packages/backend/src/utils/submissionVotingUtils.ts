@@ -3,6 +3,8 @@
  * 用於教師投票和學生投票共用的驗證邏輯
  */
 
+import { validateWeakOrder } from '@repo/shared';
+
 
 /**
  * 驗證成果是否符合投票資格
@@ -123,11 +125,10 @@ export function validateSubmissionRankingData(
     return { valid: false, error: '不能對同一成果投票多次' };
   }
 
-  // 4. 檢查重複的 rank
+  // 4. 檢查 rank 形成合法弱序（允許同名：相同 rank 可重複，層級需連續不跳號）
   const ranks = rankingData.map(r => r.rank);
-  const uniqueRanks = new Set(ranks);
-  if (ranks.length !== uniqueRanks.size) {
-    return { valid: false, error: 'rank 不能重複' };
+  if (!validateWeakOrder(ranks)) {
+    return { valid: false, error: '排名必須形成合法弱序（可同名，但名次層級需從 1 連續不跳號）' };
   }
 
   return { valid: true };

@@ -339,6 +339,57 @@ export async function getStageSubmissions(
 }
 
 /**
+ * Get per-group intra-group consensus (approval) status for a stage.
+ *
+ * For each group's latest non-withdrawn submission, reports whether it is approved
+ * (consensus complete). Groups whose latest submission is still 'submitted'
+ * (approvedTime IS NULL) cannot participate in voting — the frontend uses this to
+ * warn "有 X, Y 組未完成組內共識，無法參與投票".
+ */
+export async function getStageConsensusStatus(
+  env: Env,
+  projectId: string,
+  stageId: string
+): Promise<Response> {
+  try {
+    const result = await env.DB.prepare(`
+      WITH latest AS (
+        SELECT
+          s.groupId,
+          s.isApproved,
+          s.status,
+          ROW_NUMBER() OVER (PARTITION BY s.groupId ORDER BY s.submitTime DESC) AS rn
+        FROM submissions_with_status s
+        WHERE s.projectId = ? AND s.stageId = ? AND s.withdrawnTime IS NULL
+      )
+      SELECT l.groupId, g.groupName, l.isApproved, l.status
+      FROM latest l
+      JOIN groups g ON l.groupId = g.groupId
+      WHERE l.rn = 1
+      ORDER BY g.groupName
+    `).bind(projectId, stageId).all();
+
+    const groups = (result.results || []).map((row: any) => ({
+      groupId: row.groupId as string,
+      groupName: (row.groupName as string) || `組別 ${row.groupId}`,
+      approved: Number(row.isApproved) === 1,
+      status: row.status as string
+    }));
+
+    const pendingGroups = groups.filter(g => !g.approved);
+
+    return successResponse({
+      groups,
+      pendingGroups,
+      hasPendingConsensus: pendingGroups.length > 0
+    });
+  } catch (error) {
+    console.error('Get stage consensus status error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get stage consensus status');
+  }
+}
+
+/**
  * Get submission details
  */
 export async function getSubmissionDetails(
@@ -1017,7 +1068,7 @@ export async function getGroupStageVotingHistory(
       const submissionVotes = allVotes.filter(v => v.submissionId === submission.submissionId);
 
       // Calculate totalMembers from this submission's participationProposal
-      let totalMembers = 0;
+      let totalMembers: number;
       try {
         const proposedParticipation = parseJSON<Record<string, number>>(submission.participationProposal as string, {});
         const participants = Object.keys(proposedParticipation).filter(

@@ -53,6 +53,7 @@ export * from './schemas/wallets';
 export * from './utils/password';
 export * from './utils/code-generator';
 export * from './utils/secure-compare';
+export * from './utils/ranking';
 
 // Export theme configuration
 export * from './theme';

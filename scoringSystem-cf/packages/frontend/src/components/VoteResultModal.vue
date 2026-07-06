@@ -1,12 +1,12 @@
 <template>
   <el-drawer
     :model-value="visible"
-    @update:model-value="handleVisibleChange"
     direction="btt"
     size="100%"
     :before-close="handleClose"
     :z-index="2000"
     class="drawer-navy"
+    @update:model-value="handleVisibleChange"
   >
     <template #header>
       <el-breadcrumb separator=">">
@@ -21,7 +21,7 @@
       </el-breadcrumb>
     </template>
 
-    <div class="vote-drawer-content" v-loading="loading" element-loading-text="載入投票資料中...">
+    <div v-loading="loading" class="vote-drawer-content" element-loading-text="載入投票資料中...">
       <!-- DrawerAlertZone 統一管理 Alerts -->
       <DrawerAlertZone />
 
@@ -37,15 +37,15 @@
         <!-- 使用 VersionTimeline 組件 -->
         <VersionTimeline
           :versions="proposalVersions"
-          :currentVersionId="selectedVersionId"
-          versionIdKey="proposalId"
-          createdTimeKey="createdTime"
-          displayNameKey="proposerDisplayName"
-          :formatTitleFn="(version: any, index: number) =>
+          :current-version-id="selectedVersionId"
+          version-id-key="proposalId"
+          created-time-key="createdTime"
+          display-name-key="proposerDisplayName"
+          :format-title-fn="(version: any, index: number) =>
             index === proposalVersions.length - 1 ? '最終版本' : formatVersionStepTime(version.createdTime)"
           @version-change="onVersionChange"
         >
-          <template #description="{ version, index }: { version: any; index: number }">
+          <template #description="{ version }: { version: any }">
             <div class="version-step-description">
               <div class="submitter-line">
                 提交者：{{ version.proposerDisplayName }}
@@ -75,22 +75,26 @@
           <DraggableRankingList
             :items="displayRankings"
             :disabled="!!(hasExistingProposal && !isResubmitting) || isReadOnly"
-            itemKey="groupId"
-            itemLabel="groupName"
+            item-key="groupId"
+            item-label="groupName"
+            :enable-grouping="true"
             @update:items="handleRankingUpdate"
           >
             <template #default="{ item }: { item: any }">
-              <div class="group-info">
+              <div class="group-info" :class="{ 'not-in-version': isGroupNotInProposalVersion(item) }">
                 <div class="group-header">
                   <div class="group-name">{{ item.groupName }}</div>
-                  <div class="submission-time" v-if="item.submitTime">
+                  <div v-if="item.submitTime" class="submission-time">
                     {{ formatSubmissionTime(item.submitTime) }}
                   </div>
                 </div>
-                <div class="group-members" v-if="item.memberNames && item.memberNames.length > 0">
+                <div v-if="isGroupNotInProposalVersion(item)" class="not-in-version-note">
+                  <i class="fas fa-circle-exclamation"></i> 未列於此次排名中
+                </div>
+                <div v-if="item.memberNames && item.memberNames.length > 0" class="group-members">
                   成員：{{ item.memberNames.join('、') }}
                 </div>
-                <div class="submission-preview" v-if="item.reportContent">
+                <div v-if="item.reportContent" class="submission-preview">
                   {{ truncateContent(item.reportContent) }}
                 </div>
               </div>
@@ -101,12 +105,12 @@
         <!-- 兩欄對比顯示：查看舊版本且有有效提案時 -->
         <RankingComparison
           v-if="isViewingOldVersion && hasActiveProposal"
-          leftTitle="最新版本"
-          :rightTitle="formatVersionStepTime(currentProposal?.createdTime || 0)"
-          :leftItems="latestProposalRankings"
-          :rightItems="displayRankings"
-          itemKey="groupId"
-          itemLabel="groupName"
+          left-title="最新版本"
+          :right-title="formatVersionStepTime(currentProposal?.createdTime || 0)"
+          :left-items="latestProposalRankings"
+          :right-items="displayRankings"
+          item-key="groupId"
+          item-label="groupName"
         />
 
         <!-- 點數分配視覺化 -->
@@ -132,15 +136,15 @@
           />
         </div>
 
-        <div class="ranking-list-container" v-if="!isViewingOldVersion">
+        <div v-if="!isViewingOldVersion" class="ranking-list-container">
           <div style="display: none;"></div>
           
-          <div class="ranking-hint" v-if="isResubmitting">
+          <div v-if="isResubmitting" class="ranking-hint">
             <i class="fas fa-lightbulb"></i>
             拖曳或使用箭頭按鈕調整排名順序
           </div>
           
-          <div class="ranking-info" v-if="!hasExistingProposal || isResubmitting">
+          <div v-if="!hasExistingProposal || isResubmitting" class="ranking-info">
             <i class="fas fa-info-circle"></i>
             注意：排名列表已排除您所屬的組別，以確保投票公正性
           </div>
@@ -157,13 +161,13 @@
         </div>
 
         <VoteMajorityTsumTsumChart
-          :voteData="(tsumTsumVoteData as any)"
-          :versionLabels="versionLabels"
-          :versionStatuses="versionStatuses"
-          :versionVotingResults="versionVotingResults"
-          :groupMemberCount="userGroupInfo?.groupMemberCount || 0"
-          :currentUserEmail="user?.userEmail || ''"
-          chartTitle="各版本投票分佈（多數決）"
+          :vote-data="(tsumTsumVoteData as any)"
+          :version-labels="versionLabels"
+          :version-statuses="versionStatuses"
+          :version-voting-results="versionVotingResults"
+          :group-member-count="userGroupInfo?.groupMemberCount || 0"
+          :current-user-email="user?.userEmail || ''"
+          chart-title="各版本投票分佈（多數決）"
         />
 
       </div>
@@ -228,9 +232,9 @@
           v-if="showSubmitProposalButton"
           type="primary"
           size="large"
-          @click="submitNewProposal"
           :loading="isSubmittingNewProposal"
           :disabled="!hasValidRanking || isSubmittingNewProposal"
+          @click="submitNewProposal"
         >
           <i v-if="!isSubmittingNewProposal" class="fas fa-save"></i>
           提交排名提案
@@ -241,10 +245,10 @@
           v-if="showVoteButtons"
           type="success"
           size="large"
-          @click="vote('support')"
           :loading="isSubmittingVote && voteType === 'support'"
           :disabled="isSubmittingVote"
           :class="{ voted: userVote === 'support' }"
+          @click="vote('support')"
         >
           <i v-if="!isSubmittingVote || voteType !== 'support'" class="fas fa-thumbs-up"></i>
           同意
@@ -256,10 +260,10 @@
           v-if="showVoteButtons"
           type="danger"
           size="large"
-          @click="vote('oppose')"
           :loading="isSubmittingVote && voteType === 'oppose'"
           :disabled="isSubmittingVote"
           :class="{ voted: userVote === 'oppose' }"
+          @click="vote('oppose')"
         >
           <i v-if="!isSubmittingVote || voteType !== 'oppose'" class="fas fa-thumbs-down"></i>
           不同意
@@ -344,7 +348,7 @@
       </div>
     </template>
 
-    <div class="drawer-body" v-if="currentProposalInfo">
+    <div v-if="currentProposalInfo" class="drawer-body">
       <!-- DrawerAlertZone 統一管理 Alerts -->
       <DrawerAlertZone />
 
@@ -422,8 +426,8 @@
         </el-button>
         <el-button
           size="large"
-          @click="handleWithdrawDrawerClose"
           :disabled="isWithdrawing"
+          @click="handleWithdrawDrawerClose"
         >
           <i class="fas fa-times"></i>
           取消
@@ -454,7 +458,7 @@
       </div>
     </template>
 
-    <div class="drawer-body" v-if="currentResetInfo">
+    <div v-if="currentResetInfo" class="drawer-body">
       <!-- DrawerAlertZone 統一管理 Alerts -->
       <DrawerAlertZone />
 
@@ -537,8 +541,8 @@
         </el-button>
         <el-button
           size="large"
-          @click="handleResetDrawerClose"
           :disabled="isResetting"
+          @click="handleResetDrawerClose"
         >
           <i class="fas fa-times"></i>
           取消
@@ -700,6 +704,22 @@ const originalRankings = ref<RankingItem[]>([])
 const submittedGroupsFromHook = computed(() => rankingProposals.submittedGroups.value)
 const localSubmittedGroups = ref<SubmittedGroup[]>([])
 const hasUserDragged = ref(false)
+// 此提案版本原本排入的 groupId 集合（用於標記「未列於此次排名中」的新組）
+const proposalGroupIds = ref<Set<string>>(new Set())
+
+/**
+ * 某組是否「不在目前檢視的提案版本中」（例如新通過共識後才補進可投票名單的組）。
+ * 僅在「唯讀檢視既有提案」時標記；一旦進入重新投票（編輯）模式就不標記，因為使用者正在設定新排名。
+ */
+function isGroupNotInProposalVersion(item: any): boolean {
+  return (
+    hasExistingProposal.value &&
+    !isResubmitting.value &&
+    proposalGroupIds.value.size > 0 &&
+    !!item?.groupId &&
+    !proposalGroupIds.value.has(item.groupId)
+  )
+}
 
 // Proposal version data (from hook)
 const proposalVersions = computed(() => rankingProposals.proposals.value)
@@ -708,7 +728,6 @@ const currentProposal = computed(() => rankingProposals.currentProposal.value ||
 
 // User vote state (from hook)
 const userVote = computed(() => rankingProposals.userVote.value)
-const voteHistory = computed(() => currentProposal.value?.votes || [])
 
 // User group info (prefer hook, fallback to props)
 const userGroupInfo = computed(() => rankingProposals.userGroupInfo.value || props.userGroupInfo)
@@ -780,7 +799,6 @@ const userHasVoted = computed(() => {
   return current?.userVote === 'support' || current?.userVote === 'oppose'
 })
 
-const showInitialProposalButton = computed(() => false)
 
 const showSubmitProposalButton = computed(() => {
   if (isReadOnly.value) return false
@@ -964,6 +982,8 @@ const currentProposalInfo = computed(() => {
     totalVotes: proposal.totalVotes || 0,
     status: proposal.status,
     votingResult: proposal.votingResult,
+    withdrawnBy: proposal.withdrawnBy || null,
+    withdrawnReason: proposal.withdrawnReason || null,
     rankingsCount: displayRankings.value.length
   }
 })
@@ -988,6 +1008,8 @@ const currentResetInfo = computed(() => {
     memberCount: userGroupInfo.value?.groupMemberCount || 0,
     status: proposal.status,
     votingResult: proposal.votingResult,
+    withdrawnBy: proposal.withdrawnBy || null,
+    withdrawnReason: proposal.withdrawnReason || null,
     rankingsCount: displayRankings.value.length,
     resetCount: resetCount.value
   }
@@ -1192,6 +1214,7 @@ function processProposalRankings(proposal: { proposalId?: string; rankingData?: 
   if (!proposal || !proposal.proposalId) {
     currentRankings.value = []
     originalRankings.value = []
+    proposalGroupIds.value = new Set()
     return
   }
 
@@ -1199,6 +1222,13 @@ function processProposalRankings(proposal: { proposalId?: string; rankingData?: 
     const rankingData = typeof proposal.rankingData === 'string'
       ? JSON.parse(proposal.rankingData)
       : proposal.rankingData
+
+    // 記錄此版本原本排入的 groupId（供「未列於此次排名中」標記使用）
+    proposalGroupIds.value = new Set(
+      Array.isArray(rankingData)
+        ? (rankingData as ProposalRankingItem[]).map(r => r.groupId)
+        : Object.keys(rankingData || {})
+    )
 
     if (Array.isArray(rankingData)) {
       currentRankings.value = (rankingData as ProposalRankingItem[])
@@ -1236,6 +1266,25 @@ function processProposalRankings(proposal: { proposalId?: string; rankingData?: 
   } catch (e) {
     console.warn('Failed to parse ranking data:', e)
     currentRankings.value = []
+  }
+
+  // 補上目前可投票（approved）但不在此提案版本中的組（例如清空投票後新通過共識的組），
+  // 排在末位，讓使用者即使從舊版載入排名，也看得到並可重新納入該組。
+  const includedGroupIds = new Set(currentRankings.value.map(r => r.groupId))
+  const maxRank = currentRankings.value.reduce((m, r) => Math.max(m, r.rank || 0), 0)
+  const appendedGroups = localSubmittedGroups.value
+    .filter((g: any) => g && g.groupId && !includedGroupIds.has(g.groupId))
+    .map((g: any, i: number) => ({
+      groupId: g.groupId,
+      rank: maxRank + i + 1,
+      submissionId: g.submissionId || '',
+      groupName: g.groupName || `群組 ${String(g.groupId).slice(-4)}`,
+      memberNames: g.memberNames || [],
+      submitTime: g.submitTime || 0,
+      reportContent: g.reportContent || ''
+    }))
+  if (appendedGroups.length > 0) {
+    currentRankings.value = [...currentRankings.value, ...appendedGroups]
   }
 
   originalRankings.value = [...currentRankings.value]
@@ -1277,7 +1326,7 @@ function loadLatestProposalRankings(proposalId: string) {
   const proposal = proposalVersions.value.find(p => p.proposalId === proposalId)
   if (!proposal) return
 
-  let rankingData: ProposalRankingItem[] = []
+  let rankingData: ProposalRankingItem[]
   try {
     rankingData = typeof proposal.rankingData === 'string'
       ? JSON.parse(proposal.rankingData)
@@ -1375,18 +1424,15 @@ async function resetVotes(reason = '') {
   }
 }
 
-function startInitialProposal() {
-  // No longer needed - kept for template compatibility
-}
-
 async function submitNewProposal() {
   if (isSubmittingNewProposal.value || !hasValidRanking.value) return
 
   try {
     const targetArray = hasExistingProposal.value ? currentRankings.value : localSubmittedGroups.value
-    const rankingData: RankingData[] = targetArray.map((group, index) => ({
+    const rankingData: RankingData[] = targetArray.map((group: any, index) => ({
       groupId: group.groupId,
-      rank: index + 1,
+      // 採用元件計算的 dense 弱序 rank（同名共用同一 rank），回退為位置序
+      rank: typeof group.rank === 'number' ? group.rank : index + 1,
       submissionId: group.submissionId
     }))
 
@@ -1394,6 +1440,9 @@ async function submitNewProposal() {
 
     isResubmitting.value = false
     hasStartedProposal.value = false
+    // 重設選取版本，讓 currentProposal 在重新抓取後自動指向「剛送出的新版本」，
+    // 否則 proposalGroupIds 會停留在舊版本，導致新組仍被標記「未列於此次排名中」。
+    selectedVersionId.value = ''
 
     emit('resubmit', {
       success: true,
@@ -1440,14 +1489,7 @@ function formatVersionStepTime(timestamp: number) {
   }).replace(/\//g, '/').replace(/,/g, '')
 }
 
-function getStepStatus(version: { status: string }) {
-  if (version.status !== 'withdrawn') {
-    return 'process'
-  }
-  return ''
-}
-
-function getVersionStatusText(version: { status?: string; votingResult?: string } | null) {
+function getVersionStatusText(version: { status?: string; votingResult?: string; withdrawnBy?: string | null; withdrawnReason?: string | null } | null) {
   if (!version) return ''
 
   if (version.status === 'settled') {
@@ -1462,6 +1504,10 @@ function getVersionStatusText(version: { status?: string; votingResult?: string 
   }
 
   if (version.status === 'withdrawn') {
+    // 強制撤回時帶有理由：顯示給組員看「被管理員／老師強制撤回的舊版本」
+    if (version.withdrawnReason) {
+      return `已撤回（被強制撤回：${version.withdrawnReason}）`
+    }
     return '已撤回'
   }
 
@@ -1505,7 +1551,7 @@ function formatSubmissionTime(timestamp: number) {
 
 function truncateContent(content: string, maxLength = 100) {
   if (!content) return ''
-  const plainText = content.replace(/[#*`>\-\[\]]/g, '').trim()
+  const plainText = content.replace(/[#*`>\-[\]]/g, '').trim()
   return plainText.length > maxLength
     ? plainText.substring(0, maxLength) + '...'
     : plainText
@@ -1548,9 +1594,6 @@ function getMemberInitials(member: GroupMember) {
   const name = member.displayName || member.userEmail
   return generateMemberInitials({ email: member.userEmail, displayName: name } as any)
 }
-
-// Expose submittedGroups alias for template compatibility
-const submittedGroups = localSubmittedGroups
 </script>
 
 <style scoped>
@@ -1786,6 +1829,24 @@ const submittedGroups = localSubmittedGroups
 
 .group-info {
   flex: 1;
+}
+
+/* 未列於此次排名中的組（新通過共識、補進可投票名單的組） */
+.group-info.not-in-version {
+  border: 2px dashed #e6a23c;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fffbf0;
+}
+
+.not-in-version-note {
+  color: #e6a23c;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .group-header {
