@@ -9,7 +9,7 @@
     >
       <span class="user-btn" :class="{ 'sudo-active': sudoActive }">
         <!-- User Avatar -->
-        <div class="user-avatar">
+        <div ref="avatarContainerRef" class="user-avatar">
           <el-avatar
             :src="avatarUrl"
             :alt="`${user.displayName}的頭像`"
@@ -138,7 +138,8 @@
   </div>
 </template>
 
-<script>
+<script setup lang="ts">
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import NotificationCenter from './NotificationCenter.vue'
 import { usePermissionsDrawerStore } from '@/stores/permissionsDrawer'
 import { useSudoStore } from '@/stores/sudo'
@@ -158,540 +159,538 @@ const FIREWORK_RANDOM_DISTANCE = 20
 const FIREWORK_DURATION = 1500
 const FIREWORK_FINAL_DISTANCE_MULTIPLIER = 1.3
 
-export default {
-  name: 'TopBarUserControls',
-  components: {
-    NotificationCenter
-  },
-  props: {
-    variant: {
-      type: String,
-      default: 'topbar',
-      validator: (val) => ['topbar'].includes(val)
-    },
-    user: {
-      type: Object,
-      default: null
-    },
-    sessionPercentage: {
-      type: Number,
-      default: 100
-    },
-    remainingTime: {
-      type: Number,
-      default: 0
-    },
-    userEmail: {
-      type: String,
-      default: ''
-    },
-    permissions: {
-      type: Array,
-      default: null
-    },
-    projectPermission: {
-      type: String,
-      default: null
-    },
-    availableRoles: {
-      type: Array,
-      default: () => []
-    },
-    currentRole: {
-      type: String,
-      default: null
-    },
-    projectId: {
-      type: String,
-      default: null
-    },
-    permissionLevel: {
-      type: Number,
-      default: null
-    },
-    wealthRankings: {
-      type: Array,
-      default: () => []
-    }
-  },
-  emits: ['user-command'],
-  data() {
-    return {
-      avatarError: false,
-      activeIndex: 0,
-      flipTimer: null,
-      isFlipping: false,
-      // Session timer animation state
-      maxSessionTimeout: 86400000, // 24 hours in ms (从 KV 读取，默认值)
-      lastBlinkThreshold: 100, // 用于追踪上一次触发闪烁的阈值
-      blinkBurst: false, // 是否处于一轮阈值穿越闪烁中（由 sessionPercentage watcher 设置）
-      // Sudo store instance
-      sudoStore: null
-    }
-  },
-  computed: {
-    // Sudo mode computed properties
-    sudoActive() {
-      return this.sudoStore?.isActive || false
-    },
-    sudoDisplayInfo() {
-      return this.sudoStore?.displayInfo || null
-    },
-    displayUserEmail() {
-      return this.userEmail || this.user?.userEmail || ''
-    },
-    avatarUrl() {
-      if (this.avatarError || !this.user) {
-        // Fallback to initials avatar
-        return this.generateInitialsAvatar()
+interface TopBarUser {
+  displayName?: string
+  userEmail?: string
+  avatarSeed?: string
+  avatarStyle?: string
+  avatarOptions?: string | Record<string, unknown>
+  permissions?: string[]
+}
+
+interface UserBadge {
+  type: string
+  icon: string
+  color: string
+  label: string
+  rank?: number
+  isFirst?: boolean
+}
+
+interface WealthRanking {
+  userEmail: string
+  rank: number
+}
+
+const props = withDefaults(defineProps<{
+  variant?: 'topbar'
+  user?: TopBarUser | null
+  sessionPercentage?: number
+  remainingTime?: number
+  userEmail?: string
+  permissions?: string[] | null
+  projectPermission?: string | null
+  availableRoles?: string[]
+  currentRole?: string | null
+  projectId?: string | null
+  permissionLevel?: number | null
+  wealthRankings?: WealthRanking[]
+}>(), {
+  variant: 'topbar',
+  user: null,
+  sessionPercentage: 100,
+  remainingTime: 0,
+  userEmail: '',
+  permissions: null,
+  projectPermission: null,
+  availableRoles: () => [],
+  currentRole: null,
+  projectId: null,
+  permissionLevel: null,
+  wealthRankings: () => []
+})
+
+const emit = defineEmits<{
+  'user-command': [command: string]
+}>()
+
+// Sudo store（script setup 可直接初始化；initFromStorage 保持在 mounted 執行）
+const sudoStore = useSudoStore()
+
+const avatarError = ref(false)
+const activeIndex = ref(0)
+const flipTimer = ref<ReturnType<typeof setInterval> | null>(null)
+const isFlipping = ref(false)
+// Session timer animation state
+const maxSessionTimeout = ref(86400000) // 24 hours in ms (从 KV 读取，默认值)
+const lastBlinkThreshold = ref(100) // 用于追踪上一次触发闪烁的阈值
+const blinkBurst = ref(false) // 是否处于一轮阈值穿越闪烁中（由 sessionPercentage watcher 设置）
+
+// 煙火動畫的目標容器（原為 this.$el.querySelector('.user-avatar')）
+const avatarContainerRef = ref<HTMLElement | null>(null)
+
+// Sudo mode computed properties
+const sudoActive = computed(() => sudoStore.isActive || false)
+const sudoDisplayInfo = computed(() => sudoStore.displayInfo || null)
+
+const displayUserEmail = computed(() => {
+  return props.userEmail || props.user?.userEmail || ''
+})
+
+const avatarUrl = computed(() => {
+  if (avatarError.value || !props.user) {
+    // Fallback to initials avatar
+    return generateInitialsAvatar()
+  }
+
+  // SUDO 模式：使用被 sudo 的學生頭像
+  if (sudoActive.value && sudoDisplayInfo.value) {
+    const seed = sudoDisplayInfo.value.avatarSeed || `${sudoDisplayInfo.value.email}_sudo`
+    const style = sudoDisplayInfo.value.avatarStyle || 'avataaars'
+    return generateDicebearUrl(seed, style, {})
+  }
+
+  // 正常模式：使用自己的頭像
+  const seed = props.user.avatarSeed || `${props.user.userEmail}_${Date.now()}`
+  const style = props.user.avatarStyle || 'avataaars'
+
+  // Parse avatarOptions if it's a string
+  let options: Record<string, string> = {}
+  if (props.user.avatarOptions) {
+    if (typeof props.user.avatarOptions === 'string') {
+      try {
+        options = JSON.parse(props.user.avatarOptions)
+      } catch {
+        console.warn('Failed to parse avatarOptions:', props.user.avatarOptions)
+        options = {}
       }
-
-      // SUDO 模式：使用被 sudo 的學生頭像
-      if (this.sudoActive && this.sudoDisplayInfo) {
-        const seed = this.sudoDisplayInfo.avatarSeed || `${this.sudoDisplayInfo.email}_sudo`
-        const style = this.sudoDisplayInfo.avatarStyle || 'avataaars'
-        return this.generateDicebearUrl(seed, style, {})
-      }
-
-      // 正常模式：使用自己的頭像
-      const seed = this.user.avatarSeed || `${this.user.userEmail}_${Date.now()}`
-      const style = this.user.avatarStyle || 'avataaars'
-
-      // Parse avatarOptions if it's a string
-      let options = {}
-      if (this.user.avatarOptions) {
-        if (typeof this.user.avatarOptions === 'string') {
-          try {
-            options = JSON.parse(this.user.avatarOptions)
-          } catch {
-            console.warn('Failed to parse avatarOptions:', this.user.avatarOptions)
-            options = {}
-          }
-        } else {
-          options = this.user.avatarOptions
-        }
-      }
-
-      return this.generateDicebearUrl(seed, style, options)
-    },
-    displayName() {
-      // SUDO 模式：顯示被 sudo 的學生名稱
-      if (this.sudoActive && this.sudoDisplayInfo?.name) {
-        return this.sudoDisplayInfo.name
-      }
-      // 正常模式：顯示自己的名稱
-      return this.user?.displayName || ''
-    },
-    globalPermissionBadge() {
-      const permissions = this.user?.permissions || []
-
-      if (permissions.length === 0) return null
-
-      // 級別 1：系統管理類（最高優先級）
-      const systemPerms = [
-        'system_admin',
-        'manage_system_settings',
-        'view_system_logs',
-        'view_email_logs',
-        'manage_email_logs',
-        'notification_manager'
-      ]
-      if (permissions.some(p => systemPerms.includes(p))) {
-        return {
-          type: 'system',
-          icon: 'fas fa-crown',
-          color: '#FFD700',
-          label: '系統管理'
-        }
-      }
-
-      // 級別 2：使用者管理類
-      const userPerms = [
-        'manage_users',
-        'manage_global_groups',
-        'generate_invites',
-        'manage_invitations'
-      ]
-      if (permissions.some(p => userPerms.includes(p))) {
-        return {
-          type: 'user',
-          icon: 'fas fa-users-cog',
-          color: '#9C27B0',
-          label: '使用者管理'
-        }
-      }
-
-      // 級別 3：專案管理類
-      const projectPerms = [
-        'create_project',
-        'delete_any_project',
-        'manage_any_project'
-      ]
-      if (permissions.some(p => projectPerms.includes(p))) {
-        return {
-          type: 'project',
-          icon: 'fas fa-project-diagram',
-          color: '#409EFF',
-          label: '專案管理'
-        }
-      }
-
-      return null
-    },
-    projectRoleBadge() {
-      // 優先使用 currentRole（ProjectDetail 傳入，支援角色切換）
-      if (this.currentRole) {
-        return this.getRoleBadgeByName(this.currentRole)
-      }
-
-      // 其次使用 permissionLevel（WalletNew 傳入，僅最高權限）
-      if (this.permissionLevel !== null && this.permissionLevel !== undefined) {
-        return this.getRoleBadgeByLevel(this.permissionLevel)
-      }
-
-      return null
-    },
-    userWealthRank() {
-      if (!this.wealthRankings || this.wealthRankings.length === 0) return null
-      const userEmail = this.user?.userEmail
-      if (!userEmail) return null
-      return this.wealthRankings.find(r => r.userEmail === userEmail) || null
-    },
-    allUserBadges() {
-      const badges = []
-
-      // 0. SUDO 模式徽章（最高優先級，永遠顯示在最前面）
-      if (this.sudoActive) {
-        badges.push({
-          type: 'sudo',
-          icon: 'fas fa-user-secret',
-          color: '#e6a23c',
-          label: `正在以 ${this.sudoDisplayInfo?.name || '學生'} 的身份檢視（唯讀模式）`
-        })
-      }
-
-      // 1. 全域權限徽章
-      if (this.globalPermissionBadge) badges.push(this.globalPermissionBadge)
-
-      // 2. 專案角色徽章
-      if (this.projectRoleBadge) badges.push(this.projectRoleBadge)
-
-      // 3. 財富徽章（前 3% 富豪）
-      if (this.userWealthRank) {
-        badges.push({
-          type: 'wealth',
-          icon: 'fas fa-medal',
-          color: '#FFD700',
-          label: '專案富豪',
-          rank: this.userWealthRank.rank,
-          isFirst: this.userWealthRank.rank === 1  // 只有第一名有呼吸光暈
-        })
-      }
-
-      return badges
-    },
-    currentBadge() {
-      if (this.allUserBadges.length === 0) return null
-      return this.allUserBadges[this.activeIndex % this.allUserBadges.length]
-    },
-    nextBadge() {
-      if (this.allUserBadges.length <= 1) return null
-      const nextIndex = (this.activeIndex + 1) % this.allUserBadges.length
-      return this.allUserBadges[nextIndex]
-    },
-    badgeTooltipText() {
-      const messages = []
-
-      // SUDO 模式徽章提示（最高優先級）
-      if (this.sudoActive) {
-        messages.push(`正在以 ${this.sudoDisplayInfo?.name || '學生'} 的身份檢視（唯讀模式）`)
-      }
-
-      if (this.globalPermissionBadge) {
-        messages.push(`你的全站權限為${this.globalPermissionBadge.label}`)
-      }
-
-      if (this.projectRoleBadge) {
-        messages.push(`專案權限為${this.projectRoleBadge.label}`)
-      }
-
-      if (this.userWealthRank) {
-        messages.push(`你是第 ${this.userWealthRank.rank} 名`)
-      }
-
-      return messages.join('，')
-    },
-    userBadges() {
-      // 保留舊的計算屬性以相容性，但現在只返回當前顯示的徽章
-      return this.currentBadge ? [this.currentBadge] : []
-    },
-
-    // ✅ Session Timer UI computed properties
-
-    /**
-     * Tooltip 内容
-     */
-    sessionWarningTooltip() {
-      const halfTime = this.maxSessionTimeout / 2
-      const halfTimeMinutes = Math.floor(halfTime / 60000)
-      return `登入有效期低於 ${halfTimeMinutes} 分鐘，點一下即可立即延長有效期`
-    },
-
-    /**
-     * Timer 圆环渐变颜色 (Scheme M - Bubblegum Bright)
-     * >70% - 土耳其藍 (#1A9B8E)
-     * 50-70% - 珊瑚橙淺 (#FFA07A)
-     * 30-50% - 珊瑚橙深 (#FF6347)
-     * <30% - 熱粉紅 (#E91E63)
-     */
-    timerGradient() {
-      const percentage = this.sessionPercentage
-      let color
-
-      if (percentage <= 30) {
-        color = '#E91E63' // 熱粉紅 (Scheme M Danger)
-      } else if (percentage <= 50) {
-        color = '#FF6347' // 珊瑚橙深 (Scheme M Warning)
-      } else if (percentage <= 70) {
-        color = '#FFA07A' // 珊瑚橙淺 (Scheme M Warning Light)
-      } else {
-        color = '#1A9B8E' // 土耳其藍 (Scheme M Success)
-      }
-
-      return `conic-gradient(${color} ${percentage * 3.6}deg, #e4e7ed 0deg)`
-    },
-
-    /**
-     * 闪烁动画 class
-     * 逻辑：
-     * - 50% 以下才显示警告图标
-     * - 每降低 10% 触发一轮闪烁（三次，阈值穿越由 watcher 侦测）
-     * - 低于 10% 时持续闪烁
-     */
-    blinkAnimationClass() {
-      const percentage = this.sessionPercentage
-
-      // <10% 时持续闪烁
-      if (percentage < 10) {
-        return 'blink-continuous'
-      }
-
-      return this.blinkBurst ? 'blink-burst' : ''
-    }
-  },
-  watch: {
-    // 侦测穿越新的 10% 阈值（例如 45% → 39%，threshold 从 40 变为 30）时触发一轮闪烁
-    sessionPercentage(percentage) {
-      if (percentage < 10) return
-
-      const threshold = Math.floor(percentage / 10) * 10
-      if (threshold < this.lastBlinkThreshold) {
-        this.lastBlinkThreshold = threshold
-        this.blinkBurst = true // 触发一轮闪烁（通过 CSS 控制三次）
-      } else {
-        this.blinkBurst = false
-      }
-    },
-    activeIndex(newIndex) {
-      // 只有第一名翻轉到財富徽章時才發射煙火
-      const currentBadge = this.allUserBadges[newIndex % this.allUserBadges.length]
-      if (currentBadge && currentBadge.type === 'wealth' && currentBadge.isFirst) {
-        this.$nextTick(() => {
-          const avatarContainer = this.$el.querySelector('.user-avatar')
-          if (avatarContainer) {
-            this.launchBadgeFireworks(avatarContainer)
-          }
-        })
-      }
-    }
-  },
-  mounted() {
-    this.startBadgeRotation()
-    // Initialize sudo store
-    this.sudoStore = useSudoStore()
-    this.sudoStore.initFromStorage()
-  },
-  beforeUnmount() {
-    this.stopBadgeRotation()
-  },
-  methods: {
-    openPermissionsDrawer() {
-      const permissionsDrawer = usePermissionsDrawerStore()
-      permissionsDrawer.open(this.projectId)
-    },
-    handleCommand(command) {
-      if (command === 'view-permissions') {
-        // Use global permissions drawer store
-        this.openPermissionsDrawer()
-      } else {
-        this.$emit('user-command', command)
-      }
-    },
-
-    // Click the countdown timer (only rendered in warning state) to manually
-    // renew the session. MainLayout enforces the once-per-token constraint.
-    onSessionTimerClick() {
-      this.$emit('user-command', 'renew-session')
-    },
-
-    generateDicebearUrl(seed, style, options = {}) {
-      const baseUrl = `https://api.dicebear.com/7.x/${style}/svg`
-      const params = new URLSearchParams({
-        seed: seed,
-        size: '40',
-        ...options
-      })
-      return `${baseUrl}?${params.toString()}`
-    },
-    
-    generateInitialsAvatar() {
-      const name = this.user?.displayName || 'U'
-      const initials = name
-        .split(' ')
-        .map(word => word.charAt(0))
-        .join('')
-        .substring(0, 2)
-        .toUpperCase()
-      
-      return `https://api.dicebear.com/7.x/initials/svg?seed=${initials}&size=40&backgroundColor=b6e3f4`
-    },
-    
-    generateInitials() {
-      // SUDO 模式：使用被 sudo 的學生名稱
-      const name = (this.sudoActive && this.sudoDisplayInfo?.name)
-        ? this.sudoDisplayInfo.name
-        : (this.user?.displayName || 'U')
-      return name
-        .split(' ')
-        .map(word => word.charAt(0))
-        .join('')
-        .substring(0, 2)
-        .toUpperCase()
-    },
-    
-    handleAvatarError() {
-      this.avatarError = true
-    },
-    
-    formatTime(milliseconds) {
-      // 使用 dayjs 格式化時間為 HH:mm:ss
-      const duration = dayjs.duration(milliseconds)
-      const hours = Math.floor(duration.asHours())
-      const minutes = duration.minutes()
-      const seconds = duration.seconds()
-
-      // 如果超過 24 小時，顯示天數
-      if (hours >= 24) {
-        const days = Math.floor(hours / 24)
-        const remainingHours = hours % 24
-        return `${days}d ${remainingHours}h`
-      }
-
-      // 標準 HH:mm:ss 格式
-      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-    },
-
-    getRoleBadgeByName(roleName) {
-      const roleMap = {
-        'admin': { type: 'admin', icon: 'fas fa-crown', color: '#FFD700', label: '專案管理員' },
-        'teacher': { type: 'teacher', icon: 'fas fa-chalkboard-teacher', color: '#E6A23C', label: '專案教師' },
-        'observer': { type: 'observer', icon: 'fas fa-eye', color: '#606266', label: '專案觀察者' },
-        'group_leader': { type: 'group_leader', icon: 'fas fa-user-tie', color: '#67C23A', label: '組長' },
-        'member_in_group': { type: 'member_in_group', icon: 'fas fa-baby', color: '#409EFF', label: '組員' },
-        'member': { type: 'member', icon: 'fas fa-user', color: '#909399', label: '成員' }
-      }
-      return roleMap[roleName] || null
-    },
-
-    getRoleBadgeByLevel(level) {
-      const levelMap = {
-        0: { type: 'admin', icon: 'fas fa-crown', color: '#FFD700', label: '專案管理員' },
-        1: { type: 'teacher', icon: 'fas fa-chalkboard-teacher', color: '#E6A23C', label: '專案教師' },
-        2: { type: 'observer', icon: 'fas fa-eye', color: '#606266', label: '專案觀察者' },
-        3: { type: 'member', icon: 'fas fa-baby', color: '#409EFF', label: '組員' }
-      }
-      return levelMap[level] || null
-    },
-
-    startBadgeRotation() {
-      if (this.allUserBadges.length <= 1) return // 只有一個徽章不需要翻轉
-
-      this.flipTimer = setInterval(() => {
-        this.isFlipping = true
-
-        setTimeout(() => {
-          this.activeIndex++
-          this.isFlipping = false
-        }, BADGE_FLIP_DURATION)
-
-      }, BADGE_FLIP_INTERVAL)
-    },
-
-    stopBadgeRotation() {
-      if (this.flipTimer) {
-        clearInterval(this.flipTimer)
-        this.flipTimer = null
-      }
-    },
-
-    launchBadgeFireworks(avatarContainer) {
-      // 煙火在整個 avatar 區域爆炸
-      const emojis = ['🎉', '✨', '🎊', '⭐', '💫', '🌟', '💰', '💵']
-
-      const selectedEmojis = Array.from({ length: FIREWORK_COUNT }, () =>
-        emojis[Math.floor(Math.random() * emojis.length)]
-      )
-
-      const rect = avatarContainer.getBoundingClientRect()
-      const centerX = rect.width / 2
-      const centerY = rect.height / 2
-
-      selectedEmojis.forEach((emoji, i) => {
-        // 計算飛散方向（360度均勻分布）
-        const angle = (i / FIREWORK_COUNT) * 2 * Math.PI
-        const distance = FIREWORK_BASE_DISTANCE + Math.random() * FIREWORK_RANDOM_DISTANCE
-
-        // 創建 firework element
-        const firework = document.createElement('div')
-        firework.textContent = emoji
-        firework.style.cssText = `
-          position: absolute;
-          left: ${centerX}px;
-          top: ${centerY}px;
-          font-size: 0px;
-          pointer-events: none;
-          z-index: 9999;
-          transform: translate(-50%, -50%);
-        `
-
-        avatarContainer.style.position = 'relative'
-        avatarContainer.appendChild(firework)
-
-        // Web Animations API 動畫
-        firework.animate([
-          {
-            fontSize: '0px',
-            opacity: 1,
-            transform: `translate(-50%, -50%)`
-          },
-          {
-            fontSize: '20px',
-            opacity: 0.9,
-            transform: `translate(calc(-50% + ${Math.cos(angle) * distance}px), calc(-50% + ${Math.sin(angle) * distance}px))`
-          },
-          {
-            fontSize: '14px',
-            opacity: 0,
-            transform: `translate(calc(-50% + ${Math.cos(angle) * distance * FIREWORK_FINAL_DISTANCE_MULTIPLIER}px), calc(-50% + ${Math.sin(angle) * distance * FIREWORK_FINAL_DISTANCE_MULTIPLIER}px))`
-          }
-        ], {
-          duration: FIREWORK_DURATION,
-          easing: 'ease-out'
-        }).onfinish = () => firework.remove()
-      })
+    } else {
+      // dicebear 參數實際為字串值；上游型別較寬鬆
+      options = props.user.avatarOptions as Record<string, string>
     }
   }
+
+  return generateDicebearUrl(seed, style, options)
+})
+
+const displayName = computed(() => {
+  // SUDO 模式：顯示被 sudo 的學生名稱
+  if (sudoActive.value && sudoDisplayInfo.value?.name) {
+    return sudoDisplayInfo.value.name
+  }
+  // 正常模式：顯示自己的名稱
+  return props.user?.displayName || ''
+})
+
+const globalPermissionBadge = computed<UserBadge | null>(() => {
+  const permissions = props.user?.permissions || []
+
+  if (permissions.length === 0) return null
+
+  // 級別 1：系統管理類（最高優先級）
+  const systemPerms = [
+    'system_admin',
+    'manage_system_settings',
+    'view_system_logs',
+    'view_email_logs',
+    'manage_email_logs',
+    'notification_manager'
+  ]
+  if (permissions.some(p => systemPerms.includes(p))) {
+    return {
+      type: 'system',
+      icon: 'fas fa-crown',
+      color: '#FFD700',
+      label: '系統管理'
+    }
+  }
+
+  // 級別 2：使用者管理類
+  const userPerms = [
+    'manage_users',
+    'manage_global_groups',
+    'generate_invites',
+    'manage_invitations'
+  ]
+  if (permissions.some(p => userPerms.includes(p))) {
+    return {
+      type: 'user',
+      icon: 'fas fa-users-cog',
+      color: '#9C27B0',
+      label: '使用者管理'
+    }
+  }
+
+  // 級別 3：專案管理類
+  const projectPerms = [
+    'create_project',
+    'delete_any_project',
+    'manage_any_project'
+  ]
+  if (permissions.some(p => projectPerms.includes(p))) {
+    return {
+      type: 'project',
+      icon: 'fas fa-project-diagram',
+      color: '#409EFF',
+      label: '專案管理'
+    }
+  }
+
+  return null
+})
+
+const projectRoleBadge = computed<UserBadge | null>(() => {
+  // 優先使用 currentRole（ProjectDetail 傳入，支援角色切換）
+  if (props.currentRole) {
+    return getRoleBadgeByName(props.currentRole)
+  }
+
+  // 其次使用 permissionLevel（WalletNew 傳入，僅最高權限）
+  if (props.permissionLevel !== null && props.permissionLevel !== undefined) {
+    return getRoleBadgeByLevel(props.permissionLevel)
+  }
+
+  return null
+})
+
+const userWealthRank = computed<WealthRanking | null>(() => {
+  if (!props.wealthRankings || props.wealthRankings.length === 0) return null
+  const userEmail = props.user?.userEmail
+  if (!userEmail) return null
+  return props.wealthRankings.find(r => r.userEmail === userEmail) || null
+})
+
+const allUserBadges = computed<UserBadge[]>(() => {
+  const badges: UserBadge[] = []
+
+  // 0. SUDO 模式徽章（最高優先級，永遠顯示在最前面）
+  if (sudoActive.value) {
+    badges.push({
+      type: 'sudo',
+      icon: 'fas fa-user-secret',
+      color: '#e6a23c',
+      label: `正在以 ${sudoDisplayInfo.value?.name || '學生'} 的身份檢視（唯讀模式）`
+    })
+  }
+
+  // 1. 全域權限徽章
+  if (globalPermissionBadge.value) badges.push(globalPermissionBadge.value)
+
+  // 2. 專案角色徽章
+  if (projectRoleBadge.value) badges.push(projectRoleBadge.value)
+
+  // 3. 財富徽章（前 3% 富豪）
+  if (userWealthRank.value) {
+    badges.push({
+      type: 'wealth',
+      icon: 'fas fa-medal',
+      color: '#FFD700',
+      label: '專案富豪',
+      rank: userWealthRank.value.rank,
+      isFirst: userWealthRank.value.rank === 1  // 只有第一名有呼吸光暈
+    })
+  }
+
+  return badges
+})
+
+const currentBadge = computed<UserBadge | null>(() => {
+  if (allUserBadges.value.length === 0) return null
+  return allUserBadges.value[activeIndex.value % allUserBadges.value.length]
+})
+
+const nextBadge = computed<UserBadge | null>(() => {
+  if (allUserBadges.value.length <= 1) return null
+  const nextIndex = (activeIndex.value + 1) % allUserBadges.value.length
+  return allUserBadges.value[nextIndex]
+})
+
+const badgeTooltipText = computed(() => {
+  const messages: string[] = []
+
+  // SUDO 模式徽章提示（最高優先級）
+  if (sudoActive.value) {
+    messages.push(`正在以 ${sudoDisplayInfo.value?.name || '學生'} 的身份檢視（唯讀模式）`)
+  }
+
+  if (globalPermissionBadge.value) {
+    messages.push(`你的全站權限為${globalPermissionBadge.value.label}`)
+  }
+
+  if (projectRoleBadge.value) {
+    messages.push(`專案權限為${projectRoleBadge.value.label}`)
+  }
+
+  if (userWealthRank.value) {
+    messages.push(`你是第 ${userWealthRank.value.rank} 名`)
+  }
+
+  return messages.join('，')
+})
+
+// ✅ Session Timer UI computed properties
+
+/**
+ * Tooltip 内容
+ */
+const sessionWarningTooltip = computed(() => {
+  const halfTime = maxSessionTimeout.value / 2
+  const halfTimeMinutes = Math.floor(halfTime / 60000)
+  return `登入有效期低於 ${halfTimeMinutes} 分鐘，點一下即可立即延長有效期`
+})
+
+/**
+ * Timer 圆环渐变颜色 (Scheme M - Bubblegum Bright)
+ * >70% - 土耳其藍 (#1A9B8E)
+ * 50-70% - 珊瑚橙淺 (#FFA07A)
+ * 30-50% - 珊瑚橙深 (#FF6347)
+ * <30% - 熱粉紅 (#E91E63)
+ */
+const timerGradient = computed(() => {
+  const percentage = props.sessionPercentage
+  let color: string
+
+  if (percentage <= 30) {
+    color = '#E91E63' // 熱粉紅 (Scheme M Danger)
+  } else if (percentage <= 50) {
+    color = '#FF6347' // 珊瑚橙深 (Scheme M Warning)
+  } else if (percentage <= 70) {
+    color = '#FFA07A' // 珊瑚橙淺 (Scheme M Warning Light)
+  } else {
+    color = '#1A9B8E' // 土耳其藍 (Scheme M Success)
+  }
+
+  return `conic-gradient(${color} ${percentage * 3.6}deg, #e4e7ed 0deg)`
+})
+
+/**
+ * 闪烁动画 class
+ * 逻辑：
+ * - 50% 以下才显示警告图标
+ * - 每降低 10% 触发一轮闪烁（三次，阈值穿越由 watcher 侦测）
+ * - 低于 10% 时持续闪烁
+ */
+const blinkAnimationClass = computed(() => {
+  const percentage = props.sessionPercentage
+
+  // <10% 时持续闪烁
+  if (percentage < 10) {
+    return 'blink-continuous'
+  }
+
+  return blinkBurst.value ? 'blink-burst' : ''
+})
+
+// 侦测穿越新的 10% 阈值（例如 45% → 39%，threshold 从 40 变为 30）时触发一轮闪烁
+watch(() => props.sessionPercentage, (percentage) => {
+  if (percentage < 10) return
+
+  const threshold = Math.floor(percentage / 10) * 10
+  if (threshold < lastBlinkThreshold.value) {
+    lastBlinkThreshold.value = threshold
+    blinkBurst.value = true // 触发一轮闪烁（通过 CSS 控制三次）
+  } else {
+    blinkBurst.value = false
+  }
+})
+
+watch(activeIndex, (newIndex) => {
+  // 只有第一名翻轉到財富徽章時才發射煙火
+  const badge = allUserBadges.value[newIndex % allUserBadges.value.length]
+  if (badge && badge.type === 'wealth' && badge.isFirst) {
+    nextTick(() => {
+      if (avatarContainerRef.value) {
+        launchBadgeFireworks(avatarContainerRef.value)
+      }
+    })
+  }
+})
+
+function openPermissionsDrawer() {
+  const permissionsDrawer = usePermissionsDrawerStore()
+  permissionsDrawer.open(props.projectId)
 }
+
+function handleCommand(command: string) {
+  if (command === 'view-permissions') {
+    // Use global permissions drawer store
+    openPermissionsDrawer()
+  } else {
+    emit('user-command', command)
+  }
+}
+
+// Click the countdown timer (only rendered in warning state) to manually
+// renew the session. MainLayout enforces the once-per-token constraint.
+function onSessionTimerClick() {
+  emit('user-command', 'renew-session')
+}
+
+function generateDicebearUrl(seed: string, style: string, options: Record<string, string> = {}) {
+  const baseUrl = `https://api.dicebear.com/7.x/${style}/svg`
+  const params = new URLSearchParams({
+    seed: seed,
+    size: '40',
+    ...options
+  })
+  return `${baseUrl}?${params.toString()}`
+}
+
+function generateInitialsAvatar() {
+  const name = props.user?.displayName || 'U'
+  const initials = name
+    .split(' ')
+    .map(word => word.charAt(0))
+    .join('')
+    .substring(0, 2)
+    .toUpperCase()
+
+  return `https://api.dicebear.com/7.x/initials/svg?seed=${initials}&size=40&backgroundColor=b6e3f4`
+}
+
+function generateInitials() {
+  // SUDO 模式：使用被 sudo 的學生名稱
+  const name = (sudoActive.value && sudoDisplayInfo.value?.name)
+    ? sudoDisplayInfo.value.name
+    : (props.user?.displayName || 'U')
+  return name
+    .split(' ')
+    .map((word: string) => word.charAt(0))
+    .join('')
+    .substring(0, 2)
+    .toUpperCase()
+}
+
+function handleAvatarError() {
+  avatarError.value = true
+}
+
+function formatTime(milliseconds: number) {
+  // 使用 dayjs 格式化時間為 HH:mm:ss
+  const d = dayjs.duration(milliseconds)
+  const hours = Math.floor(d.asHours())
+  const minutes = d.minutes()
+  const seconds = d.seconds()
+
+  // 如果超過 24 小時，顯示天數
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24)
+    const remainingHours = hours % 24
+    return `${days}d ${remainingHours}h`
+  }
+
+  // 標準 HH:mm:ss 格式
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
+function getRoleBadgeByName(roleName: string): UserBadge | null {
+  const roleMap: Record<string, UserBadge> = {
+    'admin': { type: 'admin', icon: 'fas fa-crown', color: '#FFD700', label: '專案管理員' },
+    'teacher': { type: 'teacher', icon: 'fas fa-chalkboard-teacher', color: '#E6A23C', label: '專案教師' },
+    'observer': { type: 'observer', icon: 'fas fa-eye', color: '#606266', label: '專案觀察者' },
+    'group_leader': { type: 'group_leader', icon: 'fas fa-user-tie', color: '#67C23A', label: '組長' },
+    'member_in_group': { type: 'member_in_group', icon: 'fas fa-baby', color: '#409EFF', label: '組員' },
+    'member': { type: 'member', icon: 'fas fa-user', color: '#909399', label: '成員' }
+  }
+  return roleMap[roleName] || null
+}
+
+function getRoleBadgeByLevel(level: number): UserBadge | null {
+  const levelMap: Record<number, UserBadge> = {
+    0: { type: 'admin', icon: 'fas fa-crown', color: '#FFD700', label: '專案管理員' },
+    1: { type: 'teacher', icon: 'fas fa-chalkboard-teacher', color: '#E6A23C', label: '專案教師' },
+    2: { type: 'observer', icon: 'fas fa-eye', color: '#606266', label: '專案觀察者' },
+    3: { type: 'member', icon: 'fas fa-baby', color: '#409EFF', label: '組員' }
+  }
+  return levelMap[level] || null
+}
+
+function startBadgeRotation() {
+  if (allUserBadges.value.length <= 1) return // 只有一個徽章不需要翻轉
+
+  flipTimer.value = setInterval(() => {
+    isFlipping.value = true
+
+    setTimeout(() => {
+      activeIndex.value++
+      isFlipping.value = false
+    }, BADGE_FLIP_DURATION)
+
+  }, BADGE_FLIP_INTERVAL)
+}
+
+function stopBadgeRotation() {
+  if (flipTimer.value) {
+    clearInterval(flipTimer.value)
+    flipTimer.value = null
+  }
+}
+
+function launchBadgeFireworks(avatarContainer: HTMLElement) {
+  // 煙火在整個 avatar 區域爆炸
+  const emojis = ['🎉', '✨', '🎊', '⭐', '💫', '🌟', '💰', '💵']
+
+  const selectedEmojis = Array.from({ length: FIREWORK_COUNT }, () =>
+    emojis[Math.floor(Math.random() * emojis.length)]
+  )
+
+  const rect = avatarContainer.getBoundingClientRect()
+  const centerX = rect.width / 2
+  const centerY = rect.height / 2
+
+  selectedEmojis.forEach((emoji, i) => {
+    // 計算飛散方向（360度均勻分布）
+    const angle = (i / FIREWORK_COUNT) * 2 * Math.PI
+    const distance = FIREWORK_BASE_DISTANCE + Math.random() * FIREWORK_RANDOM_DISTANCE
+
+    // 創建 firework element
+    const firework = document.createElement('div')
+    firework.textContent = emoji
+    firework.style.cssText = `
+      position: absolute;
+      left: ${centerX}px;
+      top: ${centerY}px;
+      font-size: 0px;
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%);
+    `
+
+    avatarContainer.style.position = 'relative'
+    avatarContainer.appendChild(firework)
+
+    // Web Animations API 動畫
+    firework.animate([
+      {
+        fontSize: '0px',
+        opacity: 1,
+        transform: `translate(-50%, -50%)`
+      },
+      {
+        fontSize: '20px',
+        opacity: 0.9,
+        transform: `translate(calc(-50% + ${Math.cos(angle) * distance}px), calc(-50% + ${Math.sin(angle) * distance}px))`
+      },
+      {
+        fontSize: '14px',
+        opacity: 0,
+        transform: `translate(calc(-50% + ${Math.cos(angle) * distance * FIREWORK_FINAL_DISTANCE_MULTIPLIER}px), calc(-50% + ${Math.sin(angle) * distance * FIREWORK_FINAL_DISTANCE_MULTIPLIER}px))`
+      }
+    ], {
+      duration: FIREWORK_DURATION,
+      easing: 'ease-out'
+    }).onfinish = () => firework.remove()
+  })
+}
+
+onMounted(() => {
+  startBadgeRotation()
+  sudoStore.initFromStorage()
+})
+
+onBeforeUnmount(() => {
+  stopBadgeRotation()
+})
 </script>
 
 <style scoped>

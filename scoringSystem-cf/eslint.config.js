@@ -93,7 +93,6 @@ export default withVueTs(
   // TODO(lint-debt): 逐檔轉 <script lang="ts"> 後自此清單移除
   {
     files: [
-      'packages/frontend/src/components/TopBarUserControls.vue',
       'packages/frontend/src/components/admin/GroupManagement.vue',
     ],
     rules: {
