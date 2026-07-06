@@ -3702,7 +3702,7 @@ export default {
       }))
     }
 
-    const handleGanttStageClick = (stage: Stage, _projectId: string) => {
+    const handleGanttStageClick = (stage: unknown, _projectId: string) => {
       console.log('Gantt stage clicked:', stage)
     }
 
