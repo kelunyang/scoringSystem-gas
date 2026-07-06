@@ -6,6 +6,7 @@
 import { ref, computed } from 'vue';
 import { useQueryClient } from '@tanstack/vue-query';
 import { rpcClient } from '@/utils/rpc-client';
+import { apiClient } from '@/utils/api';
 import type { Ref, ComputedRef } from 'vue';
 import type { LoginCredentials, TwoFactorData, TwoFactorMethod } from '../../types/auth';
 
@@ -19,6 +20,7 @@ export interface UseLoginReturn {
   availableMethods: Ref<TwoFactorMethod[]>;
   errorMessage: Ref<string>;
   userEmail: Ref<string>;
+  lastEmailSentAt: Ref<number>;
   canSubmitPassword: ComputedRef<boolean>;
   canSubmitVerificationCode: ComputedRef<boolean>;
   verifyPassword: (credentials: LoginCredentials, turnstileToken: string) => Promise<boolean>;
@@ -67,6 +69,9 @@ export function useLogin(): UseLoginReturn {
   const availableMethods = ref<TwoFactorMethod[]>(['email']);
   const errorMessage = ref('');
   const userEmail = ref('');
+  // Timestamp (ms) of the last successful email-code send. 0 = none sent yet.
+  // Drives the 2FA email panel: 0 → show manual "send code" button; >0 → show resend countdown.
+  const lastEmailSentAt = ref(0);
 
   const canSubmitPassword = computed(() => {
     return userEmail.value.trim().length > 0 && !loading.value;
@@ -114,6 +119,11 @@ export function useLogin(): UseLoginReturn {
         passkeyAvailable.value = response.data?.passkeyAvailable === true;
         // Track available methods
         availableMethods.value = response.data?.availableMethods || ['email'];
+        // Backend no longer auto-sends the first email (emailSent is false), but keep
+        // this defensive in case that behavior changes again.
+        if (response.data?.emailSent === true) {
+          lastEmailSentAt.value = Date.now();
+        }
         return true;
       } else {
         errorMessage.value = response.error?.message || '密碼驗證失敗';
@@ -158,9 +168,9 @@ export function useLogin(): UseLoginReturn {
       const response = await httpResponse.json();
 
       if (response.success) {
-        // Save session to sessionStorage
+        // Save session (emits token-renewal so reactive consumers stay in sync)
         if (response.data.sessionId) {
-          sessionStorage.setItem('sessionId', response.data.sessionId);
+          apiClient.saveToken(response.data.sessionId);
         }
 
         // Save devMode status for admin warning display
@@ -208,12 +218,13 @@ export function useLogin(): UseLoginReturn {
       const response = await httpResponse.json();
 
       if (response.success) {
+        lastEmailSentAt.value = Date.now();
         return true;
       } else {
         errorMessage.value = response.error?.message || '重新發送失敗';
         return false;
       }
-    } catch (error: any) {
+    } catch {
       errorMessage.value = '重新發送失敗';
       return false;
     } finally {
@@ -244,6 +255,7 @@ export function useLogin(): UseLoginReturn {
     availableMethods.value = ['email'];
     errorMessage.value = '';
     userEmail.value = '';
+    lastEmailSentAt.value = 0;
   }
 
   return {
@@ -256,6 +268,7 @@ export function useLogin(): UseLoginReturn {
     availableMethods,
     errorMessage,
     userEmail,
+    lastEmailSentAt,
     canSubmitPassword,
     canSubmitVerificationCode,
     verifyPassword,

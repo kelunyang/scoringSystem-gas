@@ -11,7 +11,7 @@ import type { Env } from '../types';
 import { logoutUser, validateSession, changePassword, check2FAFailureAndLock } from '../handlers/auth/login';
 import { registerUser, checkEmailAvailability } from '../handlers/auth/register';
 import { authMiddleware } from '../middleware/auth';
-import { validateRequired, jsonResponse, ERROR_CODES } from '../utils/response';
+import { jsonResponse, ERROR_CODES } from '../utils/response';
 import { verifyTurnstileMiddleware } from '../utils/turnstile';
 import { getConfigValue } from '../utils/config';
 import { generateToken } from '../handlers/auth/jwt';
@@ -23,12 +23,8 @@ import {
   RegisterRequestSchema,
   LoginVerifyPasswordRequestSchema,
   LoginVerify2FARequestSchema,
-  LogoutRequestSchema,
-  ValidateSessionRequestSchema,
   ChangePasswordRequestSchema,
   CheckEmailQuerySchema,
-  CurrentUserRequestSchema,
-  RefreshTokenRequestSchema,
   Resend2FARequestSchema,
   VerifyEmailForResetRequestSchema,
   PasswordResetVerifyCodeRequestSchema,
@@ -325,9 +321,6 @@ authRouter.post(
       requestPath: c.req.path
     };
 
-    // Legacy alias for compatibility
-    const ipAddress = requestContext.ipAddress === 'unknown' ? null : requestContext.ipAddress;
-
     if (!user) {
       // Log failed login attempt - user not found
       const now = Date.now();
@@ -510,42 +503,20 @@ authRouter.post(
     const smtpConfigured = smtpConfig !== null;
 
     if (smtpConfigured) {
-      // Send verification code via email
-      const { generateVerificationCode, storeVerificationCode, sendVerificationCodeEmail } =
-        await import('../handlers/auth/two-factor');
-
-      const verificationCode = generateVerificationCode();
-
-      // Store verification code in database
-      const storeResult = await storeVerificationCode(c.env, body.userEmail, verificationCode);
-      if (!storeResult.success) {
-        return c.json({
-          success: false,
-          error: { code: 'SYSTEM_ERROR', message: '系統錯誤，無法生成兩階段驗證碼' }
-        }, 500);
-      }
-
-      // Send email
-      const emailResult = await sendVerificationCodeEmail(c.env, body.userEmail, verificationCode);
-      if (!emailResult.success) {
-        console.error('[2FA] Failed to send email:', emailResult.error);
-        return c.json({
-          success: false,
-          error: { code: 'EMAIL_ERROR', message: '系統錯誤，無法寄出兩階段驗證信' }
-        }, 500);
-      }
-
-
+      // Do NOT auto-send the first verification email here. The first email is
+      // triggered manually by the user (purple "send code" button in the 2FA
+      // step), which calls the resend-2fa endpoint. This keeps email consistent
+      // with passkey/TOTP (a deliberate user action) and prevents the resend
+      // countdown from running before any email has actually been sent.
       return c.json({
         success: true,
         data: {
-          message: '驗證碼已發送到您的信箱',
-          emailSent: true,
+          message: '請寄送驗證碼到您的信箱以繼續',
+          emailSent: false,
           devMode: false,
           twoFactorMethod: 'email' as const,
           passkeyAvailable: false,
-          availableMethods: ['email'] as const,
-          expiresAt: storeResult.expiresAt
+          availableMethods: ['email'] as const
         }
       });
     } else {
@@ -590,17 +561,13 @@ authRouter.post(
       requestPath: c.req.path
     };
 
-    // Legacy alias for compatibility
-    const ipAddress = requestContext.ipAddress === 'unknown' ? null : requestContext.ipAddress;
-
     // ─── 2FA Verification with verified flag pattern ───
     // SECURITY: Every path must explicitly set verified=true before JWT is issued.
     // This prevents fallthrough bypass bugs.
-    let verified = false;
-    let user: any = null;
+    let verified: boolean;
 
     // Fetch user first to check TOTP status
-    user = await c.env.DB
+    const user: any = await c.env.DB
       .prepare('SELECT * FROM users WHERE userEmail = ?')
       .bind(body.userEmail)
       .first();
@@ -614,7 +581,13 @@ authRouter.post(
 
     const totpEnabled = user.totpEnabled === 1;
 
-    if (totpEnabled) {
+    // Email is a universal 2FA fallback: TOTP/Passkey users may choose to receive
+    // an email code instead. Route by submitted code format —
+    // TOTP = 6 digits, recovery = 8 chars; anything else (12-char) is an email code.
+    const isTotpFormatCode = /^\d{6}$/.test(body.code) || body.code.length === 8;
+    const useTotp = totpEnabled && isTotpFormatCode;
+
+    if (useTotp) {
       // ─── TOTP Verification Path ───
       // TOTP is independent of SMTP — always required when enabled
       const { verifyTotpCode, verifyRecoveryCode } = await import('../utils/totp');
@@ -838,7 +811,7 @@ authRouter.post(
       {
         userEmail: user.userEmail,
         userId: user.userId,
-        twoFactorMethod: totpEnabled ? 'totp' : 'email',
+        twoFactorMethod: useTotp ? 'totp' : 'email',
         ipAddress: requestContext.ipAddress,
         country: requestContext.country,
         city: requestContext.city,
@@ -862,7 +835,7 @@ authRouter.post(
         eventType: 'login_success',
         userEmail: user.userEmail as string,
         userId: user.userId as string,
-        twoFactorMethod: totpEnabled ? 'totp' : 'email',
+        twoFactorMethod: useTotp ? 'totp' : 'email',
         ipAddress: requestContext.ipAddress,
         country: requestContext.country,
         city: requestContext.city,
@@ -943,13 +916,8 @@ authRouter.post(
       }, 403);
     }
 
-    // TOTP users don't receive email codes — resend is not applicable
-    if (user.totpEnabled === 1) {
-      return c.json({
-        success: false,
-        error: { code: 'TOTP_ENABLED', message: 'TOTP 使用者不需要重新發送驗證碼' }
-      }, 400);
-    }
+    // Email is a universal 2FA fallback — TOTP/Passkey users may also request an
+    // email code (verified via the email path in login-verify-2fa by code format).
 
     // Check if SMTP is configured for sending verification codes (KV-first)
     const smtpConfig = await getSmtpConfig(c.env);

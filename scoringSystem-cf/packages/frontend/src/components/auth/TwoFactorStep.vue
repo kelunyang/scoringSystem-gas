@@ -38,8 +38,14 @@
 
     <!-- Email OTP mode -->
     <div v-else-if="currentMethod === 'email'" class="info-message">
-      <p>驗證碼已發送到 <strong>{{ userEmail }}</strong></p>
-      <p class="hint">請查收您的電子郵件並輸入12位驗證碼（連字號可省略）</p>
+      <template v-if="emailCodeSent">
+        <p>驗證碼已發送到 <strong>{{ userEmail }}</strong></p>
+        <p class="hint">請查收您的電子郵件並輸入12位驗證碼（連字號可省略）</p>
+      </template>
+      <template v-else>
+        <p>請點擊下方按鈕，將驗證碼寄到 <strong>{{ userEmail }}</strong></p>
+        <p class="hint">收到信後輸入12位驗證碼（連字號可省略）</p>
+      </template>
     </div>
 
     <!-- TOTP mode -->
@@ -75,8 +81,8 @@
       <button
         class="btn btn-passkey"
         :style="buttonStyle"
-        @click="handlePasskeyAuth"
         :disabled="loading || passkeyLoading"
+        @click="handlePasskeyAuth"
       >
         <div v-if="passkeyLoading" class="spinner"></div>
         <i v-else class="fas fa-fingerprint"></i>
@@ -87,8 +93,8 @@
       </p>
     </div>
 
-    <!-- Code input (for email and TOTP) -->
-    <div v-else class="form-group">
+    <!-- Code input (TOTP always; email only after a code has been sent) -->
+    <div v-else-if="currentMethod !== 'email' || emailCodeSent" class="form-group">
       <label class="pin-label">驗證碼</label>
       <!-- Email OTP: 12-char input -->
       <PinCodeInput
@@ -124,25 +130,41 @@
       </div>
     </div>
 
-    <div v-if="currentMethod !== 'passkey'" class="form-actions">
+    <div
+      v-if="currentMethod !== 'passkey' && (currentMethod !== 'email' || emailCodeSent)"
+      class="form-actions"
+    >
       <button
         class="btn btn-primary"
         :style="buttonStyle"
-        @click="currentMethod === 'totp' && showRecoveryInput ? handleSubmitRecovery() : handleSubmit()"
         :disabled="!canSubmit || loading"
+        @click="currentMethod === 'totp' && showRecoveryInput ? handleSubmitRecovery() : handleSubmit()"
       >
         <div v-if="loading" class="spinner"></div>
         {{ loading ? '驗證中...' : '確認驗證碼' }}
       </button>
     </div>
 
-    <!-- Resend button: only for email OTP -->
-    <div v-if="currentMethod === 'email'" class="resend-section">
+    <!-- Email: first send is a manual action (like passkey) -->
+    <div v-if="currentMethod === 'email' && !emailCodeSent" class="send-code-section">
+      <button
+        class="btn btn-send-code"
+        :disabled="loading || resendLoading"
+        @click="handleResend"
+      >
+        <div v-if="resendLoading" class="spinner"></div>
+        <i v-else class="fas fa-paper-plane"></i>
+        {{ resendLoading ? '寄送中...' : '寄發密碼驗證信' }}
+      </button>
+    </div>
+
+    <!-- Resend button: only after the first email has been sent -->
+    <div v-if="currentMethod === 'email' && emailCodeSent" class="resend-section">
       <CountdownButton
+        ref="countdownRef"
         label="重新發送驗證碼"
         :duration="60"
         :loading="resendLoading"
-        :auto-start="true"
         type="primary"
         size="normal"
         :full-width="true"
@@ -173,7 +195,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick, onMounted } from 'vue';
 import PinCodeInput from './PinCodeInput.vue';
 import CountdownButton from '../shared/CountdownButton.vue';
 import TurnstileWidget from '../TurnstileWidget.vue';
@@ -189,6 +211,8 @@ export interface Props {
   loading?: boolean;
   resendLoading?: boolean;
   themeColor?: string;
+  /** Timestamp (ms) of the last successful email-code send. 0 = none sent yet. */
+  lastEmailSentAt?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -196,8 +220,12 @@ const props = withDefaults(defineProps<Props>(), {
   availableMethods: () => ['email'],
   loading: false,
   resendLoading: false,
-  themeColor: '#E17055'
+  themeColor: '#E17055',
+  lastEmailSentAt: 0
 });
+
+// Whether a verification email has been sent in this 2FA session
+const emailCodeSent = computed(() => props.lastEmailSentAt > 0);
 
 // Emits
 const emit = defineEmits<{
@@ -245,10 +273,42 @@ const passkeyQrHint = computed(() => {
 });
 
 // Reset inputs when method changes
-watch(currentMethod, () => {
+watch(currentMethod, (method) => {
   code.value = '';
   recoveryCode.value = '';
   showRecoveryInput.value = false;
+  if (method === 'email') {
+    nextTick(syncEmailCountdown);
+  }
+});
+
+// Resend countdown control (timer reflects the actual last-send time)
+const countdownRef = ref<InstanceType<typeof CountdownButton> | null>(null);
+
+/**
+ * Start the resend cooldown with the time remaining since the last send,
+ * so toggling back to the email tab shows the real remaining seconds
+ * instead of resetting to a full 60s.
+ */
+function syncEmailCountdown() {
+  if (currentMethod.value !== 'email' || props.lastEmailSentAt <= 0) return;
+  const remaining = 60 - (Date.now() - props.lastEmailSentAt) / 1000;
+  if (remaining > 0) {
+    nextTick(() => countdownRef.value?.startCountdown(Math.ceil(remaining)));
+  }
+}
+
+// Start/refresh the countdown whenever a new email is sent
+watch(() => props.lastEmailSentAt, () => {
+  if (currentMethod.value === 'email') {
+    nextTick(syncEmailCountdown);
+  }
+});
+
+onMounted(() => {
+  if (currentMethod.value === 'email') {
+    syncEmailCountdown();
+  }
 });
 
 // Method selection
@@ -490,6 +550,43 @@ async function handlePasskeyAuth() {
   text-align: center;
   color: #dc3545;
   font-size: 13px;
+}
+
+/* Send-code section (manual first email trigger) */
+.send-code-section {
+  margin-bottom: 20px;
+}
+
+.btn-send-code {
+  width: 100%;
+  padding: 16px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
+}
+
+.btn-send-code:hover:not(:disabled) {
+  opacity: 0.9;
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-send-code:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-send-code i {
+  font-size: 20px;
 }
 
 /* Form group */

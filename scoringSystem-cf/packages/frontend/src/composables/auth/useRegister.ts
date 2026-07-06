@@ -5,6 +5,7 @@
 
 import { ref, computed } from 'vue';
 import { rpcClient } from '@/utils/rpc-client';
+import { apiClient } from '@/utils/api';
 import type { Ref, ComputedRef } from 'vue';
 import type { RegisterData, InvitationVerificationResponse } from '../../types/auth';
 
@@ -173,7 +174,7 @@ export function useRegister(): UseRegisterReturn {
           invitationStatusMessage.value = '請輸入正確的邀請碼+受邀Email組合';
         }
       }
-    } catch (error) {
+    } catch {
       invitationStatus.value = 'invalid';
       invitationStatusMessage.value = '驗證失敗';
     } finally {
@@ -228,8 +229,9 @@ export function useRegister(): UseRegisterReturn {
         const sessionId = response.data?.sessionId;
         if (sessionId) {
           registrationSessionId.value = sessionId;
-          // Temporarily save to sessionStorage so rpcClient can use it for TOTP API calls
-          sessionStorage.setItem('sessionId', sessionId);
+          // Temporarily save so rpcClient can use it for TOTP API calls
+          // (emits token-renewal so reactive consumers stay in sync)
+          apiClient.saveToken(sessionId);
         }
         registrationComplete.value = true;
         return true;

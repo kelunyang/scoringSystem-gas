@@ -9,7 +9,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient, type UseQueryReturnType, type UseMutationReturnType } from '@tanstack/vue-query'
-import { computed, type ComputedRef } from 'vue'
+import { computed, ref, readonly, type ComputedRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { rpcClient } from '@/utils/rpc-client'
 import { isTokenExpired } from '@/utils/jwt'
@@ -17,13 +17,33 @@ import { ElMessage } from 'element-plus'
 import type { AuthUser } from '@/types/models'
 import { getErrorMessage } from '@/utils/errorHandler'
 import { apiClient } from '@/utils/api'
+import { authEventBus } from '@/utils/authEventBus'
 import { useSudoStore } from '@/stores/sudo'
 
 /**
- * 登出参数
+ * Reactive JWT token (single source of truth, shared across all useAuth() callers).
+ *
+ * IMPORTANT: A `computed(() => sessionStorage.getItem('sessionId'))` is NOT reactive,
+ * because sessionStorage is not a Vue reactive source — it would cache the login-time
+ * token forever and never reflect renewals, causing the live countdown to expire and
+ * log the user out even though a fresh token exists in storage.
+ *
+ * Instead we keep a module-level ref in sync with all token writes via authEventBus.
+ * Every token write goes through apiClient.saveToken/clearToken (which emit events),
+ * and the rpc-client X-New-Token interceptor dispatches `auth:token-renewed` (forwarded
+ * to authEventBus.onTokenRenewal). This keeps the ref accurate everywhere.
  */
-interface LogoutParams {
-  sessionId: string
+const tokenRef = ref<string | null>(
+  typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('sessionId') : null
+)
+
+if (typeof window !== 'undefined') {
+  authEventBus.onTokenRenewal(({ newToken }) => {
+    tokenRef.value = newToken
+  })
+  authEventBus.onSessionExpired(() => {
+    tokenRef.value = null
+  })
 }
 
 /**
@@ -456,10 +476,8 @@ export function useAuth() {
   // Computed: Error state
   const isError = computed(() => userQuery.isError.value)
 
-  // Computed: JWT Token (read-only access)
-  const token = computed(() => {
-    return sessionStorage.getItem('sessionId')
-  })
+  // Reactive JWT Token (read-only access) — stays in sync with renewals/login/logout
+  const token = readonly(tokenRef)
 
   // Computed: User email (shortcut)
   const userEmail = computed(() => user.value?.userEmail ?? '')

@@ -15,7 +15,8 @@
       ></div>
 
       <!-- Custom Sidebar -->
-      <div class="sidebar" :class="{
+      <div
+class="sidebar" :class="{
         collapsed: sidebarCollapsed,
         'mobile-open': showMobileSidebar,
         'sudo-mode': sudoStore.isActive,
@@ -203,7 +204,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, unref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useIntervalFn } from '@vueuse/core'
 import { useQueryClient } from '@tanstack/vue-query'
@@ -216,14 +217,14 @@ import {
   getSessionPercentage,
   shouldShowExpiryWarning,
   shouldRefreshToken,
-  isTokenExpired
+  isTokenExpired,
+  getTokenIssuedTime
 } from '../utils/jwt'
 import { handleError, showWarning, showInfo } from '@/utils/errorHandler'
 import { authEventBus } from '@/utils/authEventBus'
 import { rpcClient } from '@/utils/rpc-client'
 import { apiClient } from '@/utils/api'
 import { useBreadcrumb } from '../composables/useBreadcrumb'
-import TopBarUserControls from '../components/TopBarUserControls.vue'
 import NotificationCenter from '../components/NotificationCenter.vue'
 import { ElMessage } from 'element-plus'
 import { usePermissionsDrawerStore } from '../stores/permissionsDrawer'
@@ -288,6 +289,9 @@ const sidebarCollapsed = ref(false)
 const showMobileSidebar = ref(false)
 const currentTime = ref(Date.now())
 const sessionWarningShown = ref(false)
+// Token renewal guards (shared by auto-refresh and manual click)
+const isRenewing = ref(false)
+const lastManualRenewIat = ref<number | null>(null)
 
 // Permissions Drawer Store
 const permissionsDrawer = usePermissionsDrawerStore()
@@ -315,13 +319,13 @@ let unsubscribeTokenRenewal: (() => void) | null = null
 const user = computed(() => userFromAuth.value || null)
 
 const remainingTime = computed(() => {
-  currentTime.value // Force re-computation
+  unref(currentTime) // Force re-computation
   if (!token.value) return 0
   return getTokenRemainingTime(token.value)
 })
 
 const sessionPercentage = computed(() => {
-  currentTime.value // Force re-computation
+  unref(currentTime) // Force re-computation
   if (!token.value) return 0
   return getSessionPercentage(token.value)
 })
@@ -360,7 +364,7 @@ const userAvatarUrl = computed(() => {
     if (typeof user.value.avatarOptions === 'string') {
       try {
         options = JSON.parse(user.value.avatarOptions)
-      } catch (e) {
+      } catch {
         console.warn('Failed to parse avatarOptions:', user.value.avatarOptions)
         options = {}
       }
@@ -683,21 +687,54 @@ const handleUserCommand = (command: string) => {
     logout()
   } else if (command === 'refresh-user-data') {
     refreshUserData()
+  } else if (command === 'renew-session') {
+    handleManualRenew()
   }
 }
 
 // Vue 3 Best Practice: Use apiClient.saveToken() instead of direct sessionStorage
-const refreshToken = async () => {
+// Returns true on successful renewal. Guards against concurrent/duplicate calls
+// (the 1s interval can fire this repeatedly during the refresh window).
+const refreshToken = async (): Promise<boolean> => {
+  if (isRenewing.value) return false
+  isRenewing.value = true
   try {
     const httpResponse = await (rpcClient.api.auth as any)['refresh-token'].$post()
     const response = await httpResponse.json()
     if (response.success && response.data.token) {
+      // saveToken emits a token-renewal event → reactive token + countdown update
       apiClient.saveToken(response.data.token)
       console.log('Token refreshed successfully')
       sessionWarningShown.value = false
+      return true
     }
+    return false
   } catch (error) {
     handleError(error as Error, { action: '刷新 Token', type: 'warning' })
+    return false
+  } finally {
+    isRenewing.value = false
+  }
+}
+
+// Manual renewal triggered by clicking the countdown timer.
+// Constraint: at most one manual renewal per token (tracked by iat). After a
+// successful renewal the new token resets to ~100%, so the timer leaves the
+// warning state and is no longer clickable until it drops below 50% again —
+// this naturally enforces the "cooldown to 50%" requirement.
+const handleManualRenew = async () => {
+  if (isRenewing.value || !token.value) return
+
+  const iat = getTokenIssuedTime(token.value)
+  if (iat !== null && iat === lastManualRenewIat.value) {
+    showInfo('本次登入已續約過，請稍後再試')
+    return
+  }
+
+  lastManualRenewIat.value = iat
+  const ok = await refreshToken()
+  if (ok) {
+    ElMessage.success('已延長登入有效期')
   }
 }
 
@@ -842,7 +879,7 @@ onMounted(() => {
   setupWebSocket()
 
   // ✅ Subscribe to token renewal events
-  unsubscribeTokenRenewal = authEventBus.onTokenRenewal(({ newToken, renewedAt }) => {
+  unsubscribeTokenRenewal = authEventBus.onTokenRenewal(() => {
     console.log('🔄 Token renewed via event bus, resetting session warning')
     sessionWarningShown.value = false // Reset warning flag
   })

@@ -4,8 +4,8 @@
     <el-dropdown
       v-if="user"
       trigger="click"
-      @command="handleCommand"
       :hide-on-click="true"
+      @command="handleCommand"
     >
       <span class="user-btn" :class="{ 'sudo-active': sudoActive }">
         <!-- User Avatar -->
@@ -101,7 +101,12 @@
       placement="bottom"
       effect="dark"
     >
-      <div class="session-timer" :class="{ 'session-warning': sessionPercentage < 50 }">
+      <div
+        class="session-timer session-timer-clickable"
+        :class="{ 'session-warning': sessionPercentage < 50 }"
+        role="button"
+        @click="onSessionTimerClick"
+      >
         <div
           class="timer-circle"
           :style="{ background: timerGradient }"
@@ -209,6 +214,7 @@ export default {
       default: () => []
     }
   },
+  emits: ['user-command'],
   data() {
     return {
       avatarError: false,
@@ -218,6 +224,7 @@ export default {
       // Session timer animation state
       maxSessionTimeout: 86400000, // 24 hours in ms (从 KV 读取，默认值)
       lastBlinkThreshold: 100, // 用于追踪上一次触发闪烁的阈值
+      blinkBurst: false, // 是否处于一轮阈值穿越闪烁中（由 sessionPercentage watcher 设置）
       // Sudo store instance
       sudoStore: null
     }
@@ -256,7 +263,7 @@ export default {
         if (typeof this.user.avatarOptions === 'string') {
           try {
             options = JSON.parse(this.user.avatarOptions)
-          } catch (e) {
+          } catch {
             console.warn('Failed to parse avatarOptions:', this.user.avatarOptions)
             options = {}
           }
@@ -427,7 +434,7 @@ export default {
     sessionWarningTooltip() {
       const halfTime = this.maxSessionTimeout / 2
       const halfTimeMinutes = Math.floor(halfTime / 60000)
-      return `登入有效期低於 ${halfTimeMinutes} 分鐘，請操作網站，會自動延長有效期`
+      return `登入有效期低於 ${halfTimeMinutes} 分鐘，點一下即可立即延長有效期`
     },
 
     /**
@@ -439,7 +446,7 @@ export default {
      */
     timerGradient() {
       const percentage = this.sessionPercentage
-      let color = '#1A9B8E' // 默认土耳其藍 (Scheme M Success)
+      let color
 
       if (percentage <= 30) {
         color = '#E91E63' // 熱粉紅 (Scheme M Danger)
@@ -458,7 +465,7 @@ export default {
      * 闪烁动画 class
      * 逻辑：
      * - 50% 以下才显示警告图标
-     * - 每降低 10% 触发一轮闪烁（三次）
+     * - 每降低 10% 触发一轮闪烁（三次，阈值穿越由 watcher 侦测）
      * - 低于 10% 时持续闪烁
      */
     blinkAnimationClass() {
@@ -469,23 +476,22 @@ export default {
         return 'blink-continuous'
       }
 
-      // 计算当前所在的 10% 区间
-      const threshold = Math.floor(percentage / 10) * 10
-
-      // 当穿越新的 10% 阈值时，触发一轮闪烁
-      // 例如：从 45% → 39% 时，threshold 从 40 变为 30
-      if (threshold < this.lastBlinkThreshold && percentage >= 10) {
-        // 触发一轮闪烁（通过 CSS 控制三次）
-        this.lastBlinkThreshold = threshold
-        return 'blink-burst'
-      }
-
-      // 默认不闪烁
-      return ''
+      return this.blinkBurst ? 'blink-burst' : ''
     }
   },
-  emits: ['user-command'],
   watch: {
+    // 侦测穿越新的 10% 阈值（例如 45% → 39%，threshold 从 40 变为 30）时触发一轮闪烁
+    sessionPercentage(percentage) {
+      if (percentage < 10) return
+
+      const threshold = Math.floor(percentage / 10) * 10
+      if (threshold < this.lastBlinkThreshold) {
+        this.lastBlinkThreshold = threshold
+        this.blinkBurst = true // 触发一轮闪烁（通过 CSS 控制三次）
+      } else {
+        this.blinkBurst = false
+      }
+    },
     activeIndex(newIndex) {
       // 只有第一名翻轉到財富徽章時才發射煙火
       const currentBadge = this.allUserBadges[newIndex % this.allUserBadges.length]
@@ -522,12 +528,12 @@ export default {
       }
     },
 
-    formatTime(milliseconds) {
-      const minutes = Math.floor(milliseconds / 60000)
-      const seconds = Math.floor((milliseconds % 60000) / 1000)
-      return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+    // Click the countdown timer (only rendered in warning state) to manually
+    // renew the session. MainLayout enforces the once-per-token constraint.
+    onSessionTimerClick() {
+      this.$emit('user-command', 'renew-session')
     },
-    
+
     generateDicebearUrl(seed, style, options = {}) {
       const baseUrl = `https://api.dicebear.com/7.x/${style}/svg`
       const params = new URLSearchParams({
@@ -644,8 +650,6 @@ export default {
         // 計算飛散方向（360度均勻分布）
         const angle = (i / FIREWORK_COUNT) * 2 * Math.PI
         const distance = FIREWORK_BASE_DISTANCE + Math.random() * FIREWORK_RANDOM_DISTANCE
-        const endX = centerX + Math.cos(angle) * distance
-        const endY = centerY + Math.sin(angle) * distance
 
         // 創建 firework element
         const firework = document.createElement('div')
@@ -834,6 +838,10 @@ export default {
 .session-timer {
   display: flex;
   align-items: center;
+}
+
+.session-timer-clickable {
+  cursor: pointer;
 }
 
 .timer-circle {

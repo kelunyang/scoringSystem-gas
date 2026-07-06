@@ -15,6 +15,7 @@
 
 import { handleApiError } from './errorHandler'
 import { getCachedClientIP } from './ip'
+import { authEventBus } from './authEventBus'
 
 interface SessionInfo {
   isValid: boolean
@@ -62,18 +63,25 @@ class APIClient {
 
   /**
    * Save JWT token to sessionStorage
+   *
+   * Emits a token-renewal event so reactive consumers (e.g. useAuth().token)
+   * stay in sync with the latest token.
    */
   saveToken(token: string): void {
     sessionStorage.setItem('sessionId', token)
+    authEventBus.emitTokenRenewal(token)
   }
 
   /**
    * Remove JWT token (logout)
+   *
+   * Emits a session-expired event so reactive consumers clear their token state.
    */
   clearToken(): void {
     sessionStorage.removeItem('sessionId')
     sessionStorage.removeItem('sessionExpiryTime')
     sessionStorage.removeItem('sessionTimeout')
+    authEventBus.emitSessionExpired('logout')
   }
 
   /**
@@ -202,7 +210,7 @@ class APIClient {
         result = await response.json()
       } catch (jsonError) {
         console.error('Failed to parse JSON response:', jsonError)
-        throw new Error('Invalid JSON response from server')
+        throw new Error('Invalid JSON response from server', { cause: jsonError })
       }
 
       // Check response format

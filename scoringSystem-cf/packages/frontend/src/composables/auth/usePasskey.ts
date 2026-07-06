@@ -6,6 +6,7 @@
 import { ref, computed } from 'vue';
 import { useQueryClient } from '@tanstack/vue-query';
 import { rpcClient } from '@/utils/rpc-client';
+import { apiClient } from '@/utils/api';
 import type { Ref, ComputedRef } from 'vue';
 
 // ─── Types ───
@@ -404,9 +405,9 @@ export function usePasskey(): UsePasskeyReturn {
       const response = await httpResponse.json();
 
       if (response.success) {
-        // Save session to sessionStorage
+        // Save session (emits token-renewal so reactive consumers stay in sync)
         if (response.data.sessionId) {
-          sessionStorage.setItem('sessionId', response.data.sessionId);
+          apiClient.saveToken(response.data.sessionId);
         }
 
         // Invalidate current user query

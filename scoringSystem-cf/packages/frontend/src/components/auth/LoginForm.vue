@@ -36,8 +36,8 @@
     <PasswordStep
       v-if="!emailPasswordVerified"
       key="password-step"
-      @submit="handlePasswordSubmit"
       :loading="loading"
+      @submit="handlePasswordSubmit"
     />
 
     <!-- Step 2: Two-Factor Verification -->
@@ -47,13 +47,14 @@
       :user-email="userEmail"
       :method="twoFactorMethod"
       :available-methods="availableMethods"
+      :last-email-sent-at="lastEmailSentAt"
       theme-color="#1A9B8E"
+      :loading="loading"
+      :resend-loading="resendLoading"
       @submit="handleTwoFactorSubmit"
       @resend="handleResendCode"
       @passkey-success="handlePasskeySuccess"
       @method-change="handleMethodChange"
-      :loading="loading"
-      :resend-loading="resendLoading"
     />
 
     <!-- Error Message -->
@@ -97,6 +98,7 @@ const {
   availableMethods,
   errorMessage,
   userEmail,
+  lastEmailSentAt,
   verifyPassword,
   verifyTwoFactor,
   resendVerificationCode,
@@ -239,7 +241,7 @@ async function handleResendCode(data: { turnstileToken: string }) {
   if (success) {
     ElMessage({
       type: 'success',
-      message: '驗證碼已重新發送',
+      message: '驗證碼已寄出至您的信箱',
       duration: 2000
     });
   }
