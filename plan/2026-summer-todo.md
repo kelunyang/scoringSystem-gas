@@ -35,9 +35,9 @@ Batch 6b 的 advancedChunks 手動分組造成 production 白屏（dev 正常、
 已修復（改用 Rolldown 預設分塊）並補上 `pnpm test:e2e:preview` 防護網。
 完整事故紀錄與其他踩坑見 **[pitfalls.md](pitfalls.md)**。
 
-**遺留待辦**（2026-07-06 更新進度）：
-- `no-explicit-any` 維持 warn，隨遷移逐檔清償中（1141 → 1109 warnings）
-- Options API → script setup 遷移：✅ 一至三波 + GroupManagement 完成（9 檔），**block-lang 豁免區塊已整段刪除**；僅剩 UserManagement/ProjectManagement 兩巨頭（先補組件測試再轉），見 [options-api-migration.md](options-api-migration.md)
+**遺留待辦**（2026-07-07 更新進度）：
+- `no-explicit-any` 維持 warn，隨遷移逐檔清償中（1141 → 1094 warnings）
+- Options API → script setup 遷移：✅ 一至四波 + UserManagement 完成（10 檔）；UserManagement 附帶**首個組件掛載測試**（6 條安全網）、死碼淨刪 ~1,400 行、修復 user-global/project-groups 請求 body 400 真 bug；僅剩 ProjectManagement（先補測試、拆子組件再轉），見 [options-api-migration.md](options-api-migration.md)
 - ✅ FA 7.0.1 完成（2026-07-06，含 --fa-width:auto 還原 v6 寬度行為）；KaTeX 0.17 續等 cdnjs（仍停在 0.16.44）
 
 ---

@@ -4,14 +4,20 @@
 > 前置條件：**使用者先將工作區 WIP（44 檔）commit 落地**，再開新對話執行
 > 現狀：146 個 Vue 組件中 136 個（93%）已是 `<script setup lang="ts">`，殘留 11 檔約 24,000 行
 
-## ✅ 進度（2026-07-06 更新）
+## ✅ 進度（2026-07-07 更新）
 
 - **前置 WIP 落地**：✅ 完成（分 5 個 commit：2FA 改造、同名次排名、強制清票、雙 ESC、config 補落地）
 - **第一波**：✅ 完成（TurnstileWidget `fe5b189`、UserEditorDrawer `f552bcf`、ViewerManagementDrawer `6cd17c2`）
 - **第二波**：✅ 完成（StageGanttChart `38dcf04`、StageComments `9f7b878`、UserSettings `fd76d60`）
 - **第三波**：✅ 完成（ProjectCard `454b75f`（泛型組件）、TopBarUserControls `2fded06`）
 - **第四波**：GroupManagement ✅ 完成（`fa19411`）；**`vue/block-lang` 豁免區塊已整段刪除**（完成定義 #2 達成）
-- **殘留**：UserManagement（5,235 行）、ProjectManagement（6,822 行），皆 TS+Options；依驗證策略**先補組件測試再轉換**，建議各開一個對話（對話 D/E）
+- **UserManagement ✅ 完成**（2026-07-07，`2825d17`/`084e390`/`c743b8c` 三 commit）：
+  - 先補**首個組件掛載測試**（6 條：列表渲染、空狀態、權限三態、篩選 debounce、開 drawer、confirm 送 mutation），遷移前後不改一字通過
+  - 文件寫「TS+Options」已過時——實際跟 GroupManagement 一樣**早已是純 `setup()`**，轉換 = 拆殼 + 刪 200 行 return
+  - 檔內 `no-explicit-any` 17 → 0；**型別化又揪出真 bug**：user-global-groups/user-project-groups 請求 body 送 `{ targetEmail }`/`{ email }`，後端 zValidator 要求 `{ userEmail }`，先前一律 400（編輯抽屜的群組清單載不出）。已修並同步 shared 型別
+  - 拆殼後 eslint 揭露 53 個被 return 物件掩護的死綁定（邀請碼重複邏輯、頭像編輯殘骸、DISABLED tags），全刪；檔案 5,236 → 約 3,600 行
+  - 測試基建備忘：無 Pinia 需求（sudo store 只在 mock 掉的 mutation callback 觸及）；mount 要 `plugins: [ElementPlus]`（main.ts 是全域註冊）；mock 覆寫一律放 spec `beforeEach`（setup.ts 會 clear/restore）；el-* stub 的 props 落在 attrs
+- **殘留**：ProjectManagement（6,822 行）；依驗證策略**先補組件測試再轉換**（測試模式可直接沿用 UserManagement.spec.ts），建議先拆分子組件再轉（對話 E）
 - 執行修正註記：
   - StageGanttChart 實際是 npm `d3` + `@types/d3`（非 CDN 全域），且內部原本就是 `setup()` 寫法、無 `this` 逃逸問題
   - GroupManagement 也已是純 `setup()`（文件寫的混合式已被先前重構清掉），轉換 = 搬殼 + 2,200 行型別化
