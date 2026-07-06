@@ -286,13 +286,12 @@
   </el-drawer>
 </template>
 
-<script lang="ts">
+<script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import AvatarEditor from '@/components/shared/AvatarEditor.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
-import type { PropType } from 'vue'
 
 /**
  * User data structure
@@ -311,7 +310,7 @@ export interface User {
   lastLoginTime?: number
   avatarSeed?: string
   avatarStyle?: string
-  avatarOptions?: Record<string, any>
+  avatarOptions?: Record<string, unknown>
 }
 
 /**
@@ -348,266 +347,244 @@ export interface GlobalGroup {
   isActive: boolean
 }
 
-export default {
-  name: 'UserEditorDrawer',
-  components: {
-    AvatarEditor,
-    EmptyState
-  },
-  props: {
-    visible: {
-      type: Boolean,
-      default: false
-    },
-    user: {
-      type: Object as PropType<User | null>,
-      default: null
-    },
-    globalGroups: {
-      type: Array as PropType<GlobalGroup[]>,
-      default: () => []
-    }
-  },
-  emits: [
-    'update:visible',
-    'save',
-    'refresh',
-    'regenerate-avatar',
-    'remove-from-global-group',
-    'add-to-global-group',
-    'update-group-allow-change',
-    'remove-from-project-group'
-  ],
-  setup(props, { emit }) {
-    // Drawer Breadcrumb (MUST be inside setup() for Options API)
-    const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
+interface PermissionDisplay {
+  code: string
+  name: string
+  icon: string
+}
 
-    // Two-way binding for visibility
-    const localVisible = computed({
-      get: () => props.visible,
-      set: (val) => emit('update:visible', val)
-    })
+const props = withDefaults(defineProps<{
+  visible?: boolean
+  user?: User | null
+  globalGroups?: GlobalGroup[]
+}>(), {
+  visible: false,
+  user: null,
+  globalGroups: () => []
+})
 
-    // Editing user state
-    const editingUser = ref<User | null>(null)
-    const originalUser = ref<User | null>(null)
-    const loadingUserData = ref(false)
-    const savingEditingUser = ref(false)
+const emit = defineEmits<{
+  'update:visible': [visible: boolean]
+  save: [payload: { user: User; avatarChanged: boolean }]
+  refresh: []
+  'regenerate-avatar': [payload: { user: User }]
+  'remove-from-global-group': [payload: { userId: string; groupId: string }]
+  'add-to-global-group': [payload: { userId: string; groupId: string }]
+  'update-group-allow-change': [projectGroup: ProjectGroupMembership]
+  'remove-from-project-group': [projectGroup: ProjectGroupMembership]
+}>()
 
-    // Avatar management (simplified)
-    const editingUserAvatarChanged = ref(false)
+// Drawer Breadcrumb
+const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 
-    // Global groups management
-    const selectedGlobalGroupToAdd = ref('')
-    const availableGlobalGroups = computed(() => {
-      if (!props.globalGroups || !editingUser.value) return []
-      const userGroupIds = (editingUser.value.globalGroups || []).map(g => g.groupId)
-      return props.globalGroups.filter(g => !userGroupIds.includes(g.groupId))
-    })
+// Two-way binding for visibility
+const localVisible = computed({
+  get: () => props.visible,
+  set: (val) => emit('update:visible', val)
+})
 
-    // Project groups management
-    const loadingUserProjectGroups = ref(false)
-    const userProjectGroups = ref<ProjectGroupMembership[]>([])
-    const removingFromGroups = reactive(new Set<string>())
-    const updatingGroupSettings = reactive(new Set<string>())
+// Editing user state
+const editingUser = ref<User | null>(null)
+const originalUser = ref<User | null>(null)
+const loadingUserData = ref(false)
+const savingEditingUser = ref(false)
 
-    // User permissions
-    const userGlobalPermissions = computed(() => {
-      if (!editingUser.value || !editingUser.value.globalGroups) return []
+// Avatar management (simplified)
+const editingUserAvatarChanged = ref(false)
 
-      const permissionsMap = new Map()
-      editingUser.value.globalGroups.forEach(group => {
-        if (group.globalPermissions && Array.isArray(group.globalPermissions)) {
-          group.globalPermissions.forEach(perm => {
-            if (!permissionsMap.has(perm)) {
-              permissionsMap.set(perm, {
-                code: perm,
-                name: getPermissionName(perm),
-                icon: getPermissionIcon(perm)
-              })
-            }
+// Global groups management
+const selectedGlobalGroupToAdd = ref('')
+const availableGlobalGroups = computed(() => {
+  if (!props.globalGroups || !editingUser.value) return []
+  const userGroupIds = (editingUser.value.globalGroups || []).map(g => g.groupId)
+  return props.globalGroups.filter(g => !userGroupIds.includes(g.groupId))
+})
+
+// Project groups management
+const loadingUserProjectGroups = ref(false)
+const userProjectGroups = ref<ProjectGroupMembership[]>([])
+const removingFromGroups = reactive(new Set<string>())
+const updatingGroupSettings = reactive(new Set<string>())
+
+// User permissions
+const userGlobalPermissions = computed(() => {
+  if (!editingUser.value || !editingUser.value.globalGroups) return []
+
+  const permissionsMap = new Map<string, PermissionDisplay>()
+  editingUser.value.globalGroups.forEach(group => {
+    if (group.globalPermissions && Array.isArray(group.globalPermissions)) {
+      group.globalPermissions.forEach(perm => {
+        if (!permissionsMap.has(perm)) {
+          permissionsMap.set(perm, {
+            code: perm,
+            name: getPermissionName(perm),
+            icon: getPermissionIcon(perm)
           })
         }
       })
-
-      return Array.from(permissionsMap.values())
-    })
-
-    // Avatar data for AvatarEditor component
-    const avatarData = computed({
-      get: () => ({
-        avatarSeed: editingUser.value?.avatarSeed || '',
-        avatarStyle: editingUser.value?.avatarStyle || 'avataaars',
-        avatarOptions: editingUser.value?.avatarOptions || {}
-      }),
-      set: (value) => {
-        if (editingUser.value) {
-          editingUser.value.avatarSeed = value.avatarSeed
-          editingUser.value.avatarStyle = value.avatarStyle
-          editingUser.value.avatarOptions = value.avatarOptions
-        }
-      }
-    })
-
-    // Watch user prop to update editingUser
-    watch(() => props.user, (newUser) => {
-      if (newUser) {
-        const clonedUser = JSON.parse(JSON.stringify(newUser))
-        editingUser.value = clonedUser
-        originalUser.value = JSON.parse(JSON.stringify(clonedUser))
-      }
-    }, { immediate: true, deep: true })
-
-    // Computed: Detect if user has made changes
-    const hasUserChanges = computed(() => {
-      if (!editingUser.value || !originalUser.value) return false
-
-      // Check avatar changed flag (catches regenerate events)
-      if (editingUserAvatarChanged.value) return true
-
-      // Check display name
-      if (editingUser.value.displayName !== originalUser.value.displayName) return true
-
-      // Check status
-      if (editingUser.value.status !== originalUser.value.status) return true
-
-      // Check avatar changes
-      if (editingUser.value.avatarSeed !== originalUser.value.avatarSeed) return true
-      if (editingUser.value.avatarStyle !== originalUser.value.avatarStyle) return true
-      if (JSON.stringify(editingUser.value.avatarOptions) !== JSON.stringify(originalUser.value.avatarOptions)) return true
-
-      // Check global groups (array comparison)
-      const currentGroupIds = (editingUser.value.globalGroups || []).map(g => g.groupId).sort()
-      const originalGroupIds = (originalUser.value.globalGroups || []).map(g => g.groupId).sort()
-      if (currentGroupIds.length !== originalGroupIds.length) return true
-      if (currentGroupIds.some((id, index) => id !== originalGroupIds[index])) return true
-
-      return false
-    })
-
-    // Methods
-    const handleDrawerClose = (done: () => void) => {
-      if (hasUserChanges.value) {
-        ElMessageBox.confirm('您有未保存的變更，確定要關閉嗎？', '確認', {
-          confirmButtonText: '確定',
-          cancelButtonText: '取消',
-          type: 'warning'
-        }).then(() => {
-          done()
-        }).catch(() => {})
-      } else {
-        done()
-      }
     }
+  })
 
-    const handleCancel = () => {
-      localVisible.value = false
-      editingUser.value = null
-      // hasUserChanges is now computed, will auto-reset to false when editingUser is null
-    }
+  return Array.from(permissionsMap.values())
+})
 
-    const handleSave = () => {
-      emit('save', {
-        user: editingUser.value,
-        avatarChanged: editingUserAvatarChanged.value
-      })
-    }
-
-    const handleRegenerateAvatar = () => {
-      // Set local flag to enable save button
-      editingUserAvatarChanged.value = true
-
-      emit('regenerate-avatar', {
-        user: editingUser.value
-      })
-    }
-
-    const handleAvatarChange = () => {
-      editingUserAvatarChanged.value = true
-    }
-
-    const handleRemoveFromGlobalGroup = (group: GlobalGroupMembership) => {
-      emit('remove-from-global-group', {
-        userId: editingUser.value?.userId,
-        groupId: group.groupId
-      })
-    }
-
-    const handleAddToGlobalGroup = () => {
-      emit('add-to-global-group', {
-        userId: editingUser.value?.userId,
-        groupId: selectedGlobalGroupToAdd.value
-      })
-      selectedGlobalGroupToAdd.value = ''
-    }
-
-    const handleUpdateGroupAllowChange = (projectGroup: ProjectGroupMembership) => {
-      emit('update-group-allow-change', projectGroup)
-    }
-
-    const handleRemoveFromProjectGroup = (projectGroup: ProjectGroupMembership) => {
-      emit('remove-from-project-group', projectGroup)
-    }
-
-    const getGlobalGroupPermissionText = (group: GlobalGroupMembership) => {
-      if (!group.globalPermissions || group.globalPermissions.length === 0) {
-        return '無權限'
-      }
-      return `${group.globalPermissions.length} 個權限`
-    }
-
-    const getPermissionName = (code: string) => {
-      const permissionNames: Record<string, string> = {
-        'system_admin': '系統管理員',
-        'manage_users': '管理使用者',
-        'generate_invites': '生成邀請碼',
-        'create_project': '創建專案',
-        'manage_global_groups': '管理全域群組'
-      }
-      return permissionNames[code] || code
-    }
-
-    const getPermissionIcon = (code: string) => {
-      const permissionIcons: Record<string, string> = {
-        'system_admin': 'fas fa-crown',
-        'manage_users': 'fas fa-users-cog',
-        'generate_invites': 'fas fa-envelope',
-        'create_project': 'fas fa-plus-circle',
-        'manage_global_groups': 'fas fa-users'
-      }
-      return permissionIcons[code] || 'fas fa-key'
-    }
-
-    return {
-      localVisible,
-      editingUser,
-      loadingUserData,
-      savingEditingUser,
-      hasUserChanges,
-      editingUserAvatarChanged,
-      avatarData,
-      selectedGlobalGroupToAdd,
-      availableGlobalGroups,
-      loadingUserProjectGroups,
-      userProjectGroups,
-      removingFromGroups,
-      updatingGroupSettings,
-      userGlobalPermissions,
-      currentPageName,
-      currentPageIcon,
-      handleDrawerClose,
-      handleCancel,
-      handleSave,
-      handleRegenerateAvatar,
-      handleAvatarChange,
-      handleRemoveFromGlobalGroup,
-      handleAddToGlobalGroup,
-      handleUpdateGroupAllowChange,
-      handleRemoveFromProjectGroup,
-      getGlobalGroupPermissionText
+// Avatar data for AvatarEditor component
+const avatarData = computed({
+  get: () => ({
+    avatarSeed: editingUser.value?.avatarSeed || '',
+    avatarStyle: editingUser.value?.avatarStyle || 'avataaars',
+    avatarOptions: editingUser.value?.avatarOptions || {}
+  }),
+  set: (value) => {
+    if (editingUser.value) {
+      editingUser.value.avatarSeed = value.avatarSeed
+      editingUser.value.avatarStyle = value.avatarStyle
+      editingUser.value.avatarOptions = value.avatarOptions
     }
   }
+})
+
+// Watch user prop to update editingUser
+watch(() => props.user, (newUser) => {
+  if (newUser) {
+    const clonedUser = JSON.parse(JSON.stringify(newUser)) as User
+    editingUser.value = clonedUser
+    originalUser.value = JSON.parse(JSON.stringify(clonedUser)) as User
+  }
+}, { immediate: true, deep: true })
+
+// Computed: Detect if user has made changes
+const hasUserChanges = computed(() => {
+  if (!editingUser.value || !originalUser.value) return false
+
+  // Check avatar changed flag (catches regenerate events)
+  if (editingUserAvatarChanged.value) return true
+
+  // Check display name
+  if (editingUser.value.displayName !== originalUser.value.displayName) return true
+
+  // Check status
+  if (editingUser.value.status !== originalUser.value.status) return true
+
+  // Check avatar changes
+  if (editingUser.value.avatarSeed !== originalUser.value.avatarSeed) return true
+  if (editingUser.value.avatarStyle !== originalUser.value.avatarStyle) return true
+  if (JSON.stringify(editingUser.value.avatarOptions) !== JSON.stringify(originalUser.value.avatarOptions)) return true
+
+  // Check global groups (array comparison)
+  const currentGroupIds = (editingUser.value.globalGroups || []).map(g => g.groupId).sort()
+  const originalGroupIds = (originalUser.value.globalGroups || []).map(g => g.groupId).sort()
+  if (currentGroupIds.length !== originalGroupIds.length) return true
+  if (currentGroupIds.some((id, index) => id !== originalGroupIds[index])) return true
+
+  return false
+})
+
+// Methods
+const handleDrawerClose = (done: () => void) => {
+  if (hasUserChanges.value) {
+    ElMessageBox.confirm('您有未保存的變更，確定要關閉嗎？', '確認', {
+      confirmButtonText: '確定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }).then(() => {
+      done()
+    }).catch(() => {})
+  } else {
+    done()
+  }
 }
+
+const handleCancel = () => {
+  localVisible.value = false
+  editingUser.value = null
+  // hasUserChanges is computed, will auto-reset to false when editingUser is null
+}
+
+const handleSave = () => {
+  if (!editingUser.value) return
+  emit('save', {
+    user: editingUser.value,
+    avatarChanged: editingUserAvatarChanged.value
+  })
+}
+
+const handleRegenerateAvatar = () => {
+  if (!editingUser.value) return
+  // Set local flag to enable save button
+  editingUserAvatarChanged.value = true
+
+  emit('regenerate-avatar', {
+    user: editingUser.value
+  })
+}
+
+const handleAvatarChange = () => {
+  editingUserAvatarChanged.value = true
+}
+
+const handleRemoveFromGlobalGroup = (group: GlobalGroupMembership) => {
+  if (!editingUser.value) return
+  emit('remove-from-global-group', {
+    userId: editingUser.value.userId,
+    groupId: group.groupId
+  })
+}
+
+const handleAddToGlobalGroup = () => {
+  if (!editingUser.value) return
+  emit('add-to-global-group', {
+    userId: editingUser.value.userId,
+    groupId: selectedGlobalGroupToAdd.value
+  })
+  selectedGlobalGroupToAdd.value = ''
+}
+
+const handleUpdateGroupAllowChange = (projectGroup: ProjectGroupMembership) => {
+  emit('update-group-allow-change', projectGroup)
+}
+
+const handleRemoveFromProjectGroup = (projectGroup: ProjectGroupMembership) => {
+  emit('remove-from-project-group', projectGroup)
+}
+
+const getGlobalGroupPermissionText = (group: GlobalGroupMembership | GlobalGroup) => {
+  if (!group.globalPermissions || group.globalPermissions.length === 0) {
+    return '無權限'
+  }
+  return `${group.globalPermissions.length} 個權限`
+}
+
+const getPermissionName = (code: string) => {
+  const permissionNames: Record<string, string> = {
+    'system_admin': '系統管理員',
+    'manage_users': '管理使用者',
+    'generate_invites': '生成邀請碼',
+    'create_project': '創建專案',
+    'manage_global_groups': '管理全域群組'
+  }
+  return permissionNames[code] || code
+}
+
+const getPermissionIcon = (code: string) => {
+  const permissionIcons: Record<string, string> = {
+    'system_admin': 'fas fa-crown',
+    'manage_users': 'fas fa-users-cog',
+    'generate_invites': 'fas fa-envelope',
+    'create_project': 'fas fa-plus-circle',
+    'manage_global_groups': 'fas fa-users'
+  }
+  return permissionIcons[code] || 'fas fa-key'
+}
+
+// 供父層透過 ref 更新載入/儲存狀態與專案群組資料（Options API 時代全數自動暴露）
+defineExpose({
+  loadingUserData,
+  savingEditingUser,
+  loadingUserProjectGroups,
+  userProjectGroups,
+  editingUserAvatarChanged
+})
 </script>
 
 <style scoped>

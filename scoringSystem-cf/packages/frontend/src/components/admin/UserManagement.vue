@@ -723,7 +723,7 @@ import ResponsiveTableHeader from '@/components/shared/ResponsiveTableHeader.vue
 import UserActivityHeatmap from '@/components/charts/UserActivityHeatmap.vue'
 import UserActivityDetail from '@/components/shared/UserActivityDetail.vue'
 import InvitationManagementDrawer from './user/InvitationManagementDrawer.vue'
-import UserEditorDrawer from './user/UserEditorDrawer.vue'
+import UserEditorDrawer, { type User as DrawerUser } from './user/UserEditorDrawer.vue'
 import PasswordResetDrawer from './user/PasswordResetDrawer.vue'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
@@ -2665,7 +2665,7 @@ export default {
       isInFallbackMode.value = false
     }
 
-    const saveEditingUser = async (eventData: { user?: ExtendedUser; avatarChanged?: boolean } = {}) => {
+    const saveEditingUser = async (eventData: { user?: DrawerUser; avatarChanged?: boolean } = {}) => {
       if (!editingUser.value || savingEditingUser.value) return
 
       savingEditingUser.value = true
@@ -2676,8 +2676,9 @@ export default {
         const avatarChanged = eventData?.avatarChanged || false
 
         // Sync fresh data back to local state
+        // (drawer 回傳的是本組件傳入的 ExtendedUser 之 JSON clone，欄位完整)
         if (eventData?.user) {
-          editingUser.value = eventData.user
+          editingUser.value = eventData.user as unknown as ExtendedUser
         }
 
         // Prepare update data using fresh data from drawer
@@ -2862,7 +2863,7 @@ export default {
       selectedGlobalGroupToAdd.value = ''
     }
 
-    const removeUserFromGlobalGroup = async (group: GlobalGroupMembership) => {
+    const removeUserFromGlobalGroup = async (group: { groupId: string }) => {
       if (!editingUser.value) return
 
       // 使用 TanStack Query mutation（會自動處理 success/error 訊息）
