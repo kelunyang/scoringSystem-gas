@@ -336,7 +336,7 @@
                 </el-button>
               </div>
               <UserActivityDetail
-                :user-email="user.userEmail"
+                :user-email="user?.userEmail ?? ''"
                 :date="selectedDate"
                 :events="selectedDayEvents"
                 :can-view-details="true"
@@ -350,565 +350,571 @@
   </div>
 </template>
 
-<script>
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import TopBarUserControls from './TopBarUserControls.vue'
 import UserActivityHeatmap from './charts/UserActivityHeatmap.vue'
 import UserActivityDetail from '@/components/shared/UserActivityDetail.vue'
 import AvatarEditor from './shared/AvatarEditor.vue'
+import type { DayClickPayload } from './charts/UserActivityHeatmap.vue'
+import type { Event as ActivityEvent } from '@/components/shared/UserActivityDetail.vue'
 import TotpSetup from './settings/TotpSetup.vue'
 import PasskeySetup from './settings/PasskeySetup.vue'
 import { useBreadcrumb } from '@/composables/useBreadcrumb'
 import { rpcClient } from '@/utils/rpc-client'
 import { getUserPreferences, setUserPreference } from '@/utils/userPreferences'
 
-export default {
-  name: 'UserSettings',
-  components: {
-    TopBarUserControls,
-    UserActivityHeatmap,
-    UserActivityDetail,
-    AvatarEditor,
-    TotpSetup,
-    PasskeySetup
-  },
-  directives: {
-    'click-outside': {
-      beforeMount(el, binding) {
-        el.clickOutsideEvent = function(event) {
-          if (!(el === event.target || el.contains(event.target))) {
-            binding.value()
-          }
-        }
-        document.addEventListener('click', el.clickOutsideEvent)
-      },
-      unmounted(el) {
-        document.removeEventListener('click', el.clickOutsideEvent)
-      }
-    }
-  },
-  props: {
-    user: {
-      type: Object,
-      default: null
-    },
-    sessionPercentage: {
-      type: Number,
-      default: 100
-    },
-    remainingTime: {
-      type: Number,
-      default: 0
-    }
-  },
-  emits: ['user-command'],
-  data() {
+/** 設定頁需要的使用者欄位（父層傳入 AuthUser，此處取結構子集） */
+interface SettingsUser {
+  userId?: string
+  userEmail?: string
+  displayName?: string
+  avatarSeed?: string
+  avatarStyle?: string
+  avatarOptions?: Record<string, unknown>
+  permissions?: string[]
+}
+
+/** AvatarEditor 的資料形狀 */
+interface AvatarData {
+  avatarSeed: string
+  avatarStyle: string
+  avatarOptions: Record<string, unknown>
+}
+
+interface UserBadge {
+  type: string
+  icon: string
+  color: string
+  label: string
+}
+
+const props = withDefaults(defineProps<{
+  user?: SettingsUser | null
+  sessionPercentage?: number
+  remainingTime?: number
+}>(), {
+  user: null,
+  sessionPercentage: 100,
+  remainingTime: 0
+})
+
+const emit = defineEmits<{
+  'user-command': [command: string]
+}>()
+
+// Auto-refresh timer setting (in minutes)
+const refreshTimerValue = ref(30)
+
+// Stage display preference
+const stageDisplayAsGantt = ref(false)
+
+// Auto-open notification center preference
+const autoOpenNotification = ref(true)
+
+// Comment page size setting (stored in KV)
+const commentPageSize = ref(3)
+const savingCommentPageSize = ref(false)
+
+const sliderMarks = {
+  10: '10分',
+  30: '30分',
+  60: '60分'
+}
+
+const commentPageSizeMarks = {
+  3: '3',
+  5: '5',
+  10: '10'
+}
+
+// Profile and password editing states
+const editingProfile = ref(false)
+const editingPassword = ref(false)
+const savingProfile = ref(false)
+const changingPassword = ref(false)
+
+// Form data
+const editProfileForm = ref({
+  displayName: ''
+})
+const passwordForm = ref({
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: ''
+})
+
+// Password strength
+const passwordStrength = ref<{
+  level: 'weak' | 'medium' | 'strong' | null
+  message: string
+}>({
+  level: null,
+  message: ''
+})
+
+// Activity statistics
+const selectedDate = ref<string | null>(null)
+const selectedDayEvents = ref<ActivityEvent[]>([])
+const showActivityDetailPanel = ref(false)
+
+const avatarData = computed<AvatarData>({
+  get() {
     return {
-      // Auto-refresh timer setting (in minutes)
-      refreshTimerValue: 30,
-
-      // Stage display preference
-      stageDisplayAsGantt: false,
-
-      // Auto-open notification center preference
-      autoOpenNotification: true,
-
-      // Comment page size setting (stored in KV)
-      commentPageSize: 3,
-      savingCommentPageSize: false,
-
-      sliderMarks: {
-        10: '10分',
-        30: '30分',
-        60: '60分'
-      },
-
-      commentPageSizeMarks: {
-        3: '3',
-        5: '5',
-        10: '10'
-      },
-
-      // Profile and password editing states
-      editingProfile: false,
-      editingPassword: false,
-      savingProfile: false,
-      changingPassword: false,
-
-      // Form data
-      editProfileForm: {
-        displayName: ''
-      },
-      passwordForm: {
-        oldPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-      },
-
-      // Password strength
-      passwordStrength: {
-        level: null,  // 'weak' | 'medium' | 'strong' | null
-        message: ''
-      },
-
-      // Activity statistics
-      selectedDate: null,
-      selectedDayEvents: [],
-      showActivityDetailPanel: false
+      avatarSeed: props.user?.avatarSeed || '',
+      avatarStyle: props.user?.avatarStyle || 'avataaars',
+      avatarOptions: props.user?.avatarOptions || {}
     }
   },
-  computed: {
-    avatarData: {
-      get() {
-        return {
-          avatarSeed: this.user?.avatarSeed || '',
-          avatarStyle: this.user?.avatarStyle || 'avataaars',
-          avatarOptions: this.user?.avatarOptions || {}
-        }
-      },
-      set(_value) {
-        // This will be handled by the @change event
-      }
-    },
+  set(_value) {
+    // This will be handled by the @change event
+  }
+})
 
-    passwordStrengthPercentage() {
-      if (!this.passwordStrength.level) return 0
-      switch (this.passwordStrength.level) {
-        case 'weak': return 33
-        case 'medium': return 66
-        case 'strong': return 100
-        default: return 0
-      }
-    },
+const passwordStrengthPercentage = computed(() => {
+  if (!passwordStrength.value.level) return 0
+  switch (passwordStrength.value.level) {
+    case 'weak': return 33
+    case 'medium': return 66
+    case 'strong': return 100
+    default: return 0
+  }
+})
 
-    passwordStrengthColor() {
-      if (!this.passwordStrength.level) return '#e1e8ed'
-      switch (this.passwordStrength.level) {
-        case 'weak': return '#dc3545'
-        case 'medium': return '#ffc107'
-        case 'strong': return '#28a745'
-        default: return '#e1e8ed'
-      }
-    },
+const passwordStrengthColor = computed(() => {
+  if (!passwordStrength.value.level) return '#e1e8ed'
+  switch (passwordStrength.value.level) {
+    case 'weak': return '#dc3545'
+    case 'medium': return '#ffc107'
+    case 'strong': return '#28a745'
+    default: return '#e1e8ed'
+  }
+})
 
-    passwordStrengthText() {
-      return this.passwordStrength.message || ''
-    },
-    userBadges() {
-      const permissions = this.user?.permissions || []
+const passwordStrengthText = computed(() => passwordStrength.value.message || '')
 
-      if (permissions.length === 0) {
-        return []
-      }
+const userBadges = computed<UserBadge[]>(() => {
+  const permissions = props.user?.permissions || []
 
-      // 級別 1：系統管理類（最高優先級）
-      const systemPerms = [
-        'system_admin',
-        'manage_system_settings',
-        'view_system_logs',
-        'view_email_logs',
-        'manage_email_logs',
-        'notification_manager'
-      ]
-      if (permissions.some(p => systemPerms.includes(p))) {
-        return [{
-          type: 'system',
-          icon: 'fas fa-crown',
-          color: '#FFD700',
-          label: '系統管理'
-        }]
-      }
+  if (permissions.length === 0) {
+    return []
+  }
 
-      // 級別 2：使用者管理類
-      const userPerms = [
-        'manage_users',
-        'manage_global_groups',
-        'generate_invites',
-        'manage_invitations'
-      ]
-      if (permissions.some(p => userPerms.includes(p))) {
-        return [{
-          type: 'user',
-          icon: 'fas fa-users-cog',
-          color: '#9C27B0',
-          label: '使用者管理'
-        }]
-      }
+  // 級別 1：系統管理類（最高優先級）
+  const systemPerms = [
+    'system_admin',
+    'manage_system_settings',
+    'view_system_logs',
+    'view_email_logs',
+    'manage_email_logs',
+    'notification_manager'
+  ]
+  if (permissions.some(p => systemPerms.includes(p))) {
+    return [{
+      type: 'system',
+      icon: 'fas fa-crown',
+      color: '#FFD700',
+      label: '系統管理'
+    }]
+  }
 
-      // 級別 3：專案管理類
-      const projectPerms = [
-        'create_project',
-        'delete_any_project',
-        'manage_any_project'
-      ]
-      if (permissions.some(p => projectPerms.includes(p))) {
-        return [{
-          type: 'project',
-          icon: 'fas fa-project-diagram',
-          color: '#409EFF',
-          label: '專案管理'
-        }]
-      }
+  // 級別 2：使用者管理類
+  const userPerms = [
+    'manage_users',
+    'manage_global_groups',
+    'generate_invites',
+    'manage_invitations'
+  ]
+  if (permissions.some(p => userPerms.includes(p))) {
+    return [{
+      type: 'user',
+      icon: 'fas fa-users-cog',
+      color: '#9C27B0',
+      label: '使用者管理'
+    }]
+  }
 
-      return []
-    }
-  },
-  mounted() {
-    this.loadRefreshTimer()
-    this.loadStageDisplayPreference()
-    this.loadAutoOpenNotificationPreference()
-    this.loadCommentPageSizePreference()
+  // 級別 3：專案管理類
+  const projectPerms = [
+    'create_project',
+    'delete_any_project',
+    'manage_any_project'
+  ]
+  if (permissions.some(p => projectPerms.includes(p))) {
+    return [{
+      type: 'project',
+      icon: 'fas fa-project-diagram',
+      color: '#409EFF',
+      label: '專案管理'
+    }]
+  }
 
-    const { setPageTitle, clearProjectTitle } = useBreadcrumb()
-    setPageTitle('用戶設置')
-    clearProjectTitle()
-  },
-  methods: {
-    // Auto-refresh timer methods
-    loadRefreshTimer() {
-      if (!this.user?.userId) return
+  return []
+})
 
-      const prefs = getUserPreferences(this.user.userId)
-      if (prefs.refreshTimer) {
-        this.refreshTimerValue = Math.round(prefs.refreshTimer / 60)
-      }
-    },
+// Auto-refresh timer methods
+function loadRefreshTimer() {
+  if (!props.user?.userId) return
 
-    handleRefreshTimerChange(value) {
-      if (!this.user?.userId) return
-
-      const seconds = value * 60
-      setUserPreference(this.user.userId, 'refreshTimer', seconds)
-      this.$message.success(`自動刷新間隔已設定為 ${value} 分鐘`)
-      window.dispatchEvent(new CustomEvent('refreshTimerChanged'))
-    },
-
-    resetRefreshTimer() {
-      if (!this.user?.userId) return
-
-      this.refreshTimerValue = 30
-      setUserPreference(this.user.userId, 'refreshTimer', 1800)
-      this.$message.success('已重置為默認值 30 分鐘')
-      window.dispatchEvent(new CustomEvent('refreshTimerChanged'))
-    },
-
-    // Stage display preference methods
-    loadStageDisplayPreference() {
-      if (!this.user?.userId) return
-
-      const prefs = getUserPreferences(this.user.userId)
-      this.stageDisplayAsGantt = prefs.stageDisplayMode === 'gantt'
-    },
-
-    handleStageDisplayChange(value) {
-      if (!this.user?.userId) return
-
-      const mode = value ? 'gantt' : 'linear'
-      setUserPreference(this.user.userId, 'stageDisplayMode', mode)
-      this.$message.success(`階段顯示已切換為${value ? '甘特圖' : '流程圖'}模式`)
-      window.dispatchEvent(new CustomEvent('stageDisplayModeChanged', {
-        detail: { mode }
-      }))
-    },
-
-    // Tutorial management methods
-    resetAllTutorials() {
-      if (!this.user?.userId) return
-
-      this.$confirm('確定要重置所有教學導覽嗎？下次造訪 Dashboard、錢包和專案詳情頁面時將再次顯示教學。', '重置教學', {
-        confirmButtonText: '確定重置',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }).then(() => {
-        // Reset all tutorial flags to false
-        setUserPreference(this.user.userId, 'tutorialDashboardCompleted', false)
-        setUserPreference(this.user.userId, 'tutorialWalletCompleted', false)
-        setUserPreference(this.user.userId, 'tutorialProjectDetailCompleted', false)
-
-        this.$message.success('已重置所有教學導覽，下次造訪時將重新顯示')
-
-        // Trigger custom event for potential listeners
-        window.dispatchEvent(new CustomEvent('userPreferencesChanged', {
-          detail: { userId: this.user.userId, tutorialsReset: true }
-        }))
-      }).catch(() => {
-        // User cancelled, do nothing
-      })
-    },
-
-    // Auto-open notification center preference methods
-    loadAutoOpenNotificationPreference() {
-      if (!this.user?.userId) return
-
-      const prefs = getUserPreferences(this.user.userId)
-      // Default to true if not set
-      this.autoOpenNotification = prefs.autoOpenNotificationCenter !== false
-    },
-
-    handleAutoOpenNotificationChange(value) {
-      if (!this.user?.userId) return
-
-      setUserPreference(this.user.userId, 'autoOpenNotificationCenter', value)
-      this.$message.success(value ? '已開啟自動顯示通知中心' : '已關閉自動顯示通知中心')
-
-      // Trigger custom event
-      window.dispatchEvent(new CustomEvent('userPreferencesChanged', {
-        detail: { userId: this.user.userId, autoOpenNotificationCenter: value }
-      }))
-    },
-
-    // Comment page size preference methods (stored in KV)
-    async loadCommentPageSizePreference() {
-      try {
-        const httpResponse = await rpcClient.users.settings.$get()
-        const response = await httpResponse.json()
-        if (response.success && response.data?.commentPageSize) {
-          this.commentPageSize = response.data.commentPageSize
-          console.log(`✅ 載入評論分頁設定: ${this.commentPageSize}`)
-        }
-      } catch (error) {
-        console.warn('⚠️ 載入評論分頁設定失敗，使用預設值:', error)
-      }
-    },
-
-    async handleCommentPageSizeChange(value) {
-      if (this.savingCommentPageSize) return
-
-      this.savingCommentPageSize = true
-      try {
-        const httpResponse = await rpcClient.users.settings['comment-page-size'].$put({
-          json: { pageSize: value }
-        })
-        const response = await httpResponse.json()
-
-        if (response.success) {
-          this.$message.success(`每次載入評論數量已設定為 ${value} 則`)
-
-          // Trigger custom event for potential listeners
-          window.dispatchEvent(new CustomEvent('userPreferencesChanged', {
-            detail: { userId: this.user?.userId, commentPageSize: value }
-          }))
-        } else {
-          this.$message.error('儲存設定失敗：' + (response.error || '未知錯誤'))
-          // Revert to previous value
-          await this.loadCommentPageSizePreference()
-        }
-      } catch (error) {
-        console.error('Save comment page size error:', error)
-        this.$message.error('儲存設定失敗')
-        // Revert to previous value
-        await this.loadCommentPageSizePreference()
-      } finally {
-        this.savingCommentPageSize = false
-      }
-    },
-
-    resetCommentPageSize() {
-      this.commentPageSize = 3
-      this.handleCommentPageSizeChange(3)
-    },
-
-    // Activity methods
-    handleDayClick({ date, events }) {
-      this.selectedDate = date
-      this.selectedDayEvents = events
-      this.showActivityDetailPanel = true
-    },
-
-    closeActivityDetail() {
-      this.showActivityDetailPanel = false
-      this.selectedDate = null
-      this.selectedDayEvents = []
-    },
-
-    // Avatar management methods (simplified with shared component)
-    async regenerateAvatar() {
-      try {
-        const httpResponse = await rpcClient.users.avatar.regenerate.$post()
-        const response = await httpResponse.json()
-
-        if (response.success && response.data) {
-          this.$message.success('頭像已重新生成！')
-          this.$emit('user-command', 'refresh-user-data')
-        } else {
-          this.$message.error('重新生成頭像失敗：' + (response.error?.message || '未知錯誤'))
-        }
-      } catch (error) {
-        console.error('Regenerate avatar error:', error)
-        this.$message.error('重新生成頭像失敗')
-      }
-    },
-
-    async saveAvatarSettings(avatarData) {
-      try {
-        const httpResponse = await rpcClient.users.avatar.update.$post({
-          json: { avatarData }
-        })
-        const response = await httpResponse.json()
-
-        if (response.success) {
-          this.$message.success('頭像設定已儲存！')
-          this.$emit('user-command', 'refresh-user-data')
-        } else {
-          this.$message.error('儲存頭像設定失敗：' + (response.error?.message || '未知錯誤'))
-        }
-      } catch (error) {
-        console.error('Save avatar settings error:', error)
-        this.$message.error('儲存頭像設定失敗')
-      }
-    },
-
-    // Profile and password management
-    startEditProfile() {
-      this.editingProfile = true
-      this.editProfileForm.displayName = this.user?.displayName || ''
-    },
-
-    startEditPassword() {
-      this.editingPassword = true
-      this.passwordForm = {
-        oldPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-      }
-    },
-
-    cancelEditProfile() {
-      this.editingProfile = false
-      this.editProfileForm.displayName = ''
-    },
-
-    cancelEditPassword() {
-      this.editingPassword = false
-      this.passwordForm = {
-        oldPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-      }
-    },
-
-    async saveProfile() {
-      if (!this.editProfileForm.displayName.trim()) {
-        this.$message.error('顯示名稱不能為空')
-        return
-      }
-
-      this.savingProfile = true
-      try {
-        const httpResponse = await rpcClient.users.profile.update.$post({
-          json: {
-            updates: {
-              displayName: this.editProfileForm.displayName
-            }
-          }
-        })
-        const response = await httpResponse.json()
-
-        if (response.success) {
-          this.$message.success('個人資料已更新！')
-          this.editingProfile = false
-          this.$emit('user-command', 'refresh-user-data')
-        } else {
-          this.$message.error('更新個人資料失敗：' + (response.error?.message || '未知錯誤'))
-        }
-      } catch (error) {
-        console.error('Update profile error:', error)
-        this.$message.error('更新個人資料失敗')
-      } finally {
-        this.savingProfile = false
-      }
-    },
-
-    async savePassword() {
-      if (this.passwordForm.newPassword !== this.passwordForm.confirmPassword) {
-        this.$message.error('新密碼與確認密碼不一致')
-        return
-      }
-
-      if (this.passwordForm.newPassword.length < 8) {
-        this.$message.error('密碼長度至少需要8個字符')
-        return
-      }
-
-      if (!/\d/.test(this.passwordForm.newPassword)) {
-        this.$message.error('密碼必須包含至少一個數字')
-        return
-      }
-
-      if (!/[a-zA-Z]/.test(this.passwordForm.newPassword)) {
-        this.$message.error('密碼必須包含至少一個字母')
-        return
-      }
-
-      if (this.passwordStrength.level === 'weak') {
-        this.$message.warning('建議使用更強的密碼')
-      }
-
-      this.changingPassword = true
-      try {
-        const sessionId = sessionStorage.getItem('sessionId')
-        if (!sessionId) {
-          this.$message.error('Session 已過期，請重新登入')
-          this.changingPassword = false
-          return
-        }
-        const httpResponse = await rpcClient.api.auth['change-password'].$post({
-          json: {
-            sessionId,
-            oldPassword: this.passwordForm.oldPassword,
-            newPassword: this.passwordForm.newPassword
-          }
-        })
-        const response = await httpResponse.json()
-
-        if (response.success) {
-          this.$message.success('密碼已更新！')
-          this.editingPassword = false
-          this.passwordForm = {
-            oldPassword: '',
-            newPassword: '',
-            confirmPassword: ''
-          }
-          this.$emit('user-command', 'refresh-user-data')
-        } else {
-          this.$message.error('更新密碼失敗：' + (response.error?.message || '未知錯誤'))
-        }
-      } catch (error) {
-        console.error('Change password error:', error)
-        this.$message.error('更新密碼失敗')
-      } finally {
-        this.changingPassword = false
-      }
-    },
-
-    checkPasswordStrength() {
-      const password = this.passwordForm.newPassword
-
-      if (!password) {
-        this.passwordStrength = { level: null, message: '' }
-        return
-      }
-
-      let strength = 0
-
-      if (password.length >= 8) strength += 1
-      if (password.length >= 12) strength += 1
-      if (/[a-z]/.test(password)) strength += 1
-      if (/[A-Z]/.test(password)) strength += 1
-      if (/[0-9]/.test(password)) strength += 1
-      if (/[^a-zA-Z0-9]/.test(password)) strength += 1
-
-      if (password.length < 8) {
-        this.passwordStrength = { level: 'weak', message: '密碼至少需要8字元' }
-      } else if (strength < 3) {
-        this.passwordStrength = { level: 'weak', message: '密碼強度：弱' }
-      } else if (strength < 5) {
-        this.passwordStrength = { level: 'medium', message: '密碼強度：中等' }
-      } else {
-        this.passwordStrength = { level: 'strong', message: '密碼強度：強' }
-      }
-    }
+  const prefs = getUserPreferences(props.user.userId)
+  if (prefs.refreshTimer) {
+    refreshTimerValue.value = Math.round(prefs.refreshTimer / 60)
   }
 }
+
+function handleRefreshTimerChange(rawValue: number | number[]) {
+  if (!props.user?.userId) return
+
+  const value = Array.isArray(rawValue) ? rawValue[0] : rawValue
+  const seconds = value * 60
+  setUserPreference(props.user.userId, 'refreshTimer', seconds)
+  ElMessage.success(`自動刷新間隔已設定為 ${value} 分鐘`)
+  window.dispatchEvent(new CustomEvent('refreshTimerChanged'))
+}
+
+function resetRefreshTimer() {
+  if (!props.user?.userId) return
+
+  refreshTimerValue.value = 30
+  setUserPreference(props.user.userId, 'refreshTimer', 1800)
+  ElMessage.success('已重置為默認值 30 分鐘')
+  window.dispatchEvent(new CustomEvent('refreshTimerChanged'))
+}
+
+// Stage display preference methods
+function loadStageDisplayPreference() {
+  if (!props.user?.userId) return
+
+  const prefs = getUserPreferences(props.user.userId)
+  stageDisplayAsGantt.value = prefs.stageDisplayMode === 'gantt'
+}
+
+function handleStageDisplayChange(rawValue: string | number | boolean) {
+  if (!props.user?.userId) return
+
+  const value = Boolean(rawValue)
+  const mode = value ? 'gantt' : 'linear'
+  setUserPreference(props.user.userId, 'stageDisplayMode', mode)
+  ElMessage.success(`階段顯示已切換為${value ? '甘特圖' : '流程圖'}模式`)
+  window.dispatchEvent(new CustomEvent('stageDisplayModeChanged', {
+    detail: { mode }
+  }))
+}
+
+// Tutorial management methods
+function resetAllTutorials() {
+  const userId = props.user?.userId
+  if (!userId) return
+
+  ElMessageBox.confirm('確定要重置所有教學導覽嗎？下次造訪 Dashboard、錢包和專案詳情頁面時將再次顯示教學。', '重置教學', {
+    confirmButtonText: '確定重置',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    // Reset all tutorial flags to false
+    setUserPreference(userId, 'tutorialDashboardCompleted', false)
+    setUserPreference(userId, 'tutorialWalletCompleted', false)
+    setUserPreference(userId, 'tutorialProjectDetailCompleted', false)
+
+    ElMessage.success('已重置所有教學導覽，下次造訪時將重新顯示')
+
+    // Trigger custom event for potential listeners
+    window.dispatchEvent(new CustomEvent('userPreferencesChanged', {
+      detail: { userId, tutorialsReset: true }
+    }))
+  }).catch(() => {
+    // User cancelled, do nothing
+  })
+}
+
+// Auto-open notification center preference methods
+function loadAutoOpenNotificationPreference() {
+  if (!props.user?.userId) return
+
+  const prefs = getUserPreferences(props.user.userId)
+  // Default to true if not set
+  autoOpenNotification.value = prefs.autoOpenNotificationCenter !== false
+}
+
+function handleAutoOpenNotificationChange(rawValue: string | number | boolean) {
+  if (!props.user?.userId) return
+
+  const value = Boolean(rawValue)
+
+  setUserPreference(props.user.userId, 'autoOpenNotificationCenter', value)
+  ElMessage.success(value ? '已開啟自動顯示通知中心' : '已關閉自動顯示通知中心')
+
+  // Trigger custom event
+  window.dispatchEvent(new CustomEvent('userPreferencesChanged', {
+    detail: { userId: props.user.userId, autoOpenNotificationCenter: value }
+  }))
+}
+
+// Comment page size preference methods (stored in KV)
+async function loadCommentPageSizePreference() {
+  try {
+    const httpResponse = await rpcClient.users.settings.$get()
+    const response = await httpResponse.json()
+    if (response.success && response.data?.commentPageSize) {
+      commentPageSize.value = response.data.commentPageSize
+      console.log(`✅ 載入評論分頁設定: ${commentPageSize.value}`)
+    }
+  } catch (error) {
+    console.warn('⚠️ 載入評論分頁設定失敗，使用預設值:', error)
+  }
+}
+
+async function handleCommentPageSizeChange(rawValue: number | number[]) {
+  if (savingCommentPageSize.value) return
+
+  const value = Array.isArray(rawValue) ? rawValue[0] : rawValue
+
+  savingCommentPageSize.value = true
+  try {
+    const httpResponse = await rpcClient.users.settings['comment-page-size'].$put({
+      json: { pageSize: value }
+    })
+    const response = await httpResponse.json()
+
+    if (response.success) {
+      ElMessage.success(`每次載入評論數量已設定為 ${value} 則`)
+
+      // Trigger custom event for potential listeners
+      window.dispatchEvent(new CustomEvent('userPreferencesChanged', {
+        detail: { userId: props.user?.userId, commentPageSize: value }
+      }))
+    } else {
+      ElMessage.error('儲存設定失敗：' + (response.error || '未知錯誤'))
+      // Revert to previous value
+      await loadCommentPageSizePreference()
+    }
+  } catch (error) {
+    console.error('Save comment page size error:', error)
+    ElMessage.error('儲存設定失敗')
+    // Revert to previous value
+    await loadCommentPageSizePreference()
+  } finally {
+    savingCommentPageSize.value = false
+  }
+}
+
+function resetCommentPageSize() {
+  commentPageSize.value = 3
+  handleCommentPageSizeChange(3)
+}
+
+// Activity methods
+function handleDayClick({ date, events }: DayClickPayload) {
+  selectedDate.value = date
+  selectedDayEvents.value = events
+  showActivityDetailPanel.value = true
+}
+
+function closeActivityDetail() {
+  showActivityDetailPanel.value = false
+  selectedDate.value = null
+  selectedDayEvents.value = []
+}
+
+// Avatar management methods (simplified with shared component)
+async function regenerateAvatar() {
+  try {
+    const httpResponse = await rpcClient.users.avatar.regenerate.$post()
+    const response = await httpResponse.json()
+
+    if (response.success && response.data) {
+      ElMessage.success('頭像已重新生成！')
+      emit('user-command', 'refresh-user-data')
+    } else {
+      ElMessage.error('重新生成頭像失敗：' + (response.error?.message || '未知錯誤'))
+    }
+  } catch (error) {
+    console.error('Regenerate avatar error:', error)
+    ElMessage.error('重新生成頭像失敗')
+  }
+}
+
+async function saveAvatarSettings(data: AvatarData) {
+  try {
+    const httpResponse = await rpcClient.users.avatar.update.$post({
+      json: { avatarData: data }
+    })
+    const response = await httpResponse.json()
+
+    if (response.success) {
+      ElMessage.success('頭像設定已儲存！')
+      emit('user-command', 'refresh-user-data')
+    } else {
+      ElMessage.error('儲存頭像設定失敗：' + (response.error?.message || '未知錯誤'))
+    }
+  } catch (error) {
+    console.error('Save avatar settings error:', error)
+    ElMessage.error('儲存頭像設定失敗')
+  }
+}
+
+// Profile and password management
+function startEditProfile() {
+  editingProfile.value = true
+  editProfileForm.value.displayName = props.user?.displayName || ''
+}
+
+function startEditPassword() {
+  editingPassword.value = true
+  passwordForm.value = {
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  }
+}
+
+function cancelEditProfile() {
+  editingProfile.value = false
+  editProfileForm.value.displayName = ''
+}
+
+function cancelEditPassword() {
+  editingPassword.value = false
+  passwordForm.value = {
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  }
+}
+
+async function saveProfile() {
+  if (!editProfileForm.value.displayName.trim()) {
+    ElMessage.error('顯示名稱不能為空')
+    return
+  }
+
+  savingProfile.value = true
+  try {
+    const httpResponse = await rpcClient.users.profile.update.$post({
+      json: {
+        updates: {
+          displayName: editProfileForm.value.displayName
+        }
+      }
+    })
+    const response = await httpResponse.json()
+
+    if (response.success) {
+      ElMessage.success('個人資料已更新！')
+      editingProfile.value = false
+      emit('user-command', 'refresh-user-data')
+    } else {
+      ElMessage.error('更新個人資料失敗：' + (response.error?.message || '未知錯誤'))
+    }
+  } catch (error) {
+    console.error('Update profile error:', error)
+    ElMessage.error('更新個人資料失敗')
+  } finally {
+    savingProfile.value = false
+  }
+}
+
+async function savePassword() {
+  if (passwordForm.value.newPassword !== passwordForm.value.confirmPassword) {
+    ElMessage.error('新密碼與確認密碼不一致')
+    return
+  }
+
+  if (passwordForm.value.newPassword.length < 8) {
+    ElMessage.error('密碼長度至少需要8個字符')
+    return
+  }
+
+  if (!/\d/.test(passwordForm.value.newPassword)) {
+    ElMessage.error('密碼必須包含至少一個數字')
+    return
+  }
+
+  if (!/[a-zA-Z]/.test(passwordForm.value.newPassword)) {
+    ElMessage.error('密碼必須包含至少一個字母')
+    return
+  }
+
+  if (passwordStrength.value.level === 'weak') {
+    ElMessage.warning('建議使用更強的密碼')
+  }
+
+  changingPassword.value = true
+  try {
+    const sessionId = sessionStorage.getItem('sessionId')
+    if (!sessionId) {
+      ElMessage.error('Session 已過期，請重新登入')
+      changingPassword.value = false
+      return
+    }
+    const httpResponse = await rpcClient.api.auth['change-password'].$post({
+      json: {
+        sessionId,
+        oldPassword: passwordForm.value.oldPassword,
+        newPassword: passwordForm.value.newPassword
+      }
+    })
+    const response = await httpResponse.json()
+
+    if (response.success) {
+      ElMessage.success('密碼已更新！')
+      editingPassword.value = false
+      passwordForm.value = {
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      }
+      emit('user-command', 'refresh-user-data')
+    } else {
+      ElMessage.error('更新密碼失敗：' + (response.error?.message || '未知錯誤'))
+    }
+  } catch (error) {
+    console.error('Change password error:', error)
+    ElMessage.error('更新密碼失敗')
+  } finally {
+    changingPassword.value = false
+  }
+}
+
+function checkPasswordStrength() {
+  const password = passwordForm.value.newPassword
+
+  if (!password) {
+    passwordStrength.value = { level: null, message: '' }
+    return
+  }
+
+  let strength = 0
+
+  if (password.length >= 8) strength += 1
+  if (password.length >= 12) strength += 1
+  if (/[a-z]/.test(password)) strength += 1
+  if (/[A-Z]/.test(password)) strength += 1
+  if (/[0-9]/.test(password)) strength += 1
+  if (/[^a-zA-Z0-9]/.test(password)) strength += 1
+
+  if (password.length < 8) {
+    passwordStrength.value = { level: 'weak', message: '密碼至少需要8字元' }
+  } else if (strength < 3) {
+    passwordStrength.value = { level: 'weak', message: '密碼強度：弱' }
+  } else if (strength < 5) {
+    passwordStrength.value = { level: 'medium', message: '密碼強度：中等' }
+  } else {
+    passwordStrength.value = { level: 'strong', message: '密碼強度：強' }
+  }
+}
+
+onMounted(() => {
+  loadRefreshTimer()
+  loadStageDisplayPreference()
+  loadAutoOpenNotificationPreference()
+  loadCommentPageSizePreference()
+
+  const { setPageTitle, clearProjectTitle } = useBreadcrumb()
+  setPageTitle('用戶設置')
+  clearProjectTitle()
+})
 </script>
 
 <style scoped>
