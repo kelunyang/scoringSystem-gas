@@ -89,7 +89,7 @@
     </el-card>
 
     <!-- Project Table -->
-    <div class="table-container" v-loading="loading" element-loading-text="載入專案資料中...">
+    <div v-loading="loading" class="table-container" element-loading-text="載入專案資料中...">
       <table v-if="filteredProjects.length > 0" class="project-table">
         <!-- 響應式表頭 -->
         <ResponsiveTableHeader :actions-colspan="3">
@@ -139,7 +139,7 @@
                     <i class="fas fa-edit"></i>
                     編輯
                   </el-button>
-                  <el-button type="info" size="small" @click="openCloneProjectDrawer(project)" :disabled="cloningProject">
+                  <el-button type="info" size="small" :disabled="cloningProject" @click="openCloneProjectDrawer(project)">
                     <i :class="cloningProject ? 'fas fa-spinner fa-spin' : 'fas fa-copy'"></i>
                     {{ cloningProject ? '複製中...' : '複製專案' }}
                   </el-button>
@@ -215,7 +215,7 @@
                   </el-button>
                 </el-tooltip>
                 <el-tooltip content="複製專案" placement="top">
-                  <el-button type="info" size="small" @click.stop="openCloneProjectDrawer(project)" :disabled="cloningProject">
+                  <el-button type="info" size="small" :disabled="cloningProject" @click.stop="openCloneProjectDrawer(project)">
                     <i :class="cloningProject ? 'fas fa-spinner fa-spin' : 'fas fa-copy'"></i>
                   </el-button>
                 </el-tooltip>
@@ -285,16 +285,16 @@
                     />
                     <el-switch
                       :model-value="showGanttChart.get(project.projectId) || false"
-                      @update:model-value="(val) => toggleGanttChart(project.projectId, Boolean(val))"
                       active-text="開啟階段甘特圖"
                       inactive-text="關閉階段甘特圖"
                       style="margin-right: 16px;"
+                      @update:model-value="(val) => toggleGanttChart(project.projectId, Boolean(val))"
                     />
                     <el-button
                       size="small"
-                      @click="loadProjectStagesForExpansion(project.projectId)"
                       :disabled="loadingProjectStages.has(project.projectId)"
                       title="重新整理階段列表"
+                      @click="loadProjectStagesForExpansion(project.projectId)"
                     >
                       <i :class="loadingProjectStages.has(project.projectId) ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i>
                       重新整理
@@ -318,15 +318,15 @@
                   />
                   <el-switch
                     :model-value="showGanttChart.get(project.projectId) || false"
-                    @update:model-value="(val) => toggleGanttChart(project.projectId, Boolean(val))"
                     active-text="檢視甘特圖"
                     inactive-text=""
+                    @update:model-value="(val) => toggleGanttChart(project.projectId, Boolean(val))"
                   />
                   <el-tooltip content="重新整理" placement="top">
                     <el-button
                       size="small"
-                      @click="loadProjectStagesForExpansion(project.projectId)"
                       :disabled="loadingProjectStages.has(project.projectId)"
+                      @click="loadProjectStagesForExpansion(project.projectId)"
                     >
                       <i :class="loadingProjectStages.has(project.projectId) ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i>
                     </el-button>
@@ -378,7 +378,7 @@
                         @dragstart="handleDragStart(stage, $event)"
                         @dragover.prevent
                         @dragenter.prevent="handleDragOver($event)"
-                        @drop="handleDrop($event, project.projectId, index)"
+                        @drop="handleDrop($event, project.projectId, index as number)"
                         @dragend="handleDragEnd"
                       >
                         <div class="stage-handle">
@@ -405,17 +405,17 @@
                         <div v-if="!isPortrait" class="stage-actions" @click.stop>
                           <el-button
                             size="small"
-                            @click="moveStageUpInProject(project.projectId, index)"
                             :disabled="index === 0"
                             title="上移"
+                            @click="moveStageUpInProject(project.projectId, index as number)"
                           >
                             <i class="fas fa-arrow-up"></i>
                           </el-button>
                           <el-button
                             size="small"
-                            @click="moveStageDownInProject(project.projectId, index)"
                             :disabled="index === projectStagesMap.get(project.projectId)?.length - 1"
                             title="下移"
+                            @click="moveStageDownInProject(project.projectId, index as number)"
                           >
                             <i class="fas fa-arrow-down"></i>
                           </el-button>
@@ -423,7 +423,7 @@
                             <i class="fas fa-edit"></i>
                             編輯
                           </el-button>
-                          <el-button type="info" size="small" @click="openCloneStageDrawer(stage)" :disabled="cloningStage">
+                          <el-button type="info" size="small" :disabled="cloningStage" @click="openCloneStageDrawer(stage)">
                             <i :class="cloningStage ? 'fas fa-spinner fa-spin' : 'fas fa-copy'"></i>
                             {{ cloningStage ? '複製中...' : '複製階段' }}
                           </el-button>
@@ -468,6 +468,16 @@
                             <i :class="settlingStages.has(stage.stageId) ? 'fas fa-spinner fa-spin' : 'fas fa-calculator'"></i>
                             {{ settlingStages.has(stage.stageId) ? '結算中...' : '結算獎金' }}
                           </el-button>
+                          <el-button
+                            v-if="stage.status === 'voting'"
+                            type="danger"
+                            size="small"
+                            title="強制清空投票（倒退回未投票）"
+                            @click="openClearVotesDrawer({ ...stage, projectId: project.projectId, stageName: stage.stageName })"
+                          >
+                            <i class="fas fa-eraser"></i>
+                            清空投票
+                          </el-button>
                           <el-dropdown
                             v-if="stage.status === 'completed'"
                             trigger="click"
@@ -489,12 +499,12 @@
                             </template>
                           </el-dropdown>
                           <el-button
+                            v-if="stage.status === 'completed'"
                             type="warning"
                             size="small"
-                            @click="reverseSettlement(stage, project)"
-                            v-if="stage.status === 'completed'"
                             :disabled="reversingSettlement"
                             title="撤銷本次結算"
+                            @click="reverseSettlement(stage, project)"
                           >
                             <i :class="reversingSettlement ? 'fas fa-spinner fa-spin' : 'fas fa-undo'"></i>
                             {{ reversingSettlement ? '撤銷中...' : '撤銷結算' }}
@@ -523,8 +533,8 @@
                           <el-tooltip content="上移" placement="top">
                             <el-button
                               size="small"
-                              @click="moveStageUpInProject(project.projectId, index)"
                               :disabled="index === 0"
+                              @click="moveStageUpInProject(project.projectId, index as number)"
                             >
                               <i class="fas fa-arrow-up"></i>
                             </el-button>
@@ -532,8 +542,8 @@
                           <el-tooltip content="下移" placement="top">
                             <el-button
                               size="small"
-                              @click="moveStageDownInProject(project.projectId, index)"
                               :disabled="index === projectStagesMap.get(project.projectId)?.length - 1"
+                              @click="moveStageDownInProject(project.projectId, index as number)"
                             >
                               <i class="fas fa-arrow-down"></i>
                             </el-button>
@@ -544,7 +554,7 @@
                             </el-button>
                           </el-tooltip>
                           <el-tooltip content="複製階段" placement="top">
-                            <el-button type="info" size="small" @click="openCloneStageDrawer(stage)" :disabled="cloningStage">
+                            <el-button type="info" size="small" :disabled="cloningStage" @click="openCloneStageDrawer(stage)">
                               <i :class="cloningStage ? 'fas fa-spinner fa-spin' : 'fas fa-copy'"></i>
                             </el-button>
                           </el-tooltip>
@@ -585,6 +595,15 @@
                               <i :class="settlingStages.has(stage.stageId) ? 'fas fa-spinner fa-spin' : 'fas fa-calculator'"></i>
                             </el-button>
                           </el-tooltip>
+                          <el-tooltip v-if="stage.status === 'voting'" content="強制清空投票（倒退回未投票）" placement="top">
+                            <el-button
+                              type="danger"
+                              size="small"
+                              @click="openClearVotesDrawer({ ...stage, projectId: project.projectId, stageName: stage.stageName })"
+                            >
+                              <i class="fas fa-eraser"></i>
+                            </el-button>
+                          </el-tooltip>
                           <el-dropdown
                             v-if="stage.status === 'completed'"
                             trigger="click"
@@ -610,8 +629,8 @@
                             <el-button
                               type="warning"
                               size="small"
-                              @click="reverseSettlement(stage, project)"
                               :disabled="reversingSettlement"
+                              @click="reverseSettlement(stage, project)"
                             >
                               <i :class="reversingSettlement ? 'fas fa-spinner fa-spin' : 'fas fa-undo'"></i>
                             </el-button>
@@ -893,10 +912,10 @@
 
       <template #footer>
         <div class="dialog-footer">
-          <button class="btn-secondary" @click="showAddMemberDialog = false" :disabled="addingMember">
+          <button class="btn-secondary" :disabled="addingMember" @click="showAddMemberDialog = false">
             取消
           </button>
-          <button class="btn-primary" @click="addMemberToProject" :disabled="addingMember || !newMember.email || !newMember.role">
+          <button class="btn-primary" :disabled="addingMember || !newMember.email || !newMember.role" @click="addMemberToProject">
             <i :class="addingMember ? 'fas fa-spinner fa-spin' : 'fas fa-user-plus'"></i>
             {{ addingMember ? '新增中...' : '新增成員' }}
           </button>
@@ -907,22 +926,22 @@
     <!-- 投票分析模態窗口 -->
     <VotingAnalysisModal
       :visible="showVotingAnalysisModal"
-      @update:visible="showVotingAnalysisModal = $event"
       :project-id="selectedStageForAnalysis?.projectId || ''"
       :stage-id="selectedStageForAnalysis?.stageId || ''"
       :stage-title="selectedStageForAnalysis?.stageName"
       :is-settled="selectedStageForAnalysis?.status === 'completed'"
+      @update:visible="showVotingAnalysisModal = $event"
     />
 
     <!-- 評論投票分析模態窗口 -->
     <CommentVotingAnalysisModal
       :visible="showCommentAnalysisModal"
-      @update:visible="showCommentAnalysisModal = $event"
       :project-id="selectedStageForAnalysis?.projectId || ''"
       :stage-id="selectedStageForAnalysis?.stageId || ''"
       :max-comment-selections="10"
       :stage-title="selectedStageForAnalysis?.stageName"
       :is-settled="selectedStageForAnalysis?.status === 'completed'"
+      @update:visible="showCommentAnalysisModal = $event"
     />
 
     <!-- Settlement Progress Drawer -->
@@ -960,11 +979,11 @@
       size="100%"
       class="drawer-navy"
     >
-      <div class="drawer-body" v-loading="cloningProject">
+      <div v-loading="cloningProject" class="drawer-body">
         <!-- 原始專案資訊 -->
         <div class="form-section">
           <h4><i class="fas fa-info-circle"></i> 原始專案資訊</h4>
-          <div class="detail-row" v-if="cloneProjectForm.sourceProject">
+          <div v-if="cloneProjectForm.sourceProject" class="detail-row">
             <label>專案名稱:</label>
             <span>{{ cloneProjectForm.sourceProject.projectName }}</span>
           </div>
@@ -1008,13 +1027,13 @@
         <div class="drawer-actions">
           <el-button
             type="primary"
-            @click="executeCloneProject"
             :disabled="!isCloneFormValid || cloningProject"
+            @click="executeCloneProject"
           >
             <i :class="cloningProject ? 'fas fa-spinner fa-spin' : 'fas fa-copy'"></i>
             {{ cloningProject ? '複製中...' : '確定複製' }}
           </el-button>
-          <el-button @click="closeCloneDrawer" :disabled="cloningProject">取消</el-button>
+          <el-button :disabled="cloningProject" @click="closeCloneDrawer">取消</el-button>
         </div>
       </div>
     </el-drawer>
@@ -1027,11 +1046,11 @@
       size="100%"
       class="drawer-navy"
     >
-      <div class="drawer-body" v-loading="cloningStage">
+      <div v-loading="cloningStage" class="drawer-body">
         <!-- 原始階段資訊 -->
         <div class="form-section">
           <h4><i class="fas fa-info-circle"></i> 原始階段資訊</h4>
-          <div class="detail-row" v-if="cloneStageForm.sourceStage">
+          <div v-if="cloneStageForm.sourceStage" class="detail-row">
             <label>階段名稱:</label>
             <span>{{ cloneStageForm.sourceStage.stageName }}</span>
           </div>
@@ -1095,13 +1114,13 @@
         <div class="drawer-actions">
           <el-button
             type="primary"
-            @click="executeCloneStage"
             :disabled="!isCloneStageFormValid || cloningStage"
+            @click="executeCloneStage"
           >
             <i :class="cloningStage ? 'fas fa-spinner fa-spin' : 'fas fa-copy'"></i>
             {{ cloningStage ? '複製中...' : '確定複製' }}
           </el-button>
-          <el-button @click="closeCloneStageDrawer" :disabled="cloningStage">取消</el-button>
+          <el-button :disabled="cloningStage" @click="closeCloneStageDrawer">取消</el-button>
         </div>
       </div>
     </el-drawer>
@@ -1112,6 +1131,15 @@
       :project-id="selectedForceVotingStage?.projectId"
       :stage-id="selectedForceVotingStage?.stageId"
       @confirmed="handleForceVotingConfirmed"
+    />
+
+    <!-- Clear Stage Votes Drawer (force-revert to pre-voting) -->
+    <ClearStageVotesDrawer
+      v-model:visible="showClearVotesDrawer"
+      :project-id="clearVotesStage?.projectId"
+      :stage-id="clearVotesStage?.stageId"
+      :stage-name="clearVotesStage?.stageName"
+      @confirmed="handleClearVotesConfirmed"
     />
 
     <!-- Pause Stage Drawer -->
@@ -1140,7 +1168,7 @@
       size="100%"
       class="drawer-maroon"
     >
-      <div class="drawer-body" v-loading="archivingProjects.has(archiveProjectForm.sourceProject?.projectId)">
+      <div v-loading="archivingProjects.has(archiveProjectForm.sourceProject?.projectId)" class="drawer-body">
         <!-- 警告提示 -->
         <el-alert
           type="warning"
@@ -1207,13 +1235,13 @@
         <div class="drawer-actions">
           <el-button
             type="danger"
-            @click="executeArchiveProject"
             :disabled="!isArchiveFormValid || archivingProjects.has(archiveProjectForm.sourceProject?.projectId)"
+            @click="executeArchiveProject"
           >
             <i :class="archivingProjects.has(archiveProjectForm.sourceProject?.projectId) ? 'fas fa-spinner fa-spin' : 'fas fa-archive'"></i>
             {{ archivingProjects.has(archiveProjectForm.sourceProject?.projectId) ? '封存中...' : '確定封存' }}
           </el-button>
-          <el-button @click="closeArchiveDrawer" :disabled="archivingProjects.has(archiveProjectForm.sourceProject?.projectId)">取消</el-button>
+          <el-button :disabled="archivingProjects.has(archiveProjectForm.sourceProject?.projectId)" @click="closeArchiveDrawer">取消</el-button>
         </div>
       </div>
     </el-drawer>
@@ -1266,7 +1294,6 @@ interface SettlementDetails {
   [key: string]: unknown
 }
 
-import MarkdownEditor from '../MarkdownEditor.vue'
 import VotingAnalysisModal from '../VotingAnalysisModal.vue'
 import CommentVotingAnalysisModal from '../CommentVotingAnalysisModal.vue'
 import EventLogDrawer from '../shared/EventLogDrawer.vue'
@@ -1274,8 +1301,6 @@ import EmptyState from '../shared/EmptyState.vue'
 import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
 import ResponsiveTableHeader from '@/components/shared/ResponsiveTableHeader.vue'
 import StageGanttChart from '../charts/StageGanttChart.vue'
-import AllGroupsChart from '../shared/ContributionChart/AllGroupsChart.vue'
-import OurGroupChart from '../shared/ContributionChart/OurGroupChart.vue'
 import ReverseSettlementDrawer from './ReverseSettlementDrawer.vue'
 import SettlementProgressDrawer from './SettlementProgressDrawer.vue'
 import SettlementConfirmationDrawer from './SettlementConfirmationDrawer.vue'
@@ -1283,6 +1308,7 @@ import ViewerManagementDrawer from './project/ViewerManagementDrawer.vue'
 import ProjectEditorDrawer from './project/ProjectEditorDrawer.vue'
 import StageEditorDrawer from './project/StageEditorDrawer.vue'
 import ForceVotingDrawer from './ForceVotingDrawer.vue'
+import ClearStageVotesDrawer from './ClearStageVotesDrawer.vue'
 import PauseStageDrawer from './PauseStageDrawer.vue'
 import ResumeStageDrawer from './ResumeStageDrawer.vue'
 // DISABLED: import { getTagColor } from '@/utils/tagColor' - tags system disabled
@@ -1320,15 +1346,12 @@ import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 export default {
   name: 'ProjectManagement',
   components: {
-    MarkdownEditor,
     VotingAnalysisModal,
     CommentVotingAnalysisModal,
     EventLogDrawer,
     ExpandableTableRow,
     ResponsiveTableHeader,
     StageGanttChart,
-    AllGroupsChart,
-    OurGroupChart,
     ReverseSettlementDrawer,
     SettlementProgressDrawer,
     SettlementConfirmationDrawer,
@@ -1336,6 +1359,7 @@ export default {
     ProjectEditorDrawer,
     StageEditorDrawer,
     ForceVotingDrawer,
+    ClearStageVotesDrawer,
     PauseStageDrawer,
     ResumeStageDrawer,
     AdminFilterToolbar,
@@ -1357,7 +1381,7 @@ export default {
     const { hasPermission, hasAnyPermission } = usePermissions()
 
     // Authentication state (Vue 3 Best Practice)
-    const { user, userEmail, isAuthenticated } = useAuth()
+    const { userEmail } = useAuth()
 
     // Responsive design
     const { isPortrait } = useMediaQuery()
@@ -1557,6 +1581,10 @@ export default {
     // Force Voting Drawer State
     const showForceVotingDrawer = ref(false)
     const selectedForceVotingStage = ref<Stage | null>(null)
+
+    // Clear Stage Votes Drawer State (force-revert to pre-voting)
+    const showClearVotesDrawer = ref(false)
+    const clearVotesStage = ref<(Stage & { projectId?: string; stageName?: string }) | null>(null)
 
     // Archive Project Drawer State
     const showArchiveProjectDrawer = ref(false)
@@ -2093,7 +2121,7 @@ export default {
         creating.value = true
 
         // Use TanStack Query mutation
-        const result = await createProjectMutation.mutateAsync({
+        await createProjectMutation.mutateAsync({
           projectData: {
             projectName: projectForm.projectName.trim(),
             description: projectForm.description.trim(),
@@ -2930,7 +2958,7 @@ export default {
       if (typeof optionsData === 'string') {
         try {
           return JSON.parse(optionsData)
-        } catch (e) {
+        } catch {
           console.warn('Failed to parse avatarOptions:', optionsData)
           return {}
         }
@@ -3485,7 +3513,7 @@ export default {
     }
 
     // Open settlement drawer for a stage
-    const settleStage = async (stage: Stage & { projectId?: string }, projectId: string, forceSettle = false) => {
+    const settleStage = async (stage: Stage & { projectId?: string }, projectId: string, _forceSettle = false) => {
       console.log('[ProjectManagement] settleStage called with:', { stageId: stage.stageId, projectId })
       // Attach projectId to stage object so drawer can access it
       stage.projectId = projectId
@@ -3495,7 +3523,7 @@ export default {
     }
 
     // Handle settlement completion
-    const handleSettlementComplete = async ({ stageId, settlementId, result }: { stageId: string; settlementId?: string; result: SettlementDetails }) => {
+    const handleSettlementComplete = async ({ stageId }: { stageId: string; settlementId?: string; result: SettlementDetails }) => {
       // Update stage status in local state
       const projectId = selectedProject.value?.projectId
 
@@ -3564,7 +3592,7 @@ export default {
     }
 
     // Handle successful reversal from the drawer component
-    const handleReverseSuccess = async ({ reversalId, transactionCount, stageId, projectId }: { reversalId: string; transactionCount: number; stageId: string; projectId: string }) => {
+    const handleReverseSuccess = async ({ stageId, projectId }: { reversalId: string; transactionCount: number; stageId: string; projectId: string }) => {
       // Update stage status in local state
       const stageIndex = projectStages.value.findIndex((s: Stage) => s.stageId === stageId)
       if (stageIndex !== -1) {
@@ -3674,7 +3702,7 @@ export default {
       }))
     }
 
-    const handleGanttStageClick = (stage: Stage, projectId: string) => {
+    const handleGanttStageClick = (stage: Stage, _projectId: string) => {
       console.log('Gantt stage clicked:', stage)
     }
 
@@ -3784,7 +3812,7 @@ export default {
         ElMessage.info(`開始複製階段到 ${targetCount} 個專案，請稍候...`)
 
         // Use TanStack Query mutation
-        const result = await cloneStageToProjectsMutation.mutateAsync({
+        await cloneStageToProjectsMutation.mutateAsync({
           sourceProjectId: cloneStageForm.sourceStage.projectId,
           stageId: cloneStageForm.sourceStage.stageId,
           newStageName: cloneStageForm.newStageName.trim(),
@@ -3828,6 +3856,20 @@ export default {
         loadProjectStagesForExpansion(selectedForceVotingStage.value.projectId)
       }
       selectedForceVotingStage.value = null
+    }
+
+    // Clear Stage Votes Drawer Functions (force-revert to pre-voting)
+    const openClearVotesDrawer = (stage: Stage & { projectId?: string; stageName?: string }) => {
+      clearVotesStage.value = stage
+      showClearVotesDrawer.value = true
+    }
+
+    const handleClearVotesConfirmed = () => {
+      // Reload stage list after clearing votes
+      if (clearVotesStage.value?.projectId) {
+        loadProjectStagesForExpansion(clearVotesStage.value.projectId)
+      }
+      clearVotesStage.value = null
     }
 
     // Pause Stage Drawer Functions
@@ -4179,6 +4221,11 @@ export default {
       handleForceVotingConfirmed,
       showForceVotingDrawer,
       selectedForceVotingStage,
+      // Clear Stage Votes Drawer
+      showClearVotesDrawer,
+      clearVotesStage,
+      openClearVotesDrawer,
+      handleClearVotesConfirmed,
       // Pause Stage Drawer
       showPauseStageDrawer,
       pauseStageData,

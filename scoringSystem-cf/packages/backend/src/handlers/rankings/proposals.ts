@@ -52,6 +52,7 @@ export async function getStageRankingProposals(
           rp.settleTime,
           rp.withdrawnTime,
           rp.withdrawnBy,
+          rp.withdrawnReason,
           rp.createdTime,
           rp.resetTime,
           u.displayName as proposerDisplayName
@@ -93,6 +94,7 @@ export async function getStageRankingProposals(
           rp.settleTime,
           rp.withdrawnTime,
           rp.withdrawnBy,
+          rp.withdrawnReason,
           rp.createdTime,
           rp.resetTime,
           u.displayName as proposerDisplayName
@@ -243,6 +245,9 @@ export async function getStageRankingProposals(
         votingResult: proposal.votingResult, // From VIEW: 'agree' | 'disagree' | 'tie' | 'no_votes'
         createdTime: proposal.createdTime,
         resetTime: proposal.resetTime || null, // Timestamp when this proposal was reset (if any)
+        withdrawnTime: proposal.withdrawnTime || null,
+        withdrawnBy: proposal.withdrawnBy || null,
+        withdrawnReason: proposal.withdrawnReason || null, // Reason shown when force-withdrawn by admin/teacher
         supportCount: proposal.supportCount, // From VIEW (guaranteed non-null)
         opposeCount: proposal.opposeCount,   // From VIEW (guaranteed non-null)
         totalVotes: proposal.totalVotes,     // From VIEW (guaranteed non-null)

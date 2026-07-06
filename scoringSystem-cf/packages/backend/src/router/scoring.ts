@@ -32,20 +32,20 @@ import {
 } from '../handlers/scoring/voting';
 */
 import {
-  previewStageScores,
-  settleStage,
-  getSettledStageResults
+  settleStage
 } from '../handlers/scoring/settlement';
 import { validatePreSettlement } from '../handlers/scoring/pre-settlement-validation';
 import {
   getSubmissionVotingData,
   getCommentVotingData
 } from '../handlers/scoring/voting-analysis';
+import { clearStageVotes } from '../handlers/scoring/clear-stage-votes';
 import {
   ValidateSettlementRequestSchema,
   SettleStageRequestSchema,
   GetSubmissionVotingDataRequestSchema,
-  GetCommentVotingDataRequestSchema
+  GetCommentVotingDataRequestSchema,
+  ClearStageVotesRequestSchema
 } from '@repo/shared/schemas/scoring';
 
 
@@ -119,6 +119,30 @@ app.post(
   }
 );
 
+
+/**
+ * Force-clear all votes in a stage and roll it back to the pre-voting state.
+ * Invalidates (作廢) every student ranking proposal in the stage, optionally
+ * reverses any active stage settlement, and rolls the stage back to voting/active.
+ * Body: { projectId, stageId, reason, targetState: 'voting'|'active', extendHours? }
+ */
+app.post(
+  '/clear-stage-votes',
+  zValidator('json', ClearStageVotesRequestSchema),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+
+    // Permission is enforced inside clearStageVotes via canManageSettlements
+    // (Global PM or Project Teacher) — kept identical to /settlement/reverse so
+    // that "清空投票" and "撤回結算" share the exact same permission class.
+    return await clearStageVotes(c.env, user.userEmail, body.projectId, body.stageId, {
+      reason: body.reason,
+      targetState: body.targetState,
+      extendHours: body.extendHours
+    });
+  }
+);
 
 /**
  * Get submission voting data for analysis

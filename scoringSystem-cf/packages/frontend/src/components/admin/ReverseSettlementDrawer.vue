@@ -2,11 +2,11 @@
   <!-- Reverse Settlement Drawer -->
   <el-drawer
     :model-value="modelValue"
-    @update:model-value="$emit('update:modelValue', $event)"
     direction="ttb"
     size="100%"
     :close-on-click-modal="false"
     class="reverse-settlement-drawer drawer-maroon"
+    @update:model-value="$emit('update:modelValue', $event)"
   >
     <template #header>
       <el-breadcrumb separator=">">
@@ -21,7 +21,7 @@
       </el-breadcrumb>
     </template>
 
-    <div class="drawer-body" v-loading="loadingReversePreview" element-loading-text="載入結算詳情中...">
+    <div v-loading="loadingReversePreview" class="drawer-body" element-loading-text="載入結算詳情中...">
       <DrawerAlertZone />
 
       <div v-if="reversePreviewData && stage">
@@ -111,6 +111,47 @@
           </div>
         </div>
 
+        <!-- Also Clear Votes Switch -->
+        <div class="clear-votes-section" style="margin-top: 24px;">
+          <div class="clear-votes-row">
+            <div class="clear-votes-label">
+              <h4><i class="fas fa-eraser"></i> 同時清空投票</h4>
+              <p class="clear-votes-hint">
+                開啟後,撤銷結算的同時會作廢此階段所有組別的排名投票版本(學生提案),
+                階段倒退回投票狀態並可重新投票。各組仍會看到被強制撤回的舊版本與上方填寫的原因。
+              </p>
+            </div>
+            <el-switch
+              v-model="alsoClearVotes"
+              active-text="清空"
+              inactive-text="保留"
+              inline-prompt
+            />
+          </div>
+
+          <!-- Extend active slider (only when clearing votes) -->
+          <div v-if="alsoClearVotes" class="extend-slider-row">
+            <div class="extend-slider-label">
+              <i class="fas fa-clock"></i>
+              <span v-if="extendActiveHours > 0">
+                回到「提交/共識」階段(active),延長 <strong>{{ extendActiveHours }}</strong> 小時 —
+                讓未完成組內共識的組可補完後再重新投票
+              </span>
+              <span v-else>
+                回到「投票」階段(voting)— 不延長 active,直接重新開放投票
+              </span>
+            </div>
+            <el-slider
+              v-model="extendActiveHours"
+              :min="0"
+              :max="72"
+              :step="1"
+              :marks="extendSliderMarks"
+              show-stops
+            />
+          </div>
+        </div>
+
         <!-- Confirmation Text Input -->
         <div class="form-section">
           <h4><i class="fas fa-exclamation-triangle"></i> 確認撤銷 *</h4>
@@ -127,17 +168,17 @@
           <el-button
             type="danger"
             size="large"
-            @click="confirmReverseSettlement"
             :disabled="reverseReason.length < 5 || reverseConfirmText.trim().toUpperCase() !== 'REVERSE' || reversingSettlement"
             :loading="reversingSettlement"
+            @click="confirmReverseSettlement"
           >
             <i class="fas fa-undo"></i>
             {{ reversingSettlement ? '撤銷中...' : '確定撤銷結算' }}
           </el-button>
           <el-button
             size="large"
-            @click="closeDrawer"
             :disabled="reversingSettlement"
+            @click="closeDrawer"
           >
             取消
           </el-button>
@@ -224,6 +265,24 @@ const loadingReversePreview: Ref<boolean> = ref(false)
 const reversingSettlement: Ref<boolean> = ref(false)
 const reverseReason: Ref<string> = ref('')
 const reverseConfirmText: Ref<string> = ref('')
+const alsoClearVotes: Ref<boolean> = ref(false)
+// 清空投票時可延長的 active 時數（0 = 回到投票、不延長）
+const extendActiveHours: Ref<number> = ref(0)
+const extendSliderMarks = {
+  0: '投票',
+  1: '1h',
+  3: '3h',
+  6: '6h',
+  12: '12h',
+  24: '1天',
+  48: '2天',
+  72: '3天'
+}
+
+// 關閉「同時清空投票」時，重置延長時數
+watch(alsoClearVotes, (on) => {
+  if (!on) extendActiveHours.value = 0
+})
 
 // Helper function
 function formatTime(timestamp: number | undefined): string {
@@ -260,6 +319,8 @@ async function loadPreviewData(): Promise<void> {
       // Reset form inputs
       reverseReason.value = ''
       reverseConfirmText.value = ''
+      alsoClearVotes.value = false
+      extendActiveHours.value = 0
       reversePreviewData.value = null
       loadingReversePreview.value = true
 
@@ -345,6 +406,52 @@ async function confirmReverseSettlement(): Promise<void> {
 
       try {
         reversingSettlement.value = true
+
+        // 開啟「同時清空投票」：走 clear-stage-votes 端點，一併撤銷結算 + 作廢所有排名版本，回到投票狀態
+        if (alsoClearVotes.value) {
+          console.log('執行撤銷結算並清空投票:', {
+            projectId,
+            stageId: props.stage.stageId,
+            reason: reverseReason.value
+          })
+
+          const clearToActive = extendActiveHours.value > 0
+          const clearHttpResponse = await (rpcClient.scoring as any)['clear-stage-votes'].$post({
+            json: {
+              projectId: projectId,
+              stageId: props.stage.stageId,
+              reason: reverseReason.value,
+              targetState: clearToActive ? 'active' : 'voting',
+              ...(clearToActive ? { extendHours: extendActiveHours.value } : {})
+            }
+          })
+          const clearResponse = await clearHttpResponse.json()
+
+          if (clearResponse.success) {
+            const data = clearResponse.data || {}
+            ElMessage.success(
+              `結算已撤銷並清空投票！\n` +
+              `作廢排名版本：${data.withdrawnProposals ?? 0} 份\n` +
+              `撤回結算：${data.reversedSettlements ?? 0} 筆\n` +
+              (clearToActive
+                ? `階段已回到提交階段，延長 ${extendActiveHours.value} 小時`
+                : `階段已回到投票狀態，可重新投票`)
+            )
+
+            emit('reverse-success', {
+              reversalId: '',
+              transactionCount: data.reversedSettlements ?? 0,
+              stageId: props.stage.stageId,
+              projectId: projectId
+            })
+
+            closeDrawer()
+          } else {
+            ElMessage.error(`撤銷並清空投票失敗：${clearResponse.error?.message || '未知錯誤'}`)
+          }
+
+          return
+        }
 
         console.log('執行撤銷結算:', {
           projectId: projectId,
@@ -476,6 +583,54 @@ watch(() => props.modelValue, (newVal) => {
 .reverse-settlement-drawer .field-hint {
   font-size: 13px;
   color: #909399;
+}
+
+.reverse-settlement-drawer .clear-votes-section {
+  padding: 16px 20px;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  border-radius: 8px;
+}
+
+.reverse-settlement-drawer .clear-votes-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.reverse-settlement-drawer .clear-votes-label h4 {
+  margin: 0 0 6px 0;
+  color: #d46b08;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.reverse-settlement-drawer .clear-votes-hint {
+  margin: 0;
+  font-size: 13px;
+  color: #8c6d3f;
+  line-height: 1.5;
+}
+
+.reverse-settlement-drawer .extend-slider-row {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed #ffd591;
+}
+
+.reverse-settlement-drawer .extend-slider-label {
+  font-size: 13px;
+  color: #8c6d3f;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.5;
+}
+
+.reverse-settlement-drawer .extend-slider-row :deep(.el-slider) {
+  padding: 0 8px;
 }
 
 .reverse-settlement-drawer .drawer-actions {

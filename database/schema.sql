@@ -318,6 +318,7 @@ CREATE TABLE IF NOT EXISTS rankingproposals (
   settleTime INTEGER,      -- Settlement timestamp (NULL if not settled)
   withdrawnTime INTEGER,   -- Withdrawal timestamp (NULL if not withdrawn)
   withdrawnBy TEXT,        -- Withdrawal actor (userEmail)
+  withdrawnReason TEXT,    -- Withdrawal reason (set on admin/teacher force-clear)
   resetTime INTEGER        -- Reset timestamp (record only, does not affect status)
 );
 
@@ -984,6 +985,7 @@ SELECT
   rp.settleTime,
   rp.withdrawnTime,
   rp.withdrawnBy,
+  rp.withdrawnReason,
   rp.resetTime,
 
   -- Vote counts (guaranteed non-null with COALESCE)
