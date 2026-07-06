@@ -1,6 +1,7 @@
 <template>
   <div class="md-editor-wrapper" @keydown.esc.capture="handleEscKey">
     <MdEditor
+      ref="mdEditorRef"
       v-model="content"
       :preview="showPreview"
       :toolbars="toolbarConfig"
@@ -11,15 +12,15 @@
       :no-mermaid="true"
       :no-katex="true"
       :style="editorStyle"
-      :customIcon="customIcon"
-      @onChange="handleChange"
+      :custom-icon="customIcon"
+      @on-change="handleChange"
     />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { MdEditor, config, type ToolbarNames, type Footers, type CustomIcon } from 'md-editor-v3'
+import { MdEditor, config, type ToolbarNames, type Footers, type CustomIcon, type ExposeParam } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 
 // 停用 linkShortener 擴充功能，避免長網址被折疊顯示為 "..."
@@ -68,9 +69,15 @@ const emit = defineEmits<{
 }>()
 
 // State
+const mdEditorRef = ref<ExposeParam>()
 const content = ref(props.modelValue)
 const showPreview = ref(props.preview)
-const lastMentionStartPos = ref(-1)  // Track @ position for mention insertion
+// Track the @ trigger range (in CodeMirror document positions) for mention insertion.
+// atPos = position of the '@'; caret = caret position when the dropdown was triggered.
+const mentionRange = ref<{ atPos: number; caret: number } | null>(null)
+
+// Get the underlying CodeMirror EditorView (md-editor-v3 v6 is CodeMirror 6 based)
+const getView = () => mdEditorRef.value?.getEditorView()
 
 // Watch for external changes
 watch(() => props.modelValue, (newVal) => {
@@ -115,51 +122,55 @@ const handleChange = (newContent: string) => {
 
   // Handle mention detection here (onChange has the correct new content)
   if (props.enableMention) {
-    detectMention(newContent)
+    detectMention()
   }
 }
 
-// Detect @ mentions in the text
-const detectMention = (text: string) => {
-  // Find the last @ symbol and check if it's a valid mention trigger
-  const lastAtIndex = text.lastIndexOf('@')
-  if (lastAtIndex === -1) {
-    lastMentionStartPos.value = -1
+// Detect @ mentions based on the real caret position (not lastIndexOf),
+// so mentions can be inserted anywhere in the text, including the middle.
+const detectMention = () => {
+  const view = getView()
+  if (!view) {
+    mentionRange.value = null
     emit('mention-close')
     return
   }
 
-  // Get text after @ until the cursor position or end
-  const afterAt = text.slice(lastAtIndex + 1)
+  const caret = view.state.selection.main.head
+  const doc = view.state.doc.toString()
 
-  // Check if there's a space or newline after the @ (mention ended)
-  const spaceIndex = afterAt.search(/[\s\n]/)
-  const query = spaceIndex === -1 ? afterAt : afterAt.slice(0, spaceIndex)
+  // Scan backwards from the caret to find the start of the mention token.
+  // Stop at whitespace (no active mention) or at '@' (potential trigger).
+  let i = caret - 1
+  while (i >= 0 && !/\s/.test(doc[i]) && doc[i] !== '@') i--
 
-  // Only trigger if we're still typing the mention (no space after query)
-  if (spaceIndex === -1 && query.length >= 0) {
-    lastMentionStartPos.value = lastAtIndex
-
-    // Get cursor screen position using Selection API
-    let screenPosition: { x: number; y: number } | undefined
-    const selection = window.getSelection()
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0)
-      const rect = range.getBoundingClientRect()
-      if (rect.width > 0 || rect.height > 0) {
-        screenPosition = { x: rect.left, y: rect.bottom }
-      }
-    }
-
-    emit('mention-trigger', {
-      query,
-      cursorPosition: lastAtIndex,
-      screenPosition
-    })
-  } else {
-    lastMentionStartPos.value = -1
+  // Require a '@' immediately starting the token, and that '@' must sit at a
+  // word boundary (start of doc or preceded by whitespace) to avoid emails
+  // like "a@b.com" falsely triggering the mention dropdown.
+  const prevChar = i > 0 ? doc[i - 1] : ''
+  const atBoundary = i === 0 || /\s/.test(prevChar)
+  if (i < 0 || doc[i] !== '@' || !atBoundary) {
+    mentionRange.value = null
     emit('mention-close')
+    return
   }
+
+  const atPos = i
+  const query = doc.slice(atPos + 1, caret)
+  mentionRange.value = { atPos, caret }
+
+  // Get the '@' screen position from CodeMirror for accurate dropdown placement
+  let screenPosition: { x: number; y: number } | undefined
+  const coords = view.coordsAtPos(atPos)
+  if (coords) {
+    screenPosition = { x: coords.left, y: coords.bottom }
+  }
+
+  emit('mention-trigger', {
+    query,
+    cursorPosition: atPos,
+    screenPosition
+  })
 }
 
 // ESC key handling - 攔截以防止關閉外層 Drawer/Modal
@@ -187,27 +198,32 @@ defineExpose({
    * @param mentionText - The mention text to insert (without @)
    */
   insertMention: (mentionText: string) => {
-    if (lastMentionStartPos.value === -1) {
-      // No active mention, just append
-      content.value += `@${mentionText} `
+    const view = getView()
+    const insertText = `@${mentionText} `
+
+    if (view && mentionRange.value) {
+      // Replace the "@query" range (from the '@' to the caret) with the mention,
+      // leaving any text after the caret untouched. Move the caret after the insert.
+      const { atPos, caret } = mentionRange.value
+      view.dispatch({
+        changes: { from: atPos, to: caret, insert: insertText },
+        selection: { anchor: atPos + insertText.length }
+      })
+      view.focus()
+      // dispatch triggers onChange -> handleChange syncs content/model
     } else {
-      // Replace @query with @mentionText
-      const beforeAt = content.value.slice(0, lastMentionStartPos.value)
-      const afterAt = content.value.slice(lastMentionStartPos.value + 1)
-      // Find where the query ends (first space/newline or end of string)
-      const spaceIndex = afterAt.search(/[\s\n]/)
-      const afterQuery = spaceIndex === -1 ? '' : afterAt.slice(spaceIndex)
-      content.value = `${beforeAt}@${mentionText} ${afterQuery}`
+      // Fallback: no editor view available, just append
+      content.value += insertText
+      emit('update:modelValue', content.value)
     }
-    lastMentionStartPos.value = -1
-    emit('update:modelValue', content.value)
+    mentionRange.value = null
     emit('mention-close')
   },
   /**
    * Close mention dropdown without inserting
    */
   closeMention: () => {
-    lastMentionStartPos.value = -1
+    mentionRange.value = null
     emit('mention-close')
   }
 })

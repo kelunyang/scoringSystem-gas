@@ -1,5 +1,5 @@
 <template>
-  <div class="groups-section" v-loading="stage.loadingReports" element-loading-text="載入報告資料中..." style="min-height: 150px;">
+  <div v-loading="stage.loadingReports" class="groups-section" element-loading-text="載入報告資料中..." style="min-height: 150px;">
     <!-- 無資料狀態 -->
     <EmptyState
       v-if="!stage.loadingReports && (!stage.groups || stage.groups.length === 0)"
@@ -30,7 +30,7 @@
             <span class="group-name-text">
               {{ truncateGroupName(group.groupName, 5) }}
             </span>
-            <span class="post-it-time" v-if="group.submitTime">
+            <span v-if="group.submitTime" class="post-it-time">
               {{ formatSubmissionTime(group.submitTime) }}
             </span>
           </div>
@@ -148,9 +148,9 @@
               <span class="stat-label">報告參與者</span>
               <div class="stat-content">
                 <AvatarGroup
-                  :groupMembers="getGroupMembersForAvatar(group)"
+                  :group-members="getGroupMembersForAvatar(group)"
                   size="40px"
-                  :autoHideDelay="3000"
+                  :auto-hide-delay="3000"
                 />
               </div>
             </div>
@@ -203,8 +203,8 @@
           <!-- 查看報告按鈕 -->
           <button
             class="btn btn-outline btn-sm"
-            @click="toggleGroupReport(group)"
             :class="{ active: group.showReport }"
+            @click="toggleGroupReport(group)"
           >
             {{ group.showReport ? '隱藏報告' : '查看報告' }}
           </button>
@@ -381,7 +381,7 @@ function getGroupMembersForAvatar(group: Group) {
     }
   }
 
-  let groupMembers = []
+  let groupMembers
 
   if (participationMap && Object.keys(participationMap).length > 0) {
     // 2. ✅ 使用 participationProposal 中的成員（實際提交者）
@@ -514,15 +514,16 @@ function getConsensusTooltipData(group: Group) {
   // 無投票數據
   if (!votingData || votingData.totalVotes === 0) {
     return {
-      customMessage: '貴組未投共識票'
+      customMessage: appendPendingMembers('貴組未投共識票', group, votingData)
     }
   }
 
   // ✅ 修正：使用 API 返回的 totalMembers（與後端共識閾值一致）
   // 未達成共識
   if (votingData.agreeVotes < votingData.totalMembers) {
+    const base = `需要 ${votingData.totalMembers} 票同意，目前只有 ${votingData.agreeVotes} 票`
     return {
-      customMessage: `需要 ${votingData.totalMembers} 票同意，目前只有 ${votingData.agreeVotes} 票`
+      customMessage: appendPendingMembers(base, group, votingData)
     }
   }
 
@@ -530,9 +531,56 @@ function getConsensusTooltipData(group: Group) {
 }
 
 /**
+ * 解析 email 對應的顯示名稱（降級為 email 前綴）
+ */
+function resolveConsensusDisplayName(email: string): string {
+  const user = props.projectUsers?.find((u: any) => u.userEmail === email)
+  return user?.displayName || email.split('@')[0]
+}
+
+/**
+ * 計算該組尚未投共識票的參與者（依 participationProposal > 0 但不在 votes 內）
+ * 回傳「姓名(email)」字串陣列
+ */
+function getConsensusPendingMembers(group: Group, votingData?: any): string[] {
+  const data = votingData || props.groupApprovalVotesCache.get(group.groupId)
+  if (!data) return []
+
+  // 優先使用投票 API 回傳的 participationProposal（與後端共識門檻一致），降級用 group 上的
+  let proposal: Record<string, number> = data.participationProposal || {}
+  if (Object.keys(proposal).length === 0 && (group as any).participationProposal) {
+    try {
+      proposal = typeof (group as any).participationProposal === 'string'
+        ? JSON.parse((group as any).participationProposal)
+        : (group as any).participationProposal
+    } catch {
+      proposal = {}
+    }
+  }
+
+  const participantEmails = Object.keys(proposal).filter(
+    (email) => typeof proposal[email] === 'number' && proposal[email] > 0
+  )
+  const votedEmails = new Set((data.votes || []).map((v: any) => v.voterEmail))
+
+  return participantEmails
+    .filter((email) => !votedEmails.has(email))
+    .map((email) => `${resolveConsensusDisplayName(email)}(${email})`)
+}
+
+/**
+ * 在共識票 tooltip 訊息後附上「尚未投票」成員清單（若可計算）
+ */
+function appendPendingMembers(baseMessage: string, group: Group, votingData?: any): string {
+  const pending = getConsensusPendingMembers(group, votingData)
+  if (pending.length === 0) return baseMessage
+  return `${baseMessage}\n尚未投票：\n${pending.join('\n')}`
+}
+
+/**
  * 檢查該組是否有提交過 ranking proposal
  */
-function checkGroupSubmittedRanking(groupId: string, stage: ExtendedStage): boolean {
+function checkGroupSubmittedRanking(groupId: string, _stage: ExtendedStage): boolean {
   // 數據未載入時，默認返回 false（不標記為 not-voted）
   if (!props.stageProposals || !Array.isArray(props.stageProposals)) {
     return false

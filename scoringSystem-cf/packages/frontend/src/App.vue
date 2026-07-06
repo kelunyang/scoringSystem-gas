@@ -12,6 +12,7 @@ import { useWebSocketStore } from './stores/websocket'
 import { useSudoStore } from './stores/sudo'
 import { useAuth } from './composables/useAuth'
 import { useBreadcrumb } from './composables/useBreadcrumb'
+import { useDoubleEscToClose } from './composables/useDoubleEscToClose'
 import { setCurrentUserId } from './utils/errorHandler'
 import { setGlobalCurrentUserId } from './composables/useNotificationLog'
 import { updateFavicon } from './utils/favicon'
@@ -27,6 +28,9 @@ const websocket = useWebSocketStore()
 // Vue 3 Best Practice: Use unified useAuth() composable
 const { token, userId } = useAuth()
 const { brandingIcon, fetchSystemTitle } = useBreadcrumb()
+
+// 雙擊 ESC 才關閉 el-drawer，避免打字中誤按 ESC 遺失內容
+useDoubleEscToClose()
 
 // 監聽 userId 變化，設置全局 userId（用於日誌隔離）
 watch(userId, (newUserId) => {

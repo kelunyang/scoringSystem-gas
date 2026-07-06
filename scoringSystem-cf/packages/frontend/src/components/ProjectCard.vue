@@ -114,8 +114,8 @@
         <button
           v-if="project.permissions?.isGroupLeader"
           class="manage-members-btn"
-          @click="$emit('manage-group-members', project)"
           title="管理專案分組"
+          @click="$emit('manage-group-members', project)"
         >
           <i class="fas fa-users-cog btn-icon"></i>
           <span class="btn-text">組長功能</span>
@@ -124,8 +124,8 @@
         <button
           v-if="project.permissions?.canEnter"
           class="wallet-btn"
-          @click="openWalletForUser(project)"
           title="查看專案錢包"
+          @click="openWalletForUser(project)"
         >
           <i class="fas fa-wallet btn-icon"></i>
           <span class="btn-text">專案錢包</span>
@@ -134,8 +134,8 @@
         <button
           v-if="project.permissions?.canViewLogs"
           class="event-log-btn"
-          @click="$emit('view-event-logs', project)"
           title="查看事件日誌"
+          @click="$emit('view-event-logs', project)"
         >
           <i class="fas fa-history btn-icon"></i>
           <span class="btn-text">事件日誌</span>
@@ -259,10 +259,22 @@ export default {
       return stageDisplay.value.displayStages
     })
 
+    // 專案是否「還沒開始」（全部階段 pending）/「已結束」（全部 completed/archived）
+    const projectNotStarted = computed(() => {
+      const s = props.project.stages || []
+      return s.length > 0 && s.every(st => st.status === 'pending')
+    })
+    const projectEnded = computed(() => {
+      const s = props.project.stages || []
+      return s.length > 0 && s.every(st => st.status === 'completed' || st.status === 'archived')
+    })
+
     // ===== LED 指示燈「開車」+ 看板波浪跳動（matter.js）=====
     // LED 從起點逐幀開到「當前階段」並停下；車頭經過哪張看板，那張就「跳起來」一下 → 波浪。
     // LED 走不到「下一階段」，所以下一階段在 LED 到站後自己跳。LED 在底部軌道，不與看板重疊。
-    const LED_SLIDE_MS = 1600          // LED 開到當前階段的時間（rAF 逐幀驅動）
+    const LED_SLIDE_MS = 1600          // LED 開到當前階段的「最長」時間（rAF 逐幀驅動）
+    const LED_MIN_MS = 400             // LED 位移最短時間（停在近的標記時用）
+    const LED_PX_PER_MS = 0.18         // LED 速度（px/ms，≈180px/秒）→ 時間隨距離縮放
     const NEXT_BOUNCE_DELAY_MS = 1400  // LED 到站後，走不到的看板隔多久開始依序跳
     const LIFT_MAX = 22                // 看板被 LED 抬到最高的位移（px）
     const HUMP_HALF = 26               // LED 影響看板的左右半徑（px，決定「進入/離開」範圍）
@@ -361,9 +373,16 @@ export default {
         return el ? el.offsetWidth / 2 : HUMP_HALF
       }
 
-      // LED 停靠點 = 當前階段（無當前階段 → 開到最後）
-      const ci = currentDisplayIndex.value
-      let stopNodeIdx = nodes.findIndex(n => n.type === 'chip' && n.chipIndex === ci)
+      // LED 停靠點：未開始→「開始」標記；已結束→「結束」標記；否則→當前階段
+      let stopNodeIdx
+      if (projectNotStarted.value) {
+        stopNodeIdx = nodes.findIndex(n => n.type === 'start-marker')
+      } else if (projectEnded.value) {
+        stopNodeIdx = nodes.findIndex(n => n.type === 'end-marker')
+      } else {
+        const ci = currentDisplayIndex.value
+        stopNodeIdx = nodes.findIndex(n => n.type === 'chip' && n.chipIndex === ci)
+      }
       if (stopNodeIdx < 0) stopNodeIdx = nodes.length - 1
       const stopX = centerOf(stopNodeIdx)
 
@@ -383,10 +402,12 @@ export default {
 
       // LED 與看板震動「同一個 rAF 迴圈」→ 完全同步：
       // LED 進入看板（到左緣）→ 開始抬升；到中央 → 最高；離開 → 錨點歸位、弦回彈震盪。
+      // LED 位移時間與距離成正比（停在近的「開始」標記時才不會慢爬 1.6s）
+      const duration = Math.max(LED_MIN_MS, Math.min(LED_SLIDE_MS, stopX / LED_PX_PER_MS))
       const startTs = performance.now()
       let arrivalTs = null
       const sweep = (now) => {
-        const t = Math.min(1, (now - startTs) / LED_SLIDE_MS)
+        const t = Math.min(1, (now - startTs) / duration)
         const ledX = stopX * t
         ledLeft.value = ledX + 'px'
 
@@ -406,23 +427,26 @@ export default {
         })
 
         // 到站：顯示當前階段到期時間，並讓 LED 走不到的看板依序撥動（自己震）
+        // 未開始：後面 pending 看板靜止不動（不 pluck）；未開始/已結束不顯示到期灰字
         if (t >= 1) {
           if (arrivalTs === null) {
             arrivalTs = now
-            dueShown.value = true
+            if (!projectNotStarted.value && !projectEnded.value) dueShown.value = true
           }
           const since = now - arrivalTs
-          beyond.forEach((o, k) => {
-            if (!o.plucked && since >= NEXT_BOUNCE_DELAY_MS + k * 220) {
-              o.plucked = true
-              bounce.pluck(o.node.bodyIndex)
-            }
-          })
+          if (!projectNotStarted.value) {
+            beyond.forEach((o, k) => {
+              if (!o.plucked && since >= NEXT_BOUNCE_DELAY_MS + k * 220) {
+                o.plucked = true
+                bounce.pluck(o.node.bodyIndex)
+              }
+            })
+          }
         }
 
         bounce.step()
 
-        const allBeyondDone = beyond.every(o => o.plucked)
+        const allBeyondDone = projectNotStarted.value || beyond.every(o => o.plucked)
         if (t < 1 || !allBeyondDone || !bounce.isSettled()) {
           ledRaf = requestAnimationFrame(sweep)
         } else {
@@ -435,9 +459,9 @@ export default {
     // 進場才啟動（Dashboard 多卡效能）
     const { hasEntered } = useInViewport(stageProgressRef, { once: true })
     watch(hasEntered, (entered) => { if (entered) runIndicator() })
-    // 階段推進 / 資料變更 → 重新開車與彈跳
+    // 階段推進 / 資料變更（含未開始↔進行中↔已結束）→ 重新開車與彈跳
     watch(
-      [currentDisplayIndex, () => displayStages.value.length],
+      [currentDisplayIndex, () => displayStages.value.length, projectNotStarted, projectEnded],
       () => { if (hasEntered.value) runIndicator() }
     )
     
@@ -523,7 +547,7 @@ export default {
         const hours = Math.floor((timeLeft % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000))
         const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000))
         
-        let timeText = ''
+        let timeText
         if (days > 0) {
           timeText = `${days}天${hours}小時`
         } else if (hours > 0) {
@@ -560,6 +584,8 @@ export default {
     
     // 判斷是否顯示開始標記（只針對當前階段）
     const shouldShowStartMarker = computed(() => {
+      // 專案還沒開始 → 顯示「開始」標記，讓 LED 有得停靠
+      if (projectNotStarted.value) return true
       if (!props.project.stages || stageDisplay.value.activeStages.length === 0) return false
       
       // 取得所有階段按順序排列
@@ -575,6 +601,8 @@ export default {
     
     // 判斷是否顯示結束標記
     const shouldShowEndMarker = computed(() => {
+      // 專案已結束 → 顯示「結束」標記，讓 LED 有得停靠
+      if (projectEnded.value) return true
       if (!props.project.stages) return false
       
       // 取得所有階段按順序排列
