@@ -97,7 +97,6 @@ export default withVueTs(
       'packages/frontend/src/components/TopBarUserControls.vue',
       'packages/frontend/src/components/UserSettings.vue',
       'packages/frontend/src/components/admin/GroupManagement.vue',
-      'packages/frontend/src/components/admin/project/ViewerManagementDrawer.vue',
       'packages/frontend/src/components/charts/StageGanttChart.vue',
     ],
     rules: {

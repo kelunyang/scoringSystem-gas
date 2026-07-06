@@ -143,7 +143,7 @@
                   <div v-if="user.avatarSeed" class="user-avatar">
                     <img
                       :src="getAvatarUrl(user)"
-                      :alt="user.displayName"
+                      :alt="user.displayName || user.userEmail"
                       @error="handleAvatarError($event, user)"
                     />
                   </div>
@@ -283,7 +283,7 @@
                       <div v-if="viewer.avatarSeed" class="user-avatar">
                         <img
                           :src="getAvatarUrl(viewer)"
-                          :alt="viewer.displayName"
+                          :alt="viewer.displayName || viewer.userEmail"
                           @error="handleAvatarError($event, viewer)"
                         />
                       </div>
@@ -378,7 +378,7 @@
   </el-drawer>
 </template>
 
-<script>
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { rpcClient } from '@/utils/rpc-client'
@@ -387,421 +387,367 @@ import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import { getAvatarUrl, generateInitialsAvatar } from '@/utils/avatar'
 import EmptyState from '@/components/shared/EmptyState.vue'
 
-export default {
-  name: 'ViewerManagementDrawer',
-  components: {
-    EmptyState
-  },
-  props: {
-    visible: {
-      type: Boolean,
-      default: false
-    },
-    selectedProject: {
-      type: Object,
-      default: null
-    },
-    projectViewers: {
-      type: Array,
-      default: () => []
-    },
-    searchResults: {
-      type: Array,
-      default: () => []
-    },
-    loadingViewers: {
-      type: Boolean,
-      default: false
-    },
-    searchingUsers: {
-      type: Boolean,
-      default: false
-    },
-    projects: {
-      type: Array,
-      default: () => []
-    }
-  },
-  emits: [
-    'update:visible',
-    'search',
-    'add-selected',
-    'update-role',
-    'remove',
-    'batch-update-roles',
-    'batch-remove'
-  ],
-  setup(props, { emit }) {
-    // Drawer Breadcrumb
-    const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
+/** 專案存取者角色 */
+export type ViewerRole = 'teacher' | 'observer' | 'member'
 
-    // Two-way binding for visibility
-    const localVisible = computed({
-      get: () => props.visible,
-      set: (val) => emit('update:visible', val)
+/** 存取者清單項目（role 維持 string：上游 API 型別未收斂為 ViewerRole） */
+export interface ProjectViewer {
+  userEmail: string
+  displayName?: string | null
+  avatarSeed?: string | null
+  avatarStyle?: string
+  role: string
+}
+
+/** 搜尋結果使用者 */
+export interface SearchUser {
+  userEmail: string
+  displayName?: string | null
+  avatarSeed?: string | null
+  avatarStyle?: string
+}
+
+/** 選取待加入的使用者（email + 指派角色） */
+export interface SelectedUser {
+  userEmail: string
+  role: ViewerRole
+}
+
+export interface ProjectInfo {
+  projectId: string
+  projectName: string
+  status?: string
+}
+
+const props = withDefaults(defineProps<{
+  visible?: boolean
+  selectedProject?: ProjectInfo | null
+  projectViewers?: ProjectViewer[]
+  searchResults?: SearchUser[]
+  loadingViewers?: boolean
+  searchingUsers?: boolean
+  projects?: ProjectInfo[]
+}>(), {
+  visible: false,
+  selectedProject: null,
+  projectViewers: () => [],
+  searchResults: () => [],
+  loadingViewers: false,
+  searchingUsers: false,
+  projects: () => []
+})
+
+const emit = defineEmits<{
+  'update:visible': [visible: boolean]
+  search: [payload: { searchText: string; role: ViewerRole }]
+  'add-selected': [payload: { users: SelectedUser[]; role: ViewerRole }]
+  'update-role': [payload: { userEmail: string; newRole: ViewerRole }]
+  remove: [userEmail: string]
+  'batch-update-roles': [payload: { users: string[]; newRole: ViewerRole }]
+  'batch-remove': [userEmails: string[]]
+}>()
+
+// Drawer Breadcrumb
+const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
+
+// Two-way binding for visibility
+const localVisible = computed({
+  get: () => props.visible,
+  set: (val) => emit('update:visible', val)
+})
+
+// Search state
+const newViewerSearchText = ref('')
+const newViewerRole = ref<ViewerRole>('observer')
+const selectedUsers = ref<SelectedUser[]>([])
+
+// Viewer list state
+const viewerSearchText = ref('')
+const selectedViewers = ref<string[]>([])
+const batchRole = ref<ViewerRole | ''>('')
+
+// Sorting state
+const sortBy = ref<'displayName' | 'userEmail'>('displayName')
+const sortOrder = ref<'asc' | 'desc'>('asc')
+
+// Collapsible add section
+const showAddSection = ref(false)
+
+// Load from projects state
+const loadFromProjectIds = ref<string[]>([])
+const loadFromRole = ref<ViewerRole | 'all'>('all')
+const loadingFromProjects = ref(false)
+
+// Unassigned members state
+const ungroupedMembers = ref<string[]>([])
+const markingUnassigned = ref(false)
+
+// Filtered viewers
+const filteredViewers = computed(() => {
+  let viewers = [...props.projectViewers]
+
+  // Filter by search text
+  if (viewerSearchText.value) {
+    const searchLower = viewerSearchText.value.toLowerCase()
+    viewers = viewers.filter(v =>
+      (v.displayName && v.displayName.toLowerCase().includes(searchLower)) ||
+      (v.userEmail && v.userEmail.toLowerCase().includes(searchLower))
+    )
+  }
+
+  // Sort
+  viewers.sort((a, b) => {
+    const aVal = (a[sortBy.value] || '').toLowerCase()
+    const bVal = (b[sortBy.value] || '').toLowerCase()
+
+    if (sortOrder.value === 'asc') {
+      return aVal > bVal ? 1 : aVal < bVal ? -1 : 0
+    } else {
+      return aVal < bVal ? 1 : aVal > bVal ? -1 : 0
+    }
+  })
+
+  return viewers
+})
+
+// Unassigned count
+const ungroupedCount = computed(() => ungroupedMembers.value.length)
+
+// Available projects for load-from-projects (exclude current project and archived)
+const availableProjects = computed(() => {
+  if (!props.projects || !Array.isArray(props.projects)) return []
+  const currentProjectId = props.selectedProject?.projectId
+  return props.projects.filter((p) =>
+    p.projectId !== currentProjectId && p.status !== 'archived'
+  )
+})
+
+// Methods
+const isUserSelected = (userEmail: string) => {
+  return selectedUsers.value.findIndex(u => u.userEmail === userEmail) > -1
+}
+
+const toggleUserSelection = (userEmail: string) => {
+  const index = selectedUsers.value.findIndex(u => u.userEmail === userEmail)
+  if (index > -1) {
+    selectedUsers.value.splice(index, 1)
+  } else {
+    selectedUsers.value.push({
+      userEmail: userEmail,
+      role: newViewerRole.value  // Use default role from search
     })
-
-    // Search state
-    const newViewerSearchText = ref('')
-    const newViewerRole = ref('observer')
-    const selectedUsers = ref([])
-
-    // Viewer list state
-    const viewerSearchText = ref('')
-    const selectedViewers = ref([])
-    const batchRole = ref('')
-
-    // Sorting state
-    const sortBy = ref('displayName')
-    const sortOrder = ref('asc')
-
-    // Collapsible add section
-    const showAddSection = ref(false)
-
-    // Load from projects state
-    const loadFromProjectIds = ref([])
-    const loadFromRole = ref('all')
-    const loadingFromProjects = ref(false)
-
-    // Unassigned members state
-    const ungroupedMembers = ref([])
-    const markingUnassigned = ref(false)
-
-    // Filtered viewers
-    const filteredViewers = computed(() => {
-      let viewers = [...props.projectViewers]
-
-      // Filter by search text
-      if (viewerSearchText.value) {
-        const searchLower = viewerSearchText.value.toLowerCase()
-        viewers = viewers.filter(v =>
-          (v.displayName && v.displayName.toLowerCase().includes(searchLower)) ||
-          (v.userEmail && v.userEmail.toLowerCase().includes(searchLower))
-        )
-      }
-
-      // Sort
-      viewers.sort((a, b) => {
-        let aVal = a[sortBy.value] || ''
-        let bVal = b[sortBy.value] || ''
-
-        if (typeof aVal === 'string') aVal = aVal.toLowerCase()
-        if (typeof bVal === 'string') bVal = bVal.toLowerCase()
-
-        if (sortOrder.value === 'asc') {
-          return aVal > bVal ? 1 : aVal < bVal ? -1 : 0
-        } else {
-          return aVal < bVal ? 1 : aVal > bVal ? -1 : 0
-        }
-      })
-
-      return viewers
-    })
-
-    // Unassigned count
-    const ungroupedCount = computed(() => ungroupedMembers.value.length)
-
-    // Available projects for load-from-projects (exclude current project and archived)
-    const availableProjects = computed(() => {
-      if (!props.projects || !Array.isArray(props.projects)) return []
-      const currentProjectId = props.selectedProject?.projectId
-      return props.projects.filter((p) =>
-        p.projectId !== currentProjectId && p.status !== 'archived'
-      )
-    })
-
-    // Methods
-    const isUserSelected = (userEmail) => {
-      return selectedUsers.value.findIndex(u => u.userEmail === userEmail) > -1
-    }
-
-    const toggleUserSelection = (userEmail) => {
-      const index = selectedUsers.value.findIndex(u => u.userEmail === userEmail)
-      if (index > -1) {
-        selectedUsers.value.splice(index, 1)
-      } else {
-        selectedUsers.value.push({
-          userEmail: userEmail,
-          role: newViewerRole.value  // Use default role from search
-        })
-      }
-    }
-
-    const getUserRole = (userEmail) => {
-      const user = selectedUsers.value.find(u => u.userEmail === userEmail)
-      return user?.role || newViewerRole.value
-    }
-
-    const updateUserRole = (userEmail, newRole) => {
-      const index = selectedUsers.value.findIndex(u => u.userEmail === userEmail)
-      if (index > -1) {
-        // Replace the entire object to trigger Vue 3 reactivity
-        selectedUsers.value[index] = {
-          ...selectedUsers.value[index],
-          role: newRole
-        }
-      } else {
-        // If user not selected yet, select them with the new role
-        selectedUsers.value.push({
-          userEmail: userEmail,
-          role: newRole
-        })
-      }
-    }
-
-    const selectAllSearchResults = () => {
-      props.searchResults.forEach(user => {
-        if (!isUserSelected(user.userEmail)) {
-          selectedUsers.value.push({
-            userEmail: user.userEmail,
-            role: newViewerRole.value  // Use default role from dropdown
-          })
-        }
-      })
-    }
-
-    const deselectAllSearchResults = () => {
-      selectedUsers.value = []
-    }
-
-    const toggleViewerSelection = (userEmail) => {
-      const index = selectedViewers.value.indexOf(userEmail)
-      if (index > -1) {
-        selectedViewers.value.splice(index, 1)
-      } else {
-        selectedViewers.value.push(userEmail)
-      }
-    }
-
-    const toggleAllViewers = () => {
-      if (selectedViewers.value.length === filteredViewers.value.length) {
-        selectedViewers.value = []
-      } else {
-        selectedViewers.value = filteredViewers.value.map(v => v.userEmail)
-      }
-    }
-
-    const handleSearch = () => {
-      emit('search', {
-        searchText: newViewerSearchText.value,
-        role: newViewerRole.value
-      })
-    }
-
-    const handleAddSelected = () => {
-      emit('add-selected', {
-        users: selectedUsers.value,
-        role: newViewerRole.value
-      })
-      selectedUsers.value = []
-    }
-
-    const handleUpdateRole = (userEmail, newRole) => {
-      emit('update-role', { userEmail, newRole })
-    }
-
-    const handleRemove = (userEmail) => {
-      emit('remove', userEmail)
-    }
-
-    const handleBatchUpdateRoles = () => {
-      emit('batch-update-roles', {
-        users: selectedViewers.value,
-        newRole: batchRole.value
-      })
-      selectedViewers.value = []
-      batchRole.value = ''
-    }
-
-    const handleBatchRemove = () => {
-      emit('batch-remove', selectedViewers.value)
-      selectedViewers.value = []
-    }
-
-    const handleSort = (field) => {
-      if (sortBy.value === field) {
-        sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
-      } else {
-        sortBy.value = field
-        sortOrder.value = 'asc'
-      }
-    }
-
-    const getSortIcon = (field) => {
-      if (sortBy.value !== field) return 'fa-sort'
-      return sortOrder.value === 'asc' ? 'fa-sort-up' : 'fa-sort-down'
-    }
-
-    // Mark unassigned members
-    const handleMarkUnassigned = async () => {
-      if (!props.selectedProject?.projectId) {
-        ElMessage.error('請先選擇專案')
-        return
-      }
-
-      markingUnassigned.value = true
-      try {
-        const response = await rpcClient.projects.viewers['mark-unassigned'].$post({
-          json: { projectId: props.selectedProject.projectId }
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          ungroupedMembers.value = data.data?.ungroupedMemberEmails || []
-          ElMessage.success(`找到 ${ungroupedMembers.value.length} 位未分組成員`)
-        }
-      } catch (error) {
-        handleError(error, { action: '標記未分組成員' })
-      } finally {
-        markingUnassigned.value = false
-      }
-    }
-
-    // Load viewers from other projects
-    const handleLoadFromProjects = async () => {
-      if (loadFromProjectIds.value.length === 0) {
-        ElMessage.warning('請先選擇來源專案')
-        return
-      }
-
-      loadingFromProjects.value = true
-      try {
-        const response = await rpcClient.projects.viewers['load-from-projects'].$post({
-          json: {
-            projectIds: loadFromProjectIds.value,
-            role: loadFromRole.value
-          }
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          if (data.success && data.data) {
-            const emails = data.data.emails || []
-            const skipped = data.data.skippedProjects || []
-
-            if (emails.length === 0) {
-              ElMessage.info('所選專案中沒有找到符合條件的參與者')
-              return
-            }
-
-            // Append emails to existing search textarea
-            const existingText = newViewerSearchText.value.trim()
-            const newEmails = emails.join('\n')
-            newViewerSearchText.value = existingText
-              ? existingText + '\n' + newEmails
-              : newEmails
-
-            let message = `已載入 ${emails.length} 個 Email`
-            if (skipped.length > 0) {
-              message += `（${skipped.length} 個專案因權限不足被跳過）`
-            }
-            ElMessage.success(message)
-          } else {
-            ElMessage.error(data.error?.message || '載入失敗')
-          }
-        } else {
-          const errData = await response.json()
-          ElMessage.error(errData.error?.message || '載入失敗')
-        }
-      } catch (error) {
-        handleError(error, { action: '從專案載入參與者' })
-      } finally {
-        loadingFromProjects.value = false
-      }
-    }
-
-    // Check if user is ungrouped
-    const isUngrouped = (userEmail) => {
-      return ungroupedMembers.value.includes(userEmail)
-    }
-
-    const handleAvatarError = (event, user) => {
-      const img = event.target
-      img.src = generateInitialsAvatar(user)
-    }
-
-    const getRoleTagType = (role) => {
-      const roleTypes = {
-        teacher: 'danger',
-        observer: 'info',
-        member: 'warning'
-      }
-      return roleTypes[role] || 'info'
-    }
-
-    const getRoleLabel = (role) => {
-      const roleLabels = {
-        teacher: '教師',
-        observer: '觀察者',
-        member: '成員'
-      }
-      return roleLabels[role] || role
-    }
-
-    // Watch for drawer close to reset state
-    watch(localVisible, (newVal) => {
-      if (!newVal) {
-        newViewerSearchText.value = ''
-        newViewerRole.value = 'observer'
-        selectedUsers.value = []
-        viewerSearchText.value = ''
-        selectedViewers.value = []
-        batchRole.value = ''
-        showAddSection.value = false
-        ungroupedMembers.value = []
-        loadFromProjectIds.value = []
-        loadFromRole.value = 'all'
-      }
-    })
-
-    return {
-      // Breadcrumb
-      currentPageName,
-      currentPageIcon,
-      // State
-      localVisible,
-      newViewerSearchText,
-      newViewerRole,
-      selectedUsers,
-      viewerSearchText,
-      selectedViewers,
-      batchRole,
-      showAddSection,
-      ungroupedMembers,
-      markingUnassigned,
-      filteredViewers,
-      ungroupedCount,
-      isUserSelected,
-      toggleUserSelection,
-      getUserRole,
-      updateUserRole,
-      selectAllSearchResults,
-      deselectAllSearchResults,
-      toggleViewerSelection,
-      toggleAllViewers,
-      handleSearch,
-      handleAddSelected,
-      handleUpdateRole,
-      handleRemove,
-      handleBatchUpdateRoles,
-      handleBatchRemove,
-      handleSort,
-      getSortIcon,
-      handleMarkUnassigned,
-      isUngrouped,
-      getAvatarUrl,
-      handleAvatarError,
-      getRoleTagType,
-      // Load from projects
-      loadFromProjectIds,
-      loadFromRole,
-      loadingFromProjects,
-      availableProjects,
-      handleLoadFromProjects,
-      getRoleLabel
-    }
   }
 }
+
+const getUserRole = (userEmail: string) => {
+  const user = selectedUsers.value.find(u => u.userEmail === userEmail)
+  return user?.role || newViewerRole.value
+}
+
+const updateUserRole = (userEmail: string, newRole: ViewerRole) => {
+  const index = selectedUsers.value.findIndex(u => u.userEmail === userEmail)
+  if (index > -1) {
+    // Replace the entire object to trigger Vue 3 reactivity
+    selectedUsers.value[index] = {
+      ...selectedUsers.value[index],
+      role: newRole
+    }
+  } else {
+    // If user not selected yet, select them with the new role
+    selectedUsers.value.push({
+      userEmail: userEmail,
+      role: newRole
+    })
+  }
+}
+
+const selectAllSearchResults = () => {
+  props.searchResults.forEach(user => {
+    if (!isUserSelected(user.userEmail)) {
+      selectedUsers.value.push({
+        userEmail: user.userEmail,
+        role: newViewerRole.value  // Use default role from dropdown
+      })
+    }
+  })
+}
+
+const deselectAllSearchResults = () => {
+  selectedUsers.value = []
+}
+
+const toggleViewerSelection = (userEmail: string) => {
+  const index = selectedViewers.value.indexOf(userEmail)
+  if (index > -1) {
+    selectedViewers.value.splice(index, 1)
+  } else {
+    selectedViewers.value.push(userEmail)
+  }
+}
+
+const toggleAllViewers = () => {
+  if (selectedViewers.value.length === filteredViewers.value.length) {
+    selectedViewers.value = []
+  } else {
+    selectedViewers.value = filteredViewers.value.map(v => v.userEmail)
+  }
+}
+
+const handleSearch = () => {
+  emit('search', {
+    searchText: newViewerSearchText.value,
+    role: newViewerRole.value
+  })
+}
+
+const handleAddSelected = () => {
+  emit('add-selected', {
+    users: selectedUsers.value,
+    role: newViewerRole.value
+  })
+  selectedUsers.value = []
+}
+
+const handleUpdateRole = (userEmail: string, newRole: ViewerRole) => {
+  emit('update-role', { userEmail, newRole })
+}
+
+const handleRemove = (userEmail: string) => {
+  emit('remove', userEmail)
+}
+
+const handleBatchUpdateRoles = () => {
+  if (!batchRole.value) return
+  emit('batch-update-roles', {
+    users: selectedViewers.value,
+    newRole: batchRole.value
+  })
+  selectedViewers.value = []
+  batchRole.value = ''
+}
+
+const handleBatchRemove = () => {
+  emit('batch-remove', selectedViewers.value)
+  selectedViewers.value = []
+}
+
+const handleSort = (field: 'displayName' | 'userEmail') => {
+  if (sortBy.value === field) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortBy.value = field
+    sortOrder.value = 'asc'
+  }
+}
+
+const getSortIcon = (field: 'displayName' | 'userEmail') => {
+  if (sortBy.value !== field) return 'fa-sort'
+  return sortOrder.value === 'asc' ? 'fa-sort-up' : 'fa-sort-down'
+}
+
+// Mark unassigned members
+const handleMarkUnassigned = async () => {
+  if (!props.selectedProject?.projectId) {
+    ElMessage.error('請先選擇專案')
+    return
+  }
+
+  markingUnassigned.value = true
+  try {
+    const response = await rpcClient.projects.viewers['mark-unassigned'].$post({
+      json: { projectId: props.selectedProject.projectId }
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      ungroupedMembers.value = data.data?.ungroupedMemberEmails || []
+      ElMessage.success(`找到 ${ungroupedMembers.value.length} 位未分組成員`)
+    }
+  } catch (error) {
+    handleError(error instanceof Error ? error : String(error), { action: '標記未分組成員' })
+  } finally {
+    markingUnassigned.value = false
+  }
+}
+
+// Load viewers from other projects
+const handleLoadFromProjects = async () => {
+  if (loadFromProjectIds.value.length === 0) {
+    ElMessage.warning('請先選擇來源專案')
+    return
+  }
+
+  loadingFromProjects.value = true
+  try {
+    const response = await rpcClient.projects.viewers['load-from-projects'].$post({
+      json: {
+        projectIds: loadFromProjectIds.value,
+        role: loadFromRole.value
+      }
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      if (data.success && data.data) {
+        const emails = data.data.emails || []
+        const skipped = data.data.skippedProjects || []
+
+        if (emails.length === 0) {
+          ElMessage.info('所選專案中沒有找到符合條件的參與者')
+          return
+        }
+
+        // Append emails to existing search textarea
+        const existingText = newViewerSearchText.value.trim()
+        const newEmails = emails.join('\n')
+        newViewerSearchText.value = existingText
+          ? existingText + '\n' + newEmails
+          : newEmails
+
+        let message = `已載入 ${emails.length} 個 Email`
+        if (skipped.length > 0) {
+          message += `（${skipped.length} 個專案因權限不足被跳過）`
+        }
+        ElMessage.success(message)
+      } else {
+        ElMessage.error(data.error?.message || '載入失敗')
+      }
+    } else {
+      const errData = await response.json()
+      ElMessage.error(errData.error?.message || '載入失敗')
+    }
+  } catch (error) {
+    handleError(error instanceof Error ? error : String(error), { action: '從專案載入參與者' })
+  } finally {
+    loadingFromProjects.value = false
+  }
+}
+
+// Check if user is ungrouped
+const isUngrouped = (userEmail: string) => {
+  return ungroupedMembers.value.includes(userEmail)
+}
+
+const handleAvatarError = (event: Event, user: SearchUser | ProjectViewer) => {
+  const img = event.target as HTMLImageElement
+  img.src = generateInitialsAvatar(user)
+}
+
+// Watch for drawer close to reset state
+watch(localVisible, (newVal) => {
+  if (!newVal) {
+    newViewerSearchText.value = ''
+    newViewerRole.value = 'observer'
+    selectedUsers.value = []
+    viewerSearchText.value = ''
+    selectedViewers.value = []
+    batchRole.value = ''
+    showAddSection.value = false
+    ungroupedMembers.value = []
+    loadFromProjectIds.value = []
+    loadFromRole.value = 'all'
+  }
+})
 </script>
 
 <style scoped>
