@@ -4,6 +4,14 @@
 > 前置條件：**使用者先將工作區 WIP（44 檔）commit 落地**，再開新對話執行
 > 現狀：146 個 Vue 組件中 136 個（93%）已是 `<script setup lang="ts">`，殘留 11 檔約 24,000 行
 
+## ✅ 進度（2026-07-06 更新）
+
+- **前置 WIP 落地**：✅ 完成（分 5 個 commit：2FA 改造、同名次排名、強制清票、雙 ESC、config 補落地）
+- **第一波**：✅ 完成（TurnstileWidget `fe5b189`、UserEditorDrawer `f552bcf`、ViewerManagementDrawer `6cd17c2`）
+- **第二波**：✅ 完成（StageGanttChart `38dcf04`、StageComments `9f7b878`、UserSettings `fd76d60`）
+- **第三、四波**：待辦（block-lang 豁免剩 3 檔：ProjectCard、TopBarUserControls、GroupManagement；另 UserManagement/ProjectManagement 為 TS+Options）
+- 執行修正註記：StageGanttChart 實際是 npm `d3` + `@types/d3`（非 CDN 全域），且內部原本就是 `setup()` 寫法、無 `this` 逃逸問題；StageComments 順手刪除死碼（handleReply/isCommentEligible/未使用的 initial* props）；UserSettings 刪除未使用的 click-outside 指令
+
 ## 目標
 
 1. 全部組件統一為 `<script setup lang="ts">`（Composition API + TS）

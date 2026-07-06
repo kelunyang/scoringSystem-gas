@@ -35,10 +35,10 @@ Batch 6b 的 advancedChunks 手動分組造成 production 白屏（dev 正常、
 已修復（改用 Rolldown 預設分塊）並補上 `pnpm test:e2e:preview` 防護網。
 完整事故紀錄與其他踩坑見 **[pitfalls.md](pitfalls.md)**。
 
-**遺留待辦**：
-- `no-explicit-any` 約 1600 處維持 warn（型別大翻修另案，逐模組清理後升 error；Options API 遷移時順手清償轉換檔）
-- Options API → script setup 遷移：殘留 11 檔約 2.4 萬行，完整計畫見 [options-api-migration.md](options-api-migration.md)（含 block-lang 豁免清單清空）
-- FA 7 / KaTeX 0.17（等 cdnjs 同步）留待下次
+**遺留待辦**（2026-07-06 更新進度）：
+- `no-explicit-any` 維持 warn，隨遷移逐檔清償中（1141 → 1109 warnings）
+- Options API → script setup 遷移：✅ 第一、二波完成（6 檔），殘留 5 檔（第三波 ProjectCard/TopBarUserControls、第四波三巨頭），block-lang 豁免 7 → 3 檔，見 [options-api-migration.md](options-api-migration.md)
+- ✅ FA 7.0.1 完成（2026-07-06，含 --fa-width:auto 還原 v6 寬度行為）；KaTeX 0.17 續等 cdnjs（仍停在 0.16.44）
 
 ---
 
