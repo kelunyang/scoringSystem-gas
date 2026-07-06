@@ -76,4 +76,10 @@ html, body {
 #app {
   height: 100vh;
 }
+
+/* Font Awesome 7 預設把所有 icon 改為固定寬度 1.25em（v6 為字形自然寬度），
+   全站間距會微變；還原 v6 行為維持視覺一致 */
+:root {
+  --fa-width: auto;
+}
 </style>
