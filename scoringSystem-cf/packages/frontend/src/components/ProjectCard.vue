@@ -145,10 +145,62 @@
   </div>
 </template>
 
-<script>
+<script lang="ts">
+/**
+ * 卡片用的階段：需同時容納 shared 的 Stage 實體（startTime/endTime 可為
+ * null、status 較寬）與 stageStatus 的 Stage，故取寬鬆結構
+ */
+interface CardStage {
+  stageId: string
+  stageName?: string
+  stageTitle?: string
+  stageOrder?: number
+  startTime?: number | string | null
+  endTime?: number | string | null
+  status: string
+  settledTime?: number
+}
+
+interface CardMilestone {
+  name?: string
+  eventName?: string
+  time?: string | number
+  eventTick?: string | number
+}
+
+interface GroupMemberInfo {
+  groupId?: string
+  [key: string]: unknown
+}
+
+/** Dashboard 的 projectsWithPermissions 項目中，本卡片會用到的欄位 */
+export interface ProjectCardProject {
+  projectId: string
+  projectName?: string
+  description?: string | null
+  stages?: CardStage[]
+  milestones?: CardMilestone[]
+  permissions?: {
+    canEnter?: boolean
+    isGroupLeader?: boolean
+    canViewLogs?: boolean
+    permissionLevel?: string
+  }
+  userGroups?: Array<{ groupId?: string }>
+  groupMembers?: GroupMemberInfo[]
+}
+
+/** 進度列節點：看板（chip/marker）有 matter.js body index；箭頭沒有 */
+type ProgressNode =
+  | { type: 'chip'; key: string; stage: CardStage; chipIndex: number; bodyIndex: number; isCurrent: boolean }
+  | { type: 'start-marker' | 'end-marker'; key: string; bodyIndex: number }
+  | { type: 'arrow'; key: string; bodyIndex?: undefined }
+</script>
+
+<script setup lang="ts" generic="T extends ProjectCardProject">
 import { ref, computed, onMounted, onBeforeUnmount, onBeforeUpdate, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { getProjectStageDisplay, getStageTimeRemaining } from '@/utils/stageStatus'
+import { getProjectStageDisplay, getStageTimeRemaining, type Stage as StatusStage } from '@/utils/stageStatus'
 import { getUserPreferences } from '@/utils/userPreferences'
 import { useCurrentUser } from '@/composables/useAuth'
 import AvatarGroup from './common/AvatarGroup.vue'
@@ -157,536 +209,502 @@ import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 import { useInViewport } from '@/composables/useInViewport'
 import { useStageBounce } from '@/composables/useStageBounce'
 
-export default {
-  name: 'ProjectCard',
-  components: {
-    AvatarGroup,
-    StageGanttChart,
-    MdPreviewWrapper
-  },
-  props: {
-    project: {
-      type: Object,
-      required: true
-    },
-    user: {
-      type: Object,
-      default: null
+const props = withDefaults(defineProps<{
+  project: T
+  user?: { userEmail?: string } | null
+}>(), {
+  user: null
+})
+
+defineEmits<{
+  'enter-project': [project: T]
+  'manage-group-members': [project: T]
+  'view-event-logs': [project: T]
+}>()
+
+const router = useRouter()
+const { data: currentUser } = useCurrentUser()
+
+// Stage display mode
+const stageDisplayMode = ref<'linear' | 'gantt'>('linear')
+
+// Load display mode from user preferences
+const loadStageDisplayMode = () => {
+  if (!currentUser.value?.userId) {
+    stageDisplayMode.value = 'linear'
+    return
+  }
+
+  const prefs = getUserPreferences(currentUser.value.userId)
+  stageDisplayMode.value = prefs.stageDisplayMode || 'linear'
+}
+
+// Handle display mode change
+const handleStageDisplayModeChange = () => {
+  loadStageDisplayMode()
+}
+
+// Handle preferences change (cross-tab sync)
+const handlePreferencesChange = () => {
+  loadStageDisplayMode()
+}
+
+// Convert project stages to Gantt format
+const ganttStages = computed(() => {
+  if (!props.project.stages) return []
+
+  return props.project.stages.map(stage => {
+    const status = stage.status
+    return {
+      stageName: stage.stageName || stage.stageTitle || '未命名階段',
+      startTime: stage.startTime,
+      endTime: stage.endTime,
+      status: status,
+      extraTime: status === 'completed' ? (stage.settledTime || undefined) : Infinity,
+      extraTimeText: status === 'completed' ? '投票階段' : '投票階段將由老師手動關閉結算'
     }
-  },
-  emits: ['enter-project', 'manage-group-members', 'view-event-logs'],
-  setup(props) {
-    const router = useRouter()
-    const { data: currentUser } = useCurrentUser()
+  })
+})
 
-    // Stage display mode
-    const stageDisplayMode = ref('linear')
+// Convert milestones (if exists)
+const ganttMilestones = computed(() => {
+  if (props.project.milestones) {
+    return props.project.milestones.map(m => ({
+      eventName: m.name || m.eventName || '',
+      eventTick: m.time ?? m.eventTick ?? ''
+    }))
+  }
+  return []
+})
 
-    // Load display mode from user preferences
-    const loadStageDisplayMode = () => {
-      if (!currentUser.value?.userId) {
-        stageDisplayMode.value = 'linear'
-        return
-      }
+// Handle stage click
+const handleStageClick = (stage: unknown) => {
+  console.log('Stage clicked:', stage)
+}
 
-      const prefs = getUserPreferences(currentUser.value.userId)
-      stageDisplayMode.value = prefs.stageDisplayMode || 'linear'
+// Lifecycle
+onMounted(() => {
+  loadStageDisplayMode()
+  window.addEventListener('stageDisplayModeChanged', handleStageDisplayModeChange)
+  window.addEventListener('userPreferencesChanged', handlePreferencesChange)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('stageDisplayModeChanged', handleStageDisplayModeChange)
+  window.removeEventListener('userPreferencesChanged', handlePreferencesChange)
+  clearBounceTimers()
+})
+
+// 獲取專案階段顯示資訊
+const stageDisplay = computed(() => {
+  // CardStage 較 stageStatus.Stage 寬鬆（null 時間、寬 status），runtime 邏輯本就容忍
+  return getProjectStageDisplay((props.project.stages || []) as StatusStage[])
+})
+
+// 顯示的階段列表（前一個、當前、下一個）
+const displayStages = computed(() => {
+  return stageDisplay.value.displayStages
+})
+
+// 專案是否「還沒開始」（全部階段 pending）/「已結束」（全部 completed/archived）
+const projectNotStarted = computed(() => {
+  const s = props.project.stages || []
+  return s.length > 0 && s.every(st => st.status === 'pending')
+})
+const projectEnded = computed(() => {
+  const s = props.project.stages || []
+  return s.length > 0 && s.every(st => st.status === 'completed' || st.status === 'archived')
+})
+
+// ===== LED 指示燈「開車」+ 看板波浪跳動（matter.js）=====
+// LED 從起點逐幀開到「當前階段」並停下；車頭經過哪張看板，那張就「跳起來」一下 → 波浪。
+// LED 走不到「下一階段」，所以下一階段在 LED 到站後自己跳。LED 在底部軌道，不與看板重疊。
+const LED_SLIDE_MS = 1600          // LED 開到當前階段的「最長」時間（rAF 逐幀驅動）
+const LED_MIN_MS = 400             // LED 位移最短時間（停在近的標記時用）
+const LED_PX_PER_MS = 0.18         // LED 速度（px/ms，≈180px/秒）→ 時間隨距離縮放
+const NEXT_BOUNCE_DELAY_MS = 1400  // LED 到站後，走不到的看板隔多久開始依序跳
+const LIFT_MAX = 22                // 看板被 LED 抬到最高的位移（px）
+const HUMP_HALF = 26               // LED 影響看板的左右半徑（px，決定「進入/離開」範圍）
+
+const stageProgressRef = ref<HTMLElement | null>(null)
+const ledLeft = ref('0px')
+const ledVisible = computed(
+  () => stageDisplayMode.value === 'linear' && displayStages.value.length > 0
+)
+
+const bounce = useStageBounce()
+
+// 當前階段在 displayStages 中的索引
+const currentDisplayIndex = computed(() => {
+  const cur = stageDisplay.value.currentStage
+  if (!cur) return -1
+  return displayStages.value.findIndex(s => s.stageId === cur.stageId)
+})
+
+// 進度節點（依序）：開始標記 →（箭頭）→ 各階段看板 →（箭頭）→ 結束標記
+// 看板類（chip / marker）配一個 matter.js body index 供彈起；箭頭只淡入
+const progressNodes = computed(() => {
+  const nodes: ProgressNode[] = []
+  const stages = displayStages.value
+  let bodyIdx = 0
+  if (shouldShowStartMarker.value) {
+    nodes.push({ type: 'start-marker', key: 'start', bodyIndex: bodyIdx++ })
+    nodes.push({ type: 'arrow', key: 'arrow-start' })
+  }
+  const currentId = stageDisplay.value.currentStage?.stageId
+  stages.forEach((stage, index) => {
+    nodes.push({
+      type: 'chip',
+      key: stage.stageId || `chip-${index}`,
+      stage,
+      chipIndex: index,
+      bodyIndex: bodyIdx++,
+      isCurrent: !!currentId && stage.stageId === currentId
+    })
+    if (index < stages.length - 1 || shouldShowEndMarker.value) {
+      nodes.push({ type: 'arrow', key: `arrow-${index}` })
     }
+  })
+  if (shouldShowEndMarker.value) {
+    nodes.push({ type: 'end-marker', key: 'end', bodyIndex: bodyIdx++ })
+  }
+  return nodes
+})
+const boardCount = computed(
+  () => progressNodes.value.filter(n => n.bodyIndex !== undefined).length
+)
 
-    // Handle display mode change
-    const handleStageDisplayModeChange = () => {
-      loadStageDisplayMode()
-    }
+const nodeEls = ref<HTMLElement[]>([])
+const dueShown = ref(false) // 當前階段跳起後才顯示到期時間
+onBeforeUpdate(() => { nodeEls.value = [] })
+const setNodeRef = (el: unknown, i: number) => { if (el) nodeEls.value[i] = el as HTMLElement }
+const boardBounceY = (bodyIndex: number) => bounce.bounceY(bodyIndex)
 
-    // Handle preferences change (cross-tab sync)
-    const handlePreferencesChange = () => {
-      loadStageDisplayMode()
-    }
+// 當前階段的到期時間（灰字寫在卡片上方），格式：~ 2026/02/01 13:56
+const formatDue = (stage?: CardStage) => {
+  const t = stage?.endTime
+  if (t === null || t === undefined) return ''
+  const d = typeof t === 'number' ? new Date(t) : new Date(t)
+  if (isNaN(d.getTime())) return ''
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `~ ${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
 
-    // Convert project stages to Gantt format
-    const ganttStages = computed(() => {
-      if (!props.project.stages) return []
+let bounceTimers: ReturnType<typeof setTimeout>[] = []
+let ledRaf: number | null = null
+const clearBounceTimers = () => {
+  bounceTimers.forEach(t => clearTimeout(t))
+  bounceTimers = []
+  if (ledRaf !== null) cancelAnimationFrame(ledRaf)
+  ledRaf = null
+}
 
-      return props.project.stages.map(stage => {
-        const status = stage.status
-        return {
-          stageName: stage.stageName || stage.stageTitle || '未命名階段',
-          startTime: stage.startTime,
-          endTime: stage.endTime,
-          status: status,
-          extraTime: status === 'completed' ? (stage.settledTime || undefined) : Infinity,
-          extraTimeText: status === 'completed' ? '投票階段' : '投票階段將由老師手動關閉結算'
+const runIndicator = async () => {
+  if (stageDisplayMode.value !== 'linear') return
+  const nodes = progressNodes.value
+  if (!nodes.length) return
+
+  bounce.ensure(boardCount.value)
+  dueShown.value = false
+  clearBounceTimers()
+  ledLeft.value = '0px'
+  await nextTick()
+
+  if (!stageProgressRef.value) return
+  const centerOf = (i: number) => {
+    const el = nodeEls.value[i]
+    return el ? el.offsetLeft + el.offsetWidth / 2 : 0
+  }
+  const halfOf = (i: number) => {
+    const el = nodeEls.value[i]
+    return el ? el.offsetWidth / 2 : HUMP_HALF
+  }
+
+  // LED 停靠點：未開始→「開始」標記；已結束→「結束」標記；否則→當前階段
+  let stopNodeIdx: number
+  if (projectNotStarted.value) {
+    stopNodeIdx = nodes.findIndex(n => n.type === 'start-marker')
+  } else if (projectEnded.value) {
+    stopNodeIdx = nodes.findIndex(n => n.type === 'end-marker')
+  } else {
+    const ci = currentDisplayIndex.value
+    stopNodeIdx = nodes.findIndex(n => n.type === 'chip' && n.chipIndex === ci)
+  }
+  if (stopNodeIdx < 0) stopNodeIdx = nodes.length - 1
+  const stopX = centerOf(stopNodeIdx)
+
+  // 各「看板」節點：中心 x、左右半徑（LED 進入～離開的範圍）
+  const boardNodes = nodes
+    .map((node, i) => ({ node, i, x: centerOf(i), half: halfOf(i), plucked: false }))
+    .filter(o => o.node.bodyIndex !== undefined)
+  const reachable = boardNodes.filter(o => o.x <= stopX + 0.5)
+  const beyond = boardNodes.filter(o => o.x > stopX + 0.5)
+
+  // 量不到位置（極少數）：LED 直接停在當前階段、顯示到期時間
+  if (stopX <= 0) {
+    ledLeft.value = Math.max(0, stopX) + 'px'
+    dueShown.value = true
+    return
+  }
+
+  // LED 與看板震動「同一個 rAF 迴圈」→ 完全同步：
+  // LED 進入看板（到左緣）→ 開始抬升；到中央 → 最高；離開 → 錨點歸位、弦回彈震盪。
+  // LED 位移時間與距離成正比（停在近的「開始」標記時才不會慢爬 1.6s）
+  const duration = Math.max(LED_MIN_MS, Math.min(LED_SLIDE_MS, stopX / LED_PX_PER_MS))
+  const startTs = performance.now()
+  let arrivalTs: number | null = null
+  const sweep = (now: number) => {
+    const t = Math.min(1, (now - startTs) / duration)
+    const ledX = stopX * t
+    ledLeft.value = ledX + 'px'
+
+    // 由 LED 位置驅動每張「走得到」的看板抬升量（半正弦駝峰，中央最高）
+    // 到站後（t>=1）全部釋放（lift=0）→ 錨點歸位，當前看板回彈震盪不會卡在高點
+    reachable.forEach(o => {
+      let lift = 0
+      if (t < 1) {
+        const left = o.x - o.half
+        const right = o.x + o.half
+        if (ledX >= left && ledX <= right) {
+          const p = (ledX - left) / (right - left) // 0→1
+          lift = LIFT_MAX * Math.sin(Math.PI * p)  // 中央 p=0.5 → 最高
         }
-      })
-    })
-
-    // Convert milestones (if exists)
-    const ganttMilestones = computed(() => {
-      if (props.project.milestones) {
-        return props.project.milestones.map(m => ({
-          eventName: m.name || m.eventName,
-          eventTick: m.time || m.eventTick
-        }))
       }
-      return []
+      bounce.setLift(o.node.bodyIndex!, lift)
     })
 
-    // Handle stage click
-    const handleStageClick = (stage) => {
-      console.log('Stage clicked:', stage)
-    }
-
-    // Lifecycle
-    onMounted(() => {
-      loadStageDisplayMode()
-      window.addEventListener('stageDisplayModeChanged', handleStageDisplayModeChange)
-      window.addEventListener('userPreferencesChanged', handlePreferencesChange)
-    })
-
-    onBeforeUnmount(() => {
-      window.removeEventListener('stageDisplayModeChanged', handleStageDisplayModeChange)
-      window.removeEventListener('userPreferencesChanged', handlePreferencesChange)
-      clearBounceTimers()
-    })
-
-    // 獲取專案階段顯示資訊
-    const stageDisplay = computed(() => {
-      return getProjectStageDisplay(props.project.stages || [])
-    })
-
-    // 顯示的階段列表（前一個、當前、下一個）
-    const displayStages = computed(() => {
-      return stageDisplay.value.displayStages
-    })
-
-    // 專案是否「還沒開始」（全部階段 pending）/「已結束」（全部 completed/archived）
-    const projectNotStarted = computed(() => {
-      const s = props.project.stages || []
-      return s.length > 0 && s.every(st => st.status === 'pending')
-    })
-    const projectEnded = computed(() => {
-      const s = props.project.stages || []
-      return s.length > 0 && s.every(st => st.status === 'completed' || st.status === 'archived')
-    })
-
-    // ===== LED 指示燈「開車」+ 看板波浪跳動（matter.js）=====
-    // LED 從起點逐幀開到「當前階段」並停下；車頭經過哪張看板，那張就「跳起來」一下 → 波浪。
-    // LED 走不到「下一階段」，所以下一階段在 LED 到站後自己跳。LED 在底部軌道，不與看板重疊。
-    const LED_SLIDE_MS = 1600          // LED 開到當前階段的「最長」時間（rAF 逐幀驅動）
-    const LED_MIN_MS = 400             // LED 位移最短時間（停在近的標記時用）
-    const LED_PX_PER_MS = 0.18         // LED 速度（px/ms，≈180px/秒）→ 時間隨距離縮放
-    const NEXT_BOUNCE_DELAY_MS = 1400  // LED 到站後，走不到的看板隔多久開始依序跳
-    const LIFT_MAX = 22                // 看板被 LED 抬到最高的位移（px）
-    const HUMP_HALF = 26               // LED 影響看板的左右半徑（px，決定「進入/離開」範圍）
-
-    const stageProgressRef = ref(null)
-    const ledLeft = ref('0px')
-    const ledVisible = computed(
-      () => stageDisplayMode.value === 'linear' && displayStages.value.length > 0
-    )
-
-    const bounce = useStageBounce()
-
-    // 當前階段在 displayStages 中的索引
-    const currentDisplayIndex = computed(() => {
-      const cur = stageDisplay.value.currentStage
-      if (!cur) return -1
-      return displayStages.value.findIndex(s => s.stageId === cur.stageId)
-    })
-
-    // 進度節點（依序）：開始標記 →（箭頭）→ 各階段看板 →（箭頭）→ 結束標記
-    // 看板類（chip / marker）配一個 matter.js body index 供彈起；箭頭只淡入
-    const progressNodes = computed(() => {
-      const nodes = []
-      const stages = displayStages.value
-      let bodyIdx = 0
-      if (shouldShowStartMarker.value) {
-        nodes.push({ type: 'start-marker', key: 'start', bodyIndex: bodyIdx++ })
-        nodes.push({ type: 'arrow', key: 'arrow-start' })
+    // 到站：顯示當前階段到期時間，並讓 LED 走不到的看板依序撥動（自己震）
+    // 未開始：後面 pending 看板靜止不動（不 pluck）；未開始/已結束不顯示到期灰字
+    if (t >= 1) {
+      if (arrivalTs === null) {
+        arrivalTs = now
+        if (!projectNotStarted.value && !projectEnded.value) dueShown.value = true
       }
-      const currentId = stageDisplay.value.currentStage?.stageId
-      stages.forEach((stage, index) => {
-        nodes.push({
-          type: 'chip',
-          key: stage.stageId || `chip-${index}`,
-          stage,
-          chipIndex: index,
-          bodyIndex: bodyIdx++,
-          isCurrent: !!currentId && stage.stageId === currentId
+      const since = now - arrivalTs
+      if (!projectNotStarted.value) {
+        beyond.forEach((o, k) => {
+          if (!o.plucked && since >= NEXT_BOUNCE_DELAY_MS + k * 220) {
+            o.plucked = true
+            bounce.pluck(o.node.bodyIndex!)
+          }
         })
-        if (index < stages.length - 1 || shouldShowEndMarker.value) {
-          nodes.push({ type: 'arrow', key: `arrow-${index}` })
-        }
-      })
-      if (shouldShowEndMarker.value) {
-        nodes.push({ type: 'end-marker', key: 'end', bodyIndex: bodyIdx++ })
       }
-      return nodes
-    })
-    const boardCount = computed(
-      () => progressNodes.value.filter(n => n.bodyIndex !== undefined).length
-    )
-
-    const nodeEls = ref([])
-    const dueShown = ref(false) // 當前階段跳起後才顯示到期時間
-    onBeforeUpdate(() => { nodeEls.value = [] })
-    const setNodeRef = (el, i) => { if (el) nodeEls.value[i] = el }
-    const boardBounceY = (bodyIndex) => bounce.bounceY(bodyIndex)
-
-    // 當前階段的到期時間（灰字寫在卡片上方），格式：~ 2026/02/01 13:56
-    const formatDue = (stage) => {
-      const t = stage?.endTime
-      if (t === null || t === undefined) return ''
-      const d = typeof t === 'number' ? new Date(t) : new Date(t)
-      if (isNaN(d.getTime())) return ''
-      const p = (n) => String(n).padStart(2, '0')
-      return `~ ${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
     }
 
-    let bounceTimers = []
-    let ledRaf = null
-    const clearBounceTimers = () => {
-      bounceTimers.forEach(t => clearTimeout(t))
-      bounceTimers = []
-      if (ledRaf !== null) cancelAnimationFrame(ledRaf)
+    bounce.step()
+
+    const allBeyondDone = projectNotStarted.value || beyond.every(o => o.plucked)
+    if (t < 1 || !allBeyondDone || !bounce.isSettled()) {
+      ledRaf = requestAnimationFrame(sweep)
+    } else {
       ledRaf = null
     }
+  }
+  ledRaf = requestAnimationFrame(sweep)
+}
 
-    const runIndicator = async () => {
-      if (stageDisplayMode.value !== 'linear') return
-      const nodes = progressNodes.value
-      if (!nodes.length) return
+// 進場才啟動（Dashboard 多卡效能）
+const { hasEntered } = useInViewport(stageProgressRef, { once: true })
+watch(hasEntered, (entered) => { if (entered) runIndicator() })
+// 階段推進 / 資料變更（含未開始↔進行中↔已結束）→ 重新開車與彈跳
+watch(
+  [currentDisplayIndex, () => displayStages.value.length, projectNotStarted, projectEnded],
+  () => { if (hasEntered.value) runIndicator() }
+)
 
-      bounce.ensure(boardCount.value)
-      dueShown.value = false
-      clearBounceTimers()
-      ledLeft.value = '0px'
-      await nextTick()
-
-      if (!stageProgressRef.value) return
-      const centerOf = (i) => {
-        const el = nodeEls.value[i]
-        return el ? el.offsetLeft + el.offsetWidth / 2 : 0
-      }
-      const halfOf = (i) => {
-        const el = nodeEls.value[i]
-        return el ? el.offsetWidth / 2 : HUMP_HALF
-      }
-
-      // LED 停靠點：未開始→「開始」標記；已結束→「結束」標記；否則→當前階段
-      let stopNodeIdx
-      if (projectNotStarted.value) {
-        stopNodeIdx = nodes.findIndex(n => n.type === 'start-marker')
-      } else if (projectEnded.value) {
-        stopNodeIdx = nodes.findIndex(n => n.type === 'end-marker')
-      } else {
-        const ci = currentDisplayIndex.value
-        stopNodeIdx = nodes.findIndex(n => n.type === 'chip' && n.chipIndex === ci)
-      }
-      if (stopNodeIdx < 0) stopNodeIdx = nodes.length - 1
-      const stopX = centerOf(stopNodeIdx)
-
-      // 各「看板」節點：中心 x、左右半徑（LED 進入～離開的範圍）
-      const boardNodes = nodes
-        .map((node, i) => ({ node, i, x: centerOf(i), half: halfOf(i), plucked: false }))
-        .filter(o => o.node.bodyIndex !== undefined)
-      const reachable = boardNodes.filter(o => o.x <= stopX + 0.5)
-      const beyond = boardNodes.filter(o => o.x > stopX + 0.5)
-
-      // 量不到位置（極少數）：LED 直接停在當前階段、顯示到期時間
-      if (stopX <= 0) {
-        ledLeft.value = Math.max(0, stopX) + 'px'
-        dueShown.value = true
-        return
-      }
-
-      // LED 與看板震動「同一個 rAF 迴圈」→ 完全同步：
-      // LED 進入看板（到左緣）→ 開始抬升；到中央 → 最高；離開 → 錨點歸位、弦回彈震盪。
-      // LED 位移時間與距離成正比（停在近的「開始」標記時才不會慢爬 1.6s）
-      const duration = Math.max(LED_MIN_MS, Math.min(LED_SLIDE_MS, stopX / LED_PX_PER_MS))
-      const startTs = performance.now()
-      let arrivalTs = null
-      const sweep = (now) => {
-        const t = Math.min(1, (now - startTs) / duration)
-        const ledX = stopX * t
-        ledLeft.value = ledX + 'px'
-
-        // 由 LED 位置驅動每張「走得到」的看板抬升量（半正弦駝峰，中央最高）
-        // 到站後（t>=1）全部釋放（lift=0）→ 錨點歸位，當前看板回彈震盪不會卡在高點
-        reachable.forEach(o => {
-          let lift = 0
-          if (t < 1) {
-            const left = o.x - o.half
-            const right = o.x + o.half
-            if (ledX >= left && ledX <= right) {
-              const p = (ledX - left) / (right - left) // 0→1
-              lift = LIFT_MAX * Math.sin(Math.PI * p)  // 中央 p=0.5 → 最高
-            }
-          }
-          bounce.setLift(o.node.bodyIndex, lift)
-        })
-
-        // 到站：顯示當前階段到期時間，並讓 LED 走不到的看板依序撥動（自己震）
-        // 未開始：後面 pending 看板靜止不動（不 pluck）；未開始/已結束不顯示到期灰字
-        if (t >= 1) {
-          if (arrivalTs === null) {
-            arrivalTs = now
-            if (!projectNotStarted.value && !projectEnded.value) dueShown.value = true
-          }
-          const since = now - arrivalTs
-          if (!projectNotStarted.value) {
-            beyond.forEach((o, k) => {
-              if (!o.plucked && since >= NEXT_BOUNCE_DELAY_MS + k * 220) {
-                o.plucked = true
-                bounce.pluck(o.node.bodyIndex)
-              }
-            })
-          }
-        }
-
-        bounce.step()
-
-        const allBeyondDone = projectNotStarted.value || beyond.every(o => o.plucked)
-        if (t < 1 || !allBeyondDone || !bounce.isSettled()) {
-          ledRaf = requestAnimationFrame(sweep)
-        } else {
-          ledRaf = null
-        }
-      }
-      ledRaf = requestAnimationFrame(sweep)
-    }
-
-    // 進場才啟動（Dashboard 多卡效能）
-    const { hasEntered } = useInViewport(stageProgressRef, { once: true })
-    watch(hasEntered, (entered) => { if (entered) runIndicator() })
-    // 階段推進 / 資料變更（含未開始↔進行中↔已結束）→ 重新開車與彈跳
-    watch(
-      [currentDisplayIndex, () => displayStages.value.length, projectNotStarted, projectEnded],
-      () => { if (hasEntered.value) runIndicator() }
+// 當前階段的剩餘時間
+const timeRemaining = computed(() => {
+  const activeStages = stageDisplay.value.activeStages
+  
+  if (activeStages.length === 0) {
+    return { text: '尚未開始', timeLeft: 0, percentage: 100, colorClass: 'info' }
+  }
+  
+  if (activeStages.length === 1) {
+    // 單個進行中階段
+    return getStageTimeRemaining(activeStages[0])
+  } else {
+    // 多個進行中階段，使用最緊急的時間
+    const timeRemainingList = activeStages.map(stage => getStageTimeRemaining(stage))
+    
+    // 找到最緊急的（剩餘時間最少的）
+    const mostUrgent = timeRemainingList.reduce((min, current) => 
+      current.timeLeft < min.timeLeft ? current : min
     )
     
-    // 當前階段的剩餘時間
-    const timeRemaining = computed(() => {
-      const activeStages = stageDisplay.value.activeStages
-      
-      if (activeStages.length === 0) {
-        return { text: '尚未開始', timeLeft: 0, percentage: 100, colorClass: 'info' }
-      }
-      
-      if (activeStages.length === 1) {
-        // 單個進行中階段
-        return getStageTimeRemaining(activeStages[0])
-      } else {
-        // 多個進行中階段，使用最緊急的時間
-        const timeRemainingList = activeStages.map(stage => getStageTimeRemaining(stage))
-        
-        // 找到最緊急的（剩餘時間最少的）
-        const mostUrgent = timeRemainingList.reduce((min, current) => 
-          current.timeLeft < min.timeLeft ? current : min
-        )
-        
-        return mostUrgent
-      }
-    })
+    return mostUrgent
+  }
+})
+
+// 計算投票中的階段
+const votingStages = computed(() => {
+  if (!props.project.stages) return []
+  return props.project.stages.filter(stage => stage.status === 'voting')
+})
+
+// 狀態顯示文字
+const statusDisplayText = computed(() => {
+  const activeStages = stageDisplay.value.activeStages
+  const votingStagesCount = votingStages.value.length
+  
+  // 優先顯示投票中階段信息
+  if (votingStagesCount > 0) {
+    const stageText = votingStagesCount === 1 ? '階段' : '階段'
+    return `有${votingStagesCount}個${stageText}開始投票`
+  }
+  
+  if (activeStages.length === 0) {
+    return '尚未開始'
+  }
+  
+  if (activeStages.length === 1) {
+    // 只有一個進行中階段
+    const currentStage = activeStages[0]
+    const stageName = currentStage.stageName || currentStage.stageTitle || `階段${currentStage.stageOrder || 1}`
+    if (timeRemaining.value.timeLeft <= 0) {
+      return `${stageName} 已截止`
+    }
+    return `${stageName} 剩餘${timeRemaining.value.text}`
+  } else {
+    // 多個進行中階段
+    const stageNames = activeStages.map(stage => 
+      stage.stageName || stage.stageTitle || `階段${stage.stageOrder || 1}`
+    )
+    const stageRange = stageNames.length > 1 
+      ? `${stageNames[0]}等${stageNames.length}個階段`
+      : stageNames[0]
     
-    // 計算投票中的階段
-    const votingStages = computed(() => {
-      if (!props.project.stages) return []
-      return props.project.stages.filter(stage => stage.status === 'voting')
-    })
+    // 使用最緊急的截止時間
+    const earliestEndTime = Math.min(...activeStages.map(stage => {
+      const endTime = typeof stage.endTime === 'string'
+        ? new Date(stage.endTime).getTime()
+        : stage.endTime
+      return endTime
+    }))
     
-    // 狀態顯示文字
-    const statusDisplayText = computed(() => {
-      const activeStages = stageDisplay.value.activeStages
-      const votingStagesCount = votingStages.value.length
-      
-      // 優先顯示投票中階段信息
-      if (votingStagesCount > 0) {
-        const stageText = votingStagesCount === 1 ? '階段' : '階段'
-        return `有${votingStagesCount}個${stageText}開始投票`
-      }
-      
-      if (activeStages.length === 0) {
-        return '尚未開始'
-      }
-      
-      if (activeStages.length === 1) {
-        // 只有一個進行中階段
-        const currentStage = activeStages[0]
-        const stageName = currentStage.stageName || currentStage.stageTitle || `階段${currentStage.stageOrder || 1}`
-        if (timeRemaining.value.timeLeft <= 0) {
-          return `${stageName} 已截止`
-        }
-        return `${stageName} 剩餘${timeRemaining.value.text}`
-      } else {
-        // 多個進行中階段
-        const stageNames = activeStages.map(stage => 
-          stage.stageName || stage.stageTitle || `階段${stage.stageOrder || 1}`
-        )
-        const stageRange = stageNames.length > 1 
-          ? `${stageNames[0]}等${stageNames.length}個階段`
-          : stageNames[0]
-        
-        // 使用最緊急的截止時間
-        const earliestEndTime = Math.min(...activeStages.map(stage => {
-          const endTime = typeof stage.endTime === 'string'
-            ? new Date(stage.endTime).getTime()
-            : stage.endTime
-          return endTime
-        }))
-        
-        const now = Date.now()
-        const timeLeft = earliestEndTime - now
-        
-        if (timeLeft <= 0) {
-          return `${stageRange} 已截止`
-        }
-        
-        // 計算最緊急的剩餘時間
-        const days = Math.floor(timeLeft / (24 * 60 * 60 * 1000))
-        const hours = Math.floor((timeLeft % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000))
-        const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000))
-        
-        let timeText
-        if (days > 0) {
-          timeText = `${days}天${hours}小時`
-        } else if (hours > 0) {
-          timeText = `${hours}小時${minutes}分鐘`
-        } else {
-          timeText = `${minutes}分鐘`
-        }
-        
-        return `${stageRange} 剩餘${timeText}`
-      }
-    })
+    const now = Date.now()
+    const timeLeft = earliestEndTime - now
     
-    // 判斷階段是否正在進行中
-    const isStageActive = (stage) => {
-      return stageDisplay.value.activeStages.some(activeStage => 
-        activeStage.stageId === stage.stageId
-      )
+    if (timeLeft <= 0) {
+      return `${stageRange} 已截止`
     }
     
-    // 判斷階段是否已完成
-    const isStageCompleted = (stage) => {
-      return stage.status === 'completed' || stage.status === 'archived'
-    }
-
-    // 判斷階段是否尚未開始
-    const isStagePending = (stage) => {
-      return stage.status === 'pending'
-    }
-
-    // 判斷階段是否正在投票中
-    const isStageVoting = (stage) => {
-      return stage.status === 'voting'
+    // 計算最緊急的剩餘時間
+    const days = Math.floor(timeLeft / (24 * 60 * 60 * 1000))
+    const hours = Math.floor((timeLeft % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000))
+    const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000))
+    
+    let timeText
+    if (days > 0) {
+      timeText = `${days}天${hours}小時`
+    } else if (hours > 0) {
+      timeText = `${hours}小時${minutes}分鐘`
+    } else {
+      timeText = `${minutes}分鐘`
     }
     
-    // 判斷是否顯示開始標記（只針對當前階段）
-    const shouldShowStartMarker = computed(() => {
-      // 專案還沒開始 → 顯示「開始」標記，讓 LED 有得停靠
-      if (projectNotStarted.value) return true
-      if (!props.project.stages || stageDisplay.value.activeStages.length === 0) return false
-      
-      // 取得所有階段按順序排列
-      const allStages = [...props.project.stages].sort((a, b) => (a.stageOrder || 0) - (b.stageOrder || 0))
-      if (allStages.length === 0) return false
-      
-      // 檢查當前階段是否是專案的第一個階段
-      const currentStage = stageDisplay.value.currentStage
-      const firstProjectStage = allStages[0]
-      
-      return currentStage && currentStage.stageId === firstProjectStage.stageId
-    })
-    
-    // 判斷是否顯示結束標記
-    const shouldShowEndMarker = computed(() => {
-      // 專案已結束 → 顯示「結束」標記，讓 LED 有得停靠
-      if (projectEnded.value) return true
-      if (!props.project.stages) return false
-      
-      // 取得所有階段按順序排列
-      const allStages = [...props.project.stages].sort((a, b) => (a.stageOrder || 0) - (b.stageOrder || 0))
-      if (allStages.length === 0) return false
-      
-      const lastProjectStage = allStages[allStages.length - 1]
-      const displayStagesList = stageDisplay.value.displayStages || []
-      
-      // 檢查顯示的階段列表中是否包含專案的最後一個階段
-      // 如果包含，就應該顯示結束標記
-      return displayStagesList.some(stage => stage.stageId === lastProjectStage.stageId)
-    })
-    
-    // Note: canManageMembers has been removed and replaced with
-    // project.permissions from Dashboard's projectsWithPermissions computed property
+    return `${stageRange} 剩餘${timeText}`
+  }
+})
 
-    // Compute current group members for avatar display
-    const currentGroupMembers = computed(() => {
-      // Find the first group that the user belongs to (from userGroups)
-      const userGroup = props.project.userGroups?.[0]
-      if (!userGroup || !props.project.groupMembers) {
-        return []
+// 判斷階段是否正在進行中
+const isStageActive = (stage: CardStage) => {
+  return stageDisplay.value.activeStages.some(activeStage => 
+    activeStage.stageId === stage.stageId
+  )
+}
+
+// 判斷階段是否已完成
+const isStageCompleted = (stage: CardStage) => {
+  return stage.status === 'completed' || stage.status === 'archived'
+}
+
+// 判斷階段是否尚未開始
+const isStagePending = (stage: CardStage) => {
+  return stage.status === 'pending'
+}
+
+// 判斷階段是否正在投票中
+const isStageVoting = (stage: CardStage) => {
+  return stage.status === 'voting'
+}
+
+// 判斷是否顯示開始標記（只針對當前階段）
+const shouldShowStartMarker = computed(() => {
+  // 專案還沒開始 → 顯示「開始」標記，讓 LED 有得停靠
+  if (projectNotStarted.value) return true
+  if (!props.project.stages || stageDisplay.value.activeStages.length === 0) return false
+  
+  // 取得所有階段按順序排列
+  const allStages = [...props.project.stages].sort((a, b) => (a.stageOrder || 0) - (b.stageOrder || 0))
+  if (allStages.length === 0) return false
+  
+  // 檢查當前階段是否是專案的第一個階段
+  const currentStage = stageDisplay.value.currentStage
+  const firstProjectStage = allStages[0]
+  
+  return currentStage && currentStage.stageId === firstProjectStage.stageId
+})
+
+// 判斷是否顯示結束標記
+const shouldShowEndMarker = computed(() => {
+  // 專案已結束 → 顯示「結束」標記，讓 LED 有得停靠
+  if (projectEnded.value) return true
+  if (!props.project.stages) return false
+  
+  // 取得所有階段按順序排列
+  const allStages = [...props.project.stages].sort((a, b) => (a.stageOrder || 0) - (b.stageOrder || 0))
+  if (allStages.length === 0) return false
+  
+  const lastProjectStage = allStages[allStages.length - 1]
+  const displayStagesList = stageDisplay.value.displayStages || []
+  
+  // 檢查顯示的階段列表中是否包含專案的最後一個階段
+  // 如果包含，就應該顯示結束標記
+  return displayStagesList.some(stage => stage.stageId === lastProjectStage.stageId)
+})
+
+// Note: canManageMembers has been removed and replaced with
+// project.permissions from Dashboard's projectsWithPermissions computed property
+
+// Compute current group members for avatar display
+const currentGroupMembers = computed(() => {
+  // Find the first group that the user belongs to (from userGroups)
+  const userGroup = props.project.userGroups?.[0]
+  if (!userGroup || !props.project.groupMembers) {
+    return []
+  }
+
+  // Filter members from the same group, including avatar data
+  const groupMembers = props.project.groupMembers.filter(
+    member => member.groupId === userGroup.groupId
+  )
+
+  return groupMembers
+})
+
+// Navigate to wallet with permission-based routing
+const openWalletForUser = (project: T) => {
+  const level = project.permissions?.permissionLevel
+
+  if (level === 'member_in_group' || level === 'group_leader') {
+    // Personal wallet view for group members and leaders
+    router.push({
+      name: 'wallets',
+      params: {
+        projectId: project.projectId,
+        userEmail: props.user?.userEmail ?? ''
       }
-
-      // Filter members from the same group, including avatar data
-      const groupMembers = props.project.groupMembers.filter(
-        member => member.groupId === userGroup.groupId
-      )
-
-      return groupMembers
     })
-
-    // Navigate to wallet with permission-based routing
-    const openWalletForUser = (project) => {
-      const level = project.permissions?.permissionLevel
-
-      if (level === 'member_in_group' || level === 'group_leader') {
-        // Personal wallet view for group members and leaders
-        router.push({
-          name: 'wallets',
-          params: {
-            projectId: project.projectId,
-            userEmail: props.user?.userEmail
-          }
-        })
-      } else {
-        // Project-wide wallet view for observer/teacher/admin
-        router.push({
-          name: 'wallets',
-          params: { projectId: project.projectId }
-        })
-      }
-    }
-
-    return {
-      stageDisplay,
-      displayStages,
-      timeRemaining,
-      statusDisplayText,
-      votingStages,
-      isStageActive,
-      isStageCompleted,
-      isStagePending,
-      isStageVoting,
-      shouldShowStartMarker,
-      shouldShowEndMarker,
-      currentGroupMembers,
-      stageDisplayMode,
-      stageProgressRef,
-      progressNodes,
-      setNodeRef,
-      dueShown,
-      boardBounceY,
-      formatDue,
-      ledLeft,
-      ledVisible,
-      ganttStages,
-      ganttMilestones,
-      handleStageClick,
-      openWalletForUser
-    }
+  } else {
+    // Project-wide wallet view for observer/teacher/admin
+    router.push({
+      name: 'wallets',
+      params: { projectId: project.projectId }
+    })
   }
 }
+
 </script>
 
 <style scoped>
