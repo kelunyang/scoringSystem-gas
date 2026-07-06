@@ -88,7 +88,7 @@ const { addAlert, clearAlerts } = useDrawerAlerts()
 export interface User {
   userId?: string
   userEmail: string
-  displayName?: string
+  displayName?: string | null
   status?: string
 }
 

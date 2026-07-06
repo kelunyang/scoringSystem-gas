@@ -405,7 +405,7 @@
     <!-- Password Reset Drawer (Single user only - batch disabled for security) -->
     <PasswordResetDrawer
       v-model:visible="showPasswordResetDrawer"
-      :user="(selectedUser as any)"
+      :user="selectedUser"
       @confirm="handlePasswordResetConfirm"
     />
 
@@ -619,8 +619,8 @@
     <!-- User Edit Drawer -->
     <UserEditorDrawer
       v-model:visible="showEditUserDrawer"
-      :user="(editingUser as any)"
-      :global-groups="globalGroups as any[]"
+      :user="editingUser"
+      :global-groups="globalGroups"
       :avatar-styles="avatarStyles"
       :background-colors="backgroundColors"
       :clothes-colors="clothesColors"
@@ -634,7 +634,7 @@
     />
   </div>
 </template>
-<script lang="ts">
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch, onErrorCaptured, nextTick, inject, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
@@ -659,7 +659,10 @@ import {
   useRemoveUserFromGlobalGroup
 } from '@/composables/admin/useGlobalGroups'
 import { parseAvatarOptions } from '@/utils/avatar'
-import type { User, GlobalGroup } from '@repo/shared'
+import type { User } from '@repo/shared'
+// 注意：這裡用 admin API 的 GlobalGroup（isActive: boolean、globalPermissions: string[]），
+// 與 entities 的 GlobalGroup（DB 形狀）不同
+import type { GlobalGroup, UserListRequest } from '@repo/shared/types/admin'
 
 // Extended User type for admin display
 // Note: lockReason, lockCount, lockUntil are already in User interface
@@ -668,6 +671,7 @@ interface ExtendedUser extends User {
   failedLoginAttempts?: number
   maliciousLoginDetected?: boolean
   twoFactorEnabled?: boolean
+  lastLoginTime?: number
   globalGroups?: GlobalGroupMembership[]
   projectGroups?: ProjectGroupMembership[]
   tags?: Array<{ tagId: string; tagName: string }>
@@ -720,8 +724,8 @@ interface BatchInviteResult {
 import EmptyState from '@/components/shared/EmptyState.vue'
 import ExpandableTableRow from '@/components/shared/ExpandableTableRow.vue'
 import ResponsiveTableHeader from '@/components/shared/ResponsiveTableHeader.vue'
-import UserActivityHeatmap from '@/components/charts/UserActivityHeatmap.vue'
-import UserActivityDetail from '@/components/shared/UserActivityDetail.vue'
+import UserActivityHeatmap, { type DayClickPayload } from '@/components/charts/UserActivityHeatmap.vue'
+import UserActivityDetail, { type Event as ActivityEvent } from '@/components/shared/UserActivityDetail.vue'
 import InvitationManagementDrawer from './user/InvitationManagementDrawer.vue'
 import UserEditorDrawer, { type User as DrawerUser } from './user/UserEditorDrawer.vue'
 import PasswordResetDrawer from './user/PasswordResetDrawer.vue'
@@ -729,2579 +733,2361 @@ import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 
-export default {
-  name: 'UserManagement',
-  components: {
-    ExpandableTableRow,
-    ResponsiveTableHeader,
-    UserActivityHeatmap,
-    UserActivityDetail,
-    InvitationManagementDrawer,
-    UserEditorDrawer,
-    PasswordResetDrawer,
-    EmptyState,
-    AdminFilterToolbar,
-    AnimatedStatistic,
-    ConfirmationInput
+const route = useRoute()
+const router = useRouter()
+
+// Permission checks
+const { hasAnyPermission } = usePermissions()
+
+// Authentication state (Vue 3 Best Practice)
+const { userEmail } = useAuth()
+
+const canManageUsers = computed(() =>
+  hasAnyPermission(['manage_users', 'system_admin'])
+)
+const canManageInvites = computed(() =>
+  hasAnyPermission(['generate_invites', 'system_admin'])
+)
+// Error handler
+onErrorCaptured((err, instance, info) => {
+  console.error('=== Error in UserManagement ===')
+  console.error('Error:', err)
+  console.error('Message:', err.message)
+  console.error('Stack:', err.stack)
+  console.error('Info:', info)
+  return false
+})
+
+// Register refresh function with parent SystemAdmin
+const registerRefresh = inject<(fn: (() => void) | null) => void>('registerRefresh', () => {})
+
+// Register action function with parent SystemAdmin
+const registerAction = inject<(fn: (() => void) | null) => void>('registerAction', () => {})
+
+// ============================================================================
+// TanStack Query Mutations
+// ============================================================================
+const updateUserStatusMutation = useUpdateUserStatus()
+const batchUpdateUserStatusMutation = useBatchUpdateUserStatus()
+const resetPasswordMutation = useResetPassword()
+const unlockUserMutation = useUnlockUser()
+const updateUserProfileMutation = useUpdateUserProfile()
+const addUserToGroupMutation = useAddUserToGlobalGroup()
+const removeUserFromGroupMutation = useRemoveUserFromGlobalGroup()
+
+const users = ref<ExtendedUser[]>([])
+
+// 🆕 Pagination state for lazy loading
+const BATCH_SIZE = 50
+const totalCount = ref<number>(0)
+const currentOffset = ref<number>(0)
+const hasMore = computed(() => users.value.length < totalCount.value)
+
+// 過濾器持久化
+const { filters, resetFilters, isLoaded } = useFilterPersistence('userManagement', {
+  searchText: '',
+  statusFilter: '' as '' | 'active' | 'inactive',
+  groupFilter: [] as string[]
+})
+
+// 為了向後兼容，保留原有的 ref (指向 filters 中的值)
+const searchText = computed({
+  get: () => filters.value.searchText,
+  set: (val) => { filters.value.searchText = val }
+})
+const statusFilter = computed({
+  get: () => filters.value.statusFilter,
+  set: (val) => { filters.value.statusFilter = val }
+})
+const groupFilter = computed({
+  get: () => filters.value.groupFilter || [],
+  set: (val) => { filters.value.groupFilter = val }
+})
+
+// 計算啟用的過濾器數量
+const activeFilterCount = computed(() => {
+  let count = 0
+  if (filters.value.searchText && filters.value.searchText.trim() !== '') count++
+  if (filters.value.statusFilter) count++
+  if (filters.value.groupFilter && filters.value.groupFilter.length > 0) count++
+  return count
+})
+
+// 重置過濾器（包含用戶回饋）
+const handleResetFilters = (): void => {
+  resetFilters()
+  ElMessage.success('已清除所有過濾條件')
+}
+
+const showInviteDrawer = ref(false)
+
+// Password Reset Drawer state (single user only)
+const showPasswordResetDrawer = ref(false)
+
+// DISABLED: const showTagManagementModal = ref(false) - tags system disabled
+const selectedUser = ref<ExtendedUser | null>(null)
+const generating = ref(false)
+const generatedInvite = ref<BatchInviteResult | null>(null)
+const loading = ref(false)
+const invitationsLoading = ref(false)
+const processingStatus = ref('')
+
+// Invitation management - 必須在 computed 之前定義
+const invitations = ref<Invitation[]>([])
+const inviteSearchText = ref('')
+const inviteStatusFilter = ref('')
+const showDeactivatedInvitations = ref(false)
+const inviteCollapse = ref<string[]>([]) // Control collapse state
+const resendingInvites = ref<Set<string>>(new Set()) // Track which invitations are being resent
+
+// DISABLED: Tag management - tags system disabled
+// const allTags = ref([])
+// const tagSearchText = ref('')
+// const filteredTagSearchText = ref('') // 實際用於過濾的搜尋文字
+
+// User editing
+const showEditUserDrawer = ref(false)
+const editingUser = ref<ExtendedUser | null>(null)
+const originalUser = ref<ExtendedUser | null>(null)
+// DISABLED: const selectedTagsToAdd = ref([]) - tags system disabled
+const selectedGroupsToAdd = ref<string[]>([])
+const userGlobalGroups = ref<GlobalGroupMembership[]>([])
+const saving = ref(false)
+const loadingUserData = ref(false)
+
+// User activity statistics (for expansion) - using useExpandable composable
+const selectedDate = ref<Date | null>(null)
+const selectedDayEvents = ref<ActivityEvent[]>([])
+const selectedUserEmail = ref<string | null>(null)
+
+// Use expandable composable for user expansion management
+const {
+  expandedIds: expandedUserEmails,
+  isExpanded: isUserExpanded,
+  collapseAll: collapseAllUsers
+} = useExpandable({ singleMode: true })
+
+// Avatar management
+const regeneratingAvatar = ref(false)
+const avatarError = ref(false)
+const currentAvatarOptions = ref<Record<string, unknown>>({})
+
+// Editing user avatar management
+const regeneratingEditingUserAvatar = ref(false)
+const editingUserAvatarError = ref(false)
+const editingUserAvatarChanged = ref(false)
+const editingUserAvatarOptions = ref<Record<string, string>>({
+  backgroundColor: 'b6e3f4',
+  clothesColor: '3c4858',
+  skinColor: 'ae5d29'
+})
+const savingEditingUser = ref(false)
+
+// ✨ Avatar error handling state
+interface VerifiedAvatarConfig {
+  seed: string
+  style: string
+  options: Record<string, string>
+}
+const verifiedConfigs = ref<VerifiedAvatarConfig[]>([])
+const retryCount = ref(0)
+const isRetrying = ref(false)
+const isInFallbackMode = ref(false)
+const maxRetries = 3
+
+// Global groups management
+const globalGroups = ref<GlobalGroup[]>([])
+const selectedGlobalGroupToAdd = ref('')
+
+// Project groups management
+const userProjectGroups = ref<ProjectGroupMembership[]>([])
+const loadingUserProjectGroups = ref(false)
+const updatingGroupSettings = ref<Set<string>>(new Set())
+const removingFromGroups = ref<Set<string>>(new Set())
+
+// Batch operations management
+const selectedUserEmails = ref<Set<string>>(new Set())
+const batchUpdatingStatus = ref(false)
+
+// Unlock user management
+const showUnlockDrawer = ref(false)
+const unlockingUser = ref<ExtendedUser | null>(null)
+const unlockReason = ref('')
+const unlockConfirmText = ref('')
+const resetLockCount = ref(false)
+const unlocking = ref(false)
+
+// Old teacher privilege management - replaced by comprehensive permissions
+
+const avatarStyles = [
+  { value: 'avataaars', label: '卡通風格' },
+  { value: 'bottts', label: '機器人' },
+  { value: 'identicon', label: '幾何圖形' },
+  { value: 'initials', label: '首字母' },
+  { value: 'personas', label: '人物風格' },
+  { value: 'pixel-art', label: '像素風格' }
+]
+
+const backgroundColors = [
+  { value: 'b6e3f4', label: '淺藍色' },
+  { value: 'c0aede', label: '淺紫色' },
+  { value: 'd1d4f9', label: '淺靛色' },
+  { value: 'ffd93d', label: '黃色' },
+  { value: '6bcf7f', label: '綠色' },
+  { value: 'ffb3ba', label: '粉色' },
+  { value: 'ffdfba', label: '橘色' },
+  { value: 'bae1ff', label: '天藍色' }
+]
+
+const clothesColors = [
+  { value: '3c4858', label: '深藍色' },
+  { value: 'e74c3c', label: '紅色' },
+  { value: '2ecc71', label: '綠色' },
+  { value: 'f1c40f', label: '黃色' },
+  { value: '9b59b6', label: '紫色' },
+  { value: 'ecf0f1', label: '白色' },
+  { value: '34495e', label: '深灰色' },
+  { value: 'e67e22', label: '橘色' }
+]
+
+// Available global permissions (for display purposes)
+const availablePermissions = [
+  { 
+    code: 'create_project', 
+    name: '建立專案', 
+    description: '可以建立新的專案',
+    icon: 'fas fa-plus-circle'
   },
-  setup() {
-    const route = useRoute()
-    const router = useRouter()
+  { 
+    code: 'system_admin', 
+    name: '系統管理員', 
+    description: '完整的系統管理權限',
+    icon: 'fas fa-cogs'
+  },
+  { 
+    code: 'manage_users', 
+    name: '使用者管理', 
+    description: '管理使用者帳號和權限',
+    icon: 'fas fa-users'
+  },
+  { 
+    code: 'generate_invites', 
+    name: '產生邀請碼', 
+    description: '生成新的邀請碼',
+    icon: 'fas fa-envelope'
+  },
+  { 
+    code: 'view_system_logs', 
+    name: '查看系統日誌', 
+    description: '查看系統操作記錄',
+    icon: 'fas fa-list-alt'
+  },
+  {
+    code: 'manage_global_groups',
+    name: '管理全域群組',
+    description: '建立和管理全域群組',
+    icon: 'fas fa-layer-group'
+  }
+  // DISABLED: manage_tags permission - tags system disabled
+  /*
+  {
+    code: 'manage_tags',
+    name: '管理標籤',
+    description: '建立和管理標籤系統',
+    icon: 'fas fa-tags'
+  }
+  */
+]
 
-    // Permission checks
-    const { hasAnyPermission } = usePermissions()
+const inviteForm = reactive({
+  targetEmails: '',
+  validDays: 7,
+  // DISABLED: defaultTags: [], // Array of tag IDs to assign to new users - tags system disabled
+  defaultGlobalGroups: [] as string[] // Array of global group IDs to assign to new users
+})
 
-    // Authentication state (Vue 3 Best Practice)
-    const { userEmail } = useAuth()
-
-    const canManageUsers = computed(() =>
-      hasAnyPermission(['manage_users', 'system_admin'])
-    )
-    const canManageInvites = computed(() =>
-      hasAnyPermission(['generate_invites', 'system_admin'])
-    )
-    // Error handler
-    onErrorCaptured((err, instance, info) => {
-      console.error('=== Error in UserManagement ===')
-      console.error('Error:', err)
-      console.error('Message:', err.message)
-      console.error('Stack:', err.stack)
-      console.error('Info:', info)
-      return false
-    })
-
-    // Register refresh function with parent SystemAdmin
-    const registerRefresh = inject<(fn: (() => void) | null) => void>('registerRefresh', () => {})
-
-    // Register action function with parent SystemAdmin
-    const registerAction = inject<(fn: (() => void) | null) => void>('registerAction', () => {})
-
-    // ============================================================================
-    // TanStack Query Mutations
-    // ============================================================================
-    const updateUserStatusMutation = useUpdateUserStatus()
-    const batchUpdateUserStatusMutation = useBatchUpdateUserStatus()
-    const resetPasswordMutation = useResetPassword()
-    const unlockUserMutation = useUnlockUser()
-    const updateUserProfileMutation = useUpdateUserProfile()
-    const addUserToGroupMutation = useAddUserToGlobalGroup()
-    const removeUserFromGroupMutation = useRemoveUserFromGlobalGroup()
-
-    const users = ref<ExtendedUser[]>([])
-
-    // 🆕 Pagination state for lazy loading
-    const BATCH_SIZE = 50
-    const totalCount = ref<number>(0)
-    const currentOffset = ref<number>(0)
-    const hasMore = computed(() => users.value.length < totalCount.value)
-
-    // 過濾器持久化
-    const { filters, resetFilters, isLoaded } = useFilterPersistence('userManagement', {
-      searchText: '',
-      statusFilter: '',
-      groupFilter: [] as string[]
-    })
-
-    // 為了向後兼容，保留原有的 ref (指向 filters 中的值)
-    const searchText = computed({
-      get: () => filters.value.searchText,
-      set: (val) => { filters.value.searchText = val }
-    })
-    const statusFilter = computed({
-      get: () => filters.value.statusFilter,
-      set: (val) => { filters.value.statusFilter = val }
-    })
-    const groupFilter = computed({
-      get: () => filters.value.groupFilter || [],
-      set: (val) => { filters.value.groupFilter = val }
-    })
-
-    // 計算啟用的過濾器數量
-    const activeFilterCount = computed(() => {
-      let count = 0
-      if (filters.value.searchText && filters.value.searchText.trim() !== '') count++
-      if (filters.value.statusFilter && filters.value.statusFilter !== '') count++
-      if (filters.value.groupFilter && filters.value.groupFilter.length > 0) count++
-      return count
-    })
-
-    // 重置過濾器（包含用戶回饋）
-    const handleResetFilters = (): void => {
-      resetFilters()
-      ElMessage.success('已清除所有過濾條件')
+// 使用 computed 來計算統計數據
+const stats = computed(() => {
+  try {
+    const usersArray = users.value || []
+    const result = {
+      totalUsers: usersArray.length,
+      activeUsers: usersArray.filter(u => u.status === 'active').length,
+      inactiveUsers: usersArray.filter(u => u.status === 'disabled').length
     }
+    console.log('Stats computed:', result)
+    return result
+  } catch (error) {
+    console.error('Error in stats computed:', error)
+    return {
+      totalUsers: 0,
+      activeUsers: 0,
+      inactiveUsers: 0
+    }
+  }
+})
 
-    const showInviteDrawer = ref(false)
+// <i class="fas fa-check-circle text-success"></i> Server-side filtering - no more client-side computed filtering
+const filteredUsers = computed(() => users.value || [])
 
-    // Password Reset Drawer state (single user only)
-    const showPasswordResetDrawer = ref(false)
-
-    // DISABLED: const showTagManagementModal = ref(false) - tags system disabled
-    const selectedUser = ref<ExtendedUser | null>(null)
-    const generating = ref(false)
-    const generatedInvite = ref<BatchInviteResult | null>(null)
-    const loading = ref(false)
-    const invitationsLoading = ref(false)
-    const processingStatus = ref('')
-
-    // Invitation management - 必須在 computed 之前定義
-    const invitations = ref<Invitation[]>([])
-    const inviteSearchText = ref('')
-    const inviteStatusFilter = ref('')
-    const showDeactivatedInvitations = ref(false)
-    const inviteCollapse = ref<string[]>([]) // Control collapse state
-    const resendingInvites = ref<Set<string>>(new Set()) // Track which invitations are being resent
-    
-    // DISABLED: Tag management - tags system disabled
-    // const allTags = ref([])
-    // const tagSearchText = ref('')
-    // const filteredTagSearchText = ref('') // 實際用於過濾的搜尋文字
-    
-    // User editing
-    const showEditUserDrawer = ref(false)
-    const editingUser = ref<ExtendedUser | null>(null)
-    const originalUser = ref<ExtendedUser | null>(null)
-    // DISABLED: const selectedTagsToAdd = ref([]) - tags system disabled
-    const selectedGroupsToAdd = ref<string[]>([])
-    const userGlobalGroups = ref<GlobalGroupMembership[]>([])
-    const saving = ref(false)
-    const loadingUserData = ref(false)
-
-    // User activity statistics (for expansion) - using useExpandable composable
-    const selectedDate = ref<Date | null>(null)
-    const selectedDayEvents = ref<any[]>([])
-    const selectedUserEmail = ref<string | null>(null)
-
-    // Use expandable composable for user expansion management
-    const {
-      expandedIds: expandedUserEmails,
-      isExpanded: isUserExpanded,
-      collapseAll: collapseAllUsers
-    } = useExpandable({ singleMode: true })
-    
-    // Avatar management
-    const regeneratingAvatar = ref(false)
-    const avatarError = ref(false)
-    const currentAvatarOptions = ref({})
-    
-    // Editing user avatar management
-    const regeneratingEditingUserAvatar = ref(false)
-    const editingUserAvatarError = ref(false)
-    const editingUserAvatarChanged = ref(false)
-    const editingUserAvatarOptions = ref<Record<string, string>>({
-      backgroundColor: 'b6e3f4',
-      clothesColor: '3c4858',
-      skinColor: 'ae5d29'
-    })
-    const savingEditingUser = ref(false)
-
-    // ✨ Avatar error handling state
-    const verifiedConfigs = ref<any[]>([])
-    const retryCount = ref(0)
-    const isRetrying = ref(false)
-    const isInFallbackMode = ref(false)
-    const maxRetries = 3
-
-    // Global groups management
-    const globalGroups = ref<GlobalGroup[]>([])
-    const selectedGlobalGroupToAdd = ref('')
-
-    // Project groups management
-    const userProjectGroups = ref<ProjectGroupMembership[]>([])
-    const loadingUserProjectGroups = ref(false)
-    const updatingGroupSettings = ref<Set<string>>(new Set())
-    const removingFromGroups = ref<Set<string>>(new Set())
-
-    // Batch operations management
-    const selectedUserEmails = ref<Set<string>>(new Set())
-    const batchUpdatingStatus = ref(false)
-
-    // Unlock user management
-    const showUnlockDrawer = ref(false)
-    const unlockingUser = ref<ExtendedUser | null>(null)
-    const unlockReason = ref('')
-    const unlockConfirmText = ref('')
-    const resetLockCount = ref(false)
-    const unlocking = ref(false)
-
-    // Old teacher privilege management - replaced by comprehensive permissions
-
-    const avatarStyles = [
-      { value: 'avataaars', label: '卡通風格' },
-      { value: 'bottts', label: '機器人' },
-      { value: 'identicon', label: '幾何圖形' },
-      { value: 'initials', label: '首字母' },
-      { value: 'personas', label: '人物風格' },
-      { value: 'pixel-art', label: '像素風格' }
+// 匯出配置
+const exportConfig = computed(() => ({
+  data: filteredUsers.value,
+  filename: '用戶列表',
+  headers: ['Email', '顯示名稱', '狀態', '註冊時間', '最後登入時間'],
+  // AdminFilterToolbar 的 exportRowMapper 介面是 Record<string, unknown>
+  rowMapper: (row: Record<string, unknown>) => {
+    const user = row as unknown as ExtendedUser
+    return [
+      user.userEmail,
+      user.displayName ?? '',
+      user.status === 'active' ? '活躍' : '停用',
+      user.registrationTime ? new Date(user.registrationTime).toLocaleString('zh-TW') : '-',
+      user.lastLoginTime ? new Date(user.lastLoginTime).toLocaleString('zh-TW') : '-'
     ]
-    
-    const backgroundColors = [
-      { value: 'b6e3f4', label: '淺藍色' },
-      { value: 'c0aede', label: '淺紫色' },
-      { value: 'd1d4f9', label: '淺靛色' },
-      { value: 'ffd93d', label: '黃色' },
-      { value: '6bcf7f', label: '綠色' },
-      { value: 'ffb3ba', label: '粉色' },
-      { value: 'ffdfba', label: '橘色' },
-      { value: 'bae1ff', label: '天藍色' }
-    ]
-    
-    const clothesColors = [
-      { value: '3c4858', label: '深藍色' },
-      { value: 'e74c3c', label: '紅色' },
-      { value: '2ecc71', label: '綠色' },
-      { value: 'f1c40f', label: '黃色' },
-      { value: '9b59b6', label: '紫色' },
-      { value: 'ecf0f1', label: '白色' },
-      { value: '34495e', label: '深灰色' },
-      { value: 'e67e22', label: '橘色' }
-    ]
+  }
+}))
 
-    // Available global permissions (for display purposes)
-    const availablePermissions = [
-      { 
-        code: 'create_project', 
-        name: '建立專案', 
-        description: '可以建立新的專案',
-        icon: 'fas fa-plus-circle'
-      },
-      { 
-        code: 'system_admin', 
-        name: '系統管理員', 
-        description: '完整的系統管理權限',
-        icon: 'fas fa-cogs'
-      },
-      { 
-        code: 'manage_users', 
-        name: '使用者管理', 
-        description: '管理使用者帳號和權限',
-        icon: 'fas fa-users'
-      },
-      { 
-        code: 'generate_invites', 
-        name: '產生邀請碼', 
-        description: '生成新的邀請碼',
-        icon: 'fas fa-envelope'
-      },
-      { 
-        code: 'view_system_logs', 
-        name: '查看系統日誌', 
-        description: '查看系統操作記錄',
-        icon: 'fas fa-list-alt'
-      },
-      {
-        code: 'manage_global_groups',
-        name: '管理全域群組',
-        description: '建立和管理全域群組',
-        icon: 'fas fa-layer-group'
-      }
-      // DISABLED: manage_tags permission - tags system disabled
-      /*
-      {
-        code: 'manage_tags',
-        name: '管理標籤',
-        description: '建立和管理標籤系統',
-        icon: 'fas fa-tags'
-      }
-      */
-    ]
+// Batch selection computed properties
+const showBatchActions = computed(() => selectedUserEmails.value.size > 0)
 
-    const inviteForm = reactive({
-      targetEmails: '',
-      validDays: 7,
-      // DISABLED: defaultTags: [], // Array of tag IDs to assign to new users - tags system disabled
-      defaultGlobalGroups: [] as string[] // Array of global group IDs to assign to new users
-    })
+const isAllSelected = computed(() => {
+  return filteredUsers.value.length > 0 &&
+    filteredUsers.value.every(user => selectedUserEmails.value.has(user.userEmail))
+})
 
-    // 使用 computed 來計算統計數據
-    const stats = computed(() => {
-      try {
-        const usersArray = users.value || []
-        const result = {
-          totalUsers: usersArray.length,
-          activeUsers: usersArray.filter(u => u.status === 'active').length,
-          inactiveUsers: usersArray.filter(u => u.status === 'disabled').length
-        }
-        console.log('Stats computed:', result)
-        return result
-      } catch (error) {
-        console.error('Error in stats computed:', error)
-        return {
-          totalUsers: 0,
-          activeUsers: 0,
-          inactiveUsers: 0
-        }
-      }
-    })
+const isSomeSelected = computed(() => {
+  return selectedUserEmails.value.size > 0 && !isAllSelected.value
+})
 
-    // <i class="fas fa-check-circle text-success"></i> Server-side filtering - no more client-side computed filtering
-    const filteredUsers = computed(() => users.value || [])
+const canConfirmUnlock = computed(() => {
+  return unlockConfirmText.value.toUpperCase() === 'UNLOCK' &&
+    unlockReason.value.length >= 10
+})
 
-    // 匯出配置
-    const exportConfig = computed(() => ({
-      data: filteredUsers.value,
-      filename: '用戶列表',
-      headers: ['Email', '顯示名稱', '狀態', '註冊時間', '最後登入時間'],
-      rowMapper: (user: any) => [
-        user.userEmail,
-        user.displayName,
-        user.status === 'active' ? '活躍' : '停用',
-        user.registrationTime ? new Date(user.registrationTime).toLocaleString('zh-TW') : '-',
-        user.lastLoginTime ? new Date(user.lastLoginTime).toLocaleString('zh-TW') : '-'
-      ]
-    }))
+// Invitation management computed properties
+const filteredInvitations = computed(() => {
+  let filtered = invitations.value || []
 
-    // Batch selection computed properties
-    const showBatchActions = computed(() => selectedUserEmails.value.size > 0)
+  // 根據開關決定是否顯示停用的邀請碼
+  if (!showDeactivatedInvitations.value) {
+    filtered = filtered.filter(invite => 
+      invite.status !== 'deactivated'
+    )
+  }
 
-    const isAllSelected = computed(() => {
-      return filteredUsers.value.length > 0 &&
-        filteredUsers.value.every(user => selectedUserEmails.value.has(user.userEmail))
-    })
+  if (inviteSearchText.value) {
+    const search = inviteSearchText.value.toLowerCase()
+    filtered = filtered.filter(invite => 
+      (invite.targetEmail && invite.targetEmail.toLowerCase().includes(search)) ||
+      invite.createdBy.toLowerCase().includes(search)
+    )
+  }
 
-    const isSomeSelected = computed(() => {
-      return selectedUserEmails.value.size > 0 && !isAllSelected.value
-    })
-
-    const canConfirmUnlock = computed(() => {
-      return unlockConfirmText.value.toUpperCase() === 'UNLOCK' &&
-        unlockReason.value.length >= 10
-    })
-
-    // Invitation management computed properties
-    const filteredInvitations = computed(() => {
-      let filtered = invitations.value || []
-
-      // 根據開關決定是否顯示停用的邀請碼
-      if (!showDeactivatedInvitations.value) {
-        filtered = filtered.filter(invite => 
-          invite.status !== 'deactivated'
-        )
-      }
-
-      if (inviteSearchText.value) {
-        const search = inviteSearchText.value.toLowerCase()
-        filtered = filtered.filter(invite => 
-          (invite.targetEmail && invite.targetEmail.toLowerCase().includes(search)) ||
-          invite.createdBy.toLowerCase().includes(search)
-        )
-      }
-
-      if (inviteStatusFilter.value) {
-        filtered = filtered.filter(invite => {
-          const now = Date.now()
-          if (inviteStatusFilter.value === 'active') {
-            return invite.status === 'active' && invite.expiryTime > now
-          } else if (inviteStatusFilter.value === 'expired') {
-            return invite.expiryTime <= now
-          } else if (inviteStatusFilter.value === 'used') {
-            return invite.status === 'used'
-          } else if (inviteStatusFilter.value === 'deactivated') {
-            return invite.status === 'deactivated'
-          }
-          return true
-        })
-      }
-
-      return filtered.sort((a, b) => b.createdTime - a.createdTime)
-    })
-
-    const invitationStats = computed(() => {
+  if (inviteStatusFilter.value) {
+    filtered = filtered.filter(invite => {
       const now = Date.now()
-      const inviteList = invitations.value || []
-      return {
-        total: inviteList.length,
-        active: inviteList.filter(i => i.status === 'active' && i.expiryTime > now).length,
-        expired: inviteList.filter(i => i.expiryTime <= now).length,
-        used: inviteList.filter(i => i.status === 'used').length,
-        deactivated: inviteList.filter(i => i.status === 'deactivated').length
+      if (inviteStatusFilter.value === 'active') {
+        return invite.status === 'active' && invite.expiryTime > now
+      } else if (inviteStatusFilter.value === 'expired') {
+        return invite.expiryTime <= now
+      } else if (inviteStatusFilter.value === 'used') {
+        return invite.status === 'used'
+      } else if (inviteStatusFilter.value === 'deactivated') {
+        return invite.status === 'deactivated'
       }
+      return true
     })
-    
-    // DISABLED: availableTagsForUser - tags system disabled
-    /*
-    const availableTagsForUser = computed(() => {
-      try {
-        if (!selectedUser.value) return []
+  }
 
-        const userTagIds = (selectedUser.value.tags || []).map(t => t && t.tagId).filter(Boolean)
-        let filtered = (allTags.value || []).filter(tag => tag && tag.tagId && !userTagIds.includes(tag.tagId))
+  return filtered.sort((a, b) => b.createdTime - a.createdTime)
+})
 
-        if (filteredTagSearchText.value) {
-          const search = filteredTagSearchText.value.toLowerCase()
-          filtered = filtered.filter(tag =>
-            tag && tag.tagName && tag.tagName.toLowerCase().includes(search) ||
-            (tag && tag.description && tag.description.toLowerCase().includes(search))
-          )
-        }
+const invitationStats = computed(() => {
+  const now = Date.now()
+  const inviteList = invitations.value || []
+  return {
+    total: inviteList.length,
+    active: inviteList.filter(i => i.status === 'active' && i.expiryTime > now).length,
+    expired: inviteList.filter(i => i.expiryTime <= now).length,
+    used: inviteList.filter(i => i.status === 'used').length,
+    deactivated: inviteList.filter(i => i.status === 'deactivated').length
+  }
+})
 
-        return filtered || []
-      } catch (error) {
-        console.error('Error in availableTagsForUser computed:', error)
-        return []
-      }
-    })
-    */
+// DISABLED: availableTagsForUser - tags system disabled
+/*
+const availableTagsForUser = computed(() => {
+  try {
+    if (!selectedUser.value) return []
 
-    // DISABLED: availableTagsForEditingUser - tags system disabled
-    /*
-    const availableTagsForEditingUser = computed(() => {
-      try {
-        if (!editingUser.value) return []
+    const userTagIds = (selectedUser.value.tags || []).map(t => t && t.tagId).filter(Boolean)
+    let filtered = (allTags.value || []).filter(tag => tag && tag.tagId && !userTagIds.includes(tag.tagId))
 
-        const userTagIds = (editingUser.value.tags || []).map(t => t && t.tagId).filter(Boolean)
-        return (allTags.value || []).filter(tag =>
-          tag && tag.isActive && tag.tagId && !userTagIds.includes(tag.tagId)
-        ) || []
-      } catch (error) {
-        console.error('Error in availableTagsForEditingUser computed:', error)
-        return []
-      }
-    })
-    */
-    
-    // Compute user's global permissions based on group memberships
-    const userGlobalPermissions = computed(() => {
-      try {
-        if (!editingUser.value || !editingUser.value.globalGroups) return []
-        
-        const userPermissions = new Set()
-        
-        // Iterate through user's global groups
-        editingUser.value.globalGroups.forEach(group => {
-          if (group.globalPermissions) {
-            try {
-              const permissions = typeof group.globalPermissions === 'string' 
-                ? JSON.parse(group.globalPermissions) 
-                : group.globalPermissions
-              
-              if (Array.isArray(permissions)) {
-                permissions.forEach(permissionCode => {
-                  userPermissions.add(permissionCode)
-                })
-              }
-            } catch (error) {
-              console.error('Error parsing group permissions:', error)
-            }
-          }
-        })
-        
-        // Map permission codes to display objects
-        return availablePermissions.filter(permission => 
-          userPermissions.has(permission.code)
-        )
-      } catch (error) {
-        console.error('Error computing user global permissions:', error)
-        return []
-      }
-    })
-
-    const availableGlobalGroups = computed(() => {
-      if (!editingUser.value) return []
-      const userGroupIds = (editingUser.value.globalGroups || []).map(g => g.groupId)
-      return (globalGroups.value || []).filter(group => 
-        !userGroupIds.includes(group.groupId)
+    if (filteredTagSearchText.value) {
+      const search = filteredTagSearchText.value.toLowerCase()
+      filtered = filtered.filter(tag =>
+        tag && tag.tagName && tag.tagName.toLowerCase().includes(search) ||
+        (tag && tag.description && tag.description.toLowerCase().includes(search))
       )
-    })
+    }
+
+    return filtered || []
+  } catch (error) {
+    console.error('Error in availableTagsForUser computed:', error)
+    return []
+  }
+})
+*/
+
+// DISABLED: availableTagsForEditingUser - tags system disabled
+/*
+const availableTagsForEditingUser = computed(() => {
+  try {
+    if (!editingUser.value) return []
+
+    const userTagIds = (editingUser.value.tags || []).map(t => t && t.tagId).filter(Boolean)
+    return (allTags.value || []).filter(tag =>
+      tag && tag.isActive && tag.tagId && !userTagIds.includes(tag.tagId)
+    ) || []
+  } catch (error) {
+    console.error('Error in availableTagsForEditingUser computed:', error)
+    return []
+  }
+})
+*/
+
+// Compute user's global permissions based on group memberships
+const userGlobalPermissions = computed(() => {
+  try {
+    if (!editingUser.value || !editingUser.value.globalGroups) return []
     
-    // Current avatar URL (shows the actual current avatar)
-    const currentAvatarUrl = computed(() => {
-      if (avatarError.value || !originalUser.value) {
-        return generateInitialsAvatar(originalUser.value)
-      }
-      
-      const seed = originalUser.value.avatarSeed || `${originalUser.value.userEmail}_${Date.now()}`
-      const style = originalUser.value.avatarStyle || 'avataaars'
-      
-      // Parse avatarOptions from original user data
-      let options = {}
-      if (originalUser.value.avatarOptions) {
-        if (typeof originalUser.value.avatarOptions === 'string') {
-          try {
-            options = JSON.parse(originalUser.value.avatarOptions)
-          } catch (e) {
-            console.warn('Failed to parse avatarOptions:', e)
-            options = {}
-          }
-        } else {
-          options = originalUser.value.avatarOptions
-        }
-      }
-      
-      return generateDicebearUrl(seed, style, options)
-    })
+    const userPermissions = new Set()
     
-    // Preview avatar URL (shows changes)
-    const previewAvatarUrl = computed(() => {
-      if (avatarError.value || !editingUser.value) {
-        return generateInitialsAvatar(editingUser.value)
-      }
-      
-      const seed = editingUser.value.avatarSeed || `${editingUser.value.userEmail}_${Date.now()}`
-      const style = editingUser.value.avatarStyle || 'avataaars'
-      
-      // Parse avatarOptions from string if needed (consistent with UserSettings)
-      let options = {}
-      if (editingUser.value.avatarOptions) {
-        if (typeof editingUser.value.avatarOptions === 'string') {
-          try {
-            options = JSON.parse(editingUser.value.avatarOptions)
-          } catch (e) {
-            console.warn('Failed to parse avatarOptions:', e)
-            options = {}
-          }
-        } else {
-          options = editingUser.value.avatarOptions
-        }
-      }
-      
-      // Use currentAvatarOptions for any runtime changes
-      const mergedOptions = { ...options, ...currentAvatarOptions.value }
-      
-      return generateDicebearUrl(seed, style, mergedOptions)
-    })
-    
-    // Check if there are avatar changes
-    const hasAvatarChanges = computed(() => {
-      if (!originalUser.value || !editingUser.value) return false
-      
-      return (
-        originalUser.value.avatarStyle !== editingUser.value.avatarStyle ||
-        originalUser.value.avatarSeed !== editingUser.value.avatarSeed ||
-        JSON.stringify(originalUser.value.avatarOptions) !== JSON.stringify(editingUser.value.avatarOptions) ||
-        Object.keys(currentAvatarOptions.value).length > 0
-      )
-    })
-    
-    // Editing user avatar URL
-    const editingUserAvatarUrl = computed(() => {
-      if (isInFallbackMode.value || !editingUser.value) {
-        return generateInitialsAvatar(editingUser.value)
-      }
-
-      const seed = editingUser.value.avatarSeed || `${editingUser.value.userEmail}_${Date.now()}`
-      const style = editingUser.value.avatarStyle || 'avataaars'
-
-      // Use editingUserAvatarOptions for current changes
-      return generateDicebearUrl(seed, style, editingUserAvatarOptions.value)
-    })
-    
-    // Check if there are any changes to save
-    const hasUserChanges = computed(() => {
-      if (!originalUser.value || !editingUser.value) return false
-
-      // Check basic fields
-      if (originalUser.value.displayName !== editingUser.value.displayName ||
-          originalUser.value.status !== editingUser.value.status ||
-          editingUserAvatarChanged.value) {
-        return true
-      }
-
-      // Check if tags have changed
-      const originalTagIds = (originalUser.value.tags || []).map(t => t.tagId).sort()
-      const currentTagIds = (editingUser.value.tags || []).map(t => t.tagId).sort()
-
-      if (originalTagIds.length !== currentTagIds.length) {
-        return true
-      }
-
-      for (let i = 0; i < originalTagIds.length; i++) {
-        if (originalTagIds[i] !== currentTagIds[i]) {
-          return true
-        }
-      }
-
-      // Check if global groups have changed
-      const originalGroupIds = (originalUser.value.globalGroups || []).map(g => g.groupId).sort()
-      const currentGroupIds = (editingUser.value.globalGroups || []).map(g => g.groupId).sort()
-
-      if (originalGroupIds.length !== currentGroupIds.length) {
-        return true
-      }
-
-      for (let i = 0; i < originalGroupIds.length; i++) {
-        if (originalGroupIds[i] !== currentGroupIds[i]) {
-          return true
-        }
-      }
-
-      return false
-    })
-
-    const formatTime = (timestamp: number | null | undefined): string | null => {
-      if (!timestamp) return null
-      return new Date(timestamp).toLocaleString('zh-TW')
-    }
-
-    // Check if user is locked
-    const isUserLocked = (user: ExtendedUser | null): boolean => {
-      if (!user) return false
-      const now = Date.now()
-      // Check temporary lock
-      const isTemporarilyLocked = user.lockUntil && user.lockUntil > now
-      // Check permanent disable
-      const isPermanentlyDisabled = user.status === 'disabled'
-      return isTemporarilyLocked || isPermanentlyDisabled
-    }
-
-    // Get lock status text for display
-    const getLockStatusText = (user: ExtendedUser | null): string => {
-      if (!user) return ''
-      const now = Date.now()
-      if (user.lockUntil && user.lockUntil > now) {
-        const lockDate = new Date(user.lockUntil)
-        return `鎖定至 ${lockDate.toLocaleString('zh-TW')}`
-      }
-      if (user.status === 'disabled') {
-        return '永久停用'
-      }
-      return ''
-    }
-
-    // Get avatar URL for user list display
-    const getUserAvatarUrl = (user: ExtendedUser | null): string => {
-      if (!user) return ''
-
-      const seed = user.avatarSeed || `${user.userEmail}_${Date.now()}`
-      const style = user.avatarStyle || 'avataaars'
-      const options = parseAvatarOptions(user.avatarOptions)
-
-      return generateDicebearUrl(seed, style, options)
-    }
-
-    // Generate initials for avatar fallback
-    const getUserInitials = (user: ExtendedUser | null): string => {
-      if (!user) return 'U'
-      const name = user.displayName || user.userEmail || 'User'
-      return name
-        .split(' ')
-        .map((word: string) => word.charAt(0).toUpperCase())
-        .join('')
-        .substring(0, 2)
-    }
-
-    // 安全地獲取 stats 值
-    const getStatValue = (key: 'totalUsers' | 'activeUsers' | 'inactiveUsers'): number => {
-      try {
-        const statsObj = stats.value
-        if (statsObj && typeof statsObj === 'object' && key in statsObj) {
-          return statsObj[key]
-        }
-        return 0
-      } catch (error) {
-        console.error('Error getting stat value:', key, error)
-        return 0
-      }
-    }
-
-    // 🆕 loadingMore state for infinite scroll
-    const loadingMore = ref(false)
-
-    const loadUsers = async (append: boolean = false) => {
-      console.log('=== loadUsers called ===', { append })
-
-      if (append) {
-        loadingMore.value = true
-      } else {
-        loading.value = true
-        currentOffset.value = 0
-      }
-
-      try {
-        if (!append) {
-          ElMessage.info('開始更新使用者列表')
-        }
-
-        // Vue 3 Best Practice: rpcClient automatically handles authentication
-        const queryParams = {
-          search: searchText.value || undefined,
-          status: (statusFilter.value || undefined) as any,
-          groupIds: groupFilter.value.length > 0 ? groupFilter.value : undefined,
-          sortBy: 'registrationTime',
-          sortOrder: 'desc',
-          limit: BATCH_SIZE,
-          offset: append ? currentOffset.value : 0
-        }
-
-        console.log('Calling API: /admin/users/list with filters:', queryParams)
-
-        const response = await adminApi.users.list(queryParams as any)
-
-        console.log('API Response:', response)
-
-        if (response.success && response.data) {
-          // Backend returns either:
-          // - Old format: data is directly an array
-          // - New format: data is { users: [...], totalCount: n, ... }
-          const data = response.data as any
-          const usersList = (Array.isArray(data) ? data : data.users || []) as ExtendedUser[]
-
-          if (append) {
-            // Append new users, avoiding duplicates
-            const existingEmails = new Set(users.value.map(u => u.userEmail))
-            const uniqueNewUsers = usersList.filter(u => !existingEmails.has(u.userEmail))
-            users.value = [...users.value, ...uniqueNewUsers]
-            currentOffset.value += usersList.length
-          } else {
-            users.value = usersList
-            currentOffset.value = usersList.length
-          }
-
-          // Update totalCount from response
-          totalCount.value = data.totalCount || usersList.length
-
-          console.log('Users loaded:', users.value.length, 'users, total:', totalCount.value)
-          if (!append) {
-            ElMessage.success('使用者列表資料下載完成')
-          }
-        } else {
-          console.error('Failed to load users:', response.error)
-          if (!append) {
-            users.value = [] // 確保有預設值
-          }
-          ElMessage.error(`無法載入使用者資料: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
-        console.error('Error loading users:', error)
-        if (!append) {
-          users.value = [] // 確保在錯誤情況下也有預設值
-        }
-        ElMessage.error('載入使用者資料失敗，請重試')
-      } finally {
-        loading.value = false
-        loadingMore.value = false
-        console.log('loadUsers completed, loading:', loading.value)
-      }
-    }
-
-    // 🆕 Load more function for infinite scroll
-    const loadMore = () => {
-      if (hasMore.value && !loading.value && !loadingMore.value) {
-        loadUsers(true)
-      }
-    }
-
-    // 🆕 使用頁面級無限滾動
-    useWindowInfiniteScroll(
-      hasMore,
-      computed(() => loading.value || loadingMore.value),
-      loadMore
-    )
-
-    const refreshUsers = () => {
-      loadUsers(false)
-    }
-
-    const openInviteManagement = () => {
-      // Navigate to invitation route, the watcher will handle opening the drawer
-      router.push({ name: 'admin-users-invitation' })
-    }
-
-    const toggleUserStatus = async (user: ExtendedUser) => {
-      const newStatus = user.status === 'active' ? 'disabled' : 'active'
-
-      // 使用 TanStack Query mutation
-      await updateUserStatusMutation.mutateAsync({
-        targetEmail: user.userEmail,
-        status: newStatus
-      })
-
-      // 更新本地狀態（mutation onSuccess 會觸發 cache invalidation）
-      user.status = newStatus
-    }
-
-    // <i class="fas fa-check-circle text-success"></i> Open password reset drawer for single user
-    const resetPassword = (user: ExtendedUser) => {
-      selectedUser.value = user
-      showPasswordResetDrawer.value = true
-    }
-
-    // Password reset handler (single user only - batch mode disabled for security)
-    // Backend auto-generates random password and emails it to user
-    const handlePasswordResetConfirm = async ({ userEmail }: { userEmail: string }) => {
-      // 使用 TanStack Query mutation（會自動處理 success/error 訊息和 cache invalidation）
-      await resetPasswordMutation.mutateAsync({ targetEmail: userEmail })
-      showPasswordResetDrawer.value = false
-    }
-
-    // DISABLED: toggleDefaultTag - tags system disabled
-    /*
-    const toggleDefaultTag = (tagId) => {
-      const index = inviteForm.defaultTags.indexOf(tagId)
-      if (index === -1) {
-        inviteForm.defaultTags.push(tagId)
-      } else {
-        inviteForm.defaultTags.splice(index, 1)
-      }
-    }
-    */
-
-    const toggleDefaultGlobalGroup = (groupId: string) => {
-      const index = inviteForm.defaultGlobalGroups.indexOf(groupId)
-      if (index === -1) {
-        inviteForm.defaultGlobalGroups.push(groupId)
-      } else {
-        inviteForm.defaultGlobalGroups.splice(index, 1)
-      }
-    }
-
-    // DISABLED: 新增方法：根據ID獲取標籤 - tags system disabled
-    /*
-    const getTagById = (tagId) => {
-      return allTags.value.find(tag => tag.tagId === tagId)
-    }
-    */
-
-    // 新增方法：根據ID獲取全域群組
-    const getGlobalGroupById = (groupId: string) => {
-      return globalGroups.value.find(group => group.groupId === groupId)
-    }
-
-    // DISABLED: 新增方法：移除預設標籤 - tags system disabled
-    /*
-    const removeDefaultTag = (tagId) => {
-      const index = inviteForm.defaultTags.indexOf(tagId)
-      if (index !== -1) {
-        inviteForm.defaultTags.splice(index, 1)
-      }
-    }
-    */
-
-    // 新增方法：移除預設全域群組
-    const removeDefaultGlobalGroup = (groupId: string) => {
-      const index = inviteForm.defaultGlobalGroups.indexOf(groupId)
-      if (index !== -1) {
-        inviteForm.defaultGlobalGroups.splice(index, 1)
-      }
-    }
-
-    // 編輯使用者相關方法
-    // DISABLED: removeSelectedTag - tags system disabled
-    /*
-    const removeSelectedTag = (tagId) => {
-      const index = selectedTagsToAdd.value.indexOf(tagId)
-      if (index !== -1) {
-        selectedTagsToAdd.value.splice(index, 1)
-      }
-    }
-    */
-
-    const removeSelectedGroup = (groupId: string) => {
-      const index = selectedGroupsToAdd.value.indexOf(groupId)
-      if (index !== -1) {
-        selectedGroupsToAdd.value.splice(index, 1)
-      }
-    }
-
-    // DISABLED: removeUserTag - tags system disabled (backend router not available)
-    /*
-    const removeUserTag = async (tag) => {
-      try {
-        // TODO: Tags system disabled - backend router not available
-        // const response = await apiClient.callWithAuth('/tags/unassign/user', {
-        //   userEmail: editingUser.value.userEmail,
-        //   tagId: tag.tagId
-        // })
-
-        if (response.success) {
-          // 從使用者標籤中移除
-          editingUser.value.tags = editingUser.value.tags.filter(t => t.tagId !== tag.tagId)
-          ElMessage.success(`標籤「${tag.tagName}」已移除`)
-        } else {
-          ElMessage.error(`移除失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
-        console.error('Error removing tag from user:', error)
-        ElMessage.error('移除標籤失敗，請重試')
-      }
-    }
-    */
-
-    const removeUserFromGroup = async (membership: GlobalGroupMembership) => {
-      // 使用 TanStack Query mutation（會自動處理 success/error 訊息）
-      await removeUserFromGroupMutation.mutateAsync({
-        groupId: membership.groupId,
-        userEmail: editingUser.value!.userEmail
-      })
-
-      // 從本地群組列表中移除
-      userGlobalGroups.value = userGlobalGroups.value.filter(g => g.groupId !== membership.groupId)
-    }
-
-    const loadUserGlobalGroups = async (userEmail: string) => {
-      try {
-        const response = await adminApi.users.globalGroups({
-          targetEmail: userEmail
-        } as any)
-
-        if (response.success && response.data) {
-          userGlobalGroups.value = response.data
-        } else {
-          userGlobalGroups.value = []
-        }
-      } catch (error) {
-        console.error('Error loading user global groups:', error)
-        userGlobalGroups.value = []
-      }
-    }
-
-    const generateInvite = async () => {
-      // 驗證必填欄位
-      if (!inviteForm.targetEmails || !inviteForm.targetEmails.trim()) {
-        ElMessage.error('請輸入受邀者的Email地址')
-        return
-      }
-      
-      // 解析Email列表
-      const emailList = inviteForm.targetEmails
-        .split('\n')
-        .map(email => email.trim())
-        .filter(email => email.length > 0)
-      
-      if (emailList.length === 0) {
-        ElMessage.error('請輸入至少一個Email地址')
-        return
-      }
-      
-      // 驗證Email格式
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-      const invalidEmails = emailList.filter(email => !emailRegex.test(email))
-      if (invalidEmails.length > 0) {
-        ElMessage.error(`以下Email格式不正確: ${invalidEmails.join(', ')}`)
-        return
-      }
-      
-      generating.value = true
-
-      try {
-        // Vue 3 Best Practice: rpcClient automatically handles authentication
-
-        // 批次處理Email，每批最多50個
-        const results: Array<{ email: string; invitationCode: string; expiryTime?: number }> = []
-        const errors: string[] = []
-        const BATCH_SIZE = 50
-        
-        // 將emailList分批處理
-        const batches = []
-        for (let i = 0; i < emailList.length; i += BATCH_SIZE) {
-          batches.push(emailList.slice(i, i + BATCH_SIZE))
-        }
-        
-        // 初始化進度狀態
-        processingStatus.value = `正在處理 0/${emailList.length} 個邀請...`
-        
-        // 處理每一批
-        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-          const batch = batches[batchIndex]
-          const batchStartIndex = batchIndex * BATCH_SIZE
-          
-          // 更新批次進度
-          processingStatus.value = `正在處理第 ${batchIndex + 1}/${batches.length} 批 (每批最多 ${BATCH_SIZE} 個)`
-          
-          // 如果批次內少於50個，後端會自動處理
-          if (batch.length < BATCH_SIZE) {
-            // 單一請求發送整批
-            try {
-              const httpResponse = await rpcClient.invitations['generate-batch'].$post({
-                json: {
-                  targetEmails: batch,
-                  validDays: inviteForm.validDays,
-                  // DISABLED: defaultTags: inviteForm.defaultTags,
-                  defaultGlobalGroups: inviteForm.defaultGlobalGroups
-                }
-              })
-              const response = await httpResponse.json()
-              
-              if (response.success && response.data) {
-                // 處理批次結果
-                const data = response.data as any
-                data.results.forEach((result: { email: string; invitationCode: string; expiryTime?: number }) => {
-                  results.push(result)
-                  console.log(`✅ ${result.email}: 邀請碼生成成功`)
-                })
-
-                if (data.errors) {
-                  data.errors.forEach((err: string) => {
-                    errors.push(err)
-                    console.log(`❌ ${err}`)
-                  })
-                }
-              } else {
-                batch.forEach(email => {
-                  errors.push(`${email}: 批次請求失敗`)
-                  console.log(`❌ ${email}: 批次請求失敗`)
-                })
-              }
-            } catch (error) {
-              batch.forEach(email => {
-                errors.push(`${email}: 網路請求失敗`)
-                console.log(`❌ ${email}: 網路請求失敗 - ${(error as Error).message}`)
-              })
-            }
-          } else {
-            // 批次大小為50，逐個處理以顯示進度
-            for (let i = 0; i < batch.length; i++) {
-              const email = batch[i]
-              const overallIndex = batchStartIndex + i + 1
-              
-              // 更新進度顯示
-              processingStatus.value = `正在處理 ${overallIndex}/${emailList.length} 個邀請: ${email}`
-              
-              try {
-                const httpResponse = await rpcClient.invitations.generate.$post({
-                  json: {
-                    targetEmail: email,
-                    validDays: inviteForm.validDays,
-                    // DISABLED: defaultTags: inviteForm.defaultTags,
-                    defaultGlobalGroups: inviteForm.defaultGlobalGroups
-                  }
-                })
-                const response = await httpResponse.json()
-                
-                if (response.success && response.data) {
-                  results.push({
-                    email: email,
-                    invitationCode: response.data.invitationCode || response.data.code,
-                    expiryTime: response.data.expiryTime
-                  })
-                  console.log(`✅ ${email}: 邀請碼生成成功`)
-                } else {
-                  errors.push(`${email}: ${response.error?.message || '未知錯誤'}`)
-                  console.log(`❌ ${email}: ${response.error?.message || '未知錯誤'}`)
-                }
-              } catch (error) {
-                errors.push(`${email}: 請求失敗`)
-                console.log(`❌ ${email}: 請求失敗 - ${(error as Error).message}`)
-              }
-            }
-          }
-        }
-        
-        // 設定生成結果
-        if (results.length > 0) {
-          generatedInvite.value = {
-            results: results,
-            totalGenerated: results.length,
-            errors: errors
-          }
-          
-          // 重新載入邀請碼列表
-          await loadInvitations()
-
-          if (errors.length === 0) {
-            ElMessage.success(`成功為 ${results.length} 個Email生成邀請碼，邀請信正在發送中`)
-          } else {
-            ElMessage.warning(`成功生成 ${results.length} 個邀請碼（邀請信正在發送中），${errors.length} 個失敗`)
-          }
-          
-          // 清空表單
-          inviteForm.targetEmails = ''
-          // DISABLED: inviteForm.defaultTags = []
-          inviteForm.defaultGlobalGroups = []
-        } else {
-          ElMessage.error(`所有邀請碼生成失敗: ${errors.join('; ')}`)
-        }
-      } catch (error) {
-        console.error('Generate invite error:', error)
-        ElMessage.error('生成邀請碼失敗，請重試')
-      } finally {
-        generating.value = false
-        processingStatus.value = '' // 清空進度狀態
-      }
-    }
-
-    const copyInviteCode = () => {
-      if (generatedInvite.value && generatedInvite.value.results.length > 0) {
-        navigator.clipboard.writeText(generatedInvite.value.results[0].invitationCode)
-        ElMessage.success('邀請碼已複製到剪貼板')
-      }
-    }
-
-    const copySpecificCode = (code: string) => {
-      navigator.clipboard.writeText(code)
-      ElMessage.success('邀請碼已複製到剪貼板')
-    }
-
-    const copyAllCodes = () => {
-      if (generatedInvite.value && generatedInvite.value.results) {
-        const allCodes = generatedInvite.value.results
-          .map(result => `${result.email} > ${result.invitationCode}`)
-          .join('\n')
-        navigator.clipboard.writeText(allCodes)
-        ElMessage.success(`已複製 ${generatedInvite.value.results.length} 個邀請碼到剪貼板`)
-      }
-    }
-
-    // Invitation management methods
-    const loadInvitations = async () => {
-      invitationsLoading.value = true
-      try {
-        ElMessage.info('開始更新邀請碼列表')
-
-        // Vue 3 Best Practice: rpcClient automatically handles authentication
-        const httpResponse = await rpcClient.invitations.list.$post({
-          json: {}
-        })
-        const response = await httpResponse.json()
-        
-        if (response.success && response.data) {
-          invitations.value = response.data
-          ElMessage.success('邀請碼列表資料下載完成')
-        } else {
-          console.error('Failed to load invitations:', response.error)
-          ElMessage.error(`無法載入邀請碼資料: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
-        console.error('Error loading invitations:', error)
-        ElMessage.error('載入邀請碼資料失敗，請重試')
-      } finally {
-        invitationsLoading.value = false
-      }
-    }
-
-    const copyInvitationCode = (code: string) => {
-      navigator.clipboard.writeText(code)
-      ElMessage.success('邀請碼已複製到剪貼板')
-    }
-
-    const resendInvitationEmail = async (invitation: Invitation) => {
-      try {
-        // Add to resending set
-        resendingInvites.value.add(invitation.invitationId!)
-
-        const httpResponse = await rpcClient.invitations['resend-email'].$post({
-          json: {
-            invitationId: invitation.invitationId
-          }
-        })
-        const response = await httpResponse.json()
-
-        if (response.success) {
-          ElMessage.success(`邀請信已重新發送至 ${invitation.targetEmail}`)
-
-          // Reload invitations to get updated email sent time
-          await loadInvitations()
-        } else {
-          if (response.error?.code === 'NO_DISPLAY_CODE') {
-            ElMessage.error('無法重送：邀請碼已被隱藏，請聯繫管理員')
-          } else if (response.error?.code === 'INVITATION_EXPIRED') {
-            ElMessage.error('無法重送：邀請碼已過期')
-          } else if (response.error?.code === 'EMAIL_SEND_FAILED') {
-            ElMessage.error('郵件發送失敗，請檢查 SMTP 設定')
-          } else {
-            ElMessage.error(`重送失敗: ${response.error?.message || '未知錯誤'}`)
-          }
-        }
-      } catch (error) {
-        console.error('Error resending invitation email:', error)
-        ElMessage.error('重送邀請信失敗，請重試')
-      } finally {
-        // Remove from resending set
-        resendingInvites.value.delete(invitation.invitationId!)
-      }
-    }
-
-    const deactivateInvitation = async (invitation: Invitation) => {
-      try {
-        const httpResponse = await rpcClient.invitations.deactivate.$post({
-          json: {
-            invitationId: invitation.invitationId!
-          }
-        })
-        const response = await httpResponse.json()
-
-        if (response.success) {
-          // 重新載入邀請碼列表以獲取最新狀態
-          await loadInvitations()
-
-          ElMessage.success('邀請碼已停用，列表已更新')
-        } else {
-          ElMessage.error(`停用失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
-        console.error('Error deactivating invitation:', error)
-        ElMessage.error('停用失敗，請重試')
-      }
-    }
-
-    // ========================================
-    // BATCH OPERATIONS
-    // ========================================
-
-    // Toggle user selection
-    const toggleUserSelection = (userEmail: string) => {
-      if (selectedUserEmails.value.has(userEmail)) {
-        selectedUserEmails.value.delete(userEmail)
-      } else {
-        selectedUserEmails.value.add(userEmail)
-      }
-    }
-
-    // Toggle select all
-    const toggleSelectAll = () => {
-      if (isAllSelected.value) {
-        selectedUserEmails.value.clear()
-      } else {
-        filteredUsers.value.forEach(user => {
-          selectedUserEmails.value.add(user.userEmail)
-        })
-      }
-    }
-
-    // Clear selection
-    const clearSelection = () => {
-      selectedUserEmails.value.clear()
-    }
-
-    // Batch activate users
-    const batchActivateUsers = async () => {
-      await batchUpdateStatus('active')
-    }
-
-    // Batch deactivate users
-    const batchDeactivateUsers = async () => {
-      await batchUpdateStatus('disabled')
-    }
-
-    // Batch update status
-    const batchUpdateStatus = async (status: 'active' | 'disabled') => {
-      const userEmails = Array.from(selectedUserEmails.value)
-
-      try {
-        const confirmed = await ElMessageBox.confirm(
-          `確定要將 ${userEmails.length} 位使用者設為${status === 'active' ? '啟用' : '停用'}嗎？`,
-          '批量操作確認',
-          {
-            confirmButtonText: '確定',
-            cancelButtonText: '取消',
-            type: 'warning'
-          }
-        )
-
-        if (!confirmed) return
-      } catch {
-        return // User cancelled
-      }
-
-      batchUpdatingStatus.value = true
-
-      try {
-        // 使用 TanStack Query mutation（會自動處理 success/error 訊息和 cache invalidation）
-        const result = await batchUpdateUserStatusMutation.mutateAsync({
-          targetEmails: userEmails,
-          status
-        })
-
-        // Update local user status
-        result.results.forEach((r) => {
-          if (r.success) {
-            const user = users.value.find(u => u.userEmail === r.userEmail)
-            if (user) user.status = status
-          }
-        })
-
-        // Clear selection
-        clearSelection()
-
-        // Refresh list
-        await loadUsers()
-      } finally {
-        batchUpdatingStatus.value = false
-      }
-    }
-
-    // <i class="fas fa-check-circle text-success"></i> Batch reset password methods moved to unified handler above
-
-    // ========================================
-    // UNLOCK USER OPERATIONS
-    // ========================================
-
-    // Open unlock drawer
-    const openUnlockDrawer = (user: ExtendedUser) => {
-      unlockingUser.value = user
-      unlockReason.value = ''
-      unlockConfirmText.value = ''
-      resetLockCount.value = false
-      showUnlockDrawer.value = true
-    }
-
-    // Close unlock drawer
-    const closeUnlockDrawer = () => {
-      showUnlockDrawer.value = false
-      unlockingUser.value = null
-      unlockReason.value = ''
-      unlockConfirmText.value = ''
-      resetLockCount.value = false
-    }
-
-    // Confirm unlock
-    const confirmUnlock = async () => {
-      if (!canConfirmUnlock.value) {
-        ElMessage.error('請輸入有效的解鎖理由並確認操作')
-        return
-      }
-
-      if (!unlockingUser.value) {
-        ElMessage.error('無效的使用者資訊')
-        return
-      }
-
-      unlocking.value = true
-
-      try {
-        // 使用 TanStack Query mutation（會自動處理 success/error 訊息和 cache invalidation）
-        await unlockUserMutation.mutateAsync({
-          targetEmail: unlockingUser.value.userEmail,
-          unlockReason: unlockReason.value,
-          resetLockCount: resetLockCount.value
-        })
-
-        // Close drawer
-        closeUnlockDrawer()
-
-        // Refresh users list
-        await loadUsers()
-      } finally {
-        unlocking.value = false
-      }
-    }
-
-    // Drawer close handler
-    const handleUnlockDrawerClose = (done: () => void) => {
-      if (unlocking.value) {
-        ElMessage.warning('操作進行中，請稍候')
-        return
-      }
-      done()
-    }
-
-    const getInvitationStatusClass = (invitation: Invitation): string => {
-      const now = Date.now()
-      if (invitation.expiryTime <= now) {
-        return 'expired'
-      } else if (invitation.status === 'used') {
-        return 'used'
-      } else if (invitation.status === 'active') {
-        return 'active'
-      } else if (invitation.status === 'deactivated') {
-        return 'deactivated'
-      }
-      return 'inactive'
-    }
-
-    const getInvitationStatusText = (invitation: Invitation): string => {
-      const now = Date.now()
-      if (invitation.expiryTime <= now) {
-        return '已過期'
-      } else if (invitation.status === 'used') {
-        return '已使用'
-      } else if (invitation.status === 'active') {
-        return '有效'
-      } else if (invitation.status === 'deactivated') {
-        return '已停用'
-      }
-      return '停用'
-    }
-
-    // DISABLED: User tag management methods - tags system disabled
-    /*
-    // DISABLED: Tags system functions - backend router not available
-    const openUserTagManagement = async (user) => {
-      selectedUser.value = user
-      tagSearchText.value = ''
-      await loadAllTags()
-      await loadUserTags(user)
-      showTagManagementModal.value = true
-    }
-
-    const loadAllTags = async () => {
-      try {
-        // TODO: Tags system disabled - backend router not available
-        // const response = await apiClient.callWithAuth('/tags/list', {})
-
-        if (response.success && response.data) {
-          allTags.value = response.data.filter(tag => tag.isActive)
-        } else {
-          console.error('Failed to load tags:', response.error)
-          allTags.value = []
-        }
-      } catch (error) {
-        console.error('Error loading tags:', error)
-        allTags.value = []
-      }
-    }
-
-    const loadUserTags = async (user) => {
-      try {
-        // For now, we'll assume user tags are included in the user object
-        // If not, we would need to call a getUserTags API
-        if (!user.tags) {
-          user.tags = []
-        }
-      } catch (error) {
-        console.error('Error loading user tags:', error)
-        user.tags = []
-      }
-    }
-
-    const assignTagToUser = async (user, tag) => {
-      try {
-        // TODO: Tags system disabled - backend router not available
-        // const response = await apiClient.callWithAuth('/tags/assign/user', {
-        //   userEmail: user.userEmail,
-        //   tagId: tag.tagId
-        // })
-
-        if (response.success) {
-          // Add tag to user's tags array
-          if (!user.tags) user.tags = []
-          user.tags.push({
-            tagId: tag.tagId,
-            tagName: tag.tagName,
-            tagColor: tag.tagColor
-          })
-
-          ElMessage.success(`標籤「${tag.tagName}」已分配給用戶`)
-        } else {
-          ElMessage.error(`分配失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
-        console.error('Error assigning tag to user:', error)
-        ElMessage.error('分配標籤失敗，請重試')
-      }
-    }
-
-    const removeTagFromUser = async (user, tag) => {
-      try {
-        // TODO: Tags system disabled - backend router not available
-        // const response = await apiClient.callWithAuth('/tags/remove/user', {
-        //   userEmail: user.userEmail,
-        //   tagId: tag.tagId
-        // })
-
-        if (response.success) {
-          // Remove tag from user's tags array
-          const tagIndex = user.tags.findIndex(t => t.tagId === tag.tagId)
-          if (tagIndex !== -1) {
-            user.tags.splice(tagIndex, 1)
-          }
-
-          ElMessage.success(`標籤「${tag.tagName}」已從用戶移除`)
-        } else {
-          ElMessage.error(`移除失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
-        console.error('Error removing tag from user:', error)
-        ElMessage.error('移除標籤失敗，請重試')
-      }
-    }
-
-    // Tag search methods
-    const filterTags = () => {
-      filteredTagSearchText.value = tagSearchText.value
-    }
-
-    const clearTagSearch = () => {
-      tagSearchText.value = ''
-      filteredTagSearchText.value = ''
-    }
-    */
-
-    // Navigate to user's login logs
-    const viewLoginLogs = (user: ExtendedUser) => {
-      router.push({
-        name: 'admin-logs-login-user',
-        params: { userId: user.userEmail }
-      })
-    }
-
-    // User editing methods
-    const editUser = async (user: ExtendedUser) => {
-      loadingUserData.value = true
-      showEditUserDrawer.value = true
-
-      try {
-        // Fetch fresh user data from backend to ensure we have the latest information
-        let userData: ExtendedUser = user
+    // Iterate through user's global groups
+    editingUser.value.globalGroups.forEach(group => {
+      if (group.globalPermissions) {
         try {
-          const response = await adminApi.users.list({
-            search: user.userEmail,
-            limit: 1
-          })
-
-          // Backend returns either array or { users: [...], totalCount: n }
-          const data = response.data as any
-          const usersList = Array.isArray(data) ? data : data.users || []
-          if (response.success && usersList.length > 0) {
-            // Use fresh data from backend
-            userData = usersList[0] as ExtendedUser
-            console.log('Using fresh user data from backend for editing')
-
-            // Update the user in the users list with fresh data
-            const userIndex = users.value.findIndex(u => u.userEmail === user.userEmail)
-            if (userIndex !== -1) {
-              users.value[userIndex] = { ...users.value[userIndex], ...userData }
-            }
-          } else {
-            console.warn('Failed to fetch fresh user data, using cached data')
+          const permissions = typeof group.globalPermissions === 'string' 
+            ? JSON.parse(group.globalPermissions) 
+            : group.globalPermissions
+          
+          if (Array.isArray(permissions)) {
+            permissions.forEach(permissionCode => {
+              userPermissions.add(permissionCode)
+            })
           }
         } catch (error) {
-          console.warn('Error fetching fresh user data, using cached data:', error)
+          console.error('Error parsing group permissions:', error)
         }
+      }
+    })
+    
+    // Map permission codes to display objects
+    return availablePermissions.filter(permission => 
+      userPermissions.has(permission.code)
+    )
+  } catch (error) {
+    console.error('Error computing user global permissions:', error)
+    return []
+  }
+})
 
-        // Deep clone user data for editing
-        editingUser.value = JSON.parse(JSON.stringify(userData))
-        originalUser.value = JSON.parse(JSON.stringify(userData))
+const availableGlobalGroups = computed(() => {
+  if (!editingUser.value) return []
+  const userGroupIds = (editingUser.value.globalGroups || []).map(g => g.groupId)
+  return (globalGroups.value || []).filter(group => 
+    !userGroupIds.includes(group.groupId)
+  )
+})
 
-        // Ensure tags and globalGroups are always arrays
-        if (editingUser.value && !editingUser.value.tags) {
-          editingUser.value.tags = []
-        }
-        if (editingUser.value && !editingUser.value.globalGroups) {
-          editingUser.value.globalGroups = []
-        }
+// Current avatar URL (shows the actual current avatar)
+const currentAvatarUrl = computed(() => {
+  if (avatarError.value || !originalUser.value) {
+    return generateInitialsAvatar(originalUser.value)
+  }
+  
+  const seed = originalUser.value.avatarSeed || `${originalUser.value.userEmail}_${Date.now()}`
+  const style = originalUser.value.avatarStyle || 'avataaars'
+  
+  // Parse avatarOptions from original user data
+  let options = {}
+  if (originalUser.value.avatarOptions) {
+    if (typeof originalUser.value.avatarOptions === 'string') {
+      try {
+        options = JSON.parse(originalUser.value.avatarOptions)
+      } catch (e) {
+        console.warn('Failed to parse avatarOptions:', e)
+        options = {}
+      }
+    } else {
+      options = originalUser.value.avatarOptions
+    }
+  }
+  
+  return generateDicebearUrl(seed, style, options)
+})
 
-        // DISABLED: selectedTagsToAdd.value = [] - tags system disabled
-        selectedGroupsToAdd.value = []
-        
-        // 用戶權限狀態會通過 computed 自動計算
-        
-        // 載入使用者的全域群組和專案群組
-        await Promise.all([
-          loadUserGlobalGroups(user.userEmail),
-          loadUserProjectGroups(user.userEmail)
-        ])
+// Preview avatar URL (shows changes)
+const previewAvatarUrl = computed(() => {
+  if (avatarError.value || !editingUser.value) {
+    return generateInitialsAvatar(editingUser.value)
+  }
+  
+  const seed = editingUser.value.avatarSeed || `${editingUser.value.userEmail}_${Date.now()}`
+  const style = editingUser.value.avatarStyle || 'avataaars'
+  
+  // Parse avatarOptions from string if needed (consistent with UserSettings)
+  let options = {}
+  if (editingUser.value.avatarOptions) {
+    if (typeof editingUser.value.avatarOptions === 'string') {
+      try {
+        options = JSON.parse(editingUser.value.avatarOptions)
+      } catch (e) {
+        console.warn('Failed to parse avatarOptions:', e)
+        options = {}
+      }
+    } else {
+      options = editingUser.value.avatarOptions
+    }
+  }
+  
+  // Use currentAvatarOptions for any runtime changes
+  const mergedOptions = { ...options, ...currentAvatarOptions.value }
+  
+  return generateDicebearUrl(seed, style, mergedOptions)
+})
+
+// Check if there are avatar changes
+const hasAvatarChanges = computed(() => {
+  if (!originalUser.value || !editingUser.value) return false
+  
+  return (
+    originalUser.value.avatarStyle !== editingUser.value.avatarStyle ||
+    originalUser.value.avatarSeed !== editingUser.value.avatarSeed ||
+    JSON.stringify(originalUser.value.avatarOptions) !== JSON.stringify(editingUser.value.avatarOptions) ||
+    Object.keys(currentAvatarOptions.value).length > 0
+  )
+})
+
+// Editing user avatar URL
+const editingUserAvatarUrl = computed(() => {
+  if (isInFallbackMode.value || !editingUser.value) {
+    return generateInitialsAvatar(editingUser.value)
+  }
+
+  const seed = editingUser.value.avatarSeed || `${editingUser.value.userEmail}_${Date.now()}`
+  const style = editingUser.value.avatarStyle || 'avataaars'
+
+  // Use editingUserAvatarOptions for current changes
+  return generateDicebearUrl(seed, style, editingUserAvatarOptions.value)
+})
+
+// Check if there are any changes to save
+const hasUserChanges = computed(() => {
+  if (!originalUser.value || !editingUser.value) return false
+
+  // Check basic fields
+  if (originalUser.value.displayName !== editingUser.value.displayName ||
+      originalUser.value.status !== editingUser.value.status ||
+      editingUserAvatarChanged.value) {
+    return true
+  }
+
+  // Check if tags have changed
+  const originalTagIds = (originalUser.value.tags || []).map(t => t.tagId).sort()
+  const currentTagIds = (editingUser.value.tags || []).map(t => t.tagId).sort()
+
+  if (originalTagIds.length !== currentTagIds.length) {
+    return true
+  }
+
+  for (let i = 0; i < originalTagIds.length; i++) {
+    if (originalTagIds[i] !== currentTagIds[i]) {
+      return true
+    }
+  }
+
+  // Check if global groups have changed
+  const originalGroupIds = (originalUser.value.globalGroups || []).map(g => g.groupId).sort()
+  const currentGroupIds = (editingUser.value.globalGroups || []).map(g => g.groupId).sort()
+
+  if (originalGroupIds.length !== currentGroupIds.length) {
+    return true
+  }
+
+  for (let i = 0; i < originalGroupIds.length; i++) {
+    if (originalGroupIds[i] !== currentGroupIds[i]) {
+      return true
+    }
+  }
+
+  return false
+})
+
+const formatTime = (timestamp: number | null | undefined): string | null => {
+  if (!timestamp) return null
+  return new Date(timestamp).toLocaleString('zh-TW')
+}
+
+// Check if user is locked
+const isUserLocked = (user: ExtendedUser | null): boolean => {
+  if (!user) return false
+  const now = Date.now()
+  // Check temporary lock
+  const isTemporarilyLocked = user.lockUntil && user.lockUntil > now
+  // Check permanent disable
+  const isPermanentlyDisabled = user.status === 'disabled'
+  return isTemporarilyLocked || isPermanentlyDisabled
+}
+
+// Get lock status text for display
+const getLockStatusText = (user: ExtendedUser | null): string => {
+  if (!user) return ''
+  const now = Date.now()
+  if (user.lockUntil && user.lockUntil > now) {
+    const lockDate = new Date(user.lockUntil)
+    return `鎖定至 ${lockDate.toLocaleString('zh-TW')}`
+  }
+  if (user.status === 'disabled') {
+    return '永久停用'
+  }
+  return ''
+}
+
+// Get avatar URL for user list display
+const getUserAvatarUrl = (user: ExtendedUser | null): string => {
+  if (!user) return ''
+
+  const seed = user.avatarSeed || `${user.userEmail}_${Date.now()}`
+  const style = user.avatarStyle || 'avataaars'
+  const options = parseAvatarOptions(user.avatarOptions)
+
+  return generateDicebearUrl(seed, style, options)
+}
+
+// Generate initials for avatar fallback
+const getUserInitials = (user: ExtendedUser | null): string => {
+  if (!user) return 'U'
+  const name = user.displayName || user.userEmail || 'User'
+  return name
+    .split(' ')
+    .map((word: string) => word.charAt(0).toUpperCase())
+    .join('')
+    .substring(0, 2)
+}
+
+// 安全地獲取 stats 值
+const getStatValue = (key: 'totalUsers' | 'activeUsers' | 'inactiveUsers'): number => {
+  try {
+    const statsObj = stats.value
+    if (statsObj && typeof statsObj === 'object' && key in statsObj) {
+      return statsObj[key]
+    }
+    return 0
+  } catch (error) {
+    console.error('Error getting stat value:', key, error)
+    return 0
+  }
+}
+
+// 🆕 loadingMore state for infinite scroll
+const loadingMore = ref(false)
+
+const loadUsers = async (append: boolean = false) => {
+  console.log('=== loadUsers called ===', { append })
+
+  if (append) {
+    loadingMore.value = true
+  } else {
+    loading.value = true
+    currentOffset.value = 0
+  }
+
+  try {
+    if (!append) {
+      ElMessage.info('開始更新使用者列表')
+    }
+
+    // Vue 3 Best Practice: rpcClient automatically handles authentication
+    const queryParams: UserListRequest = {
+      search: searchText.value || undefined,
+      status: statusFilter.value || undefined,
+      groupIds: groupFilter.value.length > 0 ? groupFilter.value : undefined,
+      sortBy: 'registrationTime',
+      sortOrder: 'desc',
+      limit: BATCH_SIZE,
+      offset: append ? currentOffset.value : 0
+    }
+
+    console.log('Calling API: /admin/users/list with filters:', queryParams)
+
+    const response = await adminApi.users.list(queryParams)
+
+    console.log('API Response:', response)
+
+    if (response.success && response.data) {
+      const data = response.data
+      // shared 的 UserListResponse.users 型別（admin User）與後端實際回傳的
+      // entities User 形狀不同步，這裡以實際 runtime 形狀為準
+      const usersList = (data.users || []) as unknown as ExtendedUser[]
+
+      if (append) {
+        // Append new users, avoiding duplicates
+        const existingEmails = new Set(users.value.map(u => u.userEmail))
+        const uniqueNewUsers = usersList.filter(u => !existingEmails.has(u.userEmail))
+        users.value = [...users.value, ...uniqueNewUsers]
+        currentOffset.value += usersList.length
+      } else {
+        users.value = usersList
+        currentOffset.value = usersList.length
+      }
+
+      // Update totalCount from response
+      totalCount.value = data.totalCount || usersList.length
+
+      console.log('Users loaded:', users.value.length, 'users, total:', totalCount.value)
+      if (!append) {
+        ElMessage.success('使用者列表資料下載完成')
+      }
+    } else {
+      console.error('Failed to load users:', response.error)
+      if (!append) {
+        users.value = [] // 確保有預設值
+      }
+      ElMessage.error(`無法載入使用者資料: ${response.error?.message || '未知錯誤'}`)
+    }
+  } catch (error) {
+    console.error('Error loading users:', error)
+    if (!append) {
+      users.value = [] // 確保在錯誤情況下也有預設值
+    }
+    ElMessage.error('載入使用者資料失敗，請重試')
+  } finally {
+    loading.value = false
+    loadingMore.value = false
+    console.log('loadUsers completed, loading:', loading.value)
+  }
+}
+
+// 🆕 Load more function for infinite scroll
+const loadMore = () => {
+  if (hasMore.value && !loading.value && !loadingMore.value) {
+    loadUsers(true)
+  }
+}
+
+// 🆕 使用頁面級無限滾動
+useWindowInfiniteScroll(
+  hasMore,
+  computed(() => loading.value || loadingMore.value),
+  loadMore
+)
+
+const refreshUsers = () => {
+  loadUsers(false)
+}
+
+const openInviteManagement = () => {
+  // Navigate to invitation route, the watcher will handle opening the drawer
+  router.push({ name: 'admin-users-invitation' })
+}
+
+const toggleUserStatus = async (user: ExtendedUser) => {
+  const newStatus = user.status === 'active' ? 'disabled' : 'active'
+
+  // 使用 TanStack Query mutation
+  await updateUserStatusMutation.mutateAsync({
+    targetEmail: user.userEmail,
+    status: newStatus
+  })
+
+  // 更新本地狀態（mutation onSuccess 會觸發 cache invalidation）
+  user.status = newStatus
+}
+
+// <i class="fas fa-check-circle text-success"></i> Open password reset drawer for single user
+const resetPassword = (user: ExtendedUser) => {
+  selectedUser.value = user
+  showPasswordResetDrawer.value = true
+}
+
+// Password reset handler (single user only - batch mode disabled for security)
+// Backend auto-generates random password and emails it to user
+const handlePasswordResetConfirm = async ({ userEmail }: { userEmail: string }) => {
+  // 使用 TanStack Query mutation（會自動處理 success/error 訊息和 cache invalidation）
+  await resetPasswordMutation.mutateAsync({ targetEmail: userEmail })
+  showPasswordResetDrawer.value = false
+}
+
+// DISABLED: toggleDefaultTag - tags system disabled
+/*
+const toggleDefaultTag = (tagId) => {
+  const index = inviteForm.defaultTags.indexOf(tagId)
+  if (index === -1) {
+    inviteForm.defaultTags.push(tagId)
+  } else {
+    inviteForm.defaultTags.splice(index, 1)
+  }
+}
+*/
+
+const toggleDefaultGlobalGroup = (groupId: string) => {
+  const index = inviteForm.defaultGlobalGroups.indexOf(groupId)
+  if (index === -1) {
+    inviteForm.defaultGlobalGroups.push(groupId)
+  } else {
+    inviteForm.defaultGlobalGroups.splice(index, 1)
+  }
+}
+
+// DISABLED: 新增方法：根據ID獲取標籤 - tags system disabled
+/*
+const getTagById = (tagId) => {
+  return allTags.value.find(tag => tag.tagId === tagId)
+}
+*/
+
+// 新增方法：根據ID獲取全域群組
+const getGlobalGroupById = (groupId: string) => {
+  return globalGroups.value.find(group => group.groupId === groupId)
+}
+
+// DISABLED: 新增方法：移除預設標籤 - tags system disabled
+/*
+const removeDefaultTag = (tagId) => {
+  const index = inviteForm.defaultTags.indexOf(tagId)
+  if (index !== -1) {
+    inviteForm.defaultTags.splice(index, 1)
+  }
+}
+*/
+
+// 新增方法：移除預設全域群組
+const removeDefaultGlobalGroup = (groupId: string) => {
+  const index = inviteForm.defaultGlobalGroups.indexOf(groupId)
+  if (index !== -1) {
+    inviteForm.defaultGlobalGroups.splice(index, 1)
+  }
+}
+
+// 編輯使用者相關方法
+// DISABLED: removeSelectedTag - tags system disabled
+/*
+const removeSelectedTag = (tagId) => {
+  const index = selectedTagsToAdd.value.indexOf(tagId)
+  if (index !== -1) {
+    selectedTagsToAdd.value.splice(index, 1)
+  }
+}
+*/
+
+const removeSelectedGroup = (groupId: string) => {
+  const index = selectedGroupsToAdd.value.indexOf(groupId)
+  if (index !== -1) {
+    selectedGroupsToAdd.value.splice(index, 1)
+  }
+}
+
+// DISABLED: removeUserTag - tags system disabled (backend router not available)
+/*
+const removeUserTag = async (tag) => {
+  try {
+    // TODO: Tags system disabled - backend router not available
+    // const response = await apiClient.callWithAuth('/tags/unassign/user', {
+    //   userEmail: editingUser.value.userEmail,
+    //   tagId: tag.tagId
+    // })
+
+    if (response.success) {
+      // 從使用者標籤中移除
+      editingUser.value.tags = editingUser.value.tags.filter(t => t.tagId !== tag.tagId)
+      ElMessage.success(`標籤「${tag.tagName}」已移除`)
+    } else {
+      ElMessage.error(`移除失敗: ${response.error?.message || '未知錯誤'}`)
+    }
+  } catch (error) {
+    console.error('Error removing tag from user:', error)
+    ElMessage.error('移除標籤失敗，請重試')
+  }
+}
+*/
+
+const removeUserFromGroup = async (membership: GlobalGroupMembership) => {
+  // 使用 TanStack Query mutation（會自動處理 success/error 訊息）
+  await removeUserFromGroupMutation.mutateAsync({
+    groupId: membership.groupId,
+    userEmail: editingUser.value!.userEmail
+  })
+
+  // 從本地群組列表中移除
+  userGlobalGroups.value = userGlobalGroups.value.filter(g => g.groupId !== membership.groupId)
+}
+
+const loadUserGlobalGroups = async (userEmail: string) => {
+  try {
+    // 後端 zValidator 要求 { userEmail }；先前送 { targetEmail } 會被 400 打回
+    const response = await adminApi.users.globalGroups({ userEmail })
+
+    if (response.success && response.data) {
+      userGlobalGroups.value = response.data
+    } else {
+      userGlobalGroups.value = []
+    }
+  } catch (error) {
+    console.error('Error loading user global groups:', error)
+    userGlobalGroups.value = []
+  }
+}
+
+const generateInvite = async () => {
+  // 驗證必填欄位
+  if (!inviteForm.targetEmails || !inviteForm.targetEmails.trim()) {
+    ElMessage.error('請輸入受邀者的Email地址')
+    return
+  }
+  
+  // 解析Email列表
+  const emailList = inviteForm.targetEmails
+    .split('\n')
+    .map(email => email.trim())
+    .filter(email => email.length > 0)
+  
+  if (emailList.length === 0) {
+    ElMessage.error('請輸入至少一個Email地址')
+    return
+  }
+  
+  // 驗證Email格式
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const invalidEmails = emailList.filter(email => !emailRegex.test(email))
+  if (invalidEmails.length > 0) {
+    ElMessage.error(`以下Email格式不正確: ${invalidEmails.join(', ')}`)
+    return
+  }
+  
+  generating.value = true
+
+  try {
+    // Vue 3 Best Practice: rpcClient automatically handles authentication
+
+    // 批次處理Email，每批最多50個
+    const results: Array<{ email: string; invitationCode: string; expiryTime?: number }> = []
+    const errors: string[] = []
+    const BATCH_SIZE = 50
+    
+    // 將emailList分批處理
+    const batches = []
+    for (let i = 0; i < emailList.length; i += BATCH_SIZE) {
+      batches.push(emailList.slice(i, i + BATCH_SIZE))
+    }
+    
+    // 初始化進度狀態
+    processingStatus.value = `正在處理 0/${emailList.length} 個邀請...`
+    
+    // 處理每一批
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex]
+      const batchStartIndex = batchIndex * BATCH_SIZE
       
-        // Ensure avatar settings are properly preserved and initialized
-        // Don't override existing avatar data, only set defaults if missing
-        if (editingUser.value && !editingUser.value.avatarSeed) {
-          editingUser.value.avatarSeed = user.avatarSeed || `${user.userEmail}_${Date.now()}`
-        }
-        if (editingUser.value && !editingUser.value.avatarStyle) {
-          editingUser.value.avatarStyle = user.avatarStyle || 'avataaars'
-        }
-        
-        // Parse avatarOptions if it's a string, but preserve existing data
-        let avatarOptions: Record<string, any> = {}
-        if (user.avatarOptions) {
-          if (typeof user.avatarOptions === 'string') {
-            try {
-              avatarOptions = JSON.parse(user.avatarOptions)
-            } catch (e) {
-              console.warn('Failed to parse user avatarOptions:', e)
-              avatarOptions = {
-                backgroundColor: 'b6e3f4',
-                clothesColor: '3c4858',
-                skinColor: 'ae5d29'
-              }
+      // 更新批次進度
+      processingStatus.value = `正在處理第 ${batchIndex + 1}/${batches.length} 批 (每批最多 ${BATCH_SIZE} 個)`
+      
+      // 如果批次內少於50個，後端會自動處理
+      if (batch.length < BATCH_SIZE) {
+        // 單一請求發送整批
+        try {
+          const httpResponse = await rpcClient.invitations['generate-batch'].$post({
+            json: {
+              targetEmails: batch,
+              validDays: inviteForm.validDays,
+              // DISABLED: defaultTags: inviteForm.defaultTags,
+              defaultGlobalGroups: inviteForm.defaultGlobalGroups
+            }
+          })
+          const response = await httpResponse.json()
+          
+          if (response.success && response.data) {
+            // 處理批次結果
+            const data = response.data as BatchInviteResult
+            data.results.forEach((result: { email: string; invitationCode: string; expiryTime?: number }) => {
+              results.push(result)
+              console.log(`✅ ${result.email}: 邀請碼生成成功`)
+            })
+
+            if (data.errors) {
+              data.errors.forEach((err: string) => {
+                errors.push(err)
+                console.log(`❌ ${err}`)
+              })
             }
           } else {
-            avatarOptions = { ...(user.avatarOptions as Record<string, any>) }
+            batch.forEach(email => {
+              errors.push(`${email}: 批次請求失敗`)
+              console.log(`❌ ${email}: 批次請求失敗`)
+            })
           }
-        } else {
-          // Default avatar options only if none exist
+        } catch (error) {
+          batch.forEach(email => {
+            errors.push(`${email}: 網路請求失敗`)
+            console.log(`❌ ${email}: 網路請求失敗 - ${(error as Error).message}`)
+          })
+        }
+      } else {
+        // 批次大小為50，逐個處理以顯示進度
+        for (let i = 0; i < batch.length; i++) {
+          const email = batch[i]
+          const overallIndex = batchStartIndex + i + 1
+          
+          // 更新進度顯示
+          processingStatus.value = `正在處理 ${overallIndex}/${emailList.length} 個邀請: ${email}`
+          
+          try {
+            const httpResponse = await rpcClient.invitations.generate.$post({
+              json: {
+                targetEmail: email,
+                validDays: inviteForm.validDays,
+                // DISABLED: defaultTags: inviteForm.defaultTags,
+                defaultGlobalGroups: inviteForm.defaultGlobalGroups
+              }
+            })
+            const response = await httpResponse.json()
+            
+            if (response.success && response.data) {
+              results.push({
+                email: email,
+                invitationCode: response.data.invitationCode || response.data.code,
+                expiryTime: response.data.expiryTime
+              })
+              console.log(`✅ ${email}: 邀請碼生成成功`)
+            } else {
+              errors.push(`${email}: ${response.error?.message || '未知錯誤'}`)
+              console.log(`❌ ${email}: ${response.error?.message || '未知錯誤'}`)
+            }
+          } catch (error) {
+            errors.push(`${email}: 請求失敗`)
+            console.log(`❌ ${email}: 請求失敗 - ${(error as Error).message}`)
+          }
+        }
+      }
+    }
+    
+    // 設定生成結果
+    if (results.length > 0) {
+      generatedInvite.value = {
+        results: results,
+        totalGenerated: results.length,
+        errors: errors
+      }
+      
+      // 重新載入邀請碼列表
+      await loadInvitations()
+
+      if (errors.length === 0) {
+        ElMessage.success(`成功為 ${results.length} 個Email生成邀請碼，邀請信正在發送中`)
+      } else {
+        ElMessage.warning(`成功生成 ${results.length} 個邀請碼（邀請信正在發送中），${errors.length} 個失敗`)
+      }
+      
+      // 清空表單
+      inviteForm.targetEmails = ''
+      // DISABLED: inviteForm.defaultTags = []
+      inviteForm.defaultGlobalGroups = []
+    } else {
+      ElMessage.error(`所有邀請碼生成失敗: ${errors.join('; ')}`)
+    }
+  } catch (error) {
+    console.error('Generate invite error:', error)
+    ElMessage.error('生成邀請碼失敗，請重試')
+  } finally {
+    generating.value = false
+    processingStatus.value = '' // 清空進度狀態
+  }
+}
+
+const copyInviteCode = () => {
+  if (generatedInvite.value && generatedInvite.value.results.length > 0) {
+    navigator.clipboard.writeText(generatedInvite.value.results[0].invitationCode)
+    ElMessage.success('邀請碼已複製到剪貼板')
+  }
+}
+
+const copySpecificCode = (code: string) => {
+  navigator.clipboard.writeText(code)
+  ElMessage.success('邀請碼已複製到剪貼板')
+}
+
+const copyAllCodes = () => {
+  if (generatedInvite.value && generatedInvite.value.results) {
+    const allCodes = generatedInvite.value.results
+      .map(result => `${result.email} > ${result.invitationCode}`)
+      .join('\n')
+    navigator.clipboard.writeText(allCodes)
+    ElMessage.success(`已複製 ${generatedInvite.value.results.length} 個邀請碼到剪貼板`)
+  }
+}
+
+// Invitation management methods
+const loadInvitations = async () => {
+  invitationsLoading.value = true
+  try {
+    ElMessage.info('開始更新邀請碼列表')
+
+    // Vue 3 Best Practice: rpcClient automatically handles authentication
+    const httpResponse = await rpcClient.invitations.list.$post({
+      json: {}
+    })
+    const response = await httpResponse.json()
+    
+    if (response.success && response.data) {
+      invitations.value = response.data
+      ElMessage.success('邀請碼列表資料下載完成')
+    } else {
+      console.error('Failed to load invitations:', response.error)
+      ElMessage.error(`無法載入邀請碼資料: ${response.error?.message || '未知錯誤'}`)
+    }
+  } catch (error) {
+    console.error('Error loading invitations:', error)
+    ElMessage.error('載入邀請碼資料失敗，請重試')
+  } finally {
+    invitationsLoading.value = false
+  }
+}
+
+const copyInvitationCode = (code: string) => {
+  navigator.clipboard.writeText(code)
+  ElMessage.success('邀請碼已複製到剪貼板')
+}
+
+const resendInvitationEmail = async (invitation: Invitation) => {
+  try {
+    // Add to resending set
+    resendingInvites.value.add(invitation.invitationId!)
+
+    const httpResponse = await rpcClient.invitations['resend-email'].$post({
+      json: {
+        invitationId: invitation.invitationId
+      }
+    })
+    const response = await httpResponse.json()
+
+    if (response.success) {
+      ElMessage.success(`邀請信已重新發送至 ${invitation.targetEmail}`)
+
+      // Reload invitations to get updated email sent time
+      await loadInvitations()
+    } else {
+      if (response.error?.code === 'NO_DISPLAY_CODE') {
+        ElMessage.error('無法重送：邀請碼已被隱藏，請聯繫管理員')
+      } else if (response.error?.code === 'INVITATION_EXPIRED') {
+        ElMessage.error('無法重送：邀請碼已過期')
+      } else if (response.error?.code === 'EMAIL_SEND_FAILED') {
+        ElMessage.error('郵件發送失敗，請檢查 SMTP 設定')
+      } else {
+        ElMessage.error(`重送失敗: ${response.error?.message || '未知錯誤'}`)
+      }
+    }
+  } catch (error) {
+    console.error('Error resending invitation email:', error)
+    ElMessage.error('重送邀請信失敗，請重試')
+  } finally {
+    // Remove from resending set
+    resendingInvites.value.delete(invitation.invitationId!)
+  }
+}
+
+const deactivateInvitation = async (invitation: Invitation) => {
+  try {
+    const httpResponse = await rpcClient.invitations.deactivate.$post({
+      json: {
+        invitationId: invitation.invitationId!
+      }
+    })
+    const response = await httpResponse.json()
+
+    if (response.success) {
+      // 重新載入邀請碼列表以獲取最新狀態
+      await loadInvitations()
+
+      ElMessage.success('邀請碼已停用，列表已更新')
+    } else {
+      ElMessage.error(`停用失敗: ${response.error?.message || '未知錯誤'}`)
+    }
+  } catch (error) {
+    console.error('Error deactivating invitation:', error)
+    ElMessage.error('停用失敗，請重試')
+  }
+}
+
+// ========================================
+// BATCH OPERATIONS
+// ========================================
+
+// Toggle user selection
+const toggleUserSelection = (userEmail: string) => {
+  if (selectedUserEmails.value.has(userEmail)) {
+    selectedUserEmails.value.delete(userEmail)
+  } else {
+    selectedUserEmails.value.add(userEmail)
+  }
+}
+
+// Toggle select all
+const toggleSelectAll = () => {
+  if (isAllSelected.value) {
+    selectedUserEmails.value.clear()
+  } else {
+    filteredUsers.value.forEach(user => {
+      selectedUserEmails.value.add(user.userEmail)
+    })
+  }
+}
+
+// Clear selection
+const clearSelection = () => {
+  selectedUserEmails.value.clear()
+}
+
+// Batch activate users
+const batchActivateUsers = async () => {
+  await batchUpdateStatus('active')
+}
+
+// Batch deactivate users
+const batchDeactivateUsers = async () => {
+  await batchUpdateStatus('disabled')
+}
+
+// Batch update status
+const batchUpdateStatus = async (status: 'active' | 'disabled') => {
+  const userEmails = Array.from(selectedUserEmails.value)
+
+  try {
+    const confirmed = await ElMessageBox.confirm(
+      `確定要將 ${userEmails.length} 位使用者設為${status === 'active' ? '啟用' : '停用'}嗎？`,
+      '批量操作確認',
+      {
+        confirmButtonText: '確定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    if (!confirmed) return
+  } catch {
+    return // User cancelled
+  }
+
+  batchUpdatingStatus.value = true
+
+  try {
+    // 使用 TanStack Query mutation（會自動處理 success/error 訊息和 cache invalidation）
+    const result = await batchUpdateUserStatusMutation.mutateAsync({
+      targetEmails: userEmails,
+      status
+    })
+
+    // Update local user status
+    result.results.forEach((r) => {
+      if (r.success) {
+        const user = users.value.find(u => u.userEmail === r.userEmail)
+        if (user) user.status = status
+      }
+    })
+
+    // Clear selection
+    clearSelection()
+
+    // Refresh list
+    await loadUsers()
+  } finally {
+    batchUpdatingStatus.value = false
+  }
+}
+
+// <i class="fas fa-check-circle text-success"></i> Batch reset password methods moved to unified handler above
+
+// ========================================
+// UNLOCK USER OPERATIONS
+// ========================================
+
+// Open unlock drawer
+const openUnlockDrawer = (user: ExtendedUser) => {
+  unlockingUser.value = user
+  unlockReason.value = ''
+  unlockConfirmText.value = ''
+  resetLockCount.value = false
+  showUnlockDrawer.value = true
+}
+
+// Close unlock drawer
+const closeUnlockDrawer = () => {
+  showUnlockDrawer.value = false
+  unlockingUser.value = null
+  unlockReason.value = ''
+  unlockConfirmText.value = ''
+  resetLockCount.value = false
+}
+
+// Confirm unlock
+const confirmUnlock = async () => {
+  if (!canConfirmUnlock.value) {
+    ElMessage.error('請輸入有效的解鎖理由並確認操作')
+    return
+  }
+
+  if (!unlockingUser.value) {
+    ElMessage.error('無效的使用者資訊')
+    return
+  }
+
+  unlocking.value = true
+
+  try {
+    // 使用 TanStack Query mutation（會自動處理 success/error 訊息和 cache invalidation）
+    await unlockUserMutation.mutateAsync({
+      targetEmail: unlockingUser.value.userEmail,
+      unlockReason: unlockReason.value,
+      resetLockCount: resetLockCount.value
+    })
+
+    // Close drawer
+    closeUnlockDrawer()
+
+    // Refresh users list
+    await loadUsers()
+  } finally {
+    unlocking.value = false
+  }
+}
+
+// Drawer close handler
+const handleUnlockDrawerClose = (done: () => void) => {
+  if (unlocking.value) {
+    ElMessage.warning('操作進行中，請稍候')
+    return
+  }
+  done()
+}
+
+const getInvitationStatusClass = (invitation: Invitation): string => {
+  const now = Date.now()
+  if (invitation.expiryTime <= now) {
+    return 'expired'
+  } else if (invitation.status === 'used') {
+    return 'used'
+  } else if (invitation.status === 'active') {
+    return 'active'
+  } else if (invitation.status === 'deactivated') {
+    return 'deactivated'
+  }
+  return 'inactive'
+}
+
+const getInvitationStatusText = (invitation: Invitation): string => {
+  const now = Date.now()
+  if (invitation.expiryTime <= now) {
+    return '已過期'
+  } else if (invitation.status === 'used') {
+    return '已使用'
+  } else if (invitation.status === 'active') {
+    return '有效'
+  } else if (invitation.status === 'deactivated') {
+    return '已停用'
+  }
+  return '停用'
+}
+
+// DISABLED: User tag management methods - tags system disabled
+/*
+// DISABLED: Tags system functions - backend router not available
+const openUserTagManagement = async (user) => {
+  selectedUser.value = user
+  tagSearchText.value = ''
+  await loadAllTags()
+  await loadUserTags(user)
+  showTagManagementModal.value = true
+}
+
+const loadAllTags = async () => {
+  try {
+    // TODO: Tags system disabled - backend router not available
+    // const response = await apiClient.callWithAuth('/tags/list', {})
+
+    if (response.success && response.data) {
+      allTags.value = response.data.filter(tag => tag.isActive)
+    } else {
+      console.error('Failed to load tags:', response.error)
+      allTags.value = []
+    }
+  } catch (error) {
+    console.error('Error loading tags:', error)
+    allTags.value = []
+  }
+}
+
+const loadUserTags = async (user) => {
+  try {
+    // For now, we'll assume user tags are included in the user object
+    // If not, we would need to call a getUserTags API
+    if (!user.tags) {
+      user.tags = []
+    }
+  } catch (error) {
+    console.error('Error loading user tags:', error)
+    user.tags = []
+  }
+}
+
+const assignTagToUser = async (user, tag) => {
+  try {
+    // TODO: Tags system disabled - backend router not available
+    // const response = await apiClient.callWithAuth('/tags/assign/user', {
+    //   userEmail: user.userEmail,
+    //   tagId: tag.tagId
+    // })
+
+    if (response.success) {
+      // Add tag to user's tags array
+      if (!user.tags) user.tags = []
+      user.tags.push({
+        tagId: tag.tagId,
+        tagName: tag.tagName,
+        tagColor: tag.tagColor
+      })
+
+      ElMessage.success(`標籤「${tag.tagName}」已分配給用戶`)
+    } else {
+      ElMessage.error(`分配失敗: ${response.error?.message || '未知錯誤'}`)
+    }
+  } catch (error) {
+    console.error('Error assigning tag to user:', error)
+    ElMessage.error('分配標籤失敗，請重試')
+  }
+}
+
+const removeTagFromUser = async (user, tag) => {
+  try {
+    // TODO: Tags system disabled - backend router not available
+    // const response = await apiClient.callWithAuth('/tags/remove/user', {
+    //   userEmail: user.userEmail,
+    //   tagId: tag.tagId
+    // })
+
+    if (response.success) {
+      // Remove tag from user's tags array
+      const tagIndex = user.tags.findIndex(t => t.tagId === tag.tagId)
+      if (tagIndex !== -1) {
+        user.tags.splice(tagIndex, 1)
+      }
+
+      ElMessage.success(`標籤「${tag.tagName}」已從用戶移除`)
+    } else {
+      ElMessage.error(`移除失敗: ${response.error?.message || '未知錯誤'}`)
+    }
+  } catch (error) {
+    console.error('Error removing tag from user:', error)
+    ElMessage.error('移除標籤失敗，請重試')
+  }
+}
+
+// Tag search methods
+const filterTags = () => {
+  filteredTagSearchText.value = tagSearchText.value
+}
+
+const clearTagSearch = () => {
+  tagSearchText.value = ''
+  filteredTagSearchText.value = ''
+}
+*/
+
+// Navigate to user's login logs
+const viewLoginLogs = (user: ExtendedUser) => {
+  router.push({
+    name: 'admin-logs-login-user',
+    params: { userId: user.userEmail }
+  })
+}
+
+// User editing methods
+const editUser = async (user: ExtendedUser) => {
+  loadingUserData.value = true
+  showEditUserDrawer.value = true
+
+  try {
+    // Fetch fresh user data from backend to ensure we have the latest information
+    let userData: ExtendedUser = user
+    try {
+      const response = await adminApi.users.list({
+        search: user.userEmail,
+        limit: 1
+      })
+
+      const usersList = (response.data?.users || []) as unknown as ExtendedUser[]
+      if (response.success && usersList.length > 0) {
+        // Use fresh data from backend
+        userData = usersList[0]
+        console.log('Using fresh user data from backend for editing')
+
+        // Update the user in the users list with fresh data
+        const userIndex = users.value.findIndex(u => u.userEmail === user.userEmail)
+        if (userIndex !== -1) {
+          users.value[userIndex] = { ...users.value[userIndex], ...userData }
+        }
+      } else {
+        console.warn('Failed to fetch fresh user data, using cached data')
+      }
+    } catch (error) {
+      console.warn('Error fetching fresh user data, using cached data:', error)
+    }
+
+    // Deep clone user data for editing
+    editingUser.value = JSON.parse(JSON.stringify(userData))
+    originalUser.value = JSON.parse(JSON.stringify(userData))
+
+    // Ensure tags and globalGroups are always arrays
+    if (editingUser.value && !editingUser.value.tags) {
+      editingUser.value.tags = []
+    }
+    if (editingUser.value && !editingUser.value.globalGroups) {
+      editingUser.value.globalGroups = []
+    }
+
+    // DISABLED: selectedTagsToAdd.value = [] - tags system disabled
+    selectedGroupsToAdd.value = []
+    
+    // 用戶權限狀態會通過 computed 自動計算
+    
+    // 載入使用者的全域群組和專案群組
+    await Promise.all([
+      loadUserGlobalGroups(user.userEmail),
+      loadUserProjectGroups(user.userEmail)
+    ])
+  
+    // Ensure avatar settings are properly preserved and initialized
+    // Don't override existing avatar data, only set defaults if missing
+    if (editingUser.value && !editingUser.value.avatarSeed) {
+      editingUser.value.avatarSeed = user.avatarSeed || `${user.userEmail}_${Date.now()}`
+    }
+    if (editingUser.value && !editingUser.value.avatarStyle) {
+      editingUser.value.avatarStyle = user.avatarStyle || 'avataaars'
+    }
+    
+    // Parse avatarOptions if it's a string, but preserve existing data
+    let avatarOptions: Record<string, string> = {}
+    if (user.avatarOptions) {
+      if (typeof user.avatarOptions === 'string') {
+        try {
+          avatarOptions = JSON.parse(user.avatarOptions)
+        } catch (e) {
+          console.warn('Failed to parse user avatarOptions:', e)
           avatarOptions = {
             backgroundColor: 'b6e3f4',
             clothesColor: '3c4858',
             skinColor: 'ae5d29'
           }
         }
-
-        // Ensure both editing and original user have the same avatar data
-        if (editingUser.value) {
-          editingUser.value.avatarOptions = JSON.stringify(avatarOptions)
-        }
-        if (originalUser.value && !originalUser.value.avatarOptions) {
-          originalUser.value.avatarOptions = JSON.stringify(avatarOptions)
-        }
-        currentAvatarOptions.value = { ...avatarOptions }
-        editingUserAvatarOptions.value = {
-          backgroundColor: avatarOptions.backgroundColor || 'b6e3f4',
-          clothesColor: avatarOptions.clothesColor || '3c4858',
-          skinColor: avatarOptions.skinColor || 'ae5d29'
-        }
-        avatarError.value = false
-        editingUserAvatarError.value = false
-        editingUserAvatarChanged.value = false
-
-        // Load user's global groups
-        try {
-          await loadUserGlobalGroups(user.userEmail)
-          if (editingUser.value) {
-            editingUser.value.globalGroups = userGlobalGroups.value || []
-          }
-          // 權限狀態會通過 computed 自動更新
-        } catch (error) {
-          console.error('Failed to load user global groups:', error)
-          if (editingUser.value) {
-            editingUser.value.globalGroups = []
-          }
-          // 權限狀態會通過 computed 自動更新
-        }
-      } catch (error) {
-        console.error('Error loading user data for editing:', error)
-        ElMessage.error('載入用戶資料失敗，請重試')
-        showEditUserDrawer.value = false
-      } finally {
-        loadingUserData.value = false
-      }
-    }
-
-    const cancelEditUser = () => {
-      showEditUserDrawer.value = false
-      editingUser.value = null
-      originalUser.value = null
-      // DISABLED: selectedTagsToAdd.value = [] - tags system disabled
-      editingUserAvatarChanged.value = false
-      editingUserAvatarError.value = false
-      editingUserAvatarOptions.value = {
-        backgroundColor: 'b6e3f4',
-        clothesColor: '3c4858',
-        skinColor: 'ae5d29'
-      }
-    }
-
-    const handleDrawerClose = (done: () => void) => {
-      if (saving.value) {
-        return false
-      }
-      done()
-    }
-
-    // DISABLED: removeTagFromEditingUser - tags system disabled
-    /*
-    const removeTagFromEditingUser = (tag) => {
-      if (editingUser.value && editingUser.value.tags) {
-        const tagIndex = editingUser.value.tags.findIndex(t => t.tagId === tag.tagId)
-        if (tagIndex !== -1) {
-          editingUser.value.tags.splice(tagIndex, 1)
-        }
-      }
-    }
-
-    const onTagSelectionChange = () => {
-      // This method can be used for validation or other logic when tags are selected
-    }
-
-    const addSelectedTagsToUser = () => {
-      if (!editingUser.value || selectedTagsToAdd.value.length === 0) return
-
-      // Ensure tags array exists
-      if (!editingUser.value.tags) {
-        editingUser.value.tags = []
-      }
-
-      // Add selected tags to editing user
-      selectedTagsToAdd.value.forEach(tagId => {
-        const tag = allTags.value.find(t => t.tagId === tagId)
-        if (tag && !editingUser.value.tags.find(t => t.tagId === tagId)) {
-          editingUser.value.tags.push(tag)
-        }
-      })
-
-      // Clear selection
-      selectedTagsToAdd.value = []
-    }
-    */
-
-    const generateDicebearUrl = (seed: string, style: string, options: Record<string, string> = {}) => {
-      const baseUrl = `https://api.dicebear.com/7.x/${style}/svg`
-      const params = new URLSearchParams({
-        seed: seed,
-        size: '120',
-        ...options
-      })
-      return `${baseUrl}?${params.toString()}`
-    }
-
-    const generateInitialsAvatar = (user: ExtendedUser | null) => {
-      if (!user) return ''
-      const name = user.displayName || 'U'
-      const initials = name
-        .split(' ')
-        .map((word: string) => word.charAt(0))
-        .join('')
-        .substring(0, 2)
-        .toUpperCase()
-
-      return `https://api.dicebear.com/7.x/initials/svg?seed=${initials}&size=120&backgroundColor=b6e3f4`
-    }
-
-    const generateInitials = (user: ExtendedUser | null) => {
-      if (!user) return 'U'
-      const name = user.displayName || 'User'
-      return name
-        .split(' ')
-        .map((word: string) => word.charAt(0).toUpperCase())
-        .join('')
-        .substring(0, 2)
-    }
-
-    const regenerateUserAvatar = () => {
-      if (editingUser.value) {
-        regeneratingAvatar.value = true
-        // Generate new seed (consistent with UserSettings pattern)
-        const timestamp = Date.now().toString()
-        const emailHash = editingUser.value.userEmail.split('').reduce((a, b) => {
-          a = ((a << 5) - a) + b.charCodeAt(0)
-          return a & a
-        }, 0)
-        editingUser.value.avatarSeed = `${Math.abs(emailHash)}_${timestamp.slice(-6)}`
-        
-        // Reset avatar error
-        avatarError.value = false
-        
-        setTimeout(() => {
-          regeneratingAvatar.value = false
-        }, 500)
-      }
-    }
-
-    const handleAvatarError = () => {
-      avatarError.value = true
-    }
-
-    const onAvatarStyleChange = () => {
-      // Reset avatar options when style changes
-      currentAvatarOptions.value = {}
-      if (editingUser.value) {
-        editingUser.value.avatarOptions = '{}'
-      }
-    }
-
-    const updateAvatarOption = (key: string, value: string) => {
-      if (!currentAvatarOptions.value) {
-        currentAvatarOptions.value = {}
-      }
-      (currentAvatarOptions.value as Record<string, any>)[key] = value
-
-      if (editingUser.value) {
-        const options = editingUser.value.avatarOptions ? JSON.parse(editingUser.value.avatarOptions) : {}
-        options[key] = value
-        editingUser.value.avatarOptions = JSON.stringify(options)
-      }
-    }
-
-    // Editing user avatar methods
-    const regenerateEditingUserAvatar = async () => {
-      if (!editingUser.value) return
-
-      regeneratingEditingUserAvatar.value = true
-      try {
-        // Generate new seed (consistent with UserSettings pattern)
-        const timestamp = Date.now().toString()
-        const emailHash = editingUser.value.userEmail.split('').reduce((a, b) => {
-          a = ((a << 5) - a) + b.charCodeAt(0)
-          return a & a
-        }, 0)
-        const newSeed = `${Math.abs(emailHash)}_${timestamp.slice(-6)}`
-
-        // Update editingUser and trigger reactivity by reassigning
-        editingUser.value = {
-          ...editingUser.value,
-          avatarSeed: newSeed
-        }
-
-        // ✨ Reset error state and mark as changed
-        editingUserAvatarError.value = false
-        editingUserAvatarChanged.value = true
-        retryCount.value = 0
-        isRetrying.value = false
-        isInFallbackMode.value = false
-      } catch (error) {
-        console.error('Error regenerating editing user avatar:', error)
-      } finally {
-        setTimeout(() => {
-          regeneratingEditingUserAvatar.value = false
-        }, 500)
-      }
-    }
-
-    // ✨ Avatar load success handler
-    const handleEditingUserAvatarLoad = () => {
-      console.log('✅ Avatar loaded successfully')
-
-      // Reset error state
-      isRetrying.value = false
-      retryCount.value = 0
-      isInFallbackMode.value = false
-      editingUserAvatarError.value = false
-
-      if (!editingUser.value) return
-
-      // ✨ Save current config to verified list
-      const currentConfig = {
-        seed: editingUser.value.avatarSeed || `${editingUser.value.userEmail}_${Date.now()}`,
-        style: editingUser.value.avatarStyle || 'avataaars',
-        options: { ...editingUserAvatarOptions.value }
-      }
-
-      // Remove retry params
-      delete currentConfig.options._retry
-      delete currentConfig.options._t
-
-      // Check if already exists
-      const isDuplicate = verifiedConfigs.value.some(config =>
-        config.seed === currentConfig.seed &&
-        config.style === currentConfig.style &&
-        JSON.stringify(config.options) === JSON.stringify(currentConfig.options)
-      )
-
-      if (!isDuplicate) {
-        verifiedConfigs.value.push(currentConfig)
-        // Keep last 10 configs
-        if (verifiedConfigs.value.length > 10) {
-          verifiedConfigs.value.shift()
-        }
-        console.log(`📝 Verified config saved. Total: ${verifiedConfigs.value.length}`)
-      }
-    }
-
-    // ✨ Avatar load error handler with retry logic
-    const handleEditingUserAvatarError = async () => {
-      console.warn('⚠️ Avatar load error, attempt:', retryCount.value + 1)
-
-      // Prevent duplicate triggers
-      if (isRetrying.value) return
-
-      // Retry logic
-      if (retryCount.value < maxRetries) {
-        isRetrying.value = true
-        retryCount.value++
-
-        // Exponential backoff: 1s, 2s, 4s
-        const delay = Math.pow(2, retryCount.value - 1) * 1000
-        console.log(`⏳ Retrying in ${delay}ms...`)
-
-        await new Promise(resolve => setTimeout(resolve, delay))
-
-        // Trigger re-render
-        isRetrying.value = false
-        return
-      }
-
-      // ✨ All retries failed - rollback
-      console.error('❌ All retries failed, rolling back...')
-      isRetrying.value = false
-
-      if (verifiedConfigs.value.length > 0 && editingUser.value) {
-        // Rollback to last verified config
-        const lastGoodConfig = verifiedConfigs.value[verifiedConfigs.value.length - 1]
-        console.log('🔄 Rolling back to last verified config:', lastGoodConfig)
-
-        editingUser.value.avatarSeed = lastGoodConfig.seed
-        editingUser.value.avatarStyle = lastGoodConfig.style
-        editingUserAvatarOptions.value = { ...lastGoodConfig.options }
-
-        retryCount.value = 0
-        isInFallbackMode.value = false
-        editingUserAvatarError.value = false
-
-        ElMessage.warning({
-          message: '此配置無法生成頭像，已回退到上一個可用狀態',
-          duration: 3000
-        })
       } else {
-        // No verified configs - enter fallback mode
-        console.warn('⚠️ No verified configs available, entering fallback mode')
-        isInFallbackMode.value = true
-        editingUserAvatarError.value = true
-        retryCount.value = 0
-
-        ElMessage.error({
-          message: '頭像載入失敗，已切換為文字縮寫',
-          duration: 5000
-        })
+        avatarOptions = { ...(user.avatarOptions as unknown as Record<string, string>) }
       }
-    }
-
-    const generateEditingUserInitials = () => {
-      if (!editingUser.value) return 'U'
-      const name = editingUser.value.displayName || 'User'
-      return name
-        .split(' ')
-        .map(word => word.charAt(0).toUpperCase())
-        .join('')
-        .substring(0, 2)
-    }
-
-    const onEditingUserAvatarStyleChange = () => {
-      if (!editingUser.value) return
-
-      // Reset avatar options when style changes
-      editingUserAvatarOptions.value = {
+    } else {
+      // Default avatar options only if none exist
+      avatarOptions = {
         backgroundColor: 'b6e3f4',
         clothesColor: '3c4858',
         skinColor: 'ae5d29'
       }
-
-      editingUser.value.avatarOptions = JSON.stringify(editingUserAvatarOptions.value)
-      editingUserAvatarChanged.value = true
-
-      // ✨ Reset error state for new style
-      editingUserAvatarError.value = false
-      retryCount.value = 0
-      isRetrying.value = false
-      isInFallbackMode.value = false
     }
 
-    const updateEditingUserAvatarOption = (key: string, value: string) => {
-      if (!editingUserAvatarOptions.value) {
-        editingUserAvatarOptions.value = {}
-      }
-      editingUserAvatarOptions.value[key] = value
+    // Ensure both editing and original user have the same avatar data
+    if (editingUser.value) {
+      editingUser.value.avatarOptions = JSON.stringify(avatarOptions)
+    }
+    if (originalUser.value && !originalUser.value.avatarOptions) {
+      originalUser.value.avatarOptions = JSON.stringify(avatarOptions)
+    }
+    currentAvatarOptions.value = { ...avatarOptions }
+    editingUserAvatarOptions.value = {
+      backgroundColor: avatarOptions.backgroundColor || 'b6e3f4',
+      clothesColor: avatarOptions.clothesColor || '3c4858',
+      skinColor: avatarOptions.skinColor || 'ae5d29'
+    }
+    avatarError.value = false
+    editingUserAvatarError.value = false
+    editingUserAvatarChanged.value = false
 
+    // Load user's global groups
+    try {
+      await loadUserGlobalGroups(user.userEmail)
       if (editingUser.value) {
-        // avatarOptions is stored as JSON string, update the local ref instead
-        // The JSON serialization happens when saving
+        editingUser.value.globalGroups = userGlobalGroups.value || []
       }
+      // 權限狀態會通過 computed 自動更新
+    } catch (error) {
+      console.error('Failed to load user global groups:', error)
+      if (editingUser.value) {
+        editingUser.value.globalGroups = []
+      }
+      // 權限狀態會通過 computed 自動更新
+    }
+  } catch (error) {
+    console.error('Error loading user data for editing:', error)
+    ElMessage.error('載入用戶資料失敗，請重試')
+    showEditUserDrawer.value = false
+  } finally {
+    loadingUserData.value = false
+  }
+}
 
-      editingUserAvatarChanged.value = true
+const cancelEditUser = () => {
+  showEditUserDrawer.value = false
+  editingUser.value = null
+  originalUser.value = null
+  // DISABLED: selectedTagsToAdd.value = [] - tags system disabled
+  editingUserAvatarChanged.value = false
+  editingUserAvatarError.value = false
+  editingUserAvatarOptions.value = {
+    backgroundColor: 'b6e3f4',
+    clothesColor: '3c4858',
+    skinColor: 'ae5d29'
+  }
+}
 
-      // ✨ Reset error state for new options
-      editingUserAvatarError.value = false
-      retryCount.value = 0
-      isRetrying.value = false
-      isInFallbackMode.value = false
+const handleDrawerClose = (done: () => void) => {
+  if (saving.value) {
+    return false
+  }
+  done()
+}
+
+// DISABLED: removeTagFromEditingUser - tags system disabled
+/*
+const removeTagFromEditingUser = (tag) => {
+  if (editingUser.value && editingUser.value.tags) {
+    const tagIndex = editingUser.value.tags.findIndex(t => t.tagId === tag.tagId)
+    if (tagIndex !== -1) {
+      editingUser.value.tags.splice(tagIndex, 1)
+    }
+  }
+}
+
+const onTagSelectionChange = () => {
+  // This method can be used for validation or other logic when tags are selected
+}
+
+const addSelectedTagsToUser = () => {
+  if (!editingUser.value || selectedTagsToAdd.value.length === 0) return
+
+  // Ensure tags array exists
+  if (!editingUser.value.tags) {
+    editingUser.value.tags = []
+  }
+
+  // Add selected tags to editing user
+  selectedTagsToAdd.value.forEach(tagId => {
+    const tag = allTags.value.find(t => t.tagId === tagId)
+    if (tag && !editingUser.value.tags.find(t => t.tagId === tagId)) {
+      editingUser.value.tags.push(tag)
+    }
+  })
+
+  // Clear selection
+  selectedTagsToAdd.value = []
+}
+*/
+
+const generateDicebearUrl = (seed: string, style: string, options: Record<string, string> = {}) => {
+  const baseUrl = `https://api.dicebear.com/7.x/${style}/svg`
+  const params = new URLSearchParams({
+    seed: seed,
+    size: '120',
+    ...options
+  })
+  return `${baseUrl}?${params.toString()}`
+}
+
+const generateInitialsAvatar = (user: ExtendedUser | null) => {
+  if (!user) return ''
+  const name = user.displayName || 'U'
+  const initials = name
+    .split(' ')
+    .map((word: string) => word.charAt(0))
+    .join('')
+    .substring(0, 2)
+    .toUpperCase()
+
+  return `https://api.dicebear.com/7.x/initials/svg?seed=${initials}&size=120&backgroundColor=b6e3f4`
+}
+
+const generateInitials = (user: ExtendedUser | null) => {
+  if (!user) return 'U'
+  const name = user.displayName || 'User'
+  return name
+    .split(' ')
+    .map((word: string) => word.charAt(0).toUpperCase())
+    .join('')
+    .substring(0, 2)
+}
+
+const regenerateUserAvatar = () => {
+  if (editingUser.value) {
+    regeneratingAvatar.value = true
+    // Generate new seed (consistent with UserSettings pattern)
+    const timestamp = Date.now().toString()
+    const emailHash = editingUser.value.userEmail.split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0)
+      return a & a
+    }, 0)
+    editingUser.value.avatarSeed = `${Math.abs(emailHash)}_${timestamp.slice(-6)}`
+    
+    // Reset avatar error
+    avatarError.value = false
+    
+    setTimeout(() => {
+      regeneratingAvatar.value = false
+    }, 500)
+  }
+}
+
+const handleAvatarError = () => {
+  avatarError.value = true
+}
+
+const onAvatarStyleChange = () => {
+  // Reset avatar options when style changes
+  currentAvatarOptions.value = {}
+  if (editingUser.value) {
+    editingUser.value.avatarOptions = '{}'
+  }
+}
+
+const updateAvatarOption = (key: string, value: string) => {
+  if (!currentAvatarOptions.value) {
+    currentAvatarOptions.value = {}
+  }
+  currentAvatarOptions.value[key] = value
+
+  if (editingUser.value) {
+    const options = editingUser.value.avatarOptions ? JSON.parse(editingUser.value.avatarOptions) : {}
+    options[key] = value
+    editingUser.value.avatarOptions = JSON.stringify(options)
+  }
+}
+
+// Editing user avatar methods
+const regenerateEditingUserAvatar = async () => {
+  if (!editingUser.value) return
+
+  regeneratingEditingUserAvatar.value = true
+  try {
+    // Generate new seed (consistent with UserSettings pattern)
+    const timestamp = Date.now().toString()
+    const emailHash = editingUser.value.userEmail.split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0)
+      return a & a
+    }, 0)
+    const newSeed = `${Math.abs(emailHash)}_${timestamp.slice(-6)}`
+
+    // Update editingUser and trigger reactivity by reassigning
+    editingUser.value = {
+      ...editingUser.value,
+      avatarSeed: newSeed
     }
 
-    const saveEditingUser = async (eventData: { user?: DrawerUser; avatarChanged?: boolean } = {}) => {
-      if (!editingUser.value || savingEditingUser.value) return
+    // ✨ Reset error state and mark as changed
+    editingUserAvatarError.value = false
+    editingUserAvatarChanged.value = true
+    retryCount.value = 0
+    isRetrying.value = false
+    isInFallbackMode.value = false
+  } catch (error) {
+    console.error('Error regenerating editing user avatar:', error)
+  } finally {
+    setTimeout(() => {
+      regeneratingEditingUserAvatar.value = false
+    }, 500)
+  }
+}
 
-      savingEditingUser.value = true
+// ✨ Avatar load success handler
+const handleEditingUserAvatarLoad = () => {
+  console.log('✅ Avatar loaded successfully')
 
-      try {
-        // Use fresh data from UserEditorDrawer (contains latest changes)
-        const freshUser = eventData?.user || editingUser.value
-        const avatarChanged = eventData?.avatarChanged || false
+  // Reset error state
+  isRetrying.value = false
+  retryCount.value = 0
+  isInFallbackMode.value = false
+  editingUserAvatarError.value = false
 
-        // Sync fresh data back to local state
-        // (drawer 回傳的是本組件傳入的 ExtendedUser 之 JSON clone，欄位完整)
-        if (eventData?.user) {
-          editingUser.value = eventData.user as unknown as ExtendedUser
-        }
+  if (!editingUser.value) return
 
-        // Prepare update data using fresh data from drawer
-        const userData: Record<string, unknown> = {
-          userEmail: freshUser.userEmail,
-          displayName: freshUser.displayName,
-          status: freshUser.status
-        }
+  // ✨ Save current config to verified list
+  const currentConfig = {
+    seed: editingUser.value.avatarSeed || `${editingUser.value.userEmail}_${Date.now()}`,
+    style: editingUser.value.avatarStyle || 'avataaars',
+    options: { ...editingUserAvatarOptions.value }
+  }
 
-        // Include avatar data if changed
-        if (avatarChanged) {
-          userData.avatarSeed = freshUser.avatarSeed
-          userData.avatarStyle = freshUser.avatarStyle || 'avataaars'
-          userData.avatarOptions = freshUser.avatarOptions
-        }
+  // Remove retry params
+  delete currentConfig.options._retry
+  delete currentConfig.options._t
 
-        // 使用 TanStack Query mutation 更新用戶資料
-        await updateUserProfileMutation.mutateAsync({
-          userEmail: freshUser.userEmail,
-          displayName: freshUser.displayName ?? undefined,
-          status: freshUser.status
-        })
+  // Check if already exists
+  const isDuplicate = verifiedConfigs.value.some(config =>
+    config.seed === currentConfig.seed &&
+    config.style === currentConfig.style &&
+    JSON.stringify(config.options) === JSON.stringify(currentConfig.options)
+  )
 
-        // Update the user in the users list
-        const userIndex = users.value.findIndex(u => u.userEmail === editingUser.value!.userEmail)
-        if (userIndex !== -1) {
-          users.value[userIndex] = { ...users.value[userIndex], ...editingUser.value! }
-        }
+  if (!isDuplicate) {
+    verifiedConfigs.value.push(currentConfig)
+    // Keep last 10 configs
+    if (verifiedConfigs.value.length > 10) {
+      verifiedConfigs.value.shift()
+    }
+    console.log(`📝 Verified config saved. Total: ${verifiedConfigs.value.length}`)
+  }
+}
 
-        // Reset change flags
-        editingUserAvatarChanged.value = false
+// ✨ Avatar load error handler with retry logic
+const handleEditingUserAvatarError = async () => {
+  console.warn('⚠️ Avatar load error, attempt:', retryCount.value + 1)
 
-        // Close drawer (mutation 會自動顯示成功訊息)
-        showEditUserDrawer.value = false
-        editingUser.value = null
-        originalUser.value = null
-      } catch (error) {
-        console.error('Error saving editing user:', error)
-        ElMessage.error('保存失敗：' + (error instanceof Error ? error.message : '未知錯誤'))
-      } finally {
-        savingEditingUser.value = false
-      }
+  // Prevent duplicate triggers
+  if (isRetrying.value) return
+
+  // Retry logic
+  if (retryCount.value < maxRetries) {
+    isRetrying.value = true
+    retryCount.value++
+
+    // Exponential backoff: 1s, 2s, 4s
+    const delay = Math.pow(2, retryCount.value - 1) * 1000
+    console.log(`⏳ Retrying in ${delay}ms...`)
+
+    await new Promise(resolve => setTimeout(resolve, delay))
+
+    // Trigger re-render
+    isRetrying.value = false
+    return
+  }
+
+  // ✨ All retries failed - rollback
+  console.error('❌ All retries failed, rolling back...')
+  isRetrying.value = false
+
+  if (verifiedConfigs.value.length > 0 && editingUser.value) {
+    // Rollback to last verified config
+    const lastGoodConfig = verifiedConfigs.value[verifiedConfigs.value.length - 1]
+    console.log('🔄 Rolling back to last verified config:', lastGoodConfig)
+
+    editingUser.value.avatarSeed = lastGoodConfig.seed
+    editingUser.value.avatarStyle = lastGoodConfig.style
+    editingUserAvatarOptions.value = { ...lastGoodConfig.options }
+
+    retryCount.value = 0
+    isInFallbackMode.value = false
+    editingUserAvatarError.value = false
+
+    ElMessage.warning({
+      message: '此配置無法生成頭像，已回退到上一個可用狀態',
+      duration: 3000
+    })
+  } else {
+    // No verified configs - enter fallback mode
+    console.warn('⚠️ No verified configs available, entering fallback mode')
+    isInFallbackMode.value = true
+    editingUserAvatarError.value = true
+    retryCount.value = 0
+
+    ElMessage.error({
+      message: '頭像載入失敗，已切換為文字縮寫',
+      duration: 5000
+    })
+  }
+}
+
+const generateEditingUserInitials = () => {
+  if (!editingUser.value) return 'U'
+  const name = editingUser.value.displayName || 'User'
+  return name
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase())
+    .join('')
+    .substring(0, 2)
+}
+
+const onEditingUserAvatarStyleChange = () => {
+  if (!editingUser.value) return
+
+  // Reset avatar options when style changes
+  editingUserAvatarOptions.value = {
+    backgroundColor: 'b6e3f4',
+    clothesColor: '3c4858',
+    skinColor: 'ae5d29'
+  }
+
+  editingUser.value.avatarOptions = JSON.stringify(editingUserAvatarOptions.value)
+  editingUserAvatarChanged.value = true
+
+  // ✨ Reset error state for new style
+  editingUserAvatarError.value = false
+  retryCount.value = 0
+  isRetrying.value = false
+  isInFallbackMode.value = false
+}
+
+const updateEditingUserAvatarOption = (key: string, value: string) => {
+  if (!editingUserAvatarOptions.value) {
+    editingUserAvatarOptions.value = {}
+  }
+  editingUserAvatarOptions.value[key] = value
+
+  if (editingUser.value) {
+    // avatarOptions is stored as JSON string, update the local ref instead
+    // The JSON serialization happens when saving
+  }
+
+  editingUserAvatarChanged.value = true
+
+  // ✨ Reset error state for new options
+  editingUserAvatarError.value = false
+  retryCount.value = 0
+  isRetrying.value = false
+  isInFallbackMode.value = false
+}
+
+const saveEditingUser = async (eventData: { user?: DrawerUser; avatarChanged?: boolean } = {}) => {
+  if (!editingUser.value || savingEditingUser.value) return
+
+  savingEditingUser.value = true
+
+  try {
+    // Use fresh data from UserEditorDrawer (contains latest changes)
+    const freshUser = eventData?.user || editingUser.value
+    const avatarChanged = eventData?.avatarChanged || false
+
+    // Sync fresh data back to local state
+    // (drawer 回傳的是本組件傳入的 ExtendedUser 之 JSON clone，欄位完整)
+    if (eventData?.user) {
+      editingUser.value = eventData.user as unknown as ExtendedUser
     }
 
-    const saveUserChanges = async () => {
-      if (!editingUser.value || saving.value) return
+    // Prepare update data using fresh data from drawer
+    const userData: Record<string, unknown> = {
+      userEmail: freshUser.userEmail,
+      displayName: freshUser.displayName,
+      status: freshUser.status
+    }
 
-      saving.value = true
+    // Include avatar data if changed
+    if (avatarChanged) {
+      userData.avatarSeed = freshUser.avatarSeed
+      userData.avatarStyle = freshUser.avatarStyle || 'avataaars'
+      userData.avatarOptions = freshUser.avatarOptions
+    }
 
-      try {
-        // Prepare update data in the format backend expects
-        const userData = {
-          userEmail: editingUser.value.userEmail,
-          displayName: editingUser.value.displayName ?? undefined,
-          status: editingUser.value.status,
-          avatarSeed: editingUser.value.avatarSeed ?? undefined,
-          avatarStyle: editingUser.value.avatarStyle || 'avataaars',
-          avatarOptions: editingUser.value.avatarOptions || {}
-        }
+    // 使用 TanStack Query mutation 更新用戶資料
+    await updateUserProfileMutation.mutateAsync({
+      userEmail: freshUser.userEmail,
+      displayName: freshUser.displayName ?? undefined,
+      status: freshUser.status
+    })
 
-        // 使用 TanStack Query mutation 更新用戶資料
-        await updateUserProfileMutation.mutateAsync(userData)
+    // Update the user in the users list
+    const userIndex = users.value.findIndex(u => u.userEmail === editingUser.value!.userEmail)
+    if (userIndex !== -1) {
+      users.value[userIndex] = { ...users.value[userIndex], ...editingUser.value! }
+    }
 
-        // DISABLED: Handle tag changes - tags system disabled (backend router not available)
-        /*
-        const originalTagIds = (originalUser.value.tags || []).map(t => t.tagId)
-        const newTagIds = (editingUser.value.tags || []).map(t => t.tagId)
+    // Reset change flags
+    editingUserAvatarChanged.value = false
 
-        // Remove tags that are no longer present
-        const tagsToRemove = originalTagIds.filter(tagId => !newTagIds.includes(tagId))
-        for (const tagId of tagsToRemove) {
-          // TODO: Tags system disabled - backend router not available
-          // await apiClient.callWithAuth('/tags/unassign/user', {
-          //   userEmail: editingUser.value.userEmail,
-          //   tagId: tagId
-          // })
-        }
+    // Close drawer (mutation 會自動顯示成功訊息)
+    showEditUserDrawer.value = false
+    editingUser.value = null
+    originalUser.value = null
+  } catch (error) {
+    console.error('Error saving editing user:', error)
+    ElMessage.error('保存失敗：' + (error instanceof Error ? error.message : '未知錯誤'))
+  } finally {
+    savingEditingUser.value = false
+  }
+}
 
-        // Add new tags
-        const tagsToAdd = newTagIds.filter(tagId => !originalTagIds.includes(tagId))
-        for (const tagId of tagsToAdd) {
+const saveUserChanges = async () => {
+  if (!editingUser.value || saving.value) return
+
+  saving.value = true
+
+  try {
+    // Prepare update data in the format backend expects
+    const userData = {
+      userEmail: editingUser.value.userEmail,
+      displayName: editingUser.value.displayName ?? undefined,
+      status: editingUser.value.status,
+      avatarSeed: editingUser.value.avatarSeed ?? undefined,
+      avatarStyle: editingUser.value.avatarStyle || 'avataaars',
+      avatarOptions: editingUser.value.avatarOptions || {}
+    }
+
+    // 使用 TanStack Query mutation 更新用戶資料
+    await updateUserProfileMutation.mutateAsync(userData)
+
+    // DISABLED: Handle tag changes - tags system disabled (backend router not available)
+    /*
+    const originalTagIds = (originalUser.value.tags || []).map(t => t.tagId)
+    const newTagIds = (editingUser.value.tags || []).map(t => t.tagId)
+
+    // Remove tags that are no longer present
+    const tagsToRemove = originalTagIds.filter(tagId => !newTagIds.includes(tagId))
+    for (const tagId of tagsToRemove) {
+      // TODO: Tags system disabled - backend router not available
+      // await apiClient.callWithAuth('/tags/unassign/user', {
+      //   userEmail: editingUser.value.userEmail,
+      //   tagId: tagId
+      // })
+    }
+
+    // Add new tags
+    const tagsToAdd = newTagIds.filter(tagId => !originalTagIds.includes(tagId))
+    for (const tagId of tagsToAdd) {
+      // TODO: Tags system disabled - backend router not available
+      // await apiClient.callWithAuth('/tags/assign/user', {
+      //   userEmail: editingUser.value.userEmail,
+      //   tagId: tagId
+      // })
+    }
+
+    // Process selected tags to add
+    if (selectedTagsToAdd.value && selectedTagsToAdd.value.length > 0) {
+      for (const tagId of selectedTagsToAdd.value) {
+        try {
           // TODO: Tags system disabled - backend router not available
           // await apiClient.callWithAuth('/tags/assign/user', {
           //   userEmail: editingUser.value.userEmail,
           //   tagId: tagId
           // })
-        }
-
-        // Process selected tags to add
-        if (selectedTagsToAdd.value && selectedTagsToAdd.value.length > 0) {
-          for (const tagId of selectedTagsToAdd.value) {
-            try {
-              // TODO: Tags system disabled - backend router not available
-              // await apiClient.callWithAuth('/tags/assign/user', {
-              //   userEmail: editingUser.value.userEmail,
-              //   tagId: tagId
-              // })
-            } catch (error) {
-              console.error('Error assigning tag:', error)
-            }
-          }
-          selectedTagsToAdd.value = [] // Clear selections after processing
-        }
-        */
-
-        // Process selected groups to add (使用 TanStack Query mutation)
-        if (selectedGroupsToAdd.value && selectedGroupsToAdd.value.length > 0) {
-          for (const groupId of selectedGroupsToAdd.value) {
-            try {
-              await addUserToGroupMutation.mutateAsync({
-                groupId: groupId,
-                userEmail: editingUser.value.userEmail
-              })
-            } catch (error) {
-              console.error('Error adding user to group:', error)
-            }
-          }
-          selectedGroupsToAdd.value = [] // Clear selections after processing
-        }
-
-        // Reload user data to reflect changes
-        await loadUsers()
-        
-        // Reload user global groups for the drawer
-        if (editingUser.value && editingUser.value.userEmail) {
-          await loadUserGlobalGroups(editingUser.value.userEmail)
-        }
-
-        showEditUserDrawer.value = false
-        ElMessage.success('使用者資料已更新')
-        
-      } catch (error) {
-        console.error('Error saving user changes:', error)
-        ElMessage.error(`儲存失敗: ${error instanceof Error ? error.message : '未知錯誤'}`)
-      } finally {
-        saving.value = false
-      }
-    }
-
-    // Global groups management methods
-    const loadGlobalGroups = async () => {
-      try {
-        const response = await adminApi.globalGroups.list()
-        
-        if (response.success && response.data && response.data.groups) {
-          // Cast to GlobalGroup[] since the admin API returns groups with isActive as boolean
-          globalGroups.value = response.data.groups.filter((group) => group.isActive) as unknown as GlobalGroup[]
-        } else {
-          console.error('Failed to load global groups:', response.error)
-          globalGroups.value = []
-        }
-      } catch (error) {
-        console.error('Error loading global groups:', error)
-        globalGroups.value = []
-      }
-    }
-
-    const addUserToGlobalGroup = async () => {
-      if (!selectedGlobalGroupToAdd.value || !editingUser.value) return
-
-      const group = globalGroups.value.find(g => g.groupId === selectedGlobalGroupToAdd.value)
-      if (!group) return
-
-      // 使用 TanStack Query mutation（會自動處理 success/error 訊息）
-      await addUserToGroupMutation.mutateAsync({
-        groupId: selectedGlobalGroupToAdd.value,
-        userEmail: editingUser.value.userEmail
-      })
-
-      // Add group to user's globalGroups array
-      if (!editingUser.value.globalGroups) editingUser.value.globalGroups = []
-      // Parse globalPermissions from JSON string if needed
-      const permissions = typeof group.globalPermissions === 'string'
-        ? JSON.parse(group.globalPermissions) as string[]
-        : group.globalPermissions
-      editingUser.value.globalGroups.push({
-        groupId: group.groupId,
-        groupName: group.groupName,
-        globalPermissions: permissions
-      })
-
-      selectedGlobalGroupToAdd.value = ''
-    }
-
-    const removeUserFromGlobalGroup = async (group: { groupId: string }) => {
-      if (!editingUser.value) return
-
-      // 使用 TanStack Query mutation（會自動處理 success/error 訊息）
-      await removeUserFromGroupMutation.mutateAsync({
-        groupId: group.groupId,
-        userEmail: editingUser.value.userEmail
-      })
-
-      // Remove group from user's globalGroups array
-      if (editingUser.value.globalGroups) {
-        const index = editingUser.value.globalGroups.findIndex(g => g.groupId === group.groupId)
-        if (index !== -1) {
-          editingUser.value.globalGroups.splice(index, 1)
+        } catch (error) {
+          console.error('Error assigning tag:', error)
         }
       }
+      selectedTagsToAdd.value = [] // Clear selections after processing
+    }
+    */
+
+    // Process selected groups to add (使用 TanStack Query mutation)
+    if (selectedGroupsToAdd.value && selectedGroupsToAdd.value.length > 0) {
+      for (const groupId of selectedGroupsToAdd.value) {
+        try {
+          await addUserToGroupMutation.mutateAsync({
+            groupId: groupId,
+            userEmail: editingUser.value.userEmail
+          })
+        } catch (error) {
+          console.error('Error adding user to group:', error)
+        }
+      }
+      selectedGroupsToAdd.value = [] // Clear selections after processing
     }
 
-    const getGlobalGroupPermissionText = (group: GlobalGroupMembership) => {
-      if (!group.globalPermissions) return '無特殊權限'
-
-      try {
-        const permissions = group.globalPermissions as string[]
-        const permissionTexts: Record<string, string> = {
-          'system_admin': '系統管理員',
-          'create_project': '專案創建',
-          'manage_users': '用戶管理',
-          'generate_invites': '邀請碼生成'
-        }
-
-        const texts = permissions.map((p: string) => permissionTexts[p] || p).join(', ')
-        return texts || '無特殊權限'
-      } catch {
-        return '無特殊權限'
-      }
-    }
-
-    // Project groups management methods
-    const loadUserProjectGroups = async (userEmail: string) => {
-      if (!userEmail) return
-
-      loadingUserProjectGroups.value = true
-      try {
-        const response = await adminApi.users.projectGroups({
-          email: userEmail
-        } as any)
-
-        if (response.success && response.data) {
-          userProjectGroups.value = response.data
-        } else {
-          console.error('Failed to load user project groups:', response.error)
-          userProjectGroups.value = []
-        }
-      } catch (error) {
-        console.error('Error loading user project groups:', error)
-        userProjectGroups.value = []
-      } finally {
-        loadingUserProjectGroups.value = false
-      }
-    }
-
-    const updateGroupAllowChange = async (projectGroup: ProjectGroupMembership) => {
-      const groupKey = `${projectGroup.projectId}-${projectGroup.groupId}`
-      updatingGroupSettings.value.add(groupKey)
-
-      try {
-        const httpResponse = await rpcClient.groups.update.$post({
-          json: {
-            projectId: projectGroup.projectId,
-            groupId: projectGroup.groupId,
-            updates: {
-              allowChange: projectGroup.allowChange
-            }
-          }
-        })
-        const response = await httpResponse.json()
-
-        if (response.success) {
-          ElMessage.success(`群組「${projectGroup.groupName}」的成員變更設定已更新`)
-        } else {
-          // 回復原始狀態
-          projectGroup.allowChange = !projectGroup.allowChange
-          ElMessage.error(`更新失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
-        // 回復原始狀態
-        projectGroup.allowChange = !projectGroup.allowChange
-        console.error('Error updating group allow change:', error)
-        ElMessage.error('更新群組設定失敗，請重試')
-      } finally {
-        updatingGroupSettings.value.delete(groupKey)
-      }
-    }
-
-    const removeUserFromProjectGroup = async (projectGroup: ProjectGroupMembership) => {
-      const groupKey = `${projectGroup.projectId}-${projectGroup.groupId}`
-      removingFromGroups.value.add(groupKey)
-
-      try {
-        const httpResponse = await rpcClient.groups['remove-member'].$post({
-          json: {
-            projectId: projectGroup.projectId,
-            groupId: projectGroup.groupId,
-            userEmail: editingUser.value!.userEmail
-          }
-        })
-        const response = await httpResponse.json()
-
-        if (response.success) {
-          ElMessage.success('已成功從群組中移除用戶')
-          // 重新載入專案群組列表
-          await loadUserProjectGroups(editingUser.value!.userEmail)
-        } else {
-          ElMessage.error(`移除失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
-        console.error('Error removing user from project group:', error)
-        ElMessage.error('移除用戶失敗，請重試')
-      } finally {
-        removingFromGroups.value.delete(groupKey)
-      }
-    }
-
-    // Permission display is now computed from user's group memberships
-
-    // <i class="fas fa-check-circle text-success"></i> Watch search and filter changes - reload users from backend with debounce
-    const debouncedLoadUsers = useDebounceFn(() => {
-      loadUsers()
-    }, 300)
-
-    watch([searchText, statusFilter, groupFilter], () => {
-      console.log('Filter changed - reloading users from backend')
-      debouncedLoadUsers()
-    })
-
-    onMounted(async () => {
-      await loadUsers()  // 等待用戶列表載入完成
-      loadGlobalGroups()
-
-      // Register refresh function with parent SystemAdmin
-      registerRefresh(refreshUsers)
-
-      // Register action function with parent SystemAdmin
-      registerAction(openInviteManagement)
-
-      // Note: URL expansion handling is now managed by watch() for route.params.userEmail
-    })
-
-    onBeforeUnmount(() => {
-      // Cleanup: unregister refresh and action functions
-      registerRefresh(null)
-      registerAction(null)
-    })
-
-    // Watch route changes and permission to auto-open invitation drawer
-    watch(
-      [() => route.name, canManageInvites],
-      ([newRouteName, hasPermission]) => {
-        if (newRouteName === 'admin-users-invitation' && hasPermission === true) {
-          showInviteDrawer.value = true
-          inviteCollapse.value = []
-          loadInvitations()
-        }
-      },
-      { immediate: true }
-    )
-
-    // Watch drawer close to navigate back to users list
-    watch(showInviteDrawer, (newVal) => {
-      if (!newVal && route.name === 'admin-users-invitation') {
-        router.push({ name: 'admin-users' })
-      }
-    })
+    // Reload user data to reflect changes
+    await loadUsers()
     
-    // 在返回之前確保 stats 是可訪問的
-    console.log('Before return - testing stats access:', {
-      stats: stats,
-      statsValue: stats.value,
-      canAccessActiveUsers: stats.value ? stats.value.activeUsers : 'N/A'
-    })
-
-    // Activity expansion methods - refactored to use composable
-    const isUserExpansionReady = (user: ExtendedUser) => {
-      return expandedUserEmails.has(user.userEmail)
+    // Reload user global groups for the drawer
+    if (editingUser.value && editingUser.value.userEmail) {
+      await loadUserGlobalGroups(editingUser.value.userEmail)
     }
 
-    const toggleUserExpansion = (user: ExtendedUser) => {
-      // Toggle logic: only update URL, watch handler will manage expansion state
-      if (isUserExpanded(user.userEmail)) {
-        // Collapse: navigate to base route
-        router.push({ name: 'admin-users' })
-        selectedDate.value = null
-        selectedUserEmail.value = null
-      } else {
-        // Expand: navigate to detail route
-        router.push({
-          name: 'admin-users-detail',
-          params: { userEmail: user.userEmail }
-        })
-      }
+    showEditUserDrawer.value = false
+    ElMessage.success('使用者資料已更新')
+    
+  } catch (error) {
+    console.error('Error saving user changes:', error)
+    ElMessage.error(`儲存失敗: ${error instanceof Error ? error.message : '未知錯誤'}`)
+  } finally {
+    saving.value = false
+  }
+}
+
+// Global groups management methods
+const loadGlobalGroups = async () => {
+  try {
+    const response = await adminApi.globalGroups.list()
+    
+    if (response.success && response.data && response.data.groups) {
+      globalGroups.value = response.data.groups.filter((group) => group.isActive)
+    } else {
+      console.error('Failed to load global groups:', response.error)
+      globalGroups.value = []
     }
+  } catch (error) {
+    console.error('Error loading global groups:', error)
+    globalGroups.value = []
+  }
+}
 
-    // URL → Expansion state synchronization
-    watch(
-      () => route.params.userEmail,
-      async (paramUserEmail) => {
-        const userEmailStr = Array.isArray(paramUserEmail) ? paramUserEmail[0] : paramUserEmail
-        if (userEmailStr && !isUserExpanded(userEmailStr)) {
-          // URL has userEmail → Expand with animation delay
-          await nextTick()
-          setTimeout(() => {
-            expandedUserEmails.add(userEmailStr)
-          }, 350)
-        } else if (!userEmailStr) {
-          // URL has no userEmail → Collapse all
-          collapseAllUsers()
-        }
-      },
-      { immediate: true }
-    )
+const addUserToGlobalGroup = async () => {
+  if (!selectedGlobalGroupToAdd.value || !editingUser.value) return
 
-    const handleDayClick = (payload: { date: string; stats?: unknown; events: unknown[] }) => {
-      selectedDate.value = new Date(payload.date)
-      selectedDayEvents.value = payload.events as any[]
-      const paramUserEmail = route.params.userEmail
-      selectedUserEmail.value = Array.isArray(paramUserEmail) ? paramUserEmail[0] : paramUserEmail || null
-    }
+  const group = globalGroups.value.find(g => g.groupId === selectedGlobalGroupToAdd.value)
+  if (!group) return
 
-    const canViewUserDetails = (user: ExtendedUser | null): boolean => {
-      // Vue 3 Best Practice: Use useAuth() composable
-      if (userEmail.value === user?.userEmail) return true
-      return Boolean(hasAnyPermission(['manage_users', 'system_admin']))
-    }
+  // 使用 TanStack Query mutation（會自動處理 success/error 訊息）
+  await addUserToGroupMutation.mutateAsync({
+    groupId: selectedGlobalGroupToAdd.value,
+    userEmail: editingUser.value.userEmail
+  })
 
-    return {
-      users,
-      searchText,
-      statusFilter,
-      groupFilter,
-      showInviteDrawer,
-      showPasswordResetDrawer,
-      // DISABLED: showTagManagementModal, - tags system disabled
-      selectedUser,
-      generating,
-      generatedInvite,
-      loading,
-      // 🆕 Pagination state
-      loadingMore,
-      hasMore,
-      totalCount,
-      invitationsLoading,
-      processingStatus,
-      inviteForm,
-      // Permission checks
-      canManageUsers,
-      canManageInvites,
-      // DISABLED: Tag management - tags system disabled
-      // allTags,
-      // tagSearchText,
-      // Invitation management
-      invitations,
-      inviteSearchText,
-      inviteStatusFilter,
-      showDeactivatedInvitations,
-      inviteCollapse,
-      filteredInvitations,
-      invitationStats,
-      resendingInvites,
-      // User editing
-      showEditUserDrawer,
-      editingUser,
-      // DISABLED: selectedTagsToAdd, - tags system disabled
-      saving,
-      loadingUserData,
-      // Avatar management
-      regeneratingAvatar,
-      avatarError,
-      currentAvatarOptions,
-      avatarStyles,
-      backgroundColors,
-      clothesColors,
-      // Editing user avatar management
-      regeneratingEditingUserAvatar,
-      editingUserAvatarError,
-      editingUserAvatarChanged,
-      editingUserAvatarOptions,
-      savingEditingUser,
-      // Global groups management
-      globalGroups,
-      selectedGlobalGroupToAdd,
-      // Project groups management
-      userProjectGroups,
-      loadingUserProjectGroups,
-      updatingGroupSettings,
-      removingFromGroups,
-      // Permission display
-      availablePermissions,
-      userGlobalPermissions,
-      // Batch operations state
-      selectedUserEmails,
-      batchUpdatingStatus,
-      // REMOVED: batch password reset variables (security vulnerability)
-      showBatchActions,
-      isAllSelected,
-      isSomeSelected,
-      // Computed & Reactive
-      stats,
-      filteredUsers,
-      // Filter persistence
-      filters,
-      resetFilters,
-      isLoaded,
-      activeFilterCount,
-      handleResetFilters,
-      // Export configuration
-      exportConfig,
-      // DISABLED: availableTagsForUser, - tags system disabled
-      // DISABLED: availableTagsForEditingUser, - tags system disabled
-      availableGlobalGroups,
-      currentAvatarUrl,
-      previewAvatarUrl,
-      hasAvatarChanges,
-      editingUserAvatarUrl,
-      hasUserChanges,
-      // Methods
-      formatTime,
-      getStatValue,
-      refreshUsers,
-      openInviteManagement,
-      toggleUserStatus,
-      resetPassword,
-      handlePasswordResetConfirm,
-      generateInvite,
-      // DISABLED: toggleDefaultTag,
-      toggleDefaultGlobalGroup,
-      // DISABLED: getTagById,
-      getGlobalGroupById,
-      // DISABLED: removeDefaultTag,
-      removeDefaultGlobalGroup,
-      copyInviteCode,
-      copySpecificCode,
-      copyAllCodes,
-      // Invitation methods
-      loadInvitations,
-      copyInvitationCode,
-      resendInvitationEmail,
-      deactivateInvitation,
-      getInvitationStatusClass,
-      getInvitationStatusText,
-      // DISABLED: Tag management methods - tags system disabled
-      // openUserTagManagement,
-      // assignTagToUser,
-      // removeTagFromUser,
-      // filterTags,
-      // clearTagSearch,
-      // User editing methods
-      viewLoginLogs,
-      editUser,
-      cancelEditUser,
-      handleDrawerClose,
-      // DISABLED: removeTagFromEditingUser, - tags system disabled
-      // DISABLED: onTagSelectionChange, - tags system disabled
-      // DISABLED: addSelectedTagsToUser, - tags system disabled
-      // DISABLED: removeSelectedTag, - tags system disabled
-      removeSelectedGroup,
-      removeUserFromGroup,
-      // DISABLED: removeUserTag, - tags system disabled
-      // Avatar methods
-      generateDicebearUrl,
-      generateInitialsAvatar,
-      generateInitials,
-      regenerateUserAvatar,
-      handleAvatarError,
-      onAvatarStyleChange,
-      updateAvatarOption,
-      saveUserChanges,
-      // Editing user avatar methods
-      regenerateEditingUserAvatar,
-      handleEditingUserAvatarLoad,
-      handleEditingUserAvatarError,
-      generateEditingUserInitials,
-      onEditingUserAvatarStyleChange,
-      updateEditingUserAvatarOption,
-      saveEditingUser,
-      // Error handling state
-      verifiedConfigs,
-      retryCount,
-      isRetrying,
-      isInFallbackMode,
-      maxRetries,
-      // Global groups methods
-      loadGlobalGroups,
-      loadUserGlobalGroups,
-      addUserToGlobalGroup,
-      removeUserFromGlobalGroup,
-      getGlobalGroupPermissionText,
-      // Project groups methods
-      loadUserProjectGroups,
-      updateGroupAllowChange,
-      removeUserFromProjectGroup,
-      // Activity expansion state
-      selectedDate,
-      selectedDayEvents,
-      selectedUserEmail,
-      // Activity expansion methods
-      isUserExpanded,
-      isUserExpansionReady,
-      toggleUserExpansion,
-      handleDayClick,
-      canViewUserDetails,
-      // Batch operations methods
-      toggleUserSelection,
-      toggleSelectAll,
-      clearSelection,
-      batchActivateUsers,
-      batchDeactivateUsers,
-      batchUpdateStatus,
-      // REMOVED: batch password reset functions (security vulnerability)
-      // Unlock user state
-      showUnlockDrawer,
-      unlockingUser,
-      unlockReason,
-      unlockConfirmText,
-      resetLockCount,
-      unlocking,
-      canConfirmUnlock,
-      // Unlock user methods
-      isUserLocked,
-      getLockStatusText,
-      openUnlockDrawer,
-      closeUnlockDrawer,
-      confirmUnlock,
-      handleUnlockDrawerClose,
-      // User list avatar methods
-      getUserAvatarUrl,
-      getUserInitials
+  // Add group to user's globalGroups array
+  if (!editingUser.value.globalGroups) editingUser.value.globalGroups = []
+  // Parse globalPermissions from JSON string if needed
+  const permissions = typeof group.globalPermissions === 'string'
+    ? JSON.parse(group.globalPermissions) as string[]
+    : group.globalPermissions
+  editingUser.value.globalGroups.push({
+    groupId: group.groupId,
+    groupName: group.groupName,
+    globalPermissions: permissions
+  })
+
+  selectedGlobalGroupToAdd.value = ''
+}
+
+const removeUserFromGlobalGroup = async (group: { groupId: string }) => {
+  if (!editingUser.value) return
+
+  // 使用 TanStack Query mutation（會自動處理 success/error 訊息）
+  await removeUserFromGroupMutation.mutateAsync({
+    groupId: group.groupId,
+    userEmail: editingUser.value.userEmail
+  })
+
+  // Remove group from user's globalGroups array
+  if (editingUser.value.globalGroups) {
+    const index = editingUser.value.globalGroups.findIndex(g => g.groupId === group.groupId)
+    if (index !== -1) {
+      editingUser.value.globalGroups.splice(index, 1)
     }
   }
 }
+
+const getGlobalGroupPermissionText = (group: GlobalGroupMembership) => {
+  if (!group.globalPermissions) return '無特殊權限'
+
+  try {
+    const permissions = group.globalPermissions as string[]
+    const permissionTexts: Record<string, string> = {
+      'system_admin': '系統管理員',
+      'create_project': '專案創建',
+      'manage_users': '用戶管理',
+      'generate_invites': '邀請碼生成'
+    }
+
+    const texts = permissions.map((p: string) => permissionTexts[p] || p).join(', ')
+    return texts || '無特殊權限'
+  } catch {
+    return '無特殊權限'
+  }
+}
+
+// Project groups management methods
+const loadUserProjectGroups = async (userEmail: string) => {
+  if (!userEmail) return
+
+  loadingUserProjectGroups.value = true
+  try {
+    // 後端 zValidator 要求 { userEmail }；先前送 { email } 會被 400 打回
+    const response = await adminApi.users.projectGroups({ userEmail })
+
+    if (response.success && response.data) {
+      userProjectGroups.value = response.data
+    } else {
+      console.error('Failed to load user project groups:', response.error)
+      userProjectGroups.value = []
+    }
+  } catch (error) {
+    console.error('Error loading user project groups:', error)
+    userProjectGroups.value = []
+  } finally {
+    loadingUserProjectGroups.value = false
+  }
+}
+
+const updateGroupAllowChange = async (projectGroup: ProjectGroupMembership) => {
+  const groupKey = `${projectGroup.projectId}-${projectGroup.groupId}`
+  updatingGroupSettings.value.add(groupKey)
+
+  try {
+    const httpResponse = await rpcClient.groups.update.$post({
+      json: {
+        projectId: projectGroup.projectId,
+        groupId: projectGroup.groupId,
+        updates: {
+          allowChange: projectGroup.allowChange
+        }
+      }
+    })
+    const response = await httpResponse.json()
+
+    if (response.success) {
+      ElMessage.success(`群組「${projectGroup.groupName}」的成員變更設定已更新`)
+    } else {
+      // 回復原始狀態
+      projectGroup.allowChange = !projectGroup.allowChange
+      ElMessage.error(`更新失敗: ${response.error?.message || '未知錯誤'}`)
+    }
+  } catch (error) {
+    // 回復原始狀態
+    projectGroup.allowChange = !projectGroup.allowChange
+    console.error('Error updating group allow change:', error)
+    ElMessage.error('更新群組設定失敗，請重試')
+  } finally {
+    updatingGroupSettings.value.delete(groupKey)
+  }
+}
+
+const removeUserFromProjectGroup = async (projectGroup: ProjectGroupMembership) => {
+  const groupKey = `${projectGroup.projectId}-${projectGroup.groupId}`
+  removingFromGroups.value.add(groupKey)
+
+  try {
+    const httpResponse = await rpcClient.groups['remove-member'].$post({
+      json: {
+        projectId: projectGroup.projectId,
+        groupId: projectGroup.groupId,
+        userEmail: editingUser.value!.userEmail
+      }
+    })
+    const response = await httpResponse.json()
+
+    if (response.success) {
+      ElMessage.success('已成功從群組中移除用戶')
+      // 重新載入專案群組列表
+      await loadUserProjectGroups(editingUser.value!.userEmail)
+    } else {
+      ElMessage.error(`移除失敗: ${response.error?.message || '未知錯誤'}`)
+    }
+  } catch (error) {
+    console.error('Error removing user from project group:', error)
+    ElMessage.error('移除用戶失敗，請重試')
+  } finally {
+    removingFromGroups.value.delete(groupKey)
+  }
+}
+
+// Permission display is now computed from user's group memberships
+
+// <i class="fas fa-check-circle text-success"></i> Watch search and filter changes - reload users from backend with debounce
+const debouncedLoadUsers = useDebounceFn(() => {
+  loadUsers()
+}, 300)
+
+watch([searchText, statusFilter, groupFilter], () => {
+  console.log('Filter changed - reloading users from backend')
+  debouncedLoadUsers()
+})
+
+onMounted(async () => {
+  await loadUsers()  // 等待用戶列表載入完成
+  loadGlobalGroups()
+
+  // Register refresh function with parent SystemAdmin
+  registerRefresh(refreshUsers)
+
+  // Register action function with parent SystemAdmin
+  registerAction(openInviteManagement)
+
+  // Note: URL expansion handling is now managed by watch() for route.params.userEmail
+})
+
+onBeforeUnmount(() => {
+  // Cleanup: unregister refresh and action functions
+  registerRefresh(null)
+  registerAction(null)
+})
+
+// Watch route changes and permission to auto-open invitation drawer
+watch(
+  [() => route.name, canManageInvites],
+  ([newRouteName, hasPermission]) => {
+    if (newRouteName === 'admin-users-invitation' && hasPermission === true) {
+      showInviteDrawer.value = true
+      inviteCollapse.value = []
+      loadInvitations()
+    }
+  },
+  { immediate: true }
+)
+
+// Watch drawer close to navigate back to users list
+watch(showInviteDrawer, (newVal) => {
+  if (!newVal && route.name === 'admin-users-invitation') {
+    router.push({ name: 'admin-users' })
+  }
+})
+
+// 在返回之前確保 stats 是可訪問的
+console.log('Before return - testing stats access:', {
+  stats: stats,
+  statsValue: stats.value,
+  canAccessActiveUsers: stats.value ? stats.value.activeUsers : 'N/A'
+})
+
+// Activity expansion methods - refactored to use composable
+const isUserExpansionReady = (user: ExtendedUser) => {
+  return expandedUserEmails.has(user.userEmail)
+}
+
+const toggleUserExpansion = (user: ExtendedUser) => {
+  // Toggle logic: only update URL, watch handler will manage expansion state
+  if (isUserExpanded(user.userEmail)) {
+    // Collapse: navigate to base route
+    router.push({ name: 'admin-users' })
+    selectedDate.value = null
+    selectedUserEmail.value = null
+  } else {
+    // Expand: navigate to detail route
+    router.push({
+      name: 'admin-users-detail',
+      params: { userEmail: user.userEmail }
+    })
+  }
+}
+
+// URL → Expansion state synchronization
+watch(
+  () => route.params.userEmail,
+  async (paramUserEmail) => {
+    const userEmailStr = Array.isArray(paramUserEmail) ? paramUserEmail[0] : paramUserEmail
+    if (userEmailStr && !isUserExpanded(userEmailStr)) {
+      // URL has userEmail → Expand with animation delay
+      await nextTick()
+      setTimeout(() => {
+        expandedUserEmails.add(userEmailStr)
+      }, 350)
+    } else if (!userEmailStr) {
+      // URL has no userEmail → Collapse all
+      collapseAllUsers()
+    }
+  },
+  { immediate: true }
+)
+
+const handleDayClick = (payload: DayClickPayload) => {
+  selectedDate.value = new Date(payload.date)
+  selectedDayEvents.value = payload.events
+  const paramUserEmail = route.params.userEmail
+  selectedUserEmail.value = Array.isArray(paramUserEmail) ? paramUserEmail[0] : paramUserEmail || null
+}
+
+const canViewUserDetails = (user: ExtendedUser | null): boolean => {
+  // Vue 3 Best Practice: Use useAuth() composable
+  if (userEmail.value === user?.userEmail) return true
+  return Boolean(hasAnyPermission(['manage_users', 'system_admin']))
+}
+
 </script>
 
 <style scoped>

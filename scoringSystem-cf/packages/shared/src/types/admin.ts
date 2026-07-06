@@ -646,12 +646,13 @@ export interface ProjectGroupMembership {
   isActive: boolean
 }
 
+// 對齊後端 zValidator schema（GetUserGlobalGroupsRequestSchema：{ userEmail }）
 export interface UserGlobalGroupsRequest {
-  userId: string
+  userEmail: string
 }
 
 export interface UserProjectGroupsRequest {
-  userId: string
+  userEmail: string
 }
 
 export interface UpdateUserProfileRequest {
