@@ -95,7 +95,6 @@ export default withVueTs(
     files: [
       'packages/frontend/src/components/ProjectCard.vue',
       'packages/frontend/src/components/TopBarUserControls.vue',
-      'packages/frontend/src/components/TurnstileWidget.vue',
       'packages/frontend/src/components/UserSettings.vue',
       'packages/frontend/src/components/admin/GroupManagement.vue',
       'packages/frontend/src/components/admin/project/ViewerManagementDrawer.vue',

@@ -26,11 +26,13 @@ declare global {
     // Turnstile widget API
     turnstile?: {
       reset: (widgetId?: string) => void
-      render: (element: HTMLElement, options: {
+      render: (element: HTMLElement | string, options: {
         sitekey: string
         callback?: (token: string) => void
         'error-callback'?: () => void
+        'expired-callback'?: () => void
         theme?: 'light' | 'dark' | 'auto'
+        size?: 'normal' | 'compact'
       }) => string
       remove: (widgetId: string) => void
     }
