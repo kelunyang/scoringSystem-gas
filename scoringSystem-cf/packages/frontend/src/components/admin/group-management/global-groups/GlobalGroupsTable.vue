@@ -109,6 +109,8 @@ const permissionParseErrors = ref<Set<string>>(new Set())
 
 const getPermissionList = (group: GlobalGroup): string[] => {
   if (!group.globalPermissions) return []
+  // API 直接回傳陣列時不需（也不能）JSON.parse
+  if (Array.isArray(group.globalPermissions)) return group.globalPermissions
 
   try {
     const parsed = JSON.parse(group.globalPermissions)

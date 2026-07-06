@@ -27,9 +27,10 @@ export interface ProjectGroup {
 export interface GlobalGroup {
   groupId: string
   groupName: string
-  globalPermissions?: string // JSON string of permission array
+  globalPermissions?: string | string[] // JSON 字串或已解析的權限陣列（API 回傳為陣列）
   isActive: boolean
-  createdTime: string
+  createdTime?: string | number
+  description?: string | null
   memberCount?: number
 }
 

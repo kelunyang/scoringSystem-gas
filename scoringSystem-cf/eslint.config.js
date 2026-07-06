@@ -89,17 +89,6 @@ export default withVueTs(
     },
   },
 
-  // 遺留 JS SFC（options API，轉 TS 屬獨立遷移工程）
-  // TODO(lint-debt): 逐檔轉 <script lang="ts"> 後自此清單移除
-  {
-    files: [
-      'packages/frontend/src/components/admin/GroupManagement.vue',
-    ],
-    rules: {
-      'vue/block-lang': 'off',
-    },
-  },
-
   // prettier 負責格式，關閉衝突的 stylistic 規則
   prettierSkip,
 )

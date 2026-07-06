@@ -92,7 +92,7 @@ export interface Member {
   displayName?: string
   membershipId?: string
   role?: string
-  joinTime?: number
+  joinTime?: number | string
 }
 
 export interface Props {

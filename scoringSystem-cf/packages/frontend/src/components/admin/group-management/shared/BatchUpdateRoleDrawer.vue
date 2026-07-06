@@ -144,7 +144,7 @@ export interface MemberWithChange {
   role: 'member' | 'leader'  // For compatibility
   oldRole: 'member' | 'leader'  // Original role
   newRole: 'member' | 'leader'  // New role (after pending changes)
-  joinTime?: number
+  joinTime?: number | string
   avatarSeed?: string
   avatarStyle?: string
   avatarOptions?: string | Record<string, any>
