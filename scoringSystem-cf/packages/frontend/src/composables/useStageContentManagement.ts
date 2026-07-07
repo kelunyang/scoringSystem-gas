@@ -97,8 +97,8 @@ export function useStageContentManagement(projectData: any, userData: any) {
           stageId,
           contentType,
           excludeTeachers: false,
-          includeSubmitted: true,  // includeSubmitted: true for ProjectDetail-New to show both approved and submitted
-          excludeUserGroups: false  // excludeUserGroups: false - show all groups for ProjectDetail-New
+          includeSubmitted: true,  // includeSubmitted: true for ProjectDetail to show both approved and submitted
+          excludeUserGroups: false  // excludeUserGroups: false - show all groups for ProjectDetail
         }
       })
       const response = await httpResponse.json()

@@ -24,7 +24,7 @@ const AuthLayout = () => import('@/layouts/AuthLayout.vue')
 
 // Lazy-load components for better performance
 const Dashboard = () => import('@/components/Dashboard.vue')
-const ProjectDetail = () => import('@/components/ProjectDetail-New.vue')
+const ProjectDetail = () => import('@/components/ProjectDetail.vue')
 const Wallet = () => import('@/components/WalletNew.vue')
 const UserSettings = () => import('@/components/UserSettings.vue')
 const SystemAdmin = () => import('@/components/SystemAdmin.vue')
