@@ -35,9 +35,9 @@ Batch 6b 的 advancedChunks 手動分組造成 production 白屏（dev 正常、
 已修復（改用 Rolldown 預設分塊）並補上 `pnpm test:e2e:preview` 防護網。
 完整事故紀錄與其他踩坑見 **[pitfalls.md](pitfalls.md)**。
 
-**遺留待辦**（2026-07-07 更新進度）：
-- `no-explicit-any` 維持 warn，隨遷移逐檔清償中（1141 → 1094 warnings）
-- Options API → script setup 遷移：✅ 一至四波 + UserManagement 完成（10 檔）；UserManagement 附帶**首個組件掛載測試**（6 條安全網）、死碼淨刪 ~1,400 行、修復 user-global/project-groups 請求 body 400 真 bug；僅剩 ProjectManagement（先補測試、拆子組件再轉），見 [options-api-migration.md](options-api-migration.md)
+**遺留待辦**（2026-07-08 更新進度）：
+- `no-explicit-any` 維持 warn，隨遷移逐檔清償中（1141 → 1028 warnings）
+- Options API → script setup 遷移：✅ **全部完成**（2026-07-08，146/146 組件統一 script setup）。UserManagement 附帶**首個組件掛載測試**（6 條安全網）、死碼淨刪 ~1,400 行、修復 user-global/project-groups 請求 body 400 真 bug；ProjectManagement（最後一檔，6,822 行）走「8 條測試安全網 → 拆三個內嵌 drawer（CloneProject/CloneStage/Archive，Archive 順手改 DrawerAlertZone）→ 拆殼 → 檔內 any 62→0」，拆殼再揭露 50+ 死綁定全刪（6,822 → 5,594 行），詳見 [options-api-migration.md](options-api-migration.md)。**待做**：手動冒煙（/admin/projects 全流程）+ production 部署驗證
 - ✅ FA 7.0.1 完成（2026-07-06，含 --fa-width:auto 還原 v6 寬度行為）；KaTeX 0.17 續等 cdnjs（仍停在 0.16.44）
 
 ---

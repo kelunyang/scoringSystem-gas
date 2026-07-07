@@ -17,7 +17,12 @@
   - 檔內 `no-explicit-any` 17 → 0；**型別化又揪出真 bug**：user-global-groups/user-project-groups 請求 body 送 `{ targetEmail }`/`{ email }`，後端 zValidator 要求 `{ userEmail }`，先前一律 400（編輯抽屜的群組清單載不出）。已修並同步 shared 型別
   - 拆殼後 eslint 揭露 53 個被 return 物件掩護的死綁定（邀請碼重複邏輯、頭像編輯殘骸、DISABLED tags），全刪；檔案 5,236 → 約 3,600 行
   - 測試基建備忘：無 Pinia 需求（sudo store 只在 mock 掉的 mutation callback 觸及）；mount 要 `plugins: [ElementPlus]`（main.ts 是全域註冊）；mock 覆寫一律放 spec `beforeEach`（setup.ts 會 clear/restore）；el-* stub 的 props 落在 attrs
-- **殘留**：ProjectManagement（6,822 行）；依驗證策略**先補組件測試再轉換**（測試模式可直接沿用 UserManagement.spec.ts），建議先拆分子組件再轉（對話 E）
+- **ProjectManagement ✅ 完成**（2026-07-08，6 commit：`f874421` 測試 → `00f4af3`/`7031280`/`6df9850` 拆三個內嵌 drawer → `cda4617` 拆殼 → `e752ed7` any 歸零）：
+  - 先補 8 條掛載測試（列表/空狀態/封存開關/搜尋/route 驅動展開/複製專案/複製階段/封存全流程），設計為**抽離不敏感**（只斷言 mutation payload、drawer 開關、穩定 DOM 錨點），六個 commit 全程一字不改通過
+  - 拆出 `project/CloneProjectDrawer.vue`、`CloneStageDrawer.vue`、`ArchiveProjectDrawer.vue`（直接 script setup）＋共用 `utils/projectStatus.ts`；Archive 的違規內嵌 el-alert 順手改 DrawerAlertZone
+  - 與 UserManagement 同款劇本重演：文件寫「TS+Options」但實際早已是純 `setup()`，拆殼後 eslint 揭露 **50+ 個被 return 物件掩護的死綁定**（成員管理/階段排序/檢視者排序等先前抽 drawer 的殘骸），全刪；檔案 6,822 → 5,594 行
+  - 檔內 `no-explicit-any` 62 → 0：drawer 回傳 payload 直接用子組件 export 的 `ProjectForm`/`StageForm`/`SelectedUser` 型別；結算 handler 收 SettlementConfirmationDrawer 的窄版 Stage（單點 cast）；CSV rowMapper 收 `Record<string, unknown>` 符合 ExportableData 契約
+- **殘留**：無 — 146/146 組件皆為 `<script setup lang="ts">`。手動冒煙與 production 部署驗證待做（見完成定義 #4）
 - 執行修正註記：
   - StageGanttChart 實際是 npm `d3` + `@types/d3`（非 CDN 全域），且內部原本就是 `setup()` 寫法、無 `this` 逃逸問題
   - GroupManagement 也已是純 `setup()`（文件寫的混合式已被先前重構清掉），轉換 = 搬殼 + 2,200 行型別化
@@ -112,7 +117,7 @@ pnpm test:e2e                  # 5 個 smoke
 
 ## 完成定義
 
-- [ ] 146/146 組件皆為 `<script setup lang="ts">`
-- [ ] `eslint.config.js` 的 `vue/block-lang` 豁免區塊整段刪除
-- [ ] 轉換檔案內 `no-explicit-any` 歸零（全域歸零另見 2026-summer-todo）
-- [ ] 全 gate 綠燈 + production 部署驗證
+- [x] 146/146 組件皆為 `<script setup lang="ts">`（2026-07-08 達成）
+- [x] `eslint.config.js` 的 `vue/block-lang` 豁免區塊整段刪除
+- [x] 轉換檔案內 `no-explicit-any` 歸零（全域歸零另見 2026-summer-todo；全 monorepo warnings 1141 → 1028）
+- [ ] 全 gate 綠燈 ✅（每 commit 皆過 type-check/lint/test/build/e2e）+ **手動冒煙與 production 部署驗證待做**（/admin/projects：列表/篩選/展開 deep link/複製專案/複製階段/封存解封/抽查其他 drawer）
