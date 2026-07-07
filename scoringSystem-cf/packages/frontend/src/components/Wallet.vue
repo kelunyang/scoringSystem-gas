@@ -1158,7 +1158,7 @@ const { setPageTitle, clearProjectTitle } = useBreadcrumb()
 
 onMounted(() => {
   if (import.meta.env.DEV) {
-    console.log('🔧 [WalletNew] Component mounted')
+    console.log('🔧 [Wallet] Component mounted')
   }
 
   // Set page title using composable
@@ -1178,7 +1178,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (import.meta.env.DEV) {
-    console.log('🧹 [WalletNew] Component unmounting, clearing caches')
+    console.log('🧹 [Wallet] Component unmounting, clearing caches')
   }
   // Clear transaction details cache to prevent memory leaks
   clearDetailsCache()

@@ -3756,7 +3756,7 @@ function openDrawerByAction(action: string, stageId?: string, extraParam?: strin
     case 'analysis':
       modalManager.showVotingAnalysisModal.value = true
       break
-    // 'award' case removed - award functionality moved to WalletNew.vue
+    // 'award' case removed - award functionality moved to Wallet.vue
     case 'reply':
       if (extraParam) {
         // Find comment by ID and open reply drawer

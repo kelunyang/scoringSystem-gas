@@ -142,7 +142,7 @@
 <script setup lang="ts">
 /**
  * @fileoverview Transaction Table Section Component
- * 交易表格組件 - 從 WalletNew.vue 提取
+ * 交易表格組件 - 從 Wallet.vue 提取
  *
  * 單一職責：顯示交易記錄表格和可展開的詳情
  */

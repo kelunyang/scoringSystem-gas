@@ -345,7 +345,7 @@ const projectRoleBadge = computed<UserBadge | null>(() => {
     return getRoleBadgeByName(props.currentRole)
   }
 
-  // 其次使用 permissionLevel（WalletNew 傳入，僅最高權限）
+  // 其次使用 permissionLevel（Wallet 傳入，僅最高權限）
   if (props.permissionLevel !== null && props.permissionLevel !== undefined) {
     return getRoleBadgeByLevel(props.permissionLevel)
   }

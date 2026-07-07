@@ -637,7 +637,7 @@ export function useWalletProjectUsers(
 /**
  * Combined wallet data hook (without transactions)
  *
- * Provides non-transaction data needed for WalletNew component:
+ * Provides non-transaction data needed for Wallet component:
  * - Projects list with stages
  * - Selected project's users (if user has permission)
  * - Selected project's stages

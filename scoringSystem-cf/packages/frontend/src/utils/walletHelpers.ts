@@ -2,7 +2,7 @@
  * @fileoverview Wallet helper utilities
  * 钱包工具函数
  *
- * 从 WalletNew.vue 提取的工具函数
+ * 从 Wallet.vue 提取的工具函数
  * 提供格式化、计算等辅助功能
  */
 

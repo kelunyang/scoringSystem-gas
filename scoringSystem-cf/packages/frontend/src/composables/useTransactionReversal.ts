@@ -2,7 +2,7 @@
  * @fileoverview Transaction reversal composable
  * 交易撤銷 composable
  *
- * 從 WalletNew.vue 提取的交易撤銷邏輯
+ * 從 Wallet.vue 提取的交易撤銷邏輯
  * 負責管理員撤銷交易功能（使用 Drawer 模式）
  */
 

@@ -26,7 +26,7 @@ export interface UserPrefs {
   // 首次使用教學標誌
   /** Dashboard 首次使用教學是否已完成 */
   tutorialDashboardCompleted?: boolean;
-  /** WalletNew 首次使用教學是否已完成 */
+  /** Wallet 首次使用教學是否已完成 */
   tutorialWalletCompleted?: boolean;
   /** ProjectDetail 首次使用教學是否已完成 */
   tutorialProjectDetailCompleted?: boolean;
