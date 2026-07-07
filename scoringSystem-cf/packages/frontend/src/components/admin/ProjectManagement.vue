@@ -979,91 +979,13 @@
     />
 
     <!-- Clone Stage Drawer -->
-    <el-drawer
-      v-model="showCloneStageDrawer"
-      title="複製階段"
-      direction="btt"
-      size="100%"
-      class="drawer-navy"
-    >
-      <div v-loading="cloningStage" class="drawer-body">
-        <!-- 原始階段資訊 -->
-        <div class="form-section">
-          <h4><i class="fas fa-info-circle"></i> 原始階段資訊</h4>
-          <div v-if="cloneStageForm.sourceStage" class="detail-row">
-            <label>階段名稱:</label>
-            <span>{{ cloneStageForm.sourceStage.stageName }}</span>
-          </div>
-        </div>
-
-        <!-- 新階段設定 -->
-        <div class="form-section">
-          <h4><i class="fas fa-edit"></i> 新階段設定</h4>
-          <div class="form-group">
-            <label>新階段名稱 *</label>
-            <el-input
-              v-model="cloneStageForm.newStageName"
-              placeholder="請輸入新階段名稱"
-              clearable
-            />
-          </div>
-        </div>
-
-        <!-- 複製目標選擇 -->
-        <div class="form-section">
-          <h4><i class="fas fa-copy"></i> 複製目標專案</h4>
-          <div class="form-group">
-            <label>選擇目標專案 *</label>
-            <el-select
-              v-model="cloneStageForm.targetProjectIds"
-              multiple
-              filterable
-              placeholder="搜尋並選擇專案..."
-              style="width: 100%"
-            >
-              <el-option
-                v-for="project in manageableProjects"
-                :key="project.projectId"
-                :label="project.projectName"
-                :value="project.projectId"
-              >
-                <span>{{ project.projectName }}</span>
-                <span v-if="project.isCurrent" style="color: var(--el-color-info); margin-left: 8px; font-size: 12px;">
-                  （目前專案）
-                </span>
-              </el-option>
-            </el-select>
-            <div class="field-hint">
-              已選擇 {{ cloneStageForm.targetProjectIds.length }} 個專案（預設為目前專案，可新增其他專案）
-            </div>
-          </div>
-        </div>
-
-        <!-- 確認輸入 -->
-        <div class="form-section">
-          <h4><i class="fas fa-shield-alt"></i> 安全確認</h4>
-          <ConfirmationInput
-            v-model="cloneStageForm.confirmText"
-            keyword="CLONE"
-            hint-action="複製"
-            @confirm="executeCloneStage"
-          />
-        </div>
-
-        <!-- 操作按鈕 -->
-        <div class="drawer-actions">
-          <el-button
-            type="primary"
-            :disabled="!isCloneStageFormValid || cloningStage"
-            @click="executeCloneStage"
-          >
-            <i :class="cloningStage ? 'fas fa-spinner fa-spin' : 'fas fa-copy'"></i>
-            {{ cloningStage ? '複製中...' : '確定複製' }}
-          </el-button>
-          <el-button :disabled="cloningStage" @click="closeCloneStageDrawer">取消</el-button>
-        </div>
-      </div>
-    </el-drawer>
+    <CloneStageDrawer
+      v-model:visible="showCloneStageDrawer"
+      :source-stage="selectedStageForClone"
+      :projects="projects"
+      @update:cloning="cloningStage = $event"
+      @cloned="handleStageCloned"
+    />
 
     <!-- Force Voting Drawer -->
     <ForceVotingDrawer
@@ -1248,6 +1170,7 @@ import ViewerManagementDrawer from './project/ViewerManagementDrawer.vue'
 import ProjectEditorDrawer from './project/ProjectEditorDrawer.vue'
 import StageEditorDrawer from './project/StageEditorDrawer.vue'
 import CloneProjectDrawer from './project/CloneProjectDrawer.vue'
+import CloneStageDrawer from './project/CloneStageDrawer.vue'
 import ForceVotingDrawer from './ForceVotingDrawer.vue'
 import ClearStageVotesDrawer from './ClearStageVotesDrawer.vue'
 import PauseStageDrawer from './PauseStageDrawer.vue'
@@ -1276,8 +1199,7 @@ import {
   useCreateStage,
   useUpdateStage,
   useUpdateStageOrder,
-  useCheckVotingLock,
-  useCloneStageToProjects
+  useCheckVotingLock
 } from '@/composables/admin/useProjects'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
@@ -1299,6 +1221,7 @@ export default {
     ProjectEditorDrawer,
     StageEditorDrawer,
     CloneProjectDrawer,
+    CloneStageDrawer,
     ForceVotingDrawer,
     ClearStageVotesDrawer,
     PauseStageDrawer,
@@ -1347,7 +1270,6 @@ export default {
     const updateStageMutation = useUpdateStage()
     const updateStageOrderMutation = useUpdateStageOrder()
     const checkVotingLockMutation = useCheckVotingLock()
-    const cloneStageToProjectsMutation = useCloneStageToProjects()
 
     // Create a computed ref for backwards compatibility with existing code
     // Cast to ExtendedProject[] for type compatibility with function parameters
@@ -1496,17 +1418,7 @@ export default {
 
     // Clone Stage Drawer State
     const showCloneStageDrawer = ref(false)
-    const cloneStageForm = reactive<{
-      sourceStage: any
-      newStageName: string
-      confirmText: string
-      targetProjectIds: string[]
-    }>({
-      sourceStage: null,
-      newStageName: '',
-      confirmText: '',
-      targetProjectIds: []
-    })
+    const selectedStageForClone = ref<Stage | null>(null)
 
     // Force Voting Drawer State
     const showForceVotingDrawer = ref(false)
@@ -1638,27 +1550,9 @@ export default {
       return count
     })
 
-    // Clone stage form validation
-    const isCloneStageFormValid = computed(() => {
-      return cloneStageForm.newStageName.trim() !== '' &&
-             cloneStageForm.confirmText.toUpperCase() === 'CLONE' &&
-             cloneStageForm.targetProjectIds.length > 0
-    })
-
     // Archive form validation
     const isArchiveFormValid = computed(() => {
       return archiveProjectForm.confirmText.toUpperCase() === 'ARCHIVE'
-    })
-
-    // Projects where user has manage permission (for clone target selection)
-    // Since projects.value already contains only accessible projects for admin users,
-    // we can use them directly
-    const manageableProjects = computed(() => {
-      return projects.value.map(project => ({
-        projectId: project.projectId,
-        projectName: project.projectName,
-        isCurrent: project.projectId === cloneStageForm.sourceStage?.projectId
-      }))
     })
 
     // DISABLED: Tag management computed - tags system disabled
@@ -3649,58 +3543,18 @@ export default {
     }
 
     // Open clone stage drawer
-    const openCloneStageDrawer = (stage: Stage & { projectId?: string }) => {
-      cloneStageForm.sourceStage = stage
-      cloneStageForm.newStageName = ''
-      cloneStageForm.confirmText = ''
-      cloneStageForm.targetProjectIds = stage.projectId ? [stage.projectId] : []  // 預設選中目前專案
+    const openCloneStageDrawer = (stage: Stage) => {
+      selectedStageForClone.value = stage
       showCloneStageDrawer.value = true
     }
 
-    // Execute clone stage
-    const executeCloneStage = async () => {
-      if (!isCloneStageFormValid.value) {
-        ElMessage.warning('請填寫完整資料並輸入 CLONE 確認')
-        return
-      }
-
-      cloningStage.value = true
-
-      try {
-        const targetCount = cloneStageForm.targetProjectIds.length
-        ElMessage.info(`開始複製階段到 ${targetCount} 個專案，請稍候...`)
-
-        // Use TanStack Query mutation
-        await cloneStageToProjectsMutation.mutateAsync({
-          sourceProjectId: cloneStageForm.sourceStage.projectId,
-          stageId: cloneStageForm.sourceStage.stageId,
-          newStageName: cloneStageForm.newStageName.trim(),
-          targetProjectIds: cloneStageForm.targetProjectIds
-        })
-
-        // Refresh stages for affected projects that are currently expanded
-        for (const projectId of cloneStageForm.targetProjectIds) {
-          if (isProjectExpanded(projectId)) {
-            await loadProjectStagesForExpansion(projectId)
-          }
+    // Refresh stages for affected projects that are currently expanded
+    const handleStageCloned = async (targetProjectIds: string[]) => {
+      for (const projectId of targetProjectIds) {
+        if (isProjectExpanded(projectId)) {
+          await loadProjectStagesForExpansion(projectId)
         }
-
-        closeCloneStageDrawer()
-      } catch (error: any) {
-        console.error('Error cloning stage:', error)
-        // Error message already shown by mutation onError handler
-      } finally {
-        cloningStage.value = false
       }
-    }
-
-    // Close clone stage drawer
-    const closeCloneStageDrawer = () => {
-      showCloneStageDrawer.value = false
-      cloneStageForm.sourceStage = null
-      cloneStageForm.newStageName = ''
-      cloneStageForm.confirmText = ''
-      cloneStageForm.targetProjectIds = []
     }
 
     // Force Voting Drawer Functions
@@ -4002,12 +3856,9 @@ export default {
       reverseSettlement,
       archiveStage,
       openCloneStageDrawer,
-      executeCloneStage,
-      closeCloneStageDrawer,
+      handleStageCloned,
       showCloneStageDrawer,
-      cloneStageForm,
-      isCloneStageFormValid,
-      manageableProjects,
+      selectedStageForClone,
       saveStageOrder,
       onDragStart,
       onDrop,
