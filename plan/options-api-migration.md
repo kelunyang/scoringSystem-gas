@@ -23,6 +23,7 @@
   - 與 UserManagement 同款劇本重演：文件寫「TS+Options」但實際早已是純 `setup()`，拆殼後 eslint 揭露 **50+ 個被 return 物件掩護的死綁定**（成員管理/階段排序/檢視者排序等先前抽 drawer 的殘骸），全刪；檔案 6,822 → 5,594 行
   - 檔內 `no-explicit-any` 62 → 0：drawer 回傳 payload 直接用子組件 export 的 `ProjectForm`/`StageForm`/`SelectedUser` 型別；結算 handler 收 SettlementConfirmationDrawer 的窄版 Stage（單點 cast）；CSV rowMapper 收 `Record<string, unknown>` 符合 ExportableData 契約
 - **殘留**：無 — 146/146 組件皆為 `<script setup lang="ts">`。手動冒煙與 production 部署驗證待做（見完成定義 #4）
+- **收尾清理**（2026-07-08，`04c9ffe`）：全量複掃確認零 Options API 殘留（150/150，含新增組件；defineComponent/mixins/this.$ 皆零命中）；順手刪除無引用的 `GlobalAuthModal.new.vue`、`StageTimeline.refactored.backup.vue`，並將現役的 `ProjectDetail-New.vue` 更名為 `ProjectDetail.vue`（router import 同步）
 - 執行修正註記：
   - StageGanttChart 實際是 npm `d3` + `@types/d3`（非 CDN 全域），且內部原本就是 `setup()` 寫法、無 `this` 逃逸問題
   - GroupManagement 也已是純 `setup()`（文件寫的混合式已被先前重構清掉），轉換 = 搬殼 + 2,200 行型別化
