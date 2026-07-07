@@ -959,8 +959,8 @@
       v-model="showSettlementConfirmDrawer"
       :stage="selectedStageForConfirm"
       :project-id="selectedStageForConfirm?.projectId || ''"
-      :settling="settlingStages.has(selectedStageForConfirm?.stageId)"
-      @settlement-confirmed="(stage: any, projectId: string) => handleSettlementConfirmed(stage, projectId)"
+      :settling="settlingStages.has(selectedStageForConfirm?.stageId ?? '')"
+      @settlement-confirmed="handleSettlementConfirmed"
     />
 
     <!-- Reverse Settlement Drawer -->
@@ -1088,9 +1088,13 @@ import StageGanttChart from '../charts/StageGanttChart.vue'
 import ReverseSettlementDrawer from './ReverseSettlementDrawer.vue'
 import SettlementProgressDrawer from './SettlementProgressDrawer.vue'
 import SettlementConfirmationDrawer from './SettlementConfirmationDrawer.vue'
+import type { Stage as SettlementStage } from './SettlementConfirmationDrawer.vue'
 import ViewerManagementDrawer from './project/ViewerManagementDrawer.vue'
+import type { SelectedUser } from './project/ViewerManagementDrawer.vue'
 import ProjectEditorDrawer from './project/ProjectEditorDrawer.vue'
+import type { ProjectForm } from './project/ProjectEditorDrawer.vue'
 import StageEditorDrawer from './project/StageEditorDrawer.vue'
+import type { StageForm } from './project/StageEditorDrawer.vue'
 import CloneProjectDrawer from './project/CloneProjectDrawer.vue'
 import CloneStageDrawer from './project/CloneStageDrawer.vue'
 import ArchiveProjectDrawer from './project/ArchiveProjectDrawer.vue'
@@ -1209,13 +1213,13 @@ const updating = ref(false)
 const loading = computed(() => {
   return (projectsQuery?.isLoading?.value || projectsQuery?.isFetching?.value) ?? false
 })
-const archivingProjects = ref(new Set())  // Track which projects are being archived
-const archivingStages = ref(new Set())    // Track which stages are being archived
-const settlingStages = ref(new Set())
+const archivingProjects = ref(new Set<string>())  // Track which projects are being archived
+const archivingStages = ref(new Set<string>())    // Track which stages are being archived
+const settlingStages = ref(new Set<string>())
 const showPauseStageDrawer = ref(false)   // Pause stage drawer visibility
-const pauseStageData = ref<{ stage: any; project: any } | null>(null) // Data for pause stage drawer
+const pauseStageData = ref<{ stage: Stage; project: ExtendedProject } | null>(null) // Data for pause stage drawer
 const showResumeStageDrawer = ref(false)  // Resume stage drawer visibility
-const resumeStageData = ref<{ stage: any; project: any } | null>(null) // Data for resume stage drawer
+const resumeStageData = ref<{ stage: Stage; project: ExtendedProject } | null>(null) // Data for resume stage drawer
 const showSettlementDrawer = ref(false)  // Settlement progress drawer visibility
 const selectedStageForSettlement = ref<Stage | null>(null) // Selected stage for settlement
 const showSettlementConfirmDrawer = ref(false) // Settlement confirmation drawer visibility
@@ -1382,16 +1386,19 @@ const exportConfig = computed(() => ({
   data: filteredProjects.value as unknown as Record<string, unknown>[],
   filename: '專案列表',
   headers: ['專案名稱', '專案ID', '最低分', '最高分', '學生權重', '教師權重', '可排名數', '狀態'],
-  rowMapper: (project: any) => [
-    project.projectName,
-    project.projectId,
-    project.scoreRangeMin ?? 0,
-    project.scoreRangeMax ?? 100,
-    formatWeight(project.studentRankingWeight),
-    formatWeight(project.teacherRankingWeight),
-    formatCommentRanking(project),
-    getProjectStatusText(project.status)
-  ]
+  rowMapper: (row: Record<string, unknown>) => {
+    const project = row as unknown as ExtendedProject
+    return [
+      project.projectName,
+      project.projectId,
+      project.scoreRangeMin ?? 0,
+      project.scoreRangeMax ?? 100,
+      formatWeight(project.studentRankingWeight),
+      formatWeight(project.teacherRankingWeight),
+      formatCommentRanking(project),
+      getProjectStatusText(project.status)
+    ]
+  }
 }))
 
 // Active filter count
@@ -1448,7 +1455,7 @@ const formatWeight = (weight: number | null | undefined): string => {
  * - 固定TOP N模式（percentile === 0 或 null）：显示"TOP N"
  * - 无数据：显示"系統預設"
  */
-const formatCommentRanking = (project: any): string => {
+const formatCommentRanking = (project: ExtendedProject): string => {
   const percentile = project.commentRewardPercentile
   const maxSelections = project.maxCommentSelections
 
@@ -1680,7 +1687,7 @@ const openCreateProjectModal = async () => {
   showEditModal.value = true
 }
 
-const editProject = (project: any) => {
+const editProject = (project: ExtendedProject) => {
   editForm.projectId = project.projectId
   editForm.projectName = project.projectName
   editForm.description = project.description || ''
@@ -1693,7 +1700,7 @@ const editProject = (project: any) => {
  * Save scoring configuration for a project
  * Always sends all scoring config fields (loaded from system defaults or project config)
  */
-const saveScoringConfig = async (projectId: string, formData: any) => {
+const saveScoringConfig = async (projectId: string, formData: ProjectForm) => {
   // Build scoring config update object with all fields
   const scoringConfig = {
     maxCommentSelections: formData.maxCommentSelections,
@@ -1716,7 +1723,7 @@ const saveScoringConfig = async (projectId: string, formData: any) => {
 }
 
 // Unified save function for both create and update
-const saveProject = async (formData: any) => {
+const saveProject = async (formData: ProjectForm) => {
   // Validate the emitted form data from the child component
   if (!formData.projectName.trim()) {
     ElMessage.warning('請輸入專案名稱')
@@ -1778,7 +1785,7 @@ const saveProject = async (formData: any) => {
 
       showEditModal.value = false
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error saving project:', error)
     // Error messages are already shown by mutation onError handlers
   } finally {
@@ -1805,7 +1812,7 @@ const handleArchiveConfirm = async () => {
   }
 }
 
-const archiveProject = async (project: any) => {
+const archiveProject = async (project: ExtendedProject) => {
   try {
     // Add to archiving set
     archivingProjects.value.add(project.projectId)
@@ -1817,7 +1824,7 @@ const archiveProject = async (project: any) => {
         status: 'archived'
       }
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error archiving project:', error)
     // Error message already shown by mutation onError handler
   } finally {
@@ -1826,7 +1833,7 @@ const archiveProject = async (project: any) => {
   }
 }
 
-const unarchiveProject = async (project: any) => {
+const unarchiveProject = async (project: ExtendedProject) => {
   try {
     // Add to archiving set (reuse the same tracking set)
     archivingProjects.value.add(project.projectId)
@@ -1838,7 +1845,7 @@ const unarchiveProject = async (project: any) => {
         status: 'active'
       }
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error unarchiving project:', error)
     // Error message already shown by mutation onError handler
   } finally {
@@ -1848,7 +1855,7 @@ const unarchiveProject = async (project: any) => {
 }
 
 // Navigate to Wallet Page
-const navigateToWallet = (project: any) => {
+const navigateToWallet = (project: ExtendedProject) => {
   router.push({
     name: 'wallets',
     params: { projectId: project.projectId }
@@ -1857,7 +1864,7 @@ const navigateToWallet = (project: any) => {
 }
 
 // Event Log Functions
-const openEventLogViewer = (project: any) => {
+const openEventLogViewer = (project: ExtendedProject) => {
   selectedProject.value = project
   showEventLogDrawer.value = true
 }
@@ -1871,14 +1878,14 @@ const handleViewerCommand = (command: string, project: Project | ExtendedProject
   }
 }
 
-const navigateToProjectGroups = (project: any) => {
+const navigateToProjectGroups = (project: ExtendedProject) => {
   router.push({
     name: 'admin-groups-project-detail',
     params: { projectId: project.projectId }
   })
 }
 
-const openViewerManagement = async (project: any) => {
+const openViewerManagement = async (project: ExtendedProject) => {
   selectedProject.value = project
   showViewerDrawer.value = true
   await loadProjectViewers(project.projectId)
@@ -1893,7 +1900,7 @@ const loadProjectViewers = async (projectId: string) => {
     console.log('🔍 [loadProjectViewers] API response:', result)
     projectViewers.value = result as ProjectViewer[]
     console.log('✅ [loadProjectViewers] Loaded viewers:', projectViewers.value)
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ [loadProjectViewers] Exception:', error)
     projectViewers.value = []
     ElMessage.error('載入存取者清單失敗')
@@ -1903,9 +1910,9 @@ const loadProjectViewers = async (projectId: string) => {
   }
 }
 
-const searchUsers = async (payload: any) => {
+const searchUsers = async (payload: { searchText: string }) => {
   // Accept payload from child component event
-  const searchText = payload?.searchText || payload || ''
+  const searchText = payload?.searchText || ''
 
   if (!searchText.trim()) {
     ElMessage.warning('請輸入搜尋內容')
@@ -1936,7 +1943,7 @@ const searchUsers = async (payload: any) => {
         // Use TanStack Query mutation
         const result = await searchUsersMutation.mutateAsync({ query, limit: 50 })
         allResults.push(...result)
-      } catch (error: any) {
+      } catch (error) {
         console.error(`Error searching for "${query}":`, error)
         errors.push(`搜尋「${query}」時發生錯誤`)
       }
@@ -1979,7 +1986,7 @@ const searchUsers = async (payload: any) => {
   }
 }
 
-const addSelectedViewers = async (payload: any) => {
+const addSelectedViewers = async (payload: { users: SelectedUser[] }) => {
   // Accept payload from child component event
   // Users is now an array of { userEmail, role } objects
   const users = payload?.users || []
@@ -2000,7 +2007,7 @@ const addSelectedViewers = async (payload: any) => {
     // Use TanStack Query mutation for batch add
     const result = await addViewersBatchMutation.mutateAsync({
       projectId: selectedProject.value.projectId,
-      viewers: users.map((u: any) => ({
+      viewers: users.map(u => ({
         userEmail: u.userEmail,
         role: u.role || 'teacher'
       }))
@@ -2030,7 +2037,7 @@ const addSelectedViewers = async (payload: any) => {
     searchResults.value = []
     selectedUsers.value = []
     await loadProjectViewers(selectedProject.value.projectId)
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error adding selected viewers:', error)
     // Error message already shown by mutation onError handler
   } finally {
@@ -2053,7 +2060,7 @@ const updateViewerRole = async ({ userEmail, newRole }: { userEmail: string; new
     })
     // Reload viewers
     await loadProjectViewers(selectedProject.value.projectId)
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating viewer role:', error)
     // Error message already shown by mutation onError handler
   }
@@ -2073,7 +2080,7 @@ const removeViewer = async (userEmail: string) => {
     })
     // Reload viewers
     await loadProjectViewers(selectedProject.value.projectId)
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error removing viewer:', error)
     // Error message already shown by mutation onError handler
   }
@@ -2189,7 +2196,7 @@ const batchRemoveViewers = async () => {
 }
 
 // Project Expansion Functions - refactored to use composable
-const toggleProjectExpansion = (project: any) => {
+const toggleProjectExpansion = (project: ExtendedProject) => {
   const projectId = project.projectId
 
   if (isProjectExpanded(projectId)) {
@@ -2261,7 +2268,7 @@ const loadProjectMembers = async (projectId: string) => {
     // Use TanStack Query mutation
     const result = await listViewersMutation.mutateAsync({ projectId })
     projectMembersMap.value.set(projectId, result)
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error loading project members:', error)
     projectMembersMap.value.set(projectId, [])
     ElMessage.error('載入專案成員失敗')
@@ -2295,7 +2302,7 @@ const addMemberToProject = async () => {
 
     // Reload members for this project
     await loadProjectMembers(selectedProjectForMember.value.projectId)
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error adding member:', error)
     // Error message already shown by mutation onError handler
   } finally {
@@ -2304,7 +2311,7 @@ const addMemberToProject = async () => {
 }
 
 
-const editStage = async (stage: any, project: any = null) => {
+const editStage = async (stage: Stage, project: ExtendedProject | null = null) => {
   // Clear any previous errors
   stageFormError.value = null
 
@@ -2318,7 +2325,7 @@ const editStage = async (stage: any, project: any = null) => {
       projectStagesMap.get(p.projectId)?.some((s: Stage) => s.stageId === stage.stageId)
     )
     if (projectForStage) {
-      selectedProject.value = projectForStage as any
+      selectedProject.value = projectForStage
     } else {
       console.error('Cannot determine project for stage:', stage)
       ElMessage.error('無法確定階段所屬的專案')
@@ -2368,7 +2375,7 @@ const editStage = async (stage: any, project: any = null) => {
 
     // Check voting lock (if stage has votes, prevent time editing)
     await checkVotingLock(selectedProject.value!.projectId, stageDetails.stageId)
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error loading stage details:', error)
     ElMessage.error('載入階段詳情失敗，請重試')
     showEditStageModal.value = false
@@ -2401,7 +2408,7 @@ const checkVotingLock = async (projectId: string, stageId: string) => {
   }
 }
 
-const updateStageDetails = async (formData: any) => {
+const updateStageDetails = async (formData: StageForm) => {
   // Clear previous errors
   stageFormError.value = null
 
@@ -2487,11 +2494,11 @@ const updateStageDetails = async (formData: any) => {
       await loadProjectStagesForExpansion(selectedProject.value!.projectId)
       showEditStageModal.value = false
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error saving stage:', error)
     stageFormError.value = {
       title: editStageForm.stageId ? '更新失敗' : '新增階段失敗',
-      message: error.message || '未知錯誤'
+      message: error instanceof Error ? error.message : '未知錯誤'
     }
     // Error message already shown by mutation onError handler
   } finally {
@@ -2502,17 +2509,17 @@ const updateStageDetails = async (formData: any) => {
 
 
 // Drag and Drop Functions
-const handleDragStart = (stage: any, event: any) => {
+const handleDragStart = (stage: Stage, event: DragEvent) => {
   draggedStage.value = stage
-  event.dataTransfer.effectAllowed = 'move'
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
 }
 
-const handleDragOver = (event: any) => {
+const handleDragOver = (event: DragEvent) => {
   event.preventDefault()
-  event.dataTransfer.dropEffect = 'move'
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
 }
 
-const handleDrop = (event: any, projectId: string, targetIndex: number) => {
+const handleDrop = (event: DragEvent, projectId: string, targetIndex: number) => {
   event.preventDefault()
   
   if (!draggedStage.value) {
@@ -2626,7 +2633,7 @@ const saveStageOrder = async (projectId: string | null = null, stages: Stage[] |
     }
 
     ElMessage.success('階段順序已儲存')
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error saving stage order:', error)
     ElMessage.error('儲存階段順序失敗，請重試')
   } finally {
@@ -2642,8 +2649,8 @@ const openSettlementConfirmDrawer = (stage: Stage & { projectId?: string }, proj
   showSettlementConfirmDrawer.value = true
 }
 
-// Handle settlement confirmation
-const handleSettlementConfirmed = (stage: Stage, projectId: string) => {
+// Handle settlement confirmation (drawer emits its own loose Stage shape)
+const handleSettlementConfirmed = (stage: SettlementStage, projectId: string) => {
   // Close confirmation drawer
   showSettlementConfirmDrawer.value = false
   // Open progress drawer and trigger settlement
@@ -2771,7 +2778,7 @@ const archiveStage = async (stage: Stage, project: ExtendedProject | null) => {
 
     // Reload stages to get updated status
     await loadProjectStagesForExpansion(projectId)
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error archiving stage:', error)
     ElMessage.error('封存階段失敗，請重試')
   } finally {
@@ -2801,7 +2808,7 @@ const unarchiveStage = async (stage: Stage, project: ExtendedProject | null) => 
 
     // Reload stages to get updated status
     await loadProjectStagesForExpansion(projectId)
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error unarchiving stage:', error)
     ElMessage.error('解除封存階段失敗，請重試')
   } finally {
@@ -2906,7 +2913,7 @@ const handleClearVotesConfirmed = () => {
 }
 
 // Pause Stage Drawer Functions
-const openPauseStageDrawer = (stage: any, project: any) => {
+const openPauseStageDrawer = (stage: Stage, project: ExtendedProject) => {
   pauseStageData.value = { stage, project }
   showPauseStageDrawer.value = true
 }
@@ -2920,7 +2927,7 @@ const handlePauseStageConfirmed = () => {
 }
 
 // Resume Stage Drawer Functions
-const openResumeStageDrawer = (stage: any, project: any) => {
+const openResumeStageDrawer = (stage: Stage, project: ExtendedProject) => {
   resumeStageData.value = { stage, project }
   showResumeStageDrawer.value = true
 }
