@@ -972,71 +972,11 @@
     />
 
     <!-- Clone Project Drawer -->
-    <el-drawer
-      v-model="showCloneProjectDrawer"
-      title="複製專案"
-      direction="btt"
-      size="100%"
-      class="drawer-navy"
-    >
-      <div v-loading="cloningProject" class="drawer-body">
-        <!-- 原始專案資訊 -->
-        <div class="form-section">
-          <h4><i class="fas fa-info-circle"></i> 原始專案資訊</h4>
-          <div v-if="cloneProjectForm.sourceProject" class="detail-row">
-            <label>專案名稱:</label>
-            <span>{{ cloneProjectForm.sourceProject.projectName }}</span>
-          </div>
-        </div>
-
-        <!-- 新專案設定 -->
-        <div class="form-section">
-          <h4><i class="fas fa-edit"></i> 新專案設定</h4>
-          <div class="form-group">
-            <label>新專案名稱 *</label>
-            <el-input
-              v-model="cloneProjectForm.newProjectName"
-              placeholder="請輸入新專案名稱"
-              clearable
-            />
-          </div>
-          <div class="form-group" style="margin-top: 16px;">
-            <el-switch
-              v-model="cloneProjectForm.copyViewers"
-              active-text="一併複製參與者"
-              inactive-text=""
-            />
-            <div class="field-hint" style="margin-top: 4px;">
-              開啟後會將原專案的存取者（教師、觀察者、成員）一併複製到新專案。帳號已不存在的使用者會自動跳過。
-            </div>
-          </div>
-        </div>
-
-        <!-- 確認輸入 -->
-        <div class="form-section">
-          <h4><i class="fas fa-shield-alt"></i> 安全確認</h4>
-          <ConfirmationInput
-            v-model="cloneProjectForm.confirmText"
-            keyword="CLONE"
-            hint-action="複製"
-            @confirm="executeCloneProject"
-          />
-        </div>
-
-        <!-- 操作按鈕 -->
-        <div class="drawer-actions">
-          <el-button
-            type="primary"
-            :disabled="!isCloneFormValid || cloningProject"
-            @click="executeCloneProject"
-          >
-            <i :class="cloningProject ? 'fas fa-spinner fa-spin' : 'fas fa-copy'"></i>
-            {{ cloningProject ? '複製中...' : '確定複製' }}
-          </el-button>
-          <el-button :disabled="cloningProject" @click="closeCloneDrawer">取消</el-button>
-        </div>
-      </div>
-    </el-drawer>
+    <CloneProjectDrawer
+      v-model:visible="showCloneProjectDrawer"
+      :source-project="selectedProjectForClone"
+      @update:cloning="cloningProject = $event"
+    />
 
     <!-- Clone Stage Drawer -->
     <el-drawer
@@ -1252,7 +1192,7 @@
 <script lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, inject, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessageBox, ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { getStageStatusText, getStageStatusType } from '@/utils/stageStatus'
 import type { Project, Stage, User } from '@repo/shared'
 
@@ -1307,6 +1247,7 @@ import SettlementConfirmationDrawer from './SettlementConfirmationDrawer.vue'
 import ViewerManagementDrawer from './project/ViewerManagementDrawer.vue'
 import ProjectEditorDrawer from './project/ProjectEditorDrawer.vue'
 import StageEditorDrawer from './project/StageEditorDrawer.vue'
+import CloneProjectDrawer from './project/CloneProjectDrawer.vue'
 import ForceVotingDrawer from './ForceVotingDrawer.vue'
 import ClearStageVotesDrawer from './ClearStageVotesDrawer.vue'
 import PauseStageDrawer from './PauseStageDrawer.vue'
@@ -1324,7 +1265,6 @@ import {
   useUpdateProject,
   useGetProject,
   useUpdateScoringConfig,
-  useCloneProject,
   useListProjectViewers,
   useAddViewersBatch,
   useAddViewer,
@@ -1358,6 +1298,7 @@ export default {
     ViewerManagementDrawer,
     ProjectEditorDrawer,
     StageEditorDrawer,
+    CloneProjectDrawer,
     ForceVotingDrawer,
     ClearStageVotesDrawer,
     PauseStageDrawer,
@@ -1394,7 +1335,6 @@ export default {
     const updateProjectMutation = useUpdateProject()
     const getProjectMutation = useGetProject()
     const updateScoringConfigMutation = useUpdateScoringConfig()
-    const cloneProjectMutation = useCloneProject()
     const listViewersMutation = useListProjectViewers()
     const addViewersBatchMutation = useAddViewersBatch()
     const addViewerMutation = useAddViewer()
@@ -1552,17 +1492,7 @@ export default {
 
     // Clone Project Drawer State
     const showCloneProjectDrawer = ref(false)
-    const cloneProjectForm = reactive<{
-      sourceProject: ExtendedProject | null
-      newProjectName: string
-      confirmText: string
-      copyViewers: boolean
-    }>({
-      sourceProject: null,
-      newProjectName: '',
-      confirmText: '',
-      copyViewers: false
-    })
+    const selectedProjectForClone = ref<ExtendedProject | null>(null)
 
     // Clone Stage Drawer State
     const showCloneStageDrawer = ref(false)
@@ -1706,12 +1636,6 @@ export default {
       if (creatorFilter.value) count++
       if (showArchivedProjects.value) count++ // Show archived projects switch is active
       return count
-    })
-
-    // Clone form validation
-    const isCloneFormValid = computed(() => {
-      return cloneProjectForm.newProjectName.trim() !== '' &&
-             cloneProjectForm.confirmText.toUpperCase() === 'CLONE'
     })
 
     // Clone stage form validation
@@ -3720,73 +3644,8 @@ export default {
 
     // Open clone project drawer
     const openCloneProjectDrawer = (project: Project | ExtendedProject) => {
-      cloneProjectForm.sourceProject = project as ExtendedProject
-      cloneProjectForm.newProjectName = ''
-      cloneProjectForm.confirmText = ''
-      cloneProjectForm.copyViewers = false
+      selectedProjectForClone.value = project as ExtendedProject
       showCloneProjectDrawer.value = true
-    }
-
-    // Execute clone project
-    const executeCloneProject = async () => {
-      if (!isCloneFormValid.value) {
-        ElMessage.warning('請填寫完整資料並輸入 CLONE 確認')
-        return
-      }
-
-      cloningProject.value = true
-      ElMessage.info('開始複製專案，請稍候...')
-
-      try {
-        // Use TanStack Query mutation
-        const data = await cloneProjectMutation.mutateAsync({
-          projectId: cloneProjectForm.sourceProject!.projectId,
-          newProjectName: cloneProjectForm.newProjectName.trim(),
-          copyViewers: cloneProjectForm.copyViewers
-        })
-
-        let message = `專案「${cloneProjectForm.newProjectName}」複製成功！`
-
-        // Show viewer copy results if applicable
-        if (data?.viewerCopyResult) {
-          const { copied, skipped, total } = data.viewerCopyResult
-          if (total > 0) {
-            message += `\n參與者複製：共 ${total} 人，成功 ${copied} 人`
-            if (skipped.length > 0) {
-              message += `，跳過 ${skipped.length} 人（帳號已不存在）`
-            }
-          } else {
-            message += '\n原專案無參與者需要複製。'
-          }
-
-          // If there are skipped viewers, show a detailed warning
-          if (skipped.length > 0) {
-            ElMessageBox.alert(
-              `以下帳號因已不存在而被跳過：\n${skipped.join('\n')}`,
-              '部分參與者未複製',
-              { type: 'warning', confirmButtonText: '了解' }
-            )
-          }
-        }
-
-        ElMessage.success(message)
-        // Close drawer
-        closeCloneDrawer()
-      } catch (error: any) {
-        console.error('Error cloning project:', error)
-        // Error message already shown by mutation onError handler
-      } finally {
-        cloningProject.value = false
-      }
-    }
-
-    // Close clone drawer
-    const closeCloneDrawer = () => {
-      showCloneProjectDrawer.value = false
-      cloneProjectForm.sourceProject = null
-      cloneProjectForm.newProjectName = ''
-      cloneProjectForm.confirmText = ''
-      cloneProjectForm.copyViewers = false
     }
 
     // Open clone stage drawer
@@ -4071,11 +3930,8 @@ export default {
       archiveProject,
       unarchiveProject,
       openCloneProjectDrawer,
-      executeCloneProject,
-      closeCloneDrawer,
       showCloneProjectDrawer,
-      cloneProjectForm,
-      isCloneFormValid,
+      selectedProjectForClone,
       // Archive Project Drawer
       showArchiveProjectDrawer,
       archiveProjectForm,
