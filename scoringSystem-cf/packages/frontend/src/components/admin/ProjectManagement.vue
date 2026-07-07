@@ -707,8 +707,8 @@
           <div class="detail-row">
             <label>狀態:</label>
             <span class="status-badge" :class="selectedProject.status">
-              <i :class="getStatusIcon(selectedProject.status)"></i>
-              {{ getStatusText(selectedProject.status) }}
+              <i :class="getProjectStatusIcon(selectedProject.status)"></i>
+              {{ getProjectStatusText(selectedProject.status) }}
             </span>
           </div>
           
@@ -1023,90 +1023,12 @@
     />
 
     <!-- Archive Project Drawer -->
-    <el-drawer
-      v-model="showArchiveProjectDrawer"
-      title="封存專案"
-      direction="ttb"
-      size="100%"
-      class="drawer-maroon"
-    >
-      <div v-loading="archivingProjects.has(archiveProjectForm.sourceProject?.projectId)" class="drawer-body">
-        <!-- 警告提示 -->
-        <el-alert
-          type="warning"
-          :closable="false"
-          style="margin-bottom: 20px;"
-        >
-          <template #title>
-            <strong>⚠️ 重要警告</strong>
-          </template>
-          <div>
-            <p><strong>封存專案後：</strong></p>
-            <ul style="margin: 10px 0; padding-left: 20px;">
-              <li>專案將從主列表中隱藏（除非開啟「顯示封存專案」開關）</li>
-              <li>所有成員將無法訪問或修改專案內容</li>
-              <li>階段、提交、評論等所有數據將被保留但不可編輯</li>
-              <li>您可以隨時解除封存以恢復專案</li>
-            </ul>
-            <p><strong>此操作不會刪除任何數據，可以撤銷。</strong></p>
-          </div>
-        </el-alert>
-
-        <!-- 原始專案資訊 -->
-        <div class="form-section">
-          <h4><i class="fas fa-info-circle"></i> 專案資訊</h4>
-          <div v-if="archiveProjectForm.sourceProject">
-            <div class="detail-row">
-              <label>專案名稱:</label>
-              <span>{{ archiveProjectForm.sourceProject.projectName }}</span>
-            </div>
-            <div class="detail-row">
-              <label>專案ID:</label>
-              <span class="mono">{{ archiveProjectForm.sourceProject.projectId }}</span>
-            </div>
-            <div class="detail-row">
-              <label>創建者:</label>
-              <span>{{ archiveProjectForm.sourceProject.createdBy }}</span>
-            </div>
-            <div class="detail-row">
-              <label>當前狀態:</label>
-              <span class="status-badge" :class="archiveProjectForm.sourceProject.status">
-                <i :class="getStatusIcon(archiveProjectForm.sourceProject.status)"></i>
-                {{ getStatusText(archiveProjectForm.sourceProject.status) }}
-              </span>
-            </div>
-            <div class="detail-row">
-              <label>描述:</label>
-              <span>{{ archiveProjectForm.sourceProject.description || '無' }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 確認輸入 -->
-        <div class="form-section">
-          <h4><i class="fas fa-shield-alt"></i> 安全確認</h4>
-          <ConfirmationInput
-            v-model="archiveProjectForm.confirmText"
-            keyword="ARCHIVE"
-            hint-action="封存"
-            @confirm="executeArchiveProject"
-          />
-        </div>
-
-        <!-- 操作按鈕 -->
-        <div class="drawer-actions">
-          <el-button
-            type="danger"
-            :disabled="!isArchiveFormValid || archivingProjects.has(archiveProjectForm.sourceProject?.projectId)"
-            @click="executeArchiveProject"
-          >
-            <i :class="archivingProjects.has(archiveProjectForm.sourceProject?.projectId) ? 'fas fa-spinner fa-spin' : 'fas fa-archive'"></i>
-            {{ archivingProjects.has(archiveProjectForm.sourceProject?.projectId) ? '封存中...' : '確定封存' }}
-          </el-button>
-          <el-button :disabled="archivingProjects.has(archiveProjectForm.sourceProject?.projectId)" @click="closeArchiveDrawer">取消</el-button>
-        </div>
-      </div>
-    </el-drawer>
+    <ArchiveProjectDrawer
+      v-model:visible="showArchiveProjectDrawer"
+      :project="selectedProjectForArchive"
+      :archiving="selectedProjectForArchive ? archivingProjects.has(selectedProjectForArchive.projectId) : false"
+      @confirm="handleArchiveConfirm"
+    />
 
   </div>
 </template>
@@ -1171,6 +1093,8 @@ import ProjectEditorDrawer from './project/ProjectEditorDrawer.vue'
 import StageEditorDrawer from './project/StageEditorDrawer.vue'
 import CloneProjectDrawer from './project/CloneProjectDrawer.vue'
 import CloneStageDrawer from './project/CloneStageDrawer.vue'
+import ArchiveProjectDrawer from './project/ArchiveProjectDrawer.vue'
+import { getProjectStatusIcon, getProjectStatusText } from '@/utils/projectStatus'
 import ForceVotingDrawer from './ForceVotingDrawer.vue'
 import ClearStageVotesDrawer from './ClearStageVotesDrawer.vue'
 import PauseStageDrawer from './PauseStageDrawer.vue'
@@ -1202,7 +1126,6 @@ import {
   useCheckVotingLock
 } from '@/composables/admin/useProjects'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
-import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 
 export default {
@@ -1222,14 +1145,14 @@ export default {
     StageEditorDrawer,
     CloneProjectDrawer,
     CloneStageDrawer,
+    ArchiveProjectDrawer,
     ForceVotingDrawer,
     ClearStageVotesDrawer,
     PauseStageDrawer,
     ResumeStageDrawer,
     AdminFilterToolbar,
     EmptyState,
-    AnimatedStatistic,
-    ConfirmationInput
+    AnimatedStatistic
   },
   setup() {
     const router = useRouter()
@@ -1430,13 +1353,7 @@ export default {
 
     // Archive Project Drawer State
     const showArchiveProjectDrawer = ref(false)
-    const archiveProjectForm = reactive<{
-      sourceProject: ExtendedProject | null
-      confirmText: string
-    }>({
-      sourceProject: null,
-      confirmText: ''
-    })
+    const selectedProjectForArchive = ref<ExtendedProject | null>(null)
 
     // Reverse Settlement Drawer State
     const showReverseSettlementDrawer = ref(false)
@@ -1536,7 +1453,7 @@ export default {
         formatWeight(project.studentRankingWeight),
         formatWeight(project.teacherRankingWeight),
         formatCommentRanking(project),
-        getStatusText(project.status)
+        getProjectStatusText(project.status)
       ]
     }))
 
@@ -1548,11 +1465,6 @@ export default {
       if (creatorFilter.value) count++
       if (showArchivedProjects.value) count++ // Show archived projects switch is active
       return count
-    })
-
-    // Archive form validation
-    const isArchiveFormValid = computed(() => {
-      return archiveProjectForm.confirmText.toUpperCase() === 'ARCHIVE'
     })
 
     // DISABLED: Tag management computed - tags system disabled
@@ -1685,24 +1597,6 @@ export default {
       const totalStages = project.stages.length
 
       return Math.round((completedStages / totalStages) * 100)
-    }
-
-    const getStatusIcon = (status: string): string => {
-      switch (status) {
-        case 'active': return 'fas fa-play-circle'
-        case 'completed': return 'fas fa-check-circle'
-        case 'archived': return 'fas fa-archive'
-        default: return 'fas fa-question-circle'
-      }
-    }
-
-    const getStatusText = (status: string): string => {
-      switch (status) {
-        case 'active': return '進行中'
-        case 'completed': return '已完成'
-        case 'archived': return '已封存'
-        default: return '進行中' // 預設為進行中，避免未知狀態
-      }
     }
 
     // Refresh projects using TanStack Query refetch
@@ -2127,28 +2021,21 @@ export default {
     }
 
     // Open archive project drawer
-    const openArchiveProjectDrawer = (project: any) => {
-      archiveProjectForm.sourceProject = project
-      archiveProjectForm.confirmText = ''
+    const openArchiveProjectDrawer = (project: ExtendedProject) => {
+      selectedProjectForArchive.value = project
       showArchiveProjectDrawer.value = true
     }
 
-    // Close archive drawer
-    const closeArchiveDrawer = () => {
-      showArchiveProjectDrawer.value = false
-      archiveProjectForm.sourceProject = null
-      archiveProjectForm.confirmText = ''
-    }
-
-    // Execute archive project (called from drawer)
-    const executeArchiveProject = async () => {
-      if (!archiveProjectForm.sourceProject) return
+    // Execute archive project (confirmed from drawer; mutation stays here
+    // because archivingProjects Set is shared with the list buttons)
+    const handleArchiveConfirm = async () => {
+      if (!selectedProjectForArchive.value) return
 
       try {
-        await archiveProject(archiveProjectForm.sourceProject)
-        closeArchiveDrawer()
+        await archiveProject(selectedProjectForArchive.value)
+        showArchiveProjectDrawer.value = false
       } catch (error) {
-        console.error('Error in executeArchiveProject:', error)
+        console.error('Error in handleArchiveConfirm:', error)
       }
     }
 
@@ -3753,8 +3640,8 @@ export default {
       truncateText,
       getProgressPercentage,
       getStageCompletionPercentage,
-      getStatusIcon,
-      getStatusText,
+      getProjectStatusIcon,
+      getProjectStatusText,
       // DISABLED: Tag management - tags system disabled
       // showTagModal,
       // allTags,
@@ -3788,11 +3675,9 @@ export default {
       selectedProjectForClone,
       // Archive Project Drawer
       showArchiveProjectDrawer,
-      archiveProjectForm,
-      isArchiveFormValid,
+      selectedProjectForArchive,
       openArchiveProjectDrawer,
-      executeArchiveProject,
-      closeArchiveDrawer,
+      handleArchiveConfirm,
       navigateToWallet,
       openEventLogViewer,
       showEventLogDrawer,
