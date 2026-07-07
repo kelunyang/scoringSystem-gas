@@ -1033,7 +1033,7 @@
   </div>
 </template>
 
-<script lang="ts">
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, inject, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -1100,7 +1100,6 @@ import ClearStageVotesDrawer from './ClearStageVotesDrawer.vue'
 import PauseStageDrawer from './PauseStageDrawer.vue'
 import ResumeStageDrawer from './ResumeStageDrawer.vue'
 // DISABLED: import { getTagColor } from '@/utils/tagColor' - tags system disabled
-import { usePermissions } from '@/composables/usePermissions'
 import { useExpandable } from '@/composables/useExpandable'
 import { useAuth } from '@/composables/useAuth'
 import { useMediaQuery } from '@/composables/useMediaQuery'
@@ -1110,7 +1109,6 @@ import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import {
   useCreateProject,
   useUpdateProject,
-  useGetProject,
   useUpdateScoringConfig,
   useListProjectViewers,
   useAddViewersBatch,
@@ -1128,2728 +1126,1903 @@ import {
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 
-export default {
-  name: 'ProjectManagement',
-  components: {
-    VotingAnalysisModal,
-    CommentVotingAnalysisModal,
-    EventLogDrawer,
-    ExpandableTableRow,
-    ResponsiveTableHeader,
-    StageGanttChart,
-    ReverseSettlementDrawer,
-    SettlementProgressDrawer,
-    SettlementConfirmationDrawer,
-    ViewerManagementDrawer,
-    ProjectEditorDrawer,
-    StageEditorDrawer,
-    CloneProjectDrawer,
-    CloneStageDrawer,
-    ArchiveProjectDrawer,
-    ForceVotingDrawer,
-    ClearStageVotesDrawer,
-    PauseStageDrawer,
-    ResumeStageDrawer,
-    AdminFilterToolbar,
-    EmptyState,
-    AnimatedStatistic
-  },
-  setup() {
-    const router = useRouter()
-    const route = useRoute()
+defineOptions({ name: 'ProjectManagement' })
 
-    // Register refresh function with parent SystemAdmin
-    const registerRefresh = inject<(fn: (() => void) | null) => void>('registerRefresh', () => {})
+const router = useRouter()
+const route = useRoute()
 
-    // Register action function with parent SystemAdmin
-    const registerAction = inject<(fn: (() => void) | null) => void>('registerAction', () => {})
+// Register refresh function with parent SystemAdmin
+const registerRefresh = inject<(fn: (() => void) | null) => void>('registerRefresh', () => {})
 
-    // Permission checks
-    const { hasPermission, hasAnyPermission } = usePermissions()
+// Register action function with parent SystemAdmin
+const registerAction = inject<(fn: (() => void) | null) => void>('registerAction', () => {})
 
-    // Authentication state (Vue 3 Best Practice)
-    const { userEmail } = useAuth()
+// Authentication state (Vue 3 Best Practice)
+const { userEmail } = useAuth()
 
-    // Responsive design
-    const { isPortrait } = useMediaQuery()
+// Responsive design
+const { isPortrait } = useMediaQuery()
 
-    // Use TanStack Query for projects data with auth dependency
-    const projectsQuery = useAdminProjects()
+// Use TanStack Query for projects data with auth dependency
+const projectsQuery = useAdminProjects()
 
-    // ================== TanStack Query Mutations ==================
-    const createProjectMutation = useCreateProject()
-    const updateProjectMutation = useUpdateProject()
-    const getProjectMutation = useGetProject()
-    const updateScoringConfigMutation = useUpdateScoringConfig()
-    const listViewersMutation = useListProjectViewers()
-    const addViewersBatchMutation = useAddViewersBatch()
-    const addViewerMutation = useAddViewer()
-    const updateViewerRoleMutation = useUpdateViewerRole()
-    const removeViewerMutation = useRemoveViewer()
-    const searchUsersMutation = useSearchUsers()
-    const listStagesMutation = useListStages()
-    const getStageDetailMutation = useGetStage()
-    const createStageMutation = useCreateStage()
-    const updateStageMutation = useUpdateStage()
-    const updateStageOrderMutation = useUpdateStageOrder()
-    const checkVotingLockMutation = useCheckVotingLock()
+// ================== TanStack Query Mutations ==================
+const createProjectMutation = useCreateProject()
+const updateProjectMutation = useUpdateProject()
+const updateScoringConfigMutation = useUpdateScoringConfig()
+const listViewersMutation = useListProjectViewers()
+const addViewersBatchMutation = useAddViewersBatch()
+const addViewerMutation = useAddViewer()
+const updateViewerRoleMutation = useUpdateViewerRole()
+const removeViewerMutation = useRemoveViewer()
+const searchUsersMutation = useSearchUsers()
+const listStagesMutation = useListStages()
+const getStageDetailMutation = useGetStage()
+const createStageMutation = useCreateStage()
+const updateStageMutation = useUpdateStage()
+const updateStageOrderMutation = useUpdateStageOrder()
+const checkVotingLockMutation = useCheckVotingLock()
 
-    // Create a computed ref for backwards compatibility with existing code
-    // Cast to ExtendedProject[] for type compatibility with function parameters
-    const projects = computed(() => (projectsQuery?.data?.value?.projects || []) as ExtendedProject[])
+// Create a computed ref for backwards compatibility with existing code
+// Cast to ExtendedProject[] for type compatibility with function parameters
+const projects = computed(() => (projectsQuery?.data?.value?.projects || []) as ExtendedProject[])
 
-    // Filter persistence
-    const { filters, resetFilters } = useFilterPersistence('projectManagement', {
-      searchText: '',
-      statusFilter: '',
-      creatorFilter: '',
-      showArchivedProjects: false
-    })
+// Filter persistence
+const { filters, resetFilters } = useFilterPersistence('projectManagement', {
+  searchText: '',
+  statusFilter: '',
+  creatorFilter: '',
+  showArchivedProjects: false
+})
 
-    // Backward compatibility computed refs
-    const searchText = computed({
-      get: () => filters.value.searchText,
-      set: (val) => { filters.value.searchText = val }
-    })
-    const statusFilter = computed({
-      get: () => filters.value.statusFilter,
-      set: (val) => { filters.value.statusFilter = val }
-    })
-    const creatorFilter = computed({
-      get: () => filters.value.creatorFilter,
-      set: (val) => { filters.value.creatorFilter = val }
-    })
-    const showArchivedProjects = computed({
-      get: () => filters.value.showArchivedProjects,
-      set: (val) => { filters.value.showArchivedProjects = val }
-    })
+// Backward compatibility computed refs
+const searchText = computed({
+  get: () => filters.value.searchText,
+  set: (val) => { filters.value.searchText = val }
+})
+const statusFilter = computed({
+  get: () => filters.value.statusFilter,
+  set: (val) => { filters.value.statusFilter = val }
+})
+const creatorFilter = computed({
+  get: () => filters.value.creatorFilter,
+  set: (val) => { filters.value.creatorFilter = val }
+})
+const showArchivedProjects = computed({
+  get: () => filters.value.showArchivedProjects,
+  set: (val) => { filters.value.showArchivedProjects = val }
+})
 
-    const showCreateModal = ref(false)
-    const showEditModal = ref(false)
-    const showViewModal = ref(false)
-    const showEventLogDrawer = ref(false)
-    const showViewerDrawer = ref(false)
-    const loadingViewers = ref(false)
-    const projectViewers = ref<ProjectViewer[]>([])
-    const showStageEditor = ref(false)
-    const showEditStageModal = ref(false)
-    const showVotingAnalysisModal = ref(false)
-    const showCommentAnalysisModal = ref(false)
-    const selectedProject = ref<ExtendedProject | null>(null)
-    const selectedStageForAnalysis = ref<Stage | null>(null)
-    const creating = ref(false)
-    const updating = ref(false)
-    // Use query loading state instead of manual loading ref
-    const loading = computed(() => {
-      return (projectsQuery?.isLoading?.value || projectsQuery?.isFetching?.value) ?? false
-    })
-    const archivingProjects = ref(new Set())  // Track which projects are being archived
-    const archivingStages = ref(new Set())    // Track which stages are being archived
-    const settlingStages = ref(new Set())
-    const showPauseStageDrawer = ref(false)   // Pause stage drawer visibility
-    const pauseStageData = ref<{ stage: any; project: any } | null>(null) // Data for pause stage drawer
-    const showResumeStageDrawer = ref(false)  // Resume stage drawer visibility
-    const resumeStageData = ref<{ stage: any; project: any } | null>(null) // Data for resume stage drawer
-    const showSettlementDrawer = ref(false)  // Settlement progress drawer visibility
-    const selectedStageForSettlement = ref<Stage | null>(null) // Selected stage for settlement
-    const showSettlementConfirmDrawer = ref(false) // Settlement confirmation drawer visibility
-    const selectedStageForConfirm = ref<Stage | null>(null) // Selected stage for confirmation
-    const showArchivedStages = ref(false)     // Toggle to show/hide archived stages
-    const showGanttChart = ref(new Map<string, boolean>())     // Track gantt chart open/close state for each project
-    const ganttCenterTime = ref(new Map<string, number>())    // Store centerTime for each project's gantt chart
-    const projectStages = ref<Stage[]>([])
-    const draggedStage = ref<Stage | null>(null)
-    const editingStage = ref<Stage | null>(null)
+const showEditModal = ref(false)
+const showViewModal = ref(false)
+const showEventLogDrawer = ref(false)
+const showViewerDrawer = ref(false)
+const loadingViewers = ref(false)
+const projectViewers = ref<ProjectViewer[]>([])
+const showEditStageModal = ref(false)
+const showVotingAnalysisModal = ref(false)
+const showCommentAnalysisModal = ref(false)
+const selectedProject = ref<ExtendedProject | null>(null)
+const selectedStageForAnalysis = ref<Stage | null>(null)
+const updating = ref(false)
+// Use query loading state instead of manual loading ref
+const loading = computed(() => {
+  return (projectsQuery?.isLoading?.value || projectsQuery?.isFetching?.value) ?? false
+})
+const archivingProjects = ref(new Set())  // Track which projects are being archived
+const archivingStages = ref(new Set())    // Track which stages are being archived
+const settlingStages = ref(new Set())
+const showPauseStageDrawer = ref(false)   // Pause stage drawer visibility
+const pauseStageData = ref<{ stage: any; project: any } | null>(null) // Data for pause stage drawer
+const showResumeStageDrawer = ref(false)  // Resume stage drawer visibility
+const resumeStageData = ref<{ stage: any; project: any } | null>(null) // Data for resume stage drawer
+const showSettlementDrawer = ref(false)  // Settlement progress drawer visibility
+const selectedStageForSettlement = ref<Stage | null>(null) // Selected stage for settlement
+const showSettlementConfirmDrawer = ref(false) // Settlement confirmation drawer visibility
+const selectedStageForConfirm = ref<Stage | null>(null) // Selected stage for confirmation
+const showArchivedStages = ref(false)     // Toggle to show/hide archived stages
+const showGanttChart = ref(new Map<string, boolean>())     // Track gantt chart open/close state for each project
+const ganttCenterTime = ref(new Map<string, number>())    // Store centerTime for each project's gantt chart
+const projectStages = ref<Stage[]>([])
+const draggedStage = ref<Stage | null>(null)
+const editingStage = ref<Stage | null>(null)
 
-    // DISABLED: Tag management - tags system disabled
-    // const showTagModal = ref(false)
-    // const allTags = ref([])
-    // const currentProjectTags = ref([])
-    // const tagFilterText = ref('')
-    // const tagCategoryFilter = ref('')
+// DISABLED: Tag management - tags system disabled
+// const showTagModal = ref(false)
+// const allTags = ref([])
+// const currentProjectTags = ref([])
+// const tagFilterText = ref('')
+// const tagCategoryFilter = ref('')
 
-    // DISABLED: Project creation tag management - tags system disabled
-    // const selectedTags = ref([])
-    // const availableTags = ref([])
+// DISABLED: Project creation tag management - tags system disabled
+// const selectedTags = ref([])
+// const availableTags = ref([])
 
-    const projectForm = reactive({
-      projectName: '',
-      description: '',
-      scoreRangeMin: 65,
-      scoreRangeMax: 95
-    })
+const editForm = reactive({
+  projectId: '',
+  projectName: '',
+  description: '',
+  scoreRangeMin: 65,
+  scoreRangeMax: 95,
+  // Scoring configuration (will be loaded from system defaults or project config)
+  maxCommentSelections: 3,
+  studentRankingWeight: 0.7,
+  teacherRankingWeight: 0.3,
+  commentRewardPercentile: 0,
+  maxVoteResetCount: 1
+})
 
-    const editForm = reactive({
-      projectId: '',
-      projectName: '',
-      description: '',
-      scoreRangeMin: 65,
-      scoreRangeMax: 95,
-      // Scoring configuration (will be loaded from system defaults or project config)
-      maxCommentSelections: 3,
-      studentRankingWeight: 0.7,
-      teacherRankingWeight: 0.3,
-      commentRewardPercentile: 0,
-      maxVoteResetCount: 1
-    })
+const editStageForm = reactive({
+  stageId: '',
+  stageName: '',
+  startTime: '',
+  endTime: '',
+  description: '',
+  status: 'pending',
+  reportRewardPool: 0,
+  commentRewardPool: 0
+})
 
-    const newStage = reactive({
-      stageName: '',
-      startTime: '',
-      endTime: '',
-      description: '',
-      reportRewardPool: 0,
-      commentRewardPool: 0
-    })
+// Stage form error state
+const stageFormError = ref<{ title: string; message: string } | null>(null)
 
-    const newStageForm = reactive({
-      stageName: '',
-      startTime: '',
-      endTime: ''
-    })
+// Voting lock state (prevents time editing when voting has started)
+const isVotingLocked = ref(false)
+const checkingVotingLock = ref(false)
 
-    const editStageForm = reactive({
-      stageId: '',
-      stageName: '',
-      startTime: '',
-      endTime: '',
-      description: '',
-      status: 'pending',
-      reportRewardPool: 0,
-      commentRewardPool: 0
-    })
+const loadingStageDetails = ref(false)
+const savingStageDetails = ref(false)
+const savingStageOrder = ref(false)
+const cloningProject = ref(false)
+const cloningStage = ref(false)
 
-    // Stage form error state
-    const stageFormError = ref<{ title: string; message: string } | null>(null)
+// Clone Project Drawer State
+const showCloneProjectDrawer = ref(false)
+const selectedProjectForClone = ref<ExtendedProject | null>(null)
 
-    // Voting lock state (prevents time editing when voting has started)
-    const isVotingLocked = ref(false)
-    const checkingVotingLock = ref(false)
+// Clone Stage Drawer State
+const showCloneStageDrawer = ref(false)
+const selectedStageForClone = ref<Stage | null>(null)
 
-    const loadingStages = ref(false)
-    const loadingStageDetails = ref(false)
-    const savingStageDetails = ref(false)
-    const savingStageOrder = ref(false)
-    const activeCollapse = ref<string[]>([])
-    const selectedStage = ref<Stage | null>(null)
-    const cloningProject = ref(false)
-    const cloningStage = ref(false)
+// Force Voting Drawer State
+const showForceVotingDrawer = ref(false)
+const selectedForceVotingStage = ref<Stage | null>(null)
 
-    // Clone Project Drawer State
-    const showCloneProjectDrawer = ref(false)
-    const selectedProjectForClone = ref<ExtendedProject | null>(null)
+// Clear Stage Votes Drawer State (force-revert to pre-voting)
+const showClearVotesDrawer = ref(false)
+const clearVotesStage = ref<(Stage & { projectId?: string; stageName?: string }) | null>(null)
 
-    // Clone Stage Drawer State
-    const showCloneStageDrawer = ref(false)
-    const selectedStageForClone = ref<Stage | null>(null)
+// Archive Project Drawer State
+const showArchiveProjectDrawer = ref(false)
+const selectedProjectForArchive = ref<ExtendedProject | null>(null)
 
-    // Force Voting Drawer State
-    const showForceVotingDrawer = ref(false)
-    const selectedForceVotingStage = ref<Stage | null>(null)
+// Reverse Settlement Drawer State
+const showReverseSettlementDrawer = ref(false)
+const reversingSettlement = ref(false)  // Loading state for reverse settlement
+const selectedStageForReverse = ref<Stage | null>(null)
+const selectedProjectForReverse = ref<ExtendedProject | null>(null)
 
-    // Clear Stage Votes Drawer State (force-revert to pre-voting)
-    const showClearVotesDrawer = ref(false)
-    const clearVotesStage = ref<(Stage & { projectId?: string; stageName?: string }) | null>(null)
+// Project expansion state - using useExpandable composable with URL sync
+const {
+  expandedIds: expandedProjects,
+  contentMap: projectStagesMap,
+  loadingIds: loadingProjectStages,
+  isExpanded: isProjectExpanded,
+  collapseAll: collapseAllProjects
+} = useExpandable({ singleMode: true })
 
-    // Archive Project Drawer State
-    const showArchiveProjectDrawer = ref(false)
-    const selectedProjectForArchive = ref<ExtendedProject | null>(null)
+// Keep currentProjectId for backwards compatibility (used in other watchers)
+const currentProjectId = computed(() => {
+  const id = route.params.projectId
+  return Array.isArray(id) ? id[0] : id || ''
+})
 
-    // Reverse Settlement Drawer State
-    const showReverseSettlementDrawer = ref(false)
-    const reversingSettlement = ref(false)  // Loading state for reverse settlement
-    const selectedStageForReverse = ref<Stage | null>(null)
-    const selectedProjectForReverse = ref<ExtendedProject | null>(null)
+// REMOVED: expandedTransactions (dead code - never used)
 
-    // Project expansion state - using useExpandable composable with URL sync
-    const {
-      expandedIds: expandedProjects,
-      contentMap: projectStagesMap,
-      loadingIds: loadingProjectStages,
-      isExpanded: isProjectExpanded,
-      collapseAll: collapseAllProjects
-    } = useExpandable({ singleMode: true })
+// Project members state
+const projectMembersMap = ref(new Map())
+const loadingProjectMembers = ref(new Set())
+const showAddMemberDialog = ref(false)
+const addingMember = ref(false)
+const newMember = reactive({
+  email: '',
+  role: 'teacher'
+})
+const selectedProjectForMember = ref<ExtendedProject | null>(null)
 
-    // Keep currentProjectId for backwards compatibility (used in other watchers)
-    const currentProjectId = computed(() => {
-      const id = route.params.projectId
-      return Array.isArray(id) ? id[0] : id || ''
-    })
-
-    // REMOVED: expandedTransactions (dead code - never used)
-
-    // Project members state
-    const projectMembersMap = ref(new Map())
-    const loadingProjectMembers = ref(new Set())
-    const showAddMemberDialog = ref(false)
-    const addingMember = ref(false)
-    const newMember = reactive({
-      email: '',
-      role: 'teacher'
-    })
-    const selectedProjectForMember = ref<ExtendedProject | null>(null)
-
-    // Viewer management state
-    const newViewer = reactive({
-      searchText: '',
-      role: 'teacher'
-    })
-    const searchResults = ref<User[]>([])
-    const selectedUsers = ref<User[]>([])
-    const searchingUsers = ref(false)
-    const selectedViewers = ref<ProjectViewer[]>([])
-    const batchRole = ref('')
-    const viewerSearchText = ref('')
-    const viewerSortField = ref('displayName')
-    const viewerSortOrder = ref('asc') // 'asc' or 'desc'
-
-    const stats = computed(() => ({
-      totalProjects: projects.value.length,
-      activeProjects: projects.value.filter(p => p.status === 'active').length,
-      // Note: Projects don't have 'completed' status - only stages do. Using 'deleted' count instead
-      deletedProjects: projects.value.filter(p => p.status === 'deleted').length,
-      archivedProjects: projects.value.filter(p => p.status === 'archived').length
-    }))
+// Viewer management state
+const newViewer = reactive({
+  searchText: '',
+  role: 'teacher'
+})
+const searchResults = ref<User[]>([])
+const selectedUsers = ref<User[]>([])
+const searchingUsers = ref(false)
+const selectedViewers = ref<ProjectViewer[]>([])
+const batchRole = ref('')
+const stats = computed(() => ({
+  totalProjects: projects.value.length,
+  activeProjects: projects.value.filter(p => p.status === 'active').length,
+  // Note: Projects don't have 'completed' status - only stages do. Using 'deleted' count instead
+  deletedProjects: projects.value.filter(p => p.status === 'deleted').length,
+  archivedProjects: projects.value.filter(p => p.status === 'archived').length
+}))
 
 
-    const filteredProjects = computed(() => {
-      let filtered = projects.value
+const filteredProjects = computed(() => {
+  let filtered = projects.value
 
-      // Filter archived projects based on switch (highest priority)
-      if (!showArchivedProjects.value) {
-        filtered = filtered.filter(project => project.status !== 'archived')
-      }
+  // Filter archived projects based on switch (highest priority)
+  if (!showArchivedProjects.value) {
+    filtered = filtered.filter(project => project.status !== 'archived')
+  }
 
-      if (searchText.value) {
-        const search = searchText.value.toLowerCase()
-        filtered = filtered.filter(project =>
-          project.projectName.toLowerCase().includes(search) ||
-          (project.description && project.description.toLowerCase().includes(search))
-        )
-      }
+  if (searchText.value) {
+    const search = searchText.value.toLowerCase()
+    filtered = filtered.filter(project =>
+      project.projectName.toLowerCase().includes(search) ||
+      (project.description && project.description.toLowerCase().includes(search))
+    )
+  }
 
-      if (statusFilter.value) {
-        filtered = filtered.filter(project => project.status === statusFilter.value)
-      }
+  if (statusFilter.value) {
+    filtered = filtered.filter(project => project.status === statusFilter.value)
+  }
 
-      if (creatorFilter.value === 'me') {
-        // Vue 3 Best Practice: Use useAuth() composable
-        filtered = filtered.filter(project => project.createdBy === userEmail.value)
-      }
+  if (creatorFilter.value === 'me') {
+    // Vue 3 Best Practice: Use useAuth() composable
+    filtered = filtered.filter(project => project.createdBy === userEmail.value)
+  }
 
-      return filtered.sort((a, b) => (b.lastModified || 0) - (a.lastModified || 0))
-    })
+  return filtered.sort((a, b) => (b.lastModified || 0) - (a.lastModified || 0))
+})
 
-    // Export configuration
-    const exportConfig = computed(() => ({
-      data: filteredProjects.value as unknown as Record<string, unknown>[],
-      filename: '專案列表',
-      headers: ['專案名稱', '專案ID', '最低分', '最高分', '學生權重', '教師權重', '可排名數', '狀態'],
-      rowMapper: (project: any) => [
-        project.projectName,
-        project.projectId,
-        project.scoreRangeMin ?? 0,
-        project.scoreRangeMax ?? 100,
-        formatWeight(project.studentRankingWeight),
-        formatWeight(project.teacherRankingWeight),
-        formatCommentRanking(project),
-        getProjectStatusText(project.status)
-      ]
-    }))
+// Export configuration
+const exportConfig = computed(() => ({
+  data: filteredProjects.value as unknown as Record<string, unknown>[],
+  filename: '專案列表',
+  headers: ['專案名稱', '專案ID', '最低分', '最高分', '學生權重', '教師權重', '可排名數', '狀態'],
+  rowMapper: (project: any) => [
+    project.projectName,
+    project.projectId,
+    project.scoreRangeMin ?? 0,
+    project.scoreRangeMax ?? 100,
+    formatWeight(project.studentRankingWeight),
+    formatWeight(project.teacherRankingWeight),
+    formatCommentRanking(project),
+    getProjectStatusText(project.status)
+  ]
+}))
 
-    // Active filter count
-    const activeFilterCount = computed(() => {
-      let count = 0
-      if (searchText.value) count++
-      if (statusFilter.value) count++
-      if (creatorFilter.value) count++
-      if (showArchivedProjects.value) count++ // Show archived projects switch is active
-      return count
-    })
+// Active filter count
+const activeFilterCount = computed(() => {
+  let count = 0
+  if (searchText.value) count++
+  if (statusFilter.value) count++
+  if (creatorFilter.value) count++
+  if (showArchivedProjects.value) count++ // Show archived projects switch is active
+  return count
+})
 
-    // DISABLED: Tag management computed - tags system disabled
-    /*
-    const filteredAvailableTags = computed(() => {
-      let filtered = allTags.value.filter(tag => tag.isActive)
+// DISABLED: Tag management computed - tags system disabled
+/*
+const filteredAvailableTags = computed(() => {
+  let filtered = allTags.value.filter(tag => tag.isActive)
 
-      // Filter out already assigned tags
-      const assignedTagIds = currentProjectTags.value.map(tag => tag.tagId)
-      filtered = filtered.filter(tag => !assignedTagIds.includes(tag.tagId))
+  // Filter out already assigned tags
+  const assignedTagIds = currentProjectTags.value.map(tag => tag.tagId)
+  filtered = filtered.filter(tag => !assignedTagIds.includes(tag.tagId))
 
-      if (tagFilterText.value) {
-        const search = tagFilterText.value.toLowerCase()
-        filtered = filtered.filter(tag =>
-          tag.tagName.toLowerCase().includes(search) ||
-          (tag.description && tag.description.toLowerCase().includes(search))
-        )
-      }
+  if (tagFilterText.value) {
+    const search = tagFilterText.value.toLowerCase()
+    filtered = filtered.filter(tag =>
+      tag.tagName.toLowerCase().includes(search) ||
+      (tag.description && tag.description.toLowerCase().includes(search))
+    )
+  }
 
-      if (tagCategoryFilter.value) {
-        filtered = filtered.filter(tag => tag.category === tagCategoryFilter.value)
-      }
+  if (tagCategoryFilter.value) {
+    filtered = filtered.filter(tag => tag.category === tagCategoryFilter.value)
+  }
 
-      return filtered.sort((a, b) => a.tagName.localeCompare(b.tagName))
-    })
-    */
+  return filtered.sort((a, b) => a.tagName.localeCompare(b.tagName))
+})
+*/
 
-    // Viewer management computed
-    const filteredViewers = computed(() => {
-      let filtered = [...projectViewers.value]
+const formatTime = (timestamp: number | null | undefined): string => {
+  if (!timestamp) return '-'
+  return new Date(timestamp).toLocaleString('zh-TW')
+}
 
-      // Apply search filter
-      if (viewerSearchText.value) {
-        const search = viewerSearchText.value.toLowerCase()
-        filtered = filtered.filter(viewer =>
-          (viewer.displayName && viewer.displayName.toLowerCase().includes(search)) ||
-          (viewer.userEmail && viewer.userEmail.toLowerCase().includes(search))
-        )
-      }
+/**
+ * 格式化权重百分比
+ */
+const formatWeight = (weight: number | null | undefined): string => {
+  if (weight === null || weight === undefined) return '-'
+  return `${Math.round(weight * 100)}%`
+}
 
-      // Apply sorting
-      if (viewerSortField.value) {
-        filtered.sort((a, b) => {
-          let aVal = (a as any)[viewerSortField.value]
-          let bVal = (b as any)[viewerSortField.value]
+/**
+ * 格式化可排名数显示
+ * - 百分位模式（percentile > 0）：显示"前XX%"
+ * - 固定TOP N模式（percentile === 0 或 null）：显示"TOP N"
+ * - 无数据：显示"系統預設"
+ */
+const formatCommentRanking = (project: any): string => {
+  const percentile = project.commentRewardPercentile
+  const maxSelections = project.maxCommentSelections
 
-          // Handle special cases
-          if (viewerSortField.value === 'displayName') {
-            aVal = (a.displayName || a.userEmail || '').toLowerCase()
-            bVal = (b.displayName || b.userEmail || '').toLowerCase()
-          } else if (viewerSortField.value === 'assignedAt') {
-            aVal = a.assignedAt || 0
-            bVal = b.assignedAt || 0
-            // For timestamps, use numeric comparison
-            return viewerSortOrder.value === 'asc' ? aVal - bVal : bVal - aVal
-          } else if (aVal && bVal) {
-            aVal = aVal.toLowerCase()
-            bVal = bVal.toLowerCase()
-          }
+  // 如果两个字段都为空，使用系统默认值提示
+  if ((percentile === null || percentile === undefined) &&
+      (maxSelections === null || maxSelections === undefined)) {
+    return '系統預設'
+  }
 
-          // String comparison
-          if (viewerSortOrder.value === 'asc') {
-            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0
-          } else {
-            return aVal < bVal ? 1 : aVal > bVal ? -1 : 0
-          }
-        })
-      }
+  // 百分位模式（percentile > 0）
+  if (percentile && percentile > 0) {
+    return `前${percentile}%`
+  }
 
-      return filtered
-    })
+  // 固定 TOP N 模式（percentile === 0 或 null）
+  return `TOP ${maxSelections || 3}`
+}
 
-    const formatTime = (timestamp: number | null | undefined): string => {
-      if (!timestamp) return '-'
-      return new Date(timestamp).toLocaleString('zh-TW')
+// Refresh projects using TanStack Query refetch
+const refreshProjects = async () => {
+  ElMessage.info('開始更新專案列表')
+  try {
+    await projectsQuery?.refetch?.()
+    ElMessage.success('專案列表資料下載完成')
+  } catch (error) {
+    console.error('Error refreshing projects:', error)
+    ElMessage.error('載入專案資料失敗，請重試')
+  }
+}
+
+// Reset filters
+const handleResetFilters = () => {
+  resetFilters()
+  ElMessage.success('已清除所有篩選條件')
+}
+
+// DISABLED: Tag management methods - tags system disabled (backend router not available)
+/*
+const loadAllTags = async () => {
+  try {
+    const sessionId = sessionStorage.getItem('sessionId')
+    if (!sessionId) {
+      console.error('No session found')
+      return
     }
 
-    /**
-     * 格式化权重百分比
-     */
-    const formatWeight = (weight: number | null | undefined): string => {
-      if (weight === null || weight === undefined) return '-'
-      return `${Math.round(weight * 100)}%`
+    // TODO: Tags system disabled - backend router not available
+    // const response = await apiClient.callWithAuth('/tags/list', {})
+
+    if (response.success && response.data) {
+      allTags.value = response.data
+    } else {
+      console.error('Failed to load tags:', response.error)
     }
+  } catch (error) {
+    console.error('Error loading tags:', error)
+  }
+}
 
-    /**
-     * 格式化可排名数显示
-     * - 百分位模式（percentile > 0）：显示"前XX%"
-     * - 固定TOP N模式（percentile === 0 或 null）：显示"TOP N"
-     * - 无数据：显示"系統預設"
-     */
-    const formatCommentRanking = (project: any): string => {
-      const percentile = project.commentRewardPercentile
-      const maxSelections = project.maxCommentSelections
+const loadProjectTags = async (projectId = null) => {
+  if (!projectId && !selectedProject.value) return
 
-      // 如果两个字段都为空，使用系统默认值提示
-      if ((percentile === null || percentile === undefined) &&
-          (maxSelections === null || maxSelections === undefined)) {
-        return '系統預設'
+  const targetProjectId = projectId || selectedProject.value.projectId
+
+  try {
+    const sessionId = sessionStorage.getItem('sessionId')
+    // TODO: Tags system disabled - backend router not available
+    // const response = await apiClient.callWithAuth('/tags/project', {
+    //   projectId: targetProjectId
+    // })
+
+    if (response.success && response.data) {
+      currentProjectTags.value = response.data
+
+      // Update the project's tags in the main list
+      const projectIndex = projects.value.findIndex(p => p.projectId === targetProjectId)
+      if (projectIndex !== -1) {
+        projects.value[projectIndex].tags = response.data
       }
-
-      // 百分位模式（percentile > 0）
-      if (percentile && percentile > 0) {
-        return `前${percentile}%`
-      }
-
-      // 固定 TOP N 模式（percentile === 0 或 null）
-      return `TOP ${maxSelections || 3}`
+    } else {
+      console.error('Failed to load project tags:', response.error)
+      currentProjectTags.value = []
     }
+  } catch (error) {
+    console.error('Error loading project tags:', error)
+    currentProjectTags.value = []
+  }
+}
 
-    const truncateText = (text: string | null | undefined, maxLength: number): string => {
-      if (!text) return '-'
-      return text.length > maxLength ? text.substring(0, maxLength) + '...' : text
+// DISABLED: Tag assignment functions - tags system disabled (backend router not available)
+/*
+const openTagAssignment = async (project) => {
+  selectedProject.value = project
+  await loadProjectTags(project.projectId)
+  await loadAllTags()
+  showTagModal.value = true
+  tagFilterText.value = ''
+  tagCategoryFilter.value = ''
+}
+
+const assignTagToProject = async (tagId) => {
+  if (!selectedProject.value) return
+
+  try {
+    const sessionId = sessionStorage.getItem('sessionId')
+    // TODO: Tags system disabled - backend router not available
+    // const response = await apiClient.callWithAuth('/tags/assign/project', {
+    //   projectId: selectedProject.value.projectId,
+    //   tagId: tagId
+    // })
+
+    if (response.success) {
+      await loadProjectTags(selectedProject.value.projectId)
+      ElMessage.success('標籤指派成功')
+    } else {
+      ElMessage.error(`指派失敗: ${response.error?.message || '未知錯誤'}`)
     }
+  } catch (error) {
+    console.error('Assign tag error:', error)
+    ElMessage.error('指派失敗，請重試')
+  }
+}
 
-    const getProgressPercentage = (project: any): number => {
-      if (project.totalStages === 0) return 0
-      return Math.round((project.currentStage / project.totalStages) * 100)
+const removeTagFromProject = async (tagId) => {
+  if (!selectedProject.value) return
+
+  try {
+    const sessionId = sessionStorage.getItem('sessionId')
+    // TODO: Tags system disabled - backend router not available
+    // const response = await apiClient.callWithAuth('/tags/remove/project', {
+    //   projectId: selectedProject.value.projectId,
+    //   tagId: tagId
+    // })
+
+    if (response.success) {
+      await loadProjectTags(selectedProject.value.projectId)
+      ElMessage.success('標籤已移除')
+    } else {
+      ElMessage.error(`移除失敗: ${response.error?.message || '未知錯誤'}`)
     }
+  } catch (error) {
+    console.error('Remove tag error:', error)
+    ElMessage.error('移除失敗，請重試')
+  }
+}
+*/
 
-    const getStageCompletionPercentage = (project: any): number => {
-      // 根據實際完成的階段計算進度
-      if (!project.stages || project.stages.length === 0) {
-        // 如果沒有階段資料，使用原有的 currentStage/totalStages 邏輯作為備用
-        if (project.totalStages === 0) return 0
-        return Math.round((project.currentStage / project.totalStages) * 100)
-      }
+// DISABLED: Tag helper functions - tags system disabled (backend router not available)
+/*
+const addProjectTag = (tag) => {
+  if (!selectedTags.value.find(t => t.tagId === tag.tagId)) {
+    selectedTags.value.push(tag)
+    // Remove from available tags
+    availableTags.value = availableTags.value.filter(t => t.tagId !== tag.tagId)
+  }
+}
 
-      const completedStages = project.stages.filter((stage: Stage) => stage.status === 'completed').length
-      const totalStages = project.stages.length
+const removeProjectTag = (tag) => {
+  selectedTags.value = selectedTags.value.filter(t => t.tagId !== tag.tagId)
+  // Add back to available tags
+  if (!availableTags.value.find(t => t.tagId === tag.tagId)) {
+    availableTags.value.push(tag)
+    availableTags.value.sort((a, b) => a.tagName.localeCompare(b.tagName))
+  }
+}
 
-      return Math.round((completedStages / totalStages) * 100)
+const loadTagsForCreation = async () => {
+  try {
+    const sessionId = sessionStorage.getItem('sessionId')
+    if (!sessionId) return
+
+    // TODO: Tags system disabled - backend router not available
+    // const response = await apiClient.callWithAuth('/tags/list', {})
+
+    if (response.success && response.data) {
+      availableTags.value = response.data.filter(tag => tag.isActive)
+        .sort((a, b) => a.tagName.localeCompare(b.tagName))
+      selectedTags.value = []
     }
+  } catch (error) {
+    console.error('Error loading tags for creation:', error)
+  }
+}
 
-    // Refresh projects using TanStack Query refetch
-    const refreshProjects = async () => {
-      ElMessage.info('開始更新專案列表')
-      try {
-        await projectsQuery?.refetch?.()
-        ElMessage.success('專案列表資料下載完成')
-      } catch (error) {
-        console.error('Error refreshing projects:', error)
-        ElMessage.error('載入專案資料失敗，請重試')
-      }
-    }
+const assignTagsToProject = async (projectId, tagIds) => {
+  try {
+    const sessionId = sessionStorage.getItem('sessionId')
+    if (!sessionId) return false
 
-    // Reset filters
-    const handleResetFilters = () => {
-      resetFilters()
-      ElMessage.success('已清除所有篩選條件')
-    }
+    // Assign each tag to the project
+    for (const tagId of tagIds) {
+      // TODO: Tags system disabled - backend router not available
+      // const response = await apiClient.callWithAuth('/tags/assign/project', {
+      //   projectId: projectId,
+      //   tagId: tagId
+      // })
 
-    // DISABLED: Tag management methods - tags system disabled (backend router not available)
-    /*
-    const loadAllTags = async () => {
-      try {
-        const sessionId = sessionStorage.getItem('sessionId')
-        if (!sessionId) {
-          console.error('No session found')
-          return
-        }
-
-        // TODO: Tags system disabled - backend router not available
-        // const response = await apiClient.callWithAuth('/tags/list', {})
-
-        if (response.success && response.data) {
-          allTags.value = response.data
-        } else {
-          console.error('Failed to load tags:', response.error)
-        }
-      } catch (error) {
-        console.error('Error loading tags:', error)
-      }
-    }
-
-    const loadProjectTags = async (projectId = null) => {
-      if (!projectId && !selectedProject.value) return
-
-      const targetProjectId = projectId || selectedProject.value.projectId
-
-      try {
-        const sessionId = sessionStorage.getItem('sessionId')
-        // TODO: Tags system disabled - backend router not available
-        // const response = await apiClient.callWithAuth('/tags/project', {
-        //   projectId: targetProjectId
-        // })
-
-        if (response.success && response.data) {
-          currentProjectTags.value = response.data
-
-          // Update the project's tags in the main list
-          const projectIndex = projects.value.findIndex(p => p.projectId === targetProjectId)
-          if (projectIndex !== -1) {
-            projects.value[projectIndex].tags = response.data
-          }
-        } else {
-          console.error('Failed to load project tags:', response.error)
-          currentProjectTags.value = []
-        }
-      } catch (error) {
-        console.error('Error loading project tags:', error)
-        currentProjectTags.value = []
-      }
-    }
-
-    // DISABLED: Tag assignment functions - tags system disabled (backend router not available)
-    /*
-    const openTagAssignment = async (project) => {
-      selectedProject.value = project
-      await loadProjectTags(project.projectId)
-      await loadAllTags()
-      showTagModal.value = true
-      tagFilterText.value = ''
-      tagCategoryFilter.value = ''
-    }
-
-    const assignTagToProject = async (tagId) => {
-      if (!selectedProject.value) return
-
-      try {
-        const sessionId = sessionStorage.getItem('sessionId')
-        // TODO: Tags system disabled - backend router not available
-        // const response = await apiClient.callWithAuth('/tags/assign/project', {
-        //   projectId: selectedProject.value.projectId,
-        //   tagId: tagId
-        // })
-
-        if (response.success) {
-          await loadProjectTags(selectedProject.value.projectId)
-          ElMessage.success('標籤指派成功')
-        } else {
-          ElMessage.error(`指派失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
-        console.error('Assign tag error:', error)
-        ElMessage.error('指派失敗，請重試')
-      }
-    }
-
-    const removeTagFromProject = async (tagId) => {
-      if (!selectedProject.value) return
-
-      try {
-        const sessionId = sessionStorage.getItem('sessionId')
-        // TODO: Tags system disabled - backend router not available
-        // const response = await apiClient.callWithAuth('/tags/remove/project', {
-        //   projectId: selectedProject.value.projectId,
-        //   tagId: tagId
-        // })
-
-        if (response.success) {
-          await loadProjectTags(selectedProject.value.projectId)
-          ElMessage.success('標籤已移除')
-        } else {
-          ElMessage.error(`移除失敗: ${response.error?.message || '未知錯誤'}`)
-        }
-      } catch (error) {
-        console.error('Remove tag error:', error)
-        ElMessage.error('移除失敗，請重試')
-      }
-    }
-    */
-
-    // DISABLED: Tag helper functions - tags system disabled (backend router not available)
-    /*
-    const addProjectTag = (tag) => {
-      if (!selectedTags.value.find(t => t.tagId === tag.tagId)) {
-        selectedTags.value.push(tag)
-        // Remove from available tags
-        availableTags.value = availableTags.value.filter(t => t.tagId !== tag.tagId)
-      }
-    }
-
-    const removeProjectTag = (tag) => {
-      selectedTags.value = selectedTags.value.filter(t => t.tagId !== tag.tagId)
-      // Add back to available tags
-      if (!availableTags.value.find(t => t.tagId === tag.tagId)) {
-        availableTags.value.push(tag)
-        availableTags.value.sort((a, b) => a.tagName.localeCompare(b.tagName))
-      }
-    }
-
-    const loadTagsForCreation = async () => {
-      try {
-        const sessionId = sessionStorage.getItem('sessionId')
-        if (!sessionId) return
-
-        // TODO: Tags system disabled - backend router not available
-        // const response = await apiClient.callWithAuth('/tags/list', {})
-
-        if (response.success && response.data) {
-          availableTags.value = response.data.filter(tag => tag.isActive)
-            .sort((a, b) => a.tagName.localeCompare(b.tagName))
-          selectedTags.value = []
-        }
-      } catch (error) {
-        console.error('Error loading tags for creation:', error)
-      }
-    }
-
-    const assignTagsToProject = async (projectId, tagIds) => {
-      try {
-        const sessionId = sessionStorage.getItem('sessionId')
-        if (!sessionId) return false
-
-        // Assign each tag to the project
-        for (const tagId of tagIds) {
-          // TODO: Tags system disabled - backend router not available
-          // const response = await apiClient.callWithAuth('/tags/assign/project', {
-          //   projectId: projectId,
-          //   tagId: tagId
-          // })
-
-          if (!response.success) {
-            console.error('Failed to assign tag:', response.error)
-            return false
-          }
-        }
-
-        return true
-      } catch (error) {
-        console.error('Error assigning tags to project:', error)
+      if (!response.success) {
+        console.error('Failed to assign tag:', response.error)
         return false
       }
     }
-    */
 
-    const openCreateProjectModal = async () => {
-      // Reset editForm for create mode
-      editForm.projectId = ''
-      editForm.projectName = ''
-      editForm.description = ''
-      editForm.scoreRangeMin = 65
-      editForm.scoreRangeMax = 95
-      // Reset scoring config to defaults (will be overwritten by system defaults in drawer)
-      editForm.maxCommentSelections = 3
-      editForm.studentRankingWeight = 0.7
-      editForm.teacherRankingWeight = 0.3
-      editForm.commentRewardPercentile = 0
+    return true
+  } catch (error) {
+    console.error('Error assigning tags to project:', error)
+    return false
+  }
+}
+*/
 
-      // DISABLED: Load tags for creation - tags system disabled
-      // await loadTagsForCreation()
+const openCreateProjectModal = async () => {
+  // Reset editForm for create mode
+  editForm.projectId = ''
+  editForm.projectName = ''
+  editForm.description = ''
+  editForm.scoreRangeMin = 65
+  editForm.scoreRangeMax = 95
+  // Reset scoring config to defaults (will be overwritten by system defaults in drawer)
+  editForm.maxCommentSelections = 3
+  editForm.studentRankingWeight = 0.7
+  editForm.teacherRankingWeight = 0.3
+  editForm.commentRewardPercentile = 0
 
-      // Open the edit modal (which now handles both create and edit)
-      showEditModal.value = true
-    }
+  // DISABLED: Load tags for creation - tags system disabled
+  // await loadTagsForCreation()
 
-    const createProject = async () => {
-      if (!projectForm.projectName.trim()) {
-        ElMessage.warning('請輸入專案名稱')
-        return
-      }
+  // Open the edit modal (which now handles both create and edit)
+  showEditModal.value = true
+}
 
-      if (!projectForm.description.trim()) {
-        ElMessage.warning('請輸入專案描述')
-        return
-      }
+const editProject = (project: any) => {
+  editForm.projectId = project.projectId
+  editForm.projectName = project.projectName
+  editForm.description = project.description || ''
+  editForm.scoreRangeMin = project.scoreRangeMin || 65
+  editForm.scoreRangeMax = project.scoreRangeMax || 95
+  showEditModal.value = true
+}
 
-      // 驗證分數區間
-      if (projectForm.scoreRangeMin >= projectForm.scoreRangeMax) {
-        ElMessage.warning('最低分必須小於最高分')
-        return
-      }
+/**
+ * Save scoring configuration for a project
+ * Always sends all scoring config fields (loaded from system defaults or project config)
+ */
+const saveScoringConfig = async (projectId: string, formData: any) => {
+  // Build scoring config update object with all fields
+  const scoringConfig = {
+    maxCommentSelections: formData.maxCommentSelections,
+    studentRankingWeight: formData.studentRankingWeight,
+    teacherRankingWeight: formData.teacherRankingWeight,
+    commentRewardPercentile: formData.commentRewardPercentile,
+    maxVoteResetCount: formData.maxVoteResetCount
+  }
 
-      try {
-        creating.value = true
+  try {
+    // Use TanStack Query mutation
+    await updateScoringConfigMutation.mutateAsync({
+      projectId,
+      config: scoringConfig
+    })
+  } catch (error) {
+    console.error('Error saving scoring configuration:', error)
+    ElMessage.warning('評分配置保存失敗，但專案已保存')
+  }
+}
 
-        // Use TanStack Query mutation
-        await createProjectMutation.mutateAsync({
-          projectData: {
-            projectName: projectForm.projectName.trim(),
-            description: projectForm.description.trim(),
-            scoreRangeMin: projectForm.scoreRangeMin,
-            scoreRangeMax: projectForm.scoreRangeMax
-          }
-        })
+// Unified save function for both create and update
+const saveProject = async (formData: any) => {
+  // Validate the emitted form data from the child component
+  if (!formData.projectName.trim()) {
+    ElMessage.warning('請輸入專案名稱')
+    return
+  }
 
-        // Mutation throws on error, so if we reach here, it succeeded
-        ElMessage.success('專案創建成功')
-        showCreateModal.value = false
-        projectForm.projectName = ''
-        projectForm.description = ''
-        projectForm.scoreRangeMin = 65
-        projectForm.scoreRangeMax = 95
-        // Refetch projects using TanStack Query
-        projectsQuery?.refetch?.()
-      } catch (error) {
-        console.error('Error creating project:', error)
-        ElMessage.error('創建失敗，請重試')
-      } finally {
-        creating.value = false
-      }
-    }
+  if (!formData.description.trim()) {
+    ElMessage.warning('請輸入專案描述')
+    return
+  }
 
-    const editProject = (project: any) => {
-      editForm.projectId = project.projectId
-      editForm.projectName = project.projectName
-      editForm.description = project.description || ''
-      editForm.scoreRangeMin = project.scoreRangeMin || 65
-      editForm.scoreRangeMax = project.scoreRangeMax || 95
-      showEditModal.value = true
-    }
+  // Copy validated data to editForm for API calls
+  Object.assign(editForm, formData)
 
-    /**
-     * Save scoring configuration for a project
-     * Always sends all scoring config fields (loaded from system defaults or project config)
-     */
-    const saveScoringConfig = async (projectId: string, formData: any) => {
-      // Build scoring config update object with all fields
-      const scoringConfig = {
-        maxCommentSelections: formData.maxCommentSelections,
-        studentRankingWeight: formData.studentRankingWeight,
-        teacherRankingWeight: formData.teacherRankingWeight,
-        commentRewardPercentile: formData.commentRewardPercentile,
-        maxVoteResetCount: formData.maxVoteResetCount
-      }
+  // 驗證分數區間
+  if (editForm.scoreRangeMin >= editForm.scoreRangeMax) {
+    ElMessage.warning('最低分必須小於最高分')
+    return
+  }
 
-      try {
-        // Use TanStack Query mutation
-        await updateScoringConfigMutation.mutateAsync({
-          projectId,
-          config: scoringConfig
-        })
-      } catch (error) {
-        console.error('Error saving scoring configuration:', error)
-        ElMessage.warning('評分配置保存失敗，但專案已保存')
-      }
-    }
+  try {
+    updating.value = true
 
-    // Unified save function for both create and update
-    const saveProject = async (formData: any) => {
-      // Validate the emitted form data from the child component
-      if (!formData.projectName.trim()) {
-        ElMessage.warning('請輸入專案名稱')
-        return
-      }
-
-      if (!formData.description.trim()) {
-        ElMessage.warning('請輸入專案描述')
-        return
-      }
-
-      // Copy validated data to editForm for API calls
-      Object.assign(editForm, formData)
-
-      // 驗證分數區間
-      if (editForm.scoreRangeMin >= editForm.scoreRangeMax) {
-        ElMessage.warning('最低分必須小於最高分')
-        return
-      }
-
-      try {
-        updating.value = true
-
-        if (editForm.projectId) {
-          // Use TanStack Query mutation for update
-          await updateProjectMutation.mutateAsync({
-            projectId: editForm.projectId,
-            updates: {
-              projectName: editForm.projectName.trim(),
-              description: editForm.description.trim(),
-              scoreRangeMin: editForm.scoreRangeMin,
-              scoreRangeMax: editForm.scoreRangeMax
-            }
-          })
-
-          // Update scoring configuration if any fields are set
-          await saveScoringConfig(editForm.projectId, formData)
-
-          // Reload stages if this project is currently expanded
-          if (expandedProjects.has(editForm.projectId)) {
-            await loadProjectStagesForExpansion(editForm.projectId)
-          }
-
-          showEditModal.value = false
-        } else {
-          // Create new project using TanStack Query mutation
-          const result = await createProjectMutation.mutateAsync({
-            projectData: {
-              projectName: editForm.projectName.trim(),
-              description: editForm.description.trim(),
-              scoreRangeMin: editForm.scoreRangeMin,
-              scoreRangeMax: editForm.scoreRangeMax
-            }
-          })
-
-          // Save scoring configuration for new project
-          const newProjectId = result.projectId
-          await saveScoringConfig(newProjectId, formData)
-
-          showEditModal.value = false
+    if (editForm.projectId) {
+      // Use TanStack Query mutation for update
+      await updateProjectMutation.mutateAsync({
+        projectId: editForm.projectId,
+        updates: {
+          projectName: editForm.projectName.trim(),
+          description: editForm.description.trim(),
+          scoreRangeMin: editForm.scoreRangeMin,
+          scoreRangeMax: editForm.scoreRangeMax
         }
-      } catch (error: any) {
-        console.error('Error saving project:', error)
-        // Error messages are already shown by mutation onError handlers
-      } finally {
-        updating.value = false
-      }
-    }
-
-    const updateProject = async () => {
-      if (!editForm.projectName.trim()) {
-        ElMessage.warning('請輸入專案名稱')
-        return
-      }
-
-      if (!editForm.description.trim()) {
-        ElMessage.warning('請輸入專案描述')
-        return
-      }
-
-      // 驗證分數區間
-      if (editForm.scoreRangeMin >= editForm.scoreRangeMax) {
-        ElMessage.warning('最低分必須小於最高分')
-        return
-      }
-
-      try {
-        updating.value = true
-
-        // Use TanStack Query mutation
-        await updateProjectMutation.mutateAsync({
-          projectId: editForm.projectId,
-          updates: {
-            projectName: editForm.projectName.trim(),
-            description: editForm.description.trim(),
-            scoreRangeMin: editForm.scoreRangeMin,
-            scoreRangeMax: editForm.scoreRangeMax
-          }
-        })
-
-        showEditModal.value = false
-      } catch (error: any) {
-        console.error('Error updating project:', error)
-        // Error message already shown by mutation onError handler
-      } finally {
-        updating.value = false
-      }
-    }
-
-    const viewProject = async (project: any) => {
-      try {
-        // Use TanStack Query mutation
-        const result = await getProjectMutation.mutateAsync({
-          projectId: project.projectId
-        })
-        selectedProject.value = result as ExtendedProject
-        showViewModal.value = true
-      } catch (error) {
-        console.error('Error loading project details:', error)
-        selectedProject.value = project
-        showViewModal.value = true
-      }
-    }
-
-    // Open archive project drawer
-    const openArchiveProjectDrawer = (project: ExtendedProject) => {
-      selectedProjectForArchive.value = project
-      showArchiveProjectDrawer.value = true
-    }
-
-    // Execute archive project (confirmed from drawer; mutation stays here
-    // because archivingProjects Set is shared with the list buttons)
-    const handleArchiveConfirm = async () => {
-      if (!selectedProjectForArchive.value) return
-
-      try {
-        await archiveProject(selectedProjectForArchive.value)
-        showArchiveProjectDrawer.value = false
-      } catch (error) {
-        console.error('Error in handleArchiveConfirm:', error)
-      }
-    }
-
-    const archiveProject = async (project: any) => {
-      try {
-        // Add to archiving set
-        archivingProjects.value.add(project.projectId)
-
-        // Use TanStack Query mutation (message shown by onSuccess handler)
-        await updateProjectMutation.mutateAsync({
-          projectId: project.projectId,
-          updates: {
-            status: 'archived'
-          }
-        })
-      } catch (error: any) {
-        console.error('Error archiving project:', error)
-        // Error message already shown by mutation onError handler
-      } finally {
-        // Remove from archiving set
-        archivingProjects.value.delete(project.projectId)
-      }
-    }
-
-    const unarchiveProject = async (project: any) => {
-      try {
-        // Add to archiving set (reuse the same tracking set)
-        archivingProjects.value.add(project.projectId)
-
-        // Use TanStack Query mutation (message shown by onSuccess handler)
-        await updateProjectMutation.mutateAsync({
-          projectId: project.projectId,
-          updates: {
-            status: 'active'
-          }
-        })
-      } catch (error: any) {
-        console.error('Error unarchiving project:', error)
-        // Error message already shown by mutation onError handler
-      } finally {
-        // Remove from archiving set
-        archivingProjects.value.delete(project.projectId)
-      }
-    }
-
-    // Navigate to Wallet Page
-    const navigateToWallet = (project: any) => {
-      router.push({
-        name: 'wallets',
-        params: { projectId: project.projectId }
-        // 不傳 userEmail，進入全專案模式
       })
-    }
 
-    // Event Log Functions
-    const openEventLogViewer = (project: any) => {
-      selectedProject.value = project
-      showEventLogDrawer.value = true
-    }
+      // Update scoring configuration if any fields are set
+      await saveScoringConfig(editForm.projectId, formData)
 
-    // Viewer Management Functions
-    const handleViewerCommand = (command: string, project: Project | ExtendedProject) => {
-      if (command === 'settings') {
-        openViewerManagement(project)
-      } else if (command === 'groups') {
-        navigateToProjectGroups(project)
+      // Reload stages if this project is currently expanded
+      if (expandedProjects.has(editForm.projectId)) {
+        await loadProjectStagesForExpansion(editForm.projectId)
       }
-    }
 
-    const navigateToProjectGroups = (project: any) => {
-      router.push({
-        name: 'admin-groups-project-detail',
-        params: { projectId: project.projectId }
+      showEditModal.value = false
+    } else {
+      // Create new project using TanStack Query mutation
+      const result = await createProjectMutation.mutateAsync({
+        projectData: {
+          projectName: editForm.projectName.trim(),
+          description: editForm.description.trim(),
+          scoreRangeMin: editForm.scoreRangeMin,
+          scoreRangeMax: editForm.scoreRangeMax
+        }
       })
+
+      // Save scoring configuration for new project
+      const newProjectId = result.projectId
+      await saveScoringConfig(newProjectId, formData)
+
+      showEditModal.value = false
+    }
+  } catch (error: any) {
+    console.error('Error saving project:', error)
+    // Error messages are already shown by mutation onError handlers
+  } finally {
+    updating.value = false
+  }
+}
+
+// Open archive project drawer
+const openArchiveProjectDrawer = (project: ExtendedProject) => {
+  selectedProjectForArchive.value = project
+  showArchiveProjectDrawer.value = true
+}
+
+// Execute archive project (confirmed from drawer; mutation stays here
+// because archivingProjects Set is shared with the list buttons)
+const handleArchiveConfirm = async () => {
+  if (!selectedProjectForArchive.value) return
+
+  try {
+    await archiveProject(selectedProjectForArchive.value)
+    showArchiveProjectDrawer.value = false
+  } catch (error) {
+    console.error('Error in handleArchiveConfirm:', error)
+  }
+}
+
+const archiveProject = async (project: any) => {
+  try {
+    // Add to archiving set
+    archivingProjects.value.add(project.projectId)
+
+    // Use TanStack Query mutation (message shown by onSuccess handler)
+    await updateProjectMutation.mutateAsync({
+      projectId: project.projectId,
+      updates: {
+        status: 'archived'
+      }
+    })
+  } catch (error: any) {
+    console.error('Error archiving project:', error)
+    // Error message already shown by mutation onError handler
+  } finally {
+    // Remove from archiving set
+    archivingProjects.value.delete(project.projectId)
+  }
+}
+
+const unarchiveProject = async (project: any) => {
+  try {
+    // Add to archiving set (reuse the same tracking set)
+    archivingProjects.value.add(project.projectId)
+
+    // Use TanStack Query mutation (message shown by onSuccess handler)
+    await updateProjectMutation.mutateAsync({
+      projectId: project.projectId,
+      updates: {
+        status: 'active'
+      }
+    })
+  } catch (error: any) {
+    console.error('Error unarchiving project:', error)
+    // Error message already shown by mutation onError handler
+  } finally {
+    // Remove from archiving set
+    archivingProjects.value.delete(project.projectId)
+  }
+}
+
+// Navigate to Wallet Page
+const navigateToWallet = (project: any) => {
+  router.push({
+    name: 'wallets',
+    params: { projectId: project.projectId }
+    // 不傳 userEmail，進入全專案模式
+  })
+}
+
+// Event Log Functions
+const openEventLogViewer = (project: any) => {
+  selectedProject.value = project
+  showEventLogDrawer.value = true
+}
+
+// Viewer Management Functions
+const handleViewerCommand = (command: string, project: Project | ExtendedProject) => {
+  if (command === 'settings') {
+    openViewerManagement(project)
+  } else if (command === 'groups') {
+    navigateToProjectGroups(project)
+  }
+}
+
+const navigateToProjectGroups = (project: any) => {
+  router.push({
+    name: 'admin-groups-project-detail',
+    params: { projectId: project.projectId }
+  })
+}
+
+const openViewerManagement = async (project: any) => {
+  selectedProject.value = project
+  showViewerDrawer.value = true
+  await loadProjectViewers(project.projectId)
+}
+
+const loadProjectViewers = async (projectId: string) => {
+  console.log('🔍 [loadProjectViewers] Starting for projectId:', projectId)
+  loadingViewers.value = true
+  try {
+    // Use TanStack Query mutation
+    const result = await listViewersMutation.mutateAsync({ projectId })
+    console.log('🔍 [loadProjectViewers] API response:', result)
+    projectViewers.value = result as ProjectViewer[]
+    console.log('✅ [loadProjectViewers] Loaded viewers:', projectViewers.value)
+  } catch (error: any) {
+    console.error('❌ [loadProjectViewers] Exception:', error)
+    projectViewers.value = []
+    ElMessage.error('載入存取者清單失敗')
+  } finally {
+    loadingViewers.value = false
+    console.log('🔍 [loadProjectViewers] Final projectViewers:', projectViewers.value)
+  }
+}
+
+const searchUsers = async (payload: any) => {
+  // Accept payload from child component event
+  const searchText = payload?.searchText || payload || ''
+
+  if (!searchText.trim()) {
+    ElMessage.warning('請輸入搜尋內容')
+    return
+  }
+
+  try {
+    searchingUsers.value = true
+
+    // 按行分割搜尋文字，支援多行輸入
+    const searchQueries = searchText
+      .split('\n')
+      .map((line: string) => line.trim())
+      .filter((line: string) => line.length > 0)
+
+    if (searchQueries.length === 0) {
+      ElMessage.warning('請輸入搜尋內容')
+      searchingUsers.value = false
+      return
     }
 
-    const openViewerManagement = async (project: any) => {
-      selectedProject.value = project
-      showViewerDrawer.value = true
-      await loadProjectViewers(project.projectId)
-    }
+    // 對每一行執行搜尋
+    const allResults = []
+    const errors = []
 
-    const loadProjectViewers = async (projectId: string) => {
-      console.log('🔍 [loadProjectViewers] Starting for projectId:', projectId)
-      loadingViewers.value = true
+    for (const query of searchQueries) {
       try {
         // Use TanStack Query mutation
-        const result = await listViewersMutation.mutateAsync({ projectId })
-        console.log('🔍 [loadProjectViewers] API response:', result)
-        projectViewers.value = result as ProjectViewer[]
-        console.log('✅ [loadProjectViewers] Loaded viewers:', projectViewers.value)
+        const result = await searchUsersMutation.mutateAsync({ query, limit: 50 })
+        allResults.push(...result)
       } catch (error: any) {
-        console.error('❌ [loadProjectViewers] Exception:', error)
-        projectViewers.value = []
-        ElMessage.error('載入存取者清單失敗')
-      } finally {
-        loadingViewers.value = false
-        console.log('🔍 [loadProjectViewers] Final projectViewers:', projectViewers.value)
+        console.error(`Error searching for "${query}":`, error)
+        errors.push(`搜尋「${query}」時發生錯誤`)
       }
     }
 
-    const searchUsers = async (payload: any) => {
-      // Accept payload from child component event
-      const searchText = payload?.searchText || payload || ''
+    // 去重（基於 userEmail）
+    const uniqueResults = []
+    const seenEmails = new Set()
 
-      if (!searchText.trim()) {
-        ElMessage.warning('請輸入搜尋內容')
-        return
-      }
-
-      try {
-        searchingUsers.value = true
-
-        // 按行分割搜尋文字，支援多行輸入
-        const searchQueries = searchText
-          .split('\n')
-          .map((line: string) => line.trim())
-          .filter((line: string) => line.length > 0)
-
-        if (searchQueries.length === 0) {
-          ElMessage.warning('請輸入搜尋內容')
-          searchingUsers.value = false
-          return
-        }
-
-        // 對每一行執行搜尋
-        const allResults = []
-        const errors = []
-
-        for (const query of searchQueries) {
-          try {
-            // Use TanStack Query mutation
-            const result = await searchUsersMutation.mutateAsync({ query, limit: 50 })
-            allResults.push(...result)
-          } catch (error: any) {
-            console.error(`Error searching for "${query}":`, error)
-            errors.push(`搜尋「${query}」時發生錯誤`)
-          }
-        }
-
-        // 去重（基於 userEmail）
-        const uniqueResults = []
-        const seenEmails = new Set()
-
-        for (const user of allResults) {
-          if (!seenEmails.has(user.userEmail)) {
-            seenEmails.add(user.userEmail)
-            uniqueResults.push(user)
-          }
-        }
-
-        searchResults.value = uniqueResults
-        selectedUsers.value = []
-
-        // 顯示結果訊息
-        if (uniqueResults.length === 0) {
-          if (errors.length > 0) {
-            ElMessage.error(`搜尋失敗: ${errors.join('; ')}`)
-          } else {
-            ElMessage.info('沒有找到符合的使用者')
-          }
-        } else {
-          if (errors.length > 0) {
-            ElMessage.warning(`找到 ${uniqueResults.length} 位使用者，但有部分搜尋失敗`)
-          } else {
-            ElMessage.success(`找到 ${uniqueResults.length} 位使用者`)
-          }
-        }
-      } catch (error) {
-        console.error('Error searching users:', error)
-        searchResults.value = []
-        ElMessage.error('搜尋使用者失敗')
-      } finally {
-        searchingUsers.value = false
+    for (const user of allResults) {
+      if (!seenEmails.has(user.userEmail)) {
+        seenEmails.add(user.userEmail)
+        uniqueResults.push(user)
       }
     }
 
-    const toggleUserSelection = (userEmail: string) => {
-      const index = selectedUsers.value.findIndex((u: User) => u.userEmail === userEmail)
-      if (index > -1) {
-        selectedUsers.value.splice(index, 1)
+    searchResults.value = uniqueResults
+    selectedUsers.value = []
+
+    // 顯示結果訊息
+    if (uniqueResults.length === 0) {
+      if (errors.length > 0) {
+        ElMessage.error(`搜尋失敗: ${errors.join('; ')}`)
       } else {
-        const user = searchResults.value.find((u: User) => u.userEmail === userEmail)
-        if (user) selectedUsers.value.push(user)
+        ElMessage.info('沒有找到符合的使用者')
       }
-    }
-
-    const addSelectedViewers = async (payload: any) => {
-      // Accept payload from child component event
-      // Users is now an array of { userEmail, role } objects
-      const users = payload?.users || []
-
-      if (users.length === 0) {
-        ElMessage.warning('請選擇要新增的使用者')
-        return
-      }
-
-      if (!selectedProject.value) {
-        ElMessage.error('未選擇專案')
-        return
-      }
-
-      try {
-        loadingViewers.value = true
-
-        // Use TanStack Query mutation for batch add
-        const result = await addViewersBatchMutation.mutateAsync({
-          projectId: selectedProject.value.projectId,
-          viewers: users.map((u: any) => ({
-            userEmail: u.userEmail,
-            role: u.role || 'teacher'
-          }))
-        })
-
-        const summary = result?.summary || {}
-        const messages = []
-
-        if (summary.inserted > 0) messages.push(`新增 ${summary.inserted} 位`)
-        if (summary.reactivated > 0) messages.push(`重新啟用 ${summary.reactivated} 位`)
-        if (summary.updated > 0) messages.push(`更新角色 ${summary.updated} 位`)
-        if (summary.unchanged > 0) messages.push(`${summary.unchanged} 位已存在`)
-
-        const hasChanges = summary.inserted > 0 || summary.reactivated > 0 || summary.updated > 0
-
-        if (messages.length > 0) {
-          if (hasChanges) {
-            ElMessage.success(messages.join('、'))
-          } else {
-            ElMessage.info(messages.join('、') + '，無需變更')
-          }
-        }
-
-        // Reset and reload
-        newViewer.searchText = ''
-        newViewer.role = 'teacher'
-        searchResults.value = []
-        selectedUsers.value = []
-        await loadProjectViewers(selectedProject.value.projectId)
-      } catch (error: any) {
-        console.error('Error adding selected viewers:', error)
-        // Error message already shown by mutation onError handler
-      } finally {
-        loadingViewers.value = false
-      }
-    }
-
-    const updateViewerRole = async ({ userEmail, newRole }: { userEmail: string; newRole: string }) => {
-      if (!selectedProject.value) {
-        ElMessage.error('未選擇專案')
-        return
-      }
-
-      try {
-        // Use TanStack Query mutation (message shown by onSuccess handler)
-        await updateViewerRoleMutation.mutateAsync({
-          projectId: selectedProject.value.projectId,
-          userEmail: userEmail,
-          role: newRole
-        })
-        // Reload viewers
-        await loadProjectViewers(selectedProject.value.projectId)
-      } catch (error: any) {
-        console.error('Error updating viewer role:', error)
-        // Error message already shown by mutation onError handler
-      }
-    }
-
-    const removeViewer = async (userEmail: string) => {
-      if (!selectedProject.value) {
-        ElMessage.error('未選擇專案')
-        return
-      }
-
-      try {
-        // Use TanStack Query mutation (message shown by onSuccess handler)
-        await removeViewerMutation.mutateAsync({
-          projectId: selectedProject.value.projectId,
-          userEmail: userEmail
-        })
-        // Reload viewers
-        await loadProjectViewers(selectedProject.value.projectId)
-      } catch (error: any) {
-        console.error('Error removing viewer:', error)
-        // Error message already shown by mutation onError handler
-      }
-    }
-
-    const toggleViewerSelection = (userEmail: string) => {
-      const index = selectedViewers.value.findIndex((v: ProjectViewer) => v.userEmail === userEmail)
-      if (index > -1) {
-        selectedViewers.value.splice(index, 1)
+    } else {
+      if (errors.length > 0) {
+        ElMessage.warning(`找到 ${uniqueResults.length} 位使用者，但有部分搜尋失敗`)
       } else {
-        const viewer = projectViewers.value.find((v: ProjectViewer) => v.userEmail === userEmail)
-        if (viewer) selectedViewers.value.push(viewer)
+        ElMessage.success(`找到 ${uniqueResults.length} 位使用者`)
       }
     }
-
-    const toggleAllViewers = () => {
-      if (selectedViewers.value.length === filteredViewers.value.length) {
-        selectedViewers.value = []
-      } else {
-        selectedViewers.value = [...filteredViewers.value]
-      }
-    }
-
-    // Viewer sorting functions
-    const sortViewers = (field: string) => {
-      if (viewerSortField.value === field) {
-        // Toggle sort order if clicking the same field
-        viewerSortOrder.value = viewerSortOrder.value === 'asc' ? 'desc' : 'asc'
-      } else {
-        // Set new field and default to ascending
-        viewerSortField.value = field
-        viewerSortOrder.value = 'asc'
-      }
-    }
-
-    const getSortIcon = (field: string) => {
-      if (viewerSortField.value !== field) {
-        return 'fa-sort' // No sort icon
-      }
-      return viewerSortOrder.value === 'asc' ? 'fa-sort-up' : 'fa-sort-down'
-    }
-
-    const batchUpdateRoles = async () => {
-      if (selectedViewers.value.length === 0) {
-        ElMessage.warning('請選擇要更新的存取者')
-        return
-      }
-
-      if (!batchRole.value) {
-        ElMessage.warning('請選擇目標角色')
-        return
-      }
-
-      if (!selectedProject.value) {
-        ElMessage.error('未選擇專案')
-        return
-      }
-
-      try {
-        loadingViewers.value = true
-        let successCount = 0
-        let failCount = 0
-
-        for (const viewer of selectedViewers.value) {
-          try {
-            // Use TanStack Query mutation (silent - no messages)
-            await updateViewerRoleMutation.mutateAsync({
-              projectId: selectedProject.value.projectId,
-              userEmail: viewer.userEmail,
-              role: batchRole.value
-            })
-            successCount++
-          } catch {
-            failCount++
-          }
-        }
-
-        // Show results
-        if (successCount > 0 && failCount === 0) {
-          ElMessage.success(`成功轉換 ${successCount} 位存取者的角色`)
-        } else if (successCount > 0 && failCount > 0) {
-          ElMessage.warning(`成功轉換 ${successCount} 位，失敗 ${failCount} 位`)
-        } else {
-          ElMessage.error('批次轉換失敗')
-        }
-
-        // Reset and reload
-        if (successCount > 0) {
-          selectedViewers.value = []
-          batchRole.value = ''
-          await loadProjectViewers(selectedProject.value.projectId)
-        }
-      } catch (error) {
-        console.error('Error batch updating roles:', error)
-        ElMessage.error('批次轉換角色失敗')
-      } finally {
-        loadingViewers.value = false
-      }
-    }
-
-    const batchRemoveViewers = async () => {
-      if (selectedViewers.value.length === 0) {
-        ElMessage.warning('請選擇要刪除的存取者')
-        return
-      }
-
-      if (!selectedProject.value) {
-        ElMessage.error('未選擇專案')
-        return
-      }
-
-      try {
-        loadingViewers.value = true
-        let successCount = 0
-        let failCount = 0
-
-        for (const viewer of selectedViewers.value) {
-          try {
-            // Use TanStack Query mutation (silent - no messages)
-            await removeViewerMutation.mutateAsync({
-              projectId: selectedProject.value.projectId,
-              userEmail: viewer.userEmail
-            })
-            successCount++
-          } catch {
-            failCount++
-          }
-        }
-
-        // Show results
-        if (successCount > 0 && failCount === 0) {
-          ElMessage.success(`成功刪除 ${successCount} 位存取者`)
-        } else if (successCount > 0 && failCount > 0) {
-          ElMessage.warning(`成功刪除 ${successCount} 位，失敗 ${failCount} 位`)
-        } else {
-          ElMessage.error('批次刪除失敗')
-        }
-
-        // Reset and reload
-        if (successCount > 0) {
-          selectedViewers.value = []
-          await loadProjectViewers(selectedProject.value.projectId)
-        }
-      } catch (error) {
-        console.error('Error batch removing viewers:', error)
-        ElMessage.error('批次刪除存取者失敗')
-      } finally {
-        loadingViewers.value = false
-      }
-    }
-
-    const getDisplayName = (email: string) => {
-      // Extract name part from email for display
-      return email.split('@')[0]
-    }
-
-    // Project Expansion Functions - refactored to use composable
-    const toggleProjectExpansion = (project: any) => {
-      const projectId = project.projectId
-
-      if (isProjectExpanded(projectId)) {
-        // Collapse: navigate back to projects list
-        router.push({ name: 'admin-projects' })
-      } else {
-        // Expand: navigate to project detail
-        router.push({
-          name: 'admin-projects-detail',
-          params: { projectId }
-        })
-      }
-      // Note: Actual expansion state is managed by watch() on route.params.projectId
-    }
-
-    // Define loadProjectStagesForExpansion before watch (to avoid "before initialization" error)
-    const loadProjectStagesForExpansion = async (projectId: string) => {
-      // Note: Loading state is now managed by watch() handler
-      try {
-        // Use TanStack Query mutation
-        const result = await listStagesMutation.mutateAsync({
-          projectId: projectId,
-          includeArchived: true  // Always fetch all stages, filter on frontend
-        })
-
-        if (result?.stages) {
-          // Inject projectId into each stage for later use
-          const sortedStages = result.stages
-            .map((stage: Stage) => ({ ...stage, projectId }))
-            .sort((a: Stage, b: Stage) => a.stageOrder - b.stageOrder)
-          projectStagesMap.set(projectId, sortedStages)
-        } else {
-          projectStagesMap.set(projectId, [])
-        }
-      } catch (error) {
-        console.error('Error loading stages:', error)
-        projectStagesMap.set(projectId, [])
-        throw error // Re-throw to let watch handler manage loading state
-      }
-    }
-
-    // URL → Expansion state synchronization
-    watch(
-      () => route.params.projectId,
-      async (paramId) => {
-        const projectId = Array.isArray(paramId) ? paramId[0] : paramId
-        if (projectId && !isProjectExpanded(projectId)) {
-          // URL has projectId → Expand and load stages with loading state
-          loadingProjectStages.add(projectId)
-          expandedProjects.add(projectId)
-          try {
-            await loadProjectStagesForExpansion(projectId)
-          } finally {
-            loadingProjectStages.delete(projectId)
-          }
-        } else if (!projectId) {
-          // URL has no projectId → Collapse all
-          collapseAllProjects()
-        }
-      },
-      { immediate: true }
-    )
-
-    // Project Members Functions
-    const loadProjectMembers = async (projectId: string) => {
-      loadingProjectMembers.value.add(projectId)
-
-      try {
-        // Use TanStack Query mutation
-        const result = await listViewersMutation.mutateAsync({ projectId })
-        projectMembersMap.value.set(projectId, result)
-      } catch (error: any) {
-        console.error('Error loading project members:', error)
-        projectMembersMap.value.set(projectId, [])
-        ElMessage.error('載入專案成員失敗')
-      } finally {
-        loadingProjectMembers.value.delete(projectId)
-      }
-    }
-
-    const openAddMemberDialog = (project: any) => {
-      selectedProjectForMember.value = project
-      newMember.email = ''
-      newMember.role = 'teacher'
-      showAddMemberDialog.value = true
-    }
-
-    const addMemberToProject = async () => {
-      if (!newMember.email || !newMember.role) {
-        ElMessage.warning('請填寫完整資訊')
-        return
-      }
-
-      if (!selectedProjectForMember.value) {
-        ElMessage.error('未選擇專案')
-        return
-      }
-
-      addingMember.value = true
-
-      try {
-        // Use TanStack Query mutation (message shown by onSuccess handler)
-        await addViewerMutation.mutateAsync({
-          projectId: selectedProjectForMember.value.projectId,
-          userEmail: newMember.email,
-          role: newMember.role
-        })
-
-        showAddMemberDialog.value = false
-
-        // Reload members for this project
-        await loadProjectMembers(selectedProjectForMember.value.projectId)
-      } catch (error: any) {
-        console.error('Error adding member:', error)
-        // Error message already shown by mutation onError handler
-      } finally {
-        addingMember.value = false
-      }
-    }
-
-    const handleMemberRoleChange = async (newRole: string, projectId: string, member: any) => {
-      try {
-        // Use TanStack Query mutation (message shown by onSuccess handler)
-        await updateViewerRoleMutation.mutateAsync({
-          projectId: projectId,
-          userEmail: member.userEmail,
-          role: newRole
-        })
-        // Reload members
-        await loadProjectMembers(projectId)
-      } catch (error: any) {
-        console.error('Error updating member role:', error)
-        // Error message already shown by mutation onError handler
-      }
-    }
-
-    const removeMember = async (projectId: string, userEmail: string) => {
-      try {
-        // Use TanStack Query mutation (message shown by onSuccess handler)
-        await removeViewerMutation.mutateAsync({
-          projectId: projectId,
-          userEmail: userEmail
-        })
-        // Reload members
-        await loadProjectMembers(projectId)
-      } catch (error: any) {
-        console.error('Error removing member:', error)
-        // Error message already shown by mutation onError handler
-      }
-    }
-
-    const getRoleLabel = (role: string): string => {
-      const labels: Record<string, string> = {
-        teacher: '教師 (Level 1)',
-        observer: '觀察者 (Level 2)',
-        viewer: '檢視者 (Level 2)',
-        member: '成員 (Level 3)'
-      }
-      return labels[role] || role
-    }
-
-    const getRoleTagType = (role: string): string => {
-      const types: Record<string, string> = {
-        teacher: 'success',    // Green for teachers
-        observer: 'info',      // Blue for observers
-        viewer: 'primary',     // Purple for viewers
-        member: 'warning'      // Orange for members (students)
-      }
-      return types[role] || 'default'
-    }
-
-    // Avatar Helper Functions
-    const generateDicebearUrl = (seed: string, style: string, options: Record<string, string> = {}) => {
-      const baseUrl = `https://api.dicebear.com/7.x/${style}/svg`
-      const params = new URLSearchParams({
-        seed: seed,
-        size: '48',  // Smaller size for list view
-        ...options
-      })
-      return `${baseUrl}?${params.toString()}`
-    }
-
-    const parseAvatarOptions = (optionsData: any): Record<string, string> => {
-      if (!optionsData) return {}
-      if (typeof optionsData === 'string') {
-        try {
-          return JSON.parse(optionsData)
-        } catch {
-          console.warn('Failed to parse avatarOptions:', optionsData)
-          return {}
-        }
-      }
-      return optionsData
-    }
-
-    const getAvatarUrl = (user: any) => {
-      const options = parseAvatarOptions(user.avatarOptions)
-      return generateDicebearUrl(
-        user.avatarSeed,
-        user.avatarStyle || 'initials',
-        options
-      )
-    }
-
-    const handleAvatarError = (event: any, user: any) => {
-      // Fallback to initials style
-      const initials = (user.displayName || user.userEmail || 'U')
-        .split(' ')
-        .map((word: string) => word.charAt(0))
-        .join('')
-        .substring(0, 2)
-        .toUpperCase()
-
-      event.target.src = `https://api.dicebear.com/7.x/initials/svg?seed=${initials}&size=48`
-    }
-
-    // Stage Editor Functions
-    const openStageEditor = async (project: any) => {
-      selectedProject.value = project
-      showStageEditor.value = true
-      activeCollapse.value = [] // 預設折疊新增階段區塊
-      
-      // 載入真實的階段資料
-      await loadProjectStages(project.projectId)
-    }
-
-    const loadProjectStages = async (projectId: string) => {
-      loadingStages.value = true
-      try {
-        // Use TanStack Query mutation
-        const result = await listStagesMutation.mutateAsync({
-          projectId: projectId,
-          includeArchived: true  // Always fetch all stages
-        })
-
-        if (result?.stages) {
-          // Inject projectId into each stage for later use
-          projectStages.value = result.stages
-            .map((stage: Stage) => ({ ...stage, projectId }))
-            .sort((a: Stage, b: Stage) => a.stageOrder - b.stageOrder)
-        } else {
-          projectStages.value = []
-        }
-      } catch (error: any) {
-        console.error('Error loading stages:', error)
-        projectStages.value = []
-        ElMessage.error('載入階段資料失敗，請重試')
-      } finally {
-        loadingStages.value = false
-      }
-    }
-
-
-    const editStage = async (stage: any, project: any = null) => {
-      // Clear any previous errors
-      stageFormError.value = null
-
-      // Ensure selectedProject is set
-      if (project) {
-        selectedProject.value = project
-      } else if (!selectedProject.value) {
-        // Find the project that contains this stage
-        const projectForStage = projects.value.find(p =>
-          expandedProjects.has(p.projectId) &&
-          projectStagesMap.get(p.projectId)?.some((s: Stage) => s.stageId === stage.stageId)
-        )
-        if (projectForStage) {
-          selectedProject.value = projectForStage as any
-        } else {
-          console.error('Cannot determine project for stage:', stage)
-          ElMessage.error('無法確定階段所屬的專案')
-          return
-        }
-      }
-
-      editingStage.value = stage
-      showEditStageModal.value = true
-      loadingStageDetails.value = true
-
-      // Show loading state
-      editStageForm.stageName = '載入中...'
-      editStageForm.description = ''
-      editStageForm.reportRewardPool = 0
-      editStageForm.commentRewardPool = 0
-
-      try {
-        // Get detailed stage information using TanStack Query mutation
-        const stageDetails = await getStageDetailMutation.mutateAsync({
-          projectId: selectedProject.value!.projectId,
-          stageId: stage.stageId
-        })
-
-        editStageForm.stageId = stageDetails.stageId
-        editStageForm.stageName = stageDetails.stageName
-        // 修正時區問題：使用本地時區而不是UTC
-        const formatDatetimeLocal = (timestamp: number): string => {
-          const date = new Date(timestamp)
-          // 獲取本地時間的YYYY-MM-DDTHH:MM格式，避免時區轉換
-          const year = date.getFullYear()
-          const month = String(date.getMonth() + 1).padStart(2, '0')
-          const day = String(date.getDate()).padStart(2, '0')
-          const hours = String(date.getHours()).padStart(2, '0')
-          const minutes = String(date.getMinutes()).padStart(2, '0')
-          return `${year}-${month}-${day}T${hours}:${minutes}`
-        }
-
-        editStageForm.startTime = formatDatetimeLocal(stageDetails.startTime)
-        editStageForm.endTime = formatDatetimeLocal(stageDetails.endTime)
-        editStageForm.description = stageDetails.description || ''
-        editStageForm.status = stageDetails.status
-
-        // Get reward pools directly from stage data
-        editStageForm.reportRewardPool = stageDetails.reportRewardPool || 0
-        editStageForm.commentRewardPool = stageDetails.commentRewardPool || 0
-
-        // Check voting lock (if stage has votes, prevent time editing)
-        await checkVotingLock(selectedProject.value!.projectId, stageDetails.stageId)
-      } catch (error: any) {
-        console.error('Error loading stage details:', error)
-        ElMessage.error('載入階段詳情失敗，請重試')
-        showEditStageModal.value = false
-      } finally {
-        loadingStageDetails.value = false
-      }
-    }
-
-    // Check if stage has voting records (voting lock)
-    const checkVotingLock = async (projectId: string, stageId: string) => {
-      if (!stageId) {
-        isVotingLocked.value = false
-        return
-      }
-
-      checkingVotingLock.value = true
-      try {
-        // Use TanStack Query mutation to check for votes
-        const result = await checkVotingLockMutation.mutateAsync({
-          projectId,
-          stageId
-        })
-        isVotingLocked.value = result?.hasVotes || false
-      } catch (error) {
-        console.error('Error checking voting lock:', error)
-        // On error, assume not locked (fail-open for better UX)
-        isVotingLocked.value = false
-      } finally {
-        checkingVotingLock.value = false
-      }
-    }
-
-    const updateStageDetails = async (formData: any) => {
-      // Clear previous errors
-      stageFormError.value = null
-
-      // Sync fresh data from child component
-      if (formData) {
-        Object.assign(editStageForm, formData)
-      }
-
-      if (!editStageForm.stageName.trim()) {
-        stageFormError.value = {
-          title: '驗證失敗',
-          message: '請輸入階段名稱'
-        }
-        ElMessage.error('請輸入階段名稱')
-        return
-      }
-
-      if (!editStageForm.startTime || !editStageForm.endTime) {
-        stageFormError.value = {
-          title: '驗證失敗',
-          message: '請選擇開始和結束時間'
-        }
-        ElMessage.error('請選擇開始和結束時間')
-        return
-      }
-
-      if (new Date(editStageForm.endTime) <= new Date(editStageForm.startTime)) {
-        stageFormError.value = {
-          title: '驗證失敗',
-          message: '結束時間必須晚於開始時間'
-        }
-        ElMessage.error('結束時間必須晚於開始時間')
-        return
-      }
-
-      savingStageDetails.value = true
-      try {
-        if (editStageForm.stageId) {
-          // 更新現有階段 using TanStack Query mutation
-          await updateStageMutation.mutateAsync({
-            projectId: selectedProject.value!.projectId,
-            stageId: editStageForm.stageId,
-            updates: {
-              stageName: editStageForm.stageName.trim(),
-              startTime: new Date(editStageForm.startTime).getTime(),
-              endTime: new Date(editStageForm.endTime).getTime(),
-              description: editStageForm.description,
-              reportRewardPool: editStageForm.reportRewardPool || 0,
-              commentRewardPool: editStageForm.commentRewardPool || 0
-            }
-          })
-
-          // Reload project stages to ensure data sync
-          await loadProjectStagesForExpansion(selectedProject.value!.projectId)
-          showEditStageModal.value = false
-        } else {
-          // 創建新階段 using TanStack Query mutation
-          console.log('=== Creating new stage ===')
-          console.log('Selected project:', selectedProject.value)
-
-          const stages = projectStagesMap.get(selectedProject.value!.projectId) || []
-          const stageData = {
-            stageName: editStageForm.stageName.trim(),
-            description: editStageForm.description,
-            stageOrder: stages.length + 1,
-            startTime: new Date(editStageForm.startTime).getTime(),
-            endTime: new Date(editStageForm.endTime).getTime(),
-            reportRewardPool: editStageForm.reportRewardPool || 0,
-            commentRewardPool: editStageForm.commentRewardPool || 0
-          }
-
-          console.log('Stage data to create:', stageData)
-          console.log('Project ID:', selectedProject.value!.projectId)
-
-          const result = await createStageMutation.mutateAsync({
-            projectId: selectedProject.value!.projectId,
-            stageData: stageData
-          })
-
-          console.log('Stage created successfully:', result)
-
-          // Reload project stages to ensure data sync
-          await loadProjectStagesForExpansion(selectedProject.value!.projectId)
-          showEditStageModal.value = false
-        }
-      } catch (error: any) {
-        console.error('Error saving stage:', error)
-        stageFormError.value = {
-          title: editStageForm.stageId ? '更新失敗' : '新增階段失敗',
-          message: error.message || '未知錯誤'
-        }
-        // Error message already shown by mutation onError handler
-      } finally {
-        savingStageDetails.value = false
-      }
-    }
-
-
-
-    // Drag and Drop Functions
-    const handleDragStart = (stage: any, event: any) => {
-      draggedStage.value = stage
-      event.dataTransfer.effectAllowed = 'move'
-    }
-
-    const handleDragOver = (event: any) => {
-      event.preventDefault()
-      event.dataTransfer.dropEffect = 'move'
-    }
-
-    const handleDrop = (event: any, projectId: string, targetIndex: number) => {
-      event.preventDefault()
-      
-      if (!draggedStage.value) {
-        return
-      }
-
-      const stages = projectStagesMap.get(projectId) || []
-      const draggedIndex = stages.findIndex((s: Stage) => s.stageId === draggedStage.value!.stageId)
-      
-      if (draggedIndex === -1 || draggedIndex === targetIndex) {
-        return
-      }
-
-      // Reorder the stages array
-      const newStages = [...stages]
-      const draggedItem = newStages.splice(draggedIndex, 1)[0]
-      newStages.splice(targetIndex, 0, draggedItem)
-      
-      // Update stage order
-      newStages.forEach((stage, index) => {
-        stage.stageOrder = index + 1
-      })
-      
-      // Update the map
-      projectStagesMap.set(projectId, newStages)
-      
-      // Save the new order to backend
-      saveStageOrder(projectId, newStages)
-      
-      draggedStage.value = null
-    }
-
-
-    const handleDragEnd = () => {
-      draggedStage.value = null
-    }
-
-    const moveStageUpInProject = async (projectId: string, currentIndex: number) => {
-      if (currentIndex === 0) return
-
-      const stages = projectStagesMap.get(projectId) || []
-      const newStages = [...stages]
-
-      // 交換位置
-      const temp = newStages[currentIndex]
-      newStages[currentIndex] = newStages[currentIndex - 1]
-      newStages[currentIndex - 1] = temp
-
-      // 更新順序
-      newStages.forEach((stage: Stage, index: number) => {
-        stage.stageOrder = index + 1
-      })
-
-      // 更新map
-      projectStagesMap.set(projectId, newStages)
-
-      // 保存到後端
-      await saveStageOrder(projectId, newStages)
-    }
-
-    const moveStageDownInProject = async (projectId: string, currentIndex: number) => {
-      const stages = projectStagesMap.get(projectId) || []
-      if (currentIndex === stages.length - 1) return
-
-      const newStages = [...stages]
-
-      // 交換位置
-      const temp = newStages[currentIndex]
-      newStages[currentIndex] = newStages[currentIndex + 1]
-      newStages[currentIndex + 1] = temp
-
-      // 更新順序
-      newStages.forEach((stage: Stage, index: number) => {
-        stage.stageOrder = index + 1
-      })
-
-      // 更新map
-      projectStagesMap.set(projectId, newStages)
-
-      // 保存到後端
-      await saveStageOrder(projectId, newStages)
-    }
-
-    const formatDate = (timestamp: number | null | undefined): string => {
-      if (!timestamp) return '-'
-      // 与ProjectDetail.vue保持一致，使用dayjs處理時間
-      const date = typeof timestamp === 'number' ? dayjs(timestamp) : dayjs(timestamp)
-      return date.format('YYYY/MM/DD HH:mm:ss')
-    }
-
-    // Settlement progress helper functions
-
-    const addNewStage = async () => {
-      if (!newStage.stageName.trim()) {
-        ElMessage.error('請輸入階段名稱')
-        return
-      }
-
-      if (!newStage.startTime || !newStage.endTime) {
-        ElMessage.error('請選擇開始和結束時間')
-        return
-      }
-
-      if (new Date(newStage.endTime) <= new Date(newStage.startTime)) {
-        ElMessage.error('結束時間必須晚於開始時間')
-        return
-      }
-
-      try {
-        const stageData = {
-          stageName: newStage.stageName.trim(),
-          description: newStage.description,
-          stageOrder: projectStages.value.length + 1,
-          startTime: new Date(newStage.startTime).getTime(),
-          endTime: new Date(newStage.endTime).getTime(),
-          reportRewardPool: newStage.reportRewardPool || 0,
-          commentRewardPool: newStage.commentRewardPool || 0
-        }
-
-        // Use TanStack Query mutation (message shown by onSuccess handler)
-        await createStageMutation.mutateAsync({
-          projectId: selectedProject.value!.projectId,
-          stageData: stageData
-        })
-
-        // Reset form
-        newStage.stageName = ''
-        newStage.startTime = ''
-        newStage.endTime = ''
-        newStage.description = ''
-        newStage.reportRewardPool = 0
-        newStage.commentRewardPool = 0
-
-        // Reload stages
-        await loadProjectStages(selectedProject.value!.projectId)
-      } catch (error: any) {
-        console.error('Error creating stage:', error)
-        // Error message already shown by mutation onError handler
-      }
-    }
-
-    const onDragStart = (stage: Stage) => {
-      draggedStage.value = stage
-    }
-
-    const onDrop = (targetIndex: number) => {
-      if (!draggedStage.value) return
-
-      const draggedIndex = projectStages.value.findIndex(s => s.stageId === draggedStage.value!.stageId)
-      if (draggedIndex === targetIndex) return
-
-      // Reorder the stages array
-      const newStages = [...projectStages.value]
-      const draggedItem = newStages.splice(draggedIndex, 1)[0]
-      newStages.splice(targetIndex, 0, draggedItem)
-      
-      // Update stage order
-      newStages.forEach((stage, index) => {
-        stage.stageOrder = index + 1
-      })
-      
-      projectStages.value = newStages
-      draggedStage.value = null
-    }
-
-    const selectStage = (stage: Stage) => {
-      selectedStage.value = stage
-    }
-
-    const getStageIndex = (stage: Stage) => {
-      return projectStages.value.findIndex(s => s.stageId === stage.stageId)
-    }
-    
-    const moveStageToTop = () => {
-      if (!selectedStage.value) return
-      const index = getStageIndex(selectedStage.value)
-      if (index > 0) {
-        const stages = [...projectStages.value]
-        const [removed] = stages.splice(index, 1)
-        stages.unshift(removed)
-        updateStageOrders(stages)
-      }
-    }
-    
-    const moveStageUp = () => {
-      try {
-        if (!selectedStage.value) return
-        const index = getStageIndex(selectedStage.value)
-        if (index > 0) {
-          const stages = [...projectStages.value]
-          const temp = stages[index - 1]
-          stages[index - 1] = stages[index]
-          stages[index] = temp
-          updateStageOrders(stages)
-        }
-      } catch (error) {
-        console.error('Move stage up error:', error)
-      }
-    }
-    
-    const moveStageDown = () => {
-      try {
-        if (!selectedStage.value) return
-        const index = getStageIndex(selectedStage.value)
-        if (index < projectStages.value.length - 1) {
-          const stages = [...projectStages.value]
-          const temp = stages[index]
-          stages[index] = stages[index + 1]
-          stages[index + 1] = temp
-          updateStageOrders(stages)
-        }
-      } catch (error) {
-        console.error('Move stage down error:', error)
-      }
-    }
-    
-    const moveStageToBottom = () => {
-      if (!selectedStage.value) return
-      const index = getStageIndex(selectedStage.value)
-      if (index < projectStages.value.length - 1) {
-        const stages = [...projectStages.value]
-        const [removed] = stages.splice(index, 1)
-        stages.push(removed)
-        updateStageOrders(stages)
-      }
-    }
-    
-    const updateStageOrders = (stages: Stage[]) => {
-      stages.forEach((stage: Stage, index: number) => {
-        stage.stageOrder = index + 1
-      })
-      projectStages.value = stages
-    }
-    
-    const saveStageOrder = async (projectId: string | null = null, stages: Stage[] | null = null) => {
-      const targetProjectId = projectId || selectedProject.value?.projectId
-      const targetStages = stages || projectStages.value
-
-      if (!targetProjectId || !targetStages) {
-        ElMessage.error('無法保存階段順序：缺少必要參數')
-        return
-      }
-
-      savingStageOrder.value = true
-      try {
-        // Update stage order for each stage using TanStack Query mutation (silent)
-        for (const stage of targetStages) {
-          await updateStageOrderMutation.mutateAsync({
-            projectId: targetProjectId,
-            stageId: stage.stageId,
-            updates: { stageOrder: stage.stageOrder }
-          })
-        }
-
-        ElMessage.success('階段順序已儲存')
-      } catch (error: any) {
-        console.error('Error saving stage order:', error)
-        ElMessage.error('儲存階段順序失敗，請重試')
-      } finally {
-        savingStageOrder.value = false
-      }
-    }
-
-    // Open settlement confirmation drawer
-    const openSettlementConfirmDrawer = (stage: Stage & { projectId?: string }, project: ExtendedProject) => {
-      // Attach projectId to stage for drawer access
-      stage.projectId = project.projectId
-      selectedStageForConfirm.value = stage
-      showSettlementConfirmDrawer.value = true
-    }
-
-    // Handle settlement confirmation
-    const handleSettlementConfirmed = (stage: Stage, projectId: string) => {
-      // Close confirmation drawer
-      showSettlementConfirmDrawer.value = false
-      // Open progress drawer and trigger settlement
-      settleStage(stage as Stage & { projectId?: string }, projectId)
-    }
-
-    // Open settlement drawer for a stage
-    const settleStage = async (stage: Stage & { projectId?: string }, projectId: string, _forceSettle = false) => {
-      console.log('[ProjectManagement] settleStage called with:', { stageId: stage.stageId, projectId })
-      // Attach projectId to stage object so drawer can access it
-      stage.projectId = projectId
-      selectedStageForSettlement.value = stage
-      showSettlementDrawer.value = true
-      settlingStages.value.add(stage.stageId)
-    }
-
-    // Handle settlement completion
-    const handleSettlementComplete = async ({ stageId }: { stageId: string; settlementId?: string; result: SettlementDetails }) => {
-      // Update stage status in local state
-      const projectId = selectedProject.value?.projectId
-
-      // Update in projectStagesMap
-      if (projectId && projectStagesMap.has(projectId)) {
-        const stages = projectStagesMap.get(projectId)!
-        const stageIndex = stages.findIndex((s: Stage) => s.stageId === stageId)
-        if (stageIndex !== -1) {
-          stages[stageIndex].status = 'completed'
-        }
-      }
-
-      // Remove from settlingStages
-      settlingStages.value.delete(stageId)
-
-      // Reload stages to sync with backend
-      if (projectId) {
-        await loadProjectStagesForExpansion(projectId)
-      }
-    }
-
-    // Handle settlement error
-    const handleSettlementError = ({ stageId, error }: { stageId: string; error: string }) => {
-      // Remove from settlingStages
-      settlingStages.value.delete(stageId)
-      // Error message already shown by child component
-      ElMessage.error(`結算失敗: ${error}`)
-    }
-
-    // Handle drawer closed - refresh stage list
-    const handleDrawerClosed = async ({ projectId }: { projectId: string }) => {
-      console.log('[ProjectManagement] handleDrawerClosed called with projectId:', projectId)
-      if (projectId) {
-        console.log('[ProjectManagement] Refreshing stages for project:', projectId)
-        await loadProjectStagesForExpansion(projectId)
-        console.log('[ProjectManagement] Stage refresh completed')
-      } else {
-        console.warn('[ProjectManagement] handleDrawerClosed called without projectId')
-      }
-    }
-    
-    const handleDistributionCommand = (command: string, stage: Stage, projectId: string) => {
-      if (stage.status === 'completed') {
-        // 設定要顯示的階段資訊
-        selectedStageForAnalysis.value = {
-          ...stage,
-          projectId: projectId
-        }
-
-        // 根據選擇顯示對應的分析模態窗口
-        if (command === 'report') {
-          showVotingAnalysisModal.value = true
-        } else if (command === 'comment') {
-          showCommentAnalysisModal.value = true
-        }
-      } else {
-        ElMessage.warning('只有已結算的階段才能顯示獎金分配結果')
-      }
-    }
-
-    // Open reverse settlement drawer
-    const reverseSettlement = (stage: Stage, project: ExtendedProject | null) => {
-      selectedStageForReverse.value = stage
-      selectedProjectForReverse.value = project || selectedProject.value
-      showReverseSettlementDrawer.value = true
-    }
-
-    // Handle successful reversal from the drawer component
-    const handleReverseSuccess = async ({ stageId, projectId }: { reversalId: string; transactionCount: number; stageId: string; projectId: string }) => {
-      // Update stage status in local state
-      const stageIndex = projectStages.value.findIndex((s: Stage) => s.stageId === stageId)
-      if (stageIndex !== -1) {
-        projectStages.value[stageIndex].status = 'voting'
-      }
-
-      // Update in projectStagesMap
-      const projectStagesList = projectStagesMap.get(projectId)
-      if (projectStagesList) {
-        const mapStageIndex = projectStagesList.findIndex((s: Stage) => s.stageId === stageId)
-        if (mapStageIndex !== -1) {
-          projectStagesList[mapStageIndex].status = 'voting'
-        }
-      }
-
-      // Reload stages to sync with backend
-      await loadProjectStagesForExpansion(projectId)
-    }
-
-    const archiveStage = async (stage: Stage, project: ExtendedProject | null) => {
-      try {
-        // Add to archiving set
-        archivingStages.value.add(stage.stageId)
-
-        // Use project parameter if provided, otherwise fall back to selectedProject
-        const projectId = project?.projectId || selectedProject.value?.projectId
-        if (!projectId) {
-          ElMessage.error('無法取得專案ID')
-          return
-        }
-
-        // Use TanStack Query mutation (message shown by onSuccess handler)
-        await updateStageMutation.mutateAsync({
-          projectId: projectId,
-          stageId: stage.stageId,
-          updates: { status: 'archived' }
-        })
-
-        // Reload stages to get updated status
-        await loadProjectStagesForExpansion(projectId)
-      } catch (error: any) {
-        console.error('Error archiving stage:', error)
-        ElMessage.error('封存階段失敗，請重試')
-      } finally {
-        // Remove from archiving set
-        archivingStages.value.delete(stage.stageId)
-      }
-    }
-
-    const unarchiveStage = async (stage: Stage, project: ExtendedProject | null) => {
-      try {
-        // Add to archiving set (reuse the same tracking set)
-        archivingStages.value.add(stage.stageId)
-
-        // Use project parameter if provided, otherwise fall back to selectedProject
-        const projectId = project?.projectId || selectedProject.value?.projectId
-        if (!projectId) {
-          ElMessage.error('無法取得專案ID')
-          return
-        }
-
-        // Use TanStack Query mutation (message shown by onSuccess handler)
-        await updateStageMutation.mutateAsync({
-          projectId: projectId,
-          stageId: stage.stageId,
-          updates: { status: 'pending' }
-        })
-
-        // Reload stages to get updated status
-        await loadProjectStagesForExpansion(projectId)
-      } catch (error: any) {
-        console.error('Error unarchiving stage:', error)
-        ElMessage.error('解除封存階段失敗，請重試')
-      } finally {
-        // Remove from archiving set
-        archivingStages.value.delete(stage.stageId)
-      }
-    }
-
-    const getFilteredStages = (projectId: string) => {
-      const stages = projectStagesMap.get(projectId) || []
-      if (showArchivedStages.value) {
-        return stages  // Show all stages including archived
-      }
-      return stages.filter((s: Stage) => s.status !== 'archived')  // Hide archived stages
-    }
-
-    // Gantt chart helper functions
-    const toggleGanttChart = (projectId: string, value: boolean) => {
-      showGanttChart.value.set(projectId, value)
-
-      // Initialize centerTime to today when opening
-      if (value && !ganttCenterTime.value.has(projectId)) {
-        ganttCenterTime.value.set(projectId, Date.now())
-      }
-    }
-
-    const transformStagesForGantt = (projectId: string) => {
-      const stages = getFilteredStages(projectId)
-      return stages.map((stage: Stage & { settledTime?: number }) => ({
-        stageName: stage.stageName,
-        startTime: stage.startTime,
-        endTime: stage.endTime,
-        status: stage.status,
-        extraTime: stage.status === 'completed' ? (stage.settledTime || undefined) : Infinity,
-        extraTimeText: stage.status === 'completed' ? '投票階段' : '投票階段將由老師手動關閉結算'
+  } catch (error) {
+    console.error('Error searching users:', error)
+    searchResults.value = []
+    ElMessage.error('搜尋使用者失敗')
+  } finally {
+    searchingUsers.value = false
+  }
+}
+
+const addSelectedViewers = async (payload: any) => {
+  // Accept payload from child component event
+  // Users is now an array of { userEmail, role } objects
+  const users = payload?.users || []
+
+  if (users.length === 0) {
+    ElMessage.warning('請選擇要新增的使用者')
+    return
+  }
+
+  if (!selectedProject.value) {
+    ElMessage.error('未選擇專案')
+    return
+  }
+
+  try {
+    loadingViewers.value = true
+
+    // Use TanStack Query mutation for batch add
+    const result = await addViewersBatchMutation.mutateAsync({
+      projectId: selectedProject.value.projectId,
+      viewers: users.map((u: any) => ({
+        userEmail: u.userEmail,
+        role: u.role || 'teacher'
       }))
+    })
+
+    const summary = result?.summary || {}
+    const messages = []
+
+    if (summary.inserted > 0) messages.push(`新增 ${summary.inserted} 位`)
+    if (summary.reactivated > 0) messages.push(`重新啟用 ${summary.reactivated} 位`)
+    if (summary.updated > 0) messages.push(`更新角色 ${summary.updated} 位`)
+    if (summary.unchanged > 0) messages.push(`${summary.unchanged} 位已存在`)
+
+    const hasChanges = summary.inserted > 0 || summary.reactivated > 0 || summary.updated > 0
+
+    if (messages.length > 0) {
+      if (hasChanges) {
+        ElMessage.success(messages.join('、'))
+      } else {
+        ElMessage.info(messages.join('、') + '，無需變更')
+      }
     }
 
-    const handleGanttStageClick = (stage: unknown, _projectId: string) => {
-      console.log('Gantt stage clicked:', stage)
+    // Reset and reload
+    newViewer.searchText = ''
+    newViewer.role = 'teacher'
+    searchResults.value = []
+    selectedUsers.value = []
+    await loadProjectViewers(selectedProject.value.projectId)
+  } catch (error: any) {
+    console.error('Error adding selected viewers:', error)
+    // Error message already shown by mutation onError handler
+  } finally {
+    loadingViewers.value = false
+  }
+}
+
+const updateViewerRole = async ({ userEmail, newRole }: { userEmail: string; newRole: string }) => {
+  if (!selectedProject.value) {
+    ElMessage.error('未選擇專案')
+    return
+  }
+
+  try {
+    // Use TanStack Query mutation (message shown by onSuccess handler)
+    await updateViewerRoleMutation.mutateAsync({
+      projectId: selectedProject.value.projectId,
+      userEmail: userEmail,
+      role: newRole
+    })
+    // Reload viewers
+    await loadProjectViewers(selectedProject.value.projectId)
+  } catch (error: any) {
+    console.error('Error updating viewer role:', error)
+    // Error message already shown by mutation onError handler
+  }
+}
+
+const removeViewer = async (userEmail: string) => {
+  if (!selectedProject.value) {
+    ElMessage.error('未選擇專案')
+    return
+  }
+
+  try {
+    // Use TanStack Query mutation (message shown by onSuccess handler)
+    await removeViewerMutation.mutateAsync({
+      projectId: selectedProject.value.projectId,
+      userEmail: userEmail
+    })
+    // Reload viewers
+    await loadProjectViewers(selectedProject.value.projectId)
+  } catch (error: any) {
+    console.error('Error removing viewer:', error)
+    // Error message already shown by mutation onError handler
+  }
+}
+
+const batchUpdateRoles = async () => {
+  if (selectedViewers.value.length === 0) {
+    ElMessage.warning('請選擇要更新的存取者')
+    return
+  }
+
+  if (!batchRole.value) {
+    ElMessage.warning('請選擇目標角色')
+    return
+  }
+
+  if (!selectedProject.value) {
+    ElMessage.error('未選擇專案')
+    return
+  }
+
+  try {
+    loadingViewers.value = true
+    let successCount = 0
+    let failCount = 0
+
+    for (const viewer of selectedViewers.value) {
+      try {
+        // Use TanStack Query mutation (silent - no messages)
+        await updateViewerRoleMutation.mutateAsync({
+          projectId: selectedProject.value.projectId,
+          userEmail: viewer.userEmail,
+          role: batchRole.value
+        })
+        successCount++
+      } catch {
+        failCount++
+      }
     }
 
-    const focusStageInGantt = (stage: Stage, projectId: string) => {
-      if (!showGanttChart.value.get(projectId)) return
-      if (stage.startTime == null || stage.endTime == null) return
-
-      const startTime = typeof stage.startTime === 'string' ? new Date(stage.startTime).getTime() : stage.startTime
-      const endTime = typeof stage.endTime === 'string' ? new Date(stage.endTime).getTime() : stage.endTime
-      const centerTime = Math.floor((startTime + endTime) / 2)
-
-      // Update centerTime will trigger gantt chart to re-center
-      ganttCenterTime.value.set(projectId, centerTime)
+    // Show results
+    if (successCount > 0 && failCount === 0) {
+      ElMessage.success(`成功轉換 ${successCount} 位存取者的角色`)
+    } else if (successCount > 0 && failCount > 0) {
+      ElMessage.warning(`成功轉換 ${successCount} 位，失敗 ${failCount} 位`)
+    } else {
+      ElMessage.error('批次轉換失敗')
     }
 
-    // Open clone project drawer
-    const openCloneProjectDrawer = (project: Project | ExtendedProject) => {
-      selectedProjectForClone.value = project as ExtendedProject
-      showCloneProjectDrawer.value = true
+    // Reset and reload
+    if (successCount > 0) {
+      selectedViewers.value = []
+      batchRole.value = ''
+      await loadProjectViewers(selectedProject.value.projectId)
+    }
+  } catch (error) {
+    console.error('Error batch updating roles:', error)
+    ElMessage.error('批次轉換角色失敗')
+  } finally {
+    loadingViewers.value = false
+  }
+}
+
+const batchRemoveViewers = async () => {
+  if (selectedViewers.value.length === 0) {
+    ElMessage.warning('請選擇要刪除的存取者')
+    return
+  }
+
+  if (!selectedProject.value) {
+    ElMessage.error('未選擇專案')
+    return
+  }
+
+  try {
+    loadingViewers.value = true
+    let successCount = 0
+    let failCount = 0
+
+    for (const viewer of selectedViewers.value) {
+      try {
+        // Use TanStack Query mutation (silent - no messages)
+        await removeViewerMutation.mutateAsync({
+          projectId: selectedProject.value.projectId,
+          userEmail: viewer.userEmail
+        })
+        successCount++
+      } catch {
+        failCount++
+      }
     }
 
-    // Open clone stage drawer
-    const openCloneStageDrawer = (stage: Stage) => {
-      selectedStageForClone.value = stage
-      showCloneStageDrawer.value = true
+    // Show results
+    if (successCount > 0 && failCount === 0) {
+      ElMessage.success(`成功刪除 ${successCount} 位存取者`)
+    } else if (successCount > 0 && failCount > 0) {
+      ElMessage.warning(`成功刪除 ${successCount} 位，失敗 ${failCount} 位`)
+    } else {
+      ElMessage.error('批次刪除失敗')
     }
 
-    // Refresh stages for affected projects that are currently expanded
-    const handleStageCloned = async (targetProjectIds: string[]) => {
-      for (const projectId of targetProjectIds) {
-        if (isProjectExpanded(projectId)) {
-          await loadProjectStagesForExpansion(projectId)
+    // Reset and reload
+    if (successCount > 0) {
+      selectedViewers.value = []
+      await loadProjectViewers(selectedProject.value.projectId)
+    }
+  } catch (error) {
+    console.error('Error batch removing viewers:', error)
+    ElMessage.error('批次刪除存取者失敗')
+  } finally {
+    loadingViewers.value = false
+  }
+}
+
+// Project Expansion Functions - refactored to use composable
+const toggleProjectExpansion = (project: any) => {
+  const projectId = project.projectId
+
+  if (isProjectExpanded(projectId)) {
+    // Collapse: navigate back to projects list
+    router.push({ name: 'admin-projects' })
+  } else {
+    // Expand: navigate to project detail
+    router.push({
+      name: 'admin-projects-detail',
+      params: { projectId }
+    })
+  }
+  // Note: Actual expansion state is managed by watch() on route.params.projectId
+}
+
+// Define loadProjectStagesForExpansion before watch (to avoid "before initialization" error)
+const loadProjectStagesForExpansion = async (projectId: string) => {
+  // Note: Loading state is now managed by watch() handler
+  try {
+    // Use TanStack Query mutation
+    const result = await listStagesMutation.mutateAsync({
+      projectId: projectId,
+      includeArchived: true  // Always fetch all stages, filter on frontend
+    })
+
+    if (result?.stages) {
+      // Inject projectId into each stage for later use
+      const sortedStages = result.stages
+        .map((stage: Stage) => ({ ...stage, projectId }))
+        .sort((a: Stage, b: Stage) => a.stageOrder - b.stageOrder)
+      projectStagesMap.set(projectId, sortedStages)
+    } else {
+      projectStagesMap.set(projectId, [])
+    }
+  } catch (error) {
+    console.error('Error loading stages:', error)
+    projectStagesMap.set(projectId, [])
+    throw error // Re-throw to let watch handler manage loading state
+  }
+}
+
+// URL → Expansion state synchronization
+watch(
+  () => route.params.projectId,
+  async (paramId) => {
+    const projectId = Array.isArray(paramId) ? paramId[0] : paramId
+    if (projectId && !isProjectExpanded(projectId)) {
+      // URL has projectId → Expand and load stages with loading state
+      loadingProjectStages.add(projectId)
+      expandedProjects.add(projectId)
+      try {
+        await loadProjectStagesForExpansion(projectId)
+      } finally {
+        loadingProjectStages.delete(projectId)
+      }
+    } else if (!projectId) {
+      // URL has no projectId → Collapse all
+      collapseAllProjects()
+    }
+  },
+  { immediate: true }
+)
+
+// Project Members Functions
+const loadProjectMembers = async (projectId: string) => {
+  loadingProjectMembers.value.add(projectId)
+
+  try {
+    // Use TanStack Query mutation
+    const result = await listViewersMutation.mutateAsync({ projectId })
+    projectMembersMap.value.set(projectId, result)
+  } catch (error: any) {
+    console.error('Error loading project members:', error)
+    projectMembersMap.value.set(projectId, [])
+    ElMessage.error('載入專案成員失敗')
+  } finally {
+    loadingProjectMembers.value.delete(projectId)
+  }
+}
+
+const addMemberToProject = async () => {
+  if (!newMember.email || !newMember.role) {
+    ElMessage.warning('請填寫完整資訊')
+    return
+  }
+
+  if (!selectedProjectForMember.value) {
+    ElMessage.error('未選擇專案')
+    return
+  }
+
+  addingMember.value = true
+
+  try {
+    // Use TanStack Query mutation (message shown by onSuccess handler)
+    await addViewerMutation.mutateAsync({
+      projectId: selectedProjectForMember.value.projectId,
+      userEmail: newMember.email,
+      role: newMember.role
+    })
+
+    showAddMemberDialog.value = false
+
+    // Reload members for this project
+    await loadProjectMembers(selectedProjectForMember.value.projectId)
+  } catch (error: any) {
+    console.error('Error adding member:', error)
+    // Error message already shown by mutation onError handler
+  } finally {
+    addingMember.value = false
+  }
+}
+
+
+const editStage = async (stage: any, project: any = null) => {
+  // Clear any previous errors
+  stageFormError.value = null
+
+  // Ensure selectedProject is set
+  if (project) {
+    selectedProject.value = project
+  } else if (!selectedProject.value) {
+    // Find the project that contains this stage
+    const projectForStage = projects.value.find(p =>
+      expandedProjects.has(p.projectId) &&
+      projectStagesMap.get(p.projectId)?.some((s: Stage) => s.stageId === stage.stageId)
+    )
+    if (projectForStage) {
+      selectedProject.value = projectForStage as any
+    } else {
+      console.error('Cannot determine project for stage:', stage)
+      ElMessage.error('無法確定階段所屬的專案')
+      return
+    }
+  }
+
+  editingStage.value = stage
+  showEditStageModal.value = true
+  loadingStageDetails.value = true
+
+  // Show loading state
+  editStageForm.stageName = '載入中...'
+  editStageForm.description = ''
+  editStageForm.reportRewardPool = 0
+  editStageForm.commentRewardPool = 0
+
+  try {
+    // Get detailed stage information using TanStack Query mutation
+    const stageDetails = await getStageDetailMutation.mutateAsync({
+      projectId: selectedProject.value!.projectId,
+      stageId: stage.stageId
+    })
+
+    editStageForm.stageId = stageDetails.stageId
+    editStageForm.stageName = stageDetails.stageName
+    // 修正時區問題：使用本地時區而不是UTC
+    const formatDatetimeLocal = (timestamp: number): string => {
+      const date = new Date(timestamp)
+      // 獲取本地時間的YYYY-MM-DDTHH:MM格式，避免時區轉換
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const hours = String(date.getHours()).padStart(2, '0')
+      const minutes = String(date.getMinutes()).padStart(2, '0')
+      return `${year}-${month}-${day}T${hours}:${minutes}`
+    }
+
+    editStageForm.startTime = formatDatetimeLocal(stageDetails.startTime)
+    editStageForm.endTime = formatDatetimeLocal(stageDetails.endTime)
+    editStageForm.description = stageDetails.description || ''
+    editStageForm.status = stageDetails.status
+
+    // Get reward pools directly from stage data
+    editStageForm.reportRewardPool = stageDetails.reportRewardPool || 0
+    editStageForm.commentRewardPool = stageDetails.commentRewardPool || 0
+
+    // Check voting lock (if stage has votes, prevent time editing)
+    await checkVotingLock(selectedProject.value!.projectId, stageDetails.stageId)
+  } catch (error: any) {
+    console.error('Error loading stage details:', error)
+    ElMessage.error('載入階段詳情失敗，請重試')
+    showEditStageModal.value = false
+  } finally {
+    loadingStageDetails.value = false
+  }
+}
+
+// Check if stage has voting records (voting lock)
+const checkVotingLock = async (projectId: string, stageId: string) => {
+  if (!stageId) {
+    isVotingLocked.value = false
+    return
+  }
+
+  checkingVotingLock.value = true
+  try {
+    // Use TanStack Query mutation to check for votes
+    const result = await checkVotingLockMutation.mutateAsync({
+      projectId,
+      stageId
+    })
+    isVotingLocked.value = result?.hasVotes || false
+  } catch (error) {
+    console.error('Error checking voting lock:', error)
+    // On error, assume not locked (fail-open for better UX)
+    isVotingLocked.value = false
+  } finally {
+    checkingVotingLock.value = false
+  }
+}
+
+const updateStageDetails = async (formData: any) => {
+  // Clear previous errors
+  stageFormError.value = null
+
+  // Sync fresh data from child component
+  if (formData) {
+    Object.assign(editStageForm, formData)
+  }
+
+  if (!editStageForm.stageName.trim()) {
+    stageFormError.value = {
+      title: '驗證失敗',
+      message: '請輸入階段名稱'
+    }
+    ElMessage.error('請輸入階段名稱')
+    return
+  }
+
+  if (!editStageForm.startTime || !editStageForm.endTime) {
+    stageFormError.value = {
+      title: '驗證失敗',
+      message: '請選擇開始和結束時間'
+    }
+    ElMessage.error('請選擇開始和結束時間')
+    return
+  }
+
+  if (new Date(editStageForm.endTime) <= new Date(editStageForm.startTime)) {
+    stageFormError.value = {
+      title: '驗證失敗',
+      message: '結束時間必須晚於開始時間'
+    }
+    ElMessage.error('結束時間必須晚於開始時間')
+    return
+  }
+
+  savingStageDetails.value = true
+  try {
+    if (editStageForm.stageId) {
+      // 更新現有階段 using TanStack Query mutation
+      await updateStageMutation.mutateAsync({
+        projectId: selectedProject.value!.projectId,
+        stageId: editStageForm.stageId,
+        updates: {
+          stageName: editStageForm.stageName.trim(),
+          startTime: new Date(editStageForm.startTime).getTime(),
+          endTime: new Date(editStageForm.endTime).getTime(),
+          description: editStageForm.description,
+          reportRewardPool: editStageForm.reportRewardPool || 0,
+          commentRewardPool: editStageForm.commentRewardPool || 0
         }
+      })
+
+      // Reload project stages to ensure data sync
+      await loadProjectStagesForExpansion(selectedProject.value!.projectId)
+      showEditStageModal.value = false
+    } else {
+      // 創建新階段 using TanStack Query mutation
+      console.log('=== Creating new stage ===')
+      console.log('Selected project:', selectedProject.value)
+
+      const stages = projectStagesMap.get(selectedProject.value!.projectId) || []
+      const stageData = {
+        stageName: editStageForm.stageName.trim(),
+        description: editStageForm.description,
+        stageOrder: stages.length + 1,
+        startTime: new Date(editStageForm.startTime).getTime(),
+        endTime: new Date(editStageForm.endTime).getTime(),
+        reportRewardPool: editStageForm.reportRewardPool || 0,
+        commentRewardPool: editStageForm.commentRewardPool || 0
       }
+
+      console.log('Stage data to create:', stageData)
+      console.log('Project ID:', selectedProject.value!.projectId)
+
+      const result = await createStageMutation.mutateAsync({
+        projectId: selectedProject.value!.projectId,
+        stageData: stageData
+      })
+
+      console.log('Stage created successfully:', result)
+
+      // Reload project stages to ensure data sync
+      await loadProjectStagesForExpansion(selectedProject.value!.projectId)
+      showEditStageModal.value = false
+    }
+  } catch (error: any) {
+    console.error('Error saving stage:', error)
+    stageFormError.value = {
+      title: editStageForm.stageId ? '更新失敗' : '新增階段失敗',
+      message: error.message || '未知錯誤'
+    }
+    // Error message already shown by mutation onError handler
+  } finally {
+    savingStageDetails.value = false
+  }
+}
+
+
+
+// Drag and Drop Functions
+const handleDragStart = (stage: any, event: any) => {
+  draggedStage.value = stage
+  event.dataTransfer.effectAllowed = 'move'
+}
+
+const handleDragOver = (event: any) => {
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'move'
+}
+
+const handleDrop = (event: any, projectId: string, targetIndex: number) => {
+  event.preventDefault()
+  
+  if (!draggedStage.value) {
+    return
+  }
+
+  const stages = projectStagesMap.get(projectId) || []
+  const draggedIndex = stages.findIndex((s: Stage) => s.stageId === draggedStage.value!.stageId)
+  
+  if (draggedIndex === -1 || draggedIndex === targetIndex) {
+    return
+  }
+
+  // Reorder the stages array
+  const newStages = [...stages]
+  const draggedItem = newStages.splice(draggedIndex, 1)[0]
+  newStages.splice(targetIndex, 0, draggedItem)
+  
+  // Update stage order
+  newStages.forEach((stage, index) => {
+    stage.stageOrder = index + 1
+  })
+  
+  // Update the map
+  projectStagesMap.set(projectId, newStages)
+  
+  // Save the new order to backend
+  saveStageOrder(projectId, newStages)
+  
+  draggedStage.value = null
+}
+
+
+const handleDragEnd = () => {
+  draggedStage.value = null
+}
+
+const moveStageUpInProject = async (projectId: string, currentIndex: number) => {
+  if (currentIndex === 0) return
+
+  const stages = projectStagesMap.get(projectId) || []
+  const newStages = [...stages]
+
+  // 交換位置
+  const temp = newStages[currentIndex]
+  newStages[currentIndex] = newStages[currentIndex - 1]
+  newStages[currentIndex - 1] = temp
+
+  // 更新順序
+  newStages.forEach((stage: Stage, index: number) => {
+    stage.stageOrder = index + 1
+  })
+
+  // 更新map
+  projectStagesMap.set(projectId, newStages)
+
+  // 保存到後端
+  await saveStageOrder(projectId, newStages)
+}
+
+const moveStageDownInProject = async (projectId: string, currentIndex: number) => {
+  const stages = projectStagesMap.get(projectId) || []
+  if (currentIndex === stages.length - 1) return
+
+  const newStages = [...stages]
+
+  // 交換位置
+  const temp = newStages[currentIndex]
+  newStages[currentIndex] = newStages[currentIndex + 1]
+  newStages[currentIndex + 1] = temp
+
+  // 更新順序
+  newStages.forEach((stage: Stage, index: number) => {
+    stage.stageOrder = index + 1
+  })
+
+  // 更新map
+  projectStagesMap.set(projectId, newStages)
+
+  // 保存到後端
+  await saveStageOrder(projectId, newStages)
+}
+
+const formatDate = (timestamp: number | null | undefined): string => {
+  if (!timestamp) return '-'
+  // 与ProjectDetail.vue保持一致，使用dayjs處理時間
+  const date = typeof timestamp === 'number' ? dayjs(timestamp) : dayjs(timestamp)
+  return date.format('YYYY/MM/DD HH:mm:ss')
+}
+
+// Settlement progress helper functions
+
+const saveStageOrder = async (projectId: string | null = null, stages: Stage[] | null = null) => {
+  const targetProjectId = projectId || selectedProject.value?.projectId
+  const targetStages = stages || projectStages.value
+
+  if (!targetProjectId || !targetStages) {
+    ElMessage.error('無法保存階段順序：缺少必要參數')
+    return
+  }
+
+  savingStageOrder.value = true
+  try {
+    // Update stage order for each stage using TanStack Query mutation (silent)
+    for (const stage of targetStages) {
+      await updateStageOrderMutation.mutateAsync({
+        projectId: targetProjectId,
+        stageId: stage.stageId,
+        updates: { stageOrder: stage.stageOrder }
+      })
     }
 
-    // Force Voting Drawer Functions
-    const openForceVotingDrawer = (stage: Stage & { projectId?: string }) => {
-      selectedForceVotingStage.value = stage
-      showForceVotingDrawer.value = true
+    ElMessage.success('階段順序已儲存')
+  } catch (error: any) {
+    console.error('Error saving stage order:', error)
+    ElMessage.error('儲存階段順序失敗，請重試')
+  } finally {
+    savingStageOrder.value = false
+  }
+}
+
+// Open settlement confirmation drawer
+const openSettlementConfirmDrawer = (stage: Stage & { projectId?: string }, project: ExtendedProject) => {
+  // Attach projectId to stage for drawer access
+  stage.projectId = project.projectId
+  selectedStageForConfirm.value = stage
+  showSettlementConfirmDrawer.value = true
+}
+
+// Handle settlement confirmation
+const handleSettlementConfirmed = (stage: Stage, projectId: string) => {
+  // Close confirmation drawer
+  showSettlementConfirmDrawer.value = false
+  // Open progress drawer and trigger settlement
+  settleStage(stage as Stage & { projectId?: string }, projectId)
+}
+
+// Open settlement drawer for a stage
+const settleStage = async (stage: Stage & { projectId?: string }, projectId: string, _forceSettle = false) => {
+  console.log('[ProjectManagement] settleStage called with:', { stageId: stage.stageId, projectId })
+  // Attach projectId to stage object so drawer can access it
+  stage.projectId = projectId
+  selectedStageForSettlement.value = stage
+  showSettlementDrawer.value = true
+  settlingStages.value.add(stage.stageId)
+}
+
+// Handle settlement completion
+const handleSettlementComplete = async ({ stageId }: { stageId: string; settlementId?: string; result: SettlementDetails }) => {
+  // Update stage status in local state
+  const projectId = selectedProject.value?.projectId
+
+  // Update in projectStagesMap
+  if (projectId && projectStagesMap.has(projectId)) {
+    const stages = projectStagesMap.get(projectId)!
+    const stageIndex = stages.findIndex((s: Stage) => s.stageId === stageId)
+    if (stageIndex !== -1) {
+      stages[stageIndex].status = 'completed'
+    }
+  }
+
+  // Remove from settlingStages
+  settlingStages.value.delete(stageId)
+
+  // Reload stages to sync with backend
+  if (projectId) {
+    await loadProjectStagesForExpansion(projectId)
+  }
+}
+
+// Handle settlement error
+const handleSettlementError = ({ stageId, error }: { stageId: string; error: string }) => {
+  // Remove from settlingStages
+  settlingStages.value.delete(stageId)
+  // Error message already shown by child component
+  ElMessage.error(`結算失敗: ${error}`)
+}
+
+// Handle drawer closed - refresh stage list
+const handleDrawerClosed = async ({ projectId }: { projectId: string }) => {
+  console.log('[ProjectManagement] handleDrawerClosed called with projectId:', projectId)
+  if (projectId) {
+    console.log('[ProjectManagement] Refreshing stages for project:', projectId)
+    await loadProjectStagesForExpansion(projectId)
+    console.log('[ProjectManagement] Stage refresh completed')
+  } else {
+    console.warn('[ProjectManagement] handleDrawerClosed called without projectId')
+  }
+}
+
+const handleDistributionCommand = (command: string, stage: Stage, projectId: string) => {
+  if (stage.status === 'completed') {
+    // 設定要顯示的階段資訊
+    selectedStageForAnalysis.value = {
+      ...stage,
+      projectId: projectId
     }
 
-    const handleForceVotingConfirmed = () => {
-      // Reload stage list after force voting
-      if (selectedForceVotingStage.value?.projectId) {
-        loadProjectStagesForExpansion(selectedForceVotingStage.value.projectId)
-      }
-      selectedForceVotingStage.value = null
-    }
-
-    // Clear Stage Votes Drawer Functions (force-revert to pre-voting)
-    const openClearVotesDrawer = (stage: Stage & { projectId?: string; stageName?: string }) => {
-      clearVotesStage.value = stage
-      showClearVotesDrawer.value = true
-    }
-
-    const handleClearVotesConfirmed = () => {
-      // Reload stage list after clearing votes
-      if (clearVotesStage.value?.projectId) {
-        loadProjectStagesForExpansion(clearVotesStage.value.projectId)
-      }
-      clearVotesStage.value = null
-    }
-
-    // Pause Stage Drawer Functions
-    const openPauseStageDrawer = (stage: any, project: any) => {
-      pauseStageData.value = { stage, project }
-      showPauseStageDrawer.value = true
-    }
-
-    const handlePauseStageConfirmed = () => {
-      // Reload stage list after pausing
-      if (pauseStageData.value?.project?.projectId) {
-        loadProjectStagesForExpansion(pauseStageData.value.project.projectId)
-      }
-      pauseStageData.value = null
-    }
-
-    // Resume Stage Drawer Functions
-    const openResumeStageDrawer = (stage: any, project: any) => {
-      resumeStageData.value = { stage, project }
-      showResumeStageDrawer.value = true
-    }
-
-    const handleResumeStageConfirmed = () => {
-      // Reload stage list after resuming
-      if (resumeStageData.value?.project?.projectId) {
-        loadProjectStagesForExpansion(resumeStageData.value.project.projectId)
-      }
-      resumeStageData.value = null
-    }
-
-    // Additional helper functions for stage management
-    const showSettlementDistribution = (stage: Stage & { projectId?: string }) => {
-      handleDistributionCommand('report', stage, stage.projectId || '')
-    }
-
-    const canSettleStage = (stage: Stage) => {
-      const now = Date.now()
-      return stage.endTime != null && stage.endTime < now && stage.status === 'active'
-    }
-
-    const openVotingAnalysisModal = (stage: Stage & { projectId?: string }) => {
-      selectedStageForAnalysis.value = stage
+    // 根據選擇顯示對應的分析模態窗口
+    if (command === 'report') {
       showVotingAnalysisModal.value = true
+    } else if (command === 'comment') {
+      showCommentAnalysisModal.value = true
+    }
+  } else {
+    ElMessage.warning('只有已結算的階段才能顯示獎金分配結果')
+  }
+}
+
+// Open reverse settlement drawer
+const reverseSettlement = (stage: Stage, project: ExtendedProject | null) => {
+  selectedStageForReverse.value = stage
+  selectedProjectForReverse.value = project || selectedProject.value
+  showReverseSettlementDrawer.value = true
+}
+
+// Handle successful reversal from the drawer component
+const handleReverseSuccess = async ({ stageId, projectId }: { reversalId: string; transactionCount: number; stageId: string; projectId: string }) => {
+  // Update stage status in local state
+  const stageIndex = projectStages.value.findIndex((s: Stage) => s.stageId === stageId)
+  if (stageIndex !== -1) {
+    projectStages.value[stageIndex].status = 'voting'
+  }
+
+  // Update in projectStagesMap
+  const projectStagesList = projectStagesMap.get(projectId)
+  if (projectStagesList) {
+    const mapStageIndex = projectStagesList.findIndex((s: Stage) => s.stageId === stageId)
+    if (mapStageIndex !== -1) {
+      projectStagesList[mapStageIndex].status = 'voting'
+    }
+  }
+
+  // Reload stages to sync with backend
+  await loadProjectStagesForExpansion(projectId)
+}
+
+const archiveStage = async (stage: Stage, project: ExtendedProject | null) => {
+  try {
+    // Add to archiving set
+    archivingStages.value.add(stage.stageId)
+
+    // Use project parameter if provided, otherwise fall back to selectedProject
+    const projectId = project?.projectId || selectedProject.value?.projectId
+    if (!projectId) {
+      ElMessage.error('無法取得專案ID')
+      return
     }
 
-    // 為專案列表中的空階段打開階段編輯器
-    const openCreateStageForProject = async (project: Project | ExtendedProject) => {
-      console.log('=== openCreateStageForProject called ===')
-      console.log('Project:', project)
+    // Use TanStack Query mutation (message shown by onSuccess handler)
+    await updateStageMutation.mutateAsync({
+      projectId: projectId,
+      stageId: stage.stageId,
+      updates: { status: 'archived' }
+    })
 
-      selectedProject.value = project
+    // Reload stages to get updated status
+    await loadProjectStagesForExpansion(projectId)
+  } catch (error: any) {
+    console.error('Error archiving stage:', error)
+    ElMessage.error('封存階段失敗，請重試')
+  } finally {
+    // Remove from archiving set
+    archivingStages.value.delete(stage.stageId)
+  }
+}
 
-      // Clear any previous errors
-      stageFormError.value = null
+const unarchiveStage = async (stage: Stage, project: ExtendedProject | null) => {
+  try {
+    // Add to archiving set (reuse the same tracking set)
+    archivingStages.value.add(stage.stageId)
 
-      // 載入真實的階段資料以便計算新階段的順序
-      await loadProjectStagesForExpansion(project.projectId)
-
-      // 重置表單為新增模式
-      editingStage.value = null
-      editStageForm.stageId = ''
-      editStageForm.stageName = ''
-      editStageForm.description = ''
-      editStageForm.reportRewardPool = 0
-      editStageForm.commentRewardPool = 0
-
-      // 設定預設時間（現在到一週後）
-      const now = new Date()
-      const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-
-      const formatDatetimeLocal = (date: Date) => {
-        const year = date.getFullYear()
-        const month = String(date.getMonth() + 1).padStart(2, '0')
-        const day = String(date.getDate()).padStart(2, '0')
-        const hours = String(date.getHours()).padStart(2, '0')
-        const minutes = String(date.getMinutes()).padStart(2, '0')
-        return `${year}-${month}-${day}T${hours}:${minutes}`
-      }
-
-      editStageForm.startTime = formatDatetimeLocal(now)
-      editStageForm.endTime = formatDatetimeLocal(nextWeek)
-
-      // 重要：關閉載入狀態，否則drawer會一直顯示"載入中..."
-      loadingStageDetails.value = false
-
-      console.log('Opening drawer with form:', editStageForm)
-
-      // 打開編輯階段的drawer（新增模式）
-      showEditStageModal.value = true
+    // Use project parameter if provided, otherwise fall back to selectedProject
+    const projectId = project?.projectId || selectedProject.value?.projectId
+    if (!projectId) {
+      ElMessage.error('無法取得專案ID')
+      return
     }
 
-    // 在階段編輯器中打開新增階段面板
-    const openCreateStagePanel = () => {
-      activeCollapse.value = ['newStage'] // 展開新增階段區塊
-    }
-
-    // WebSocket settlement progress handler
-
-    // No onMounted needed - TanStack Query automatically fetches when auth is ready
-    // But we do need to register the refresh function with parent SystemAdmin
-    onMounted(() => {
-      registerRefresh(refreshProjects)
-      registerAction(openCreateProjectModal)
+    // Use TanStack Query mutation (message shown by onSuccess handler)
+    await updateStageMutation.mutateAsync({
+      projectId: projectId,
+      stageId: stage.stageId,
+      updates: { status: 'pending' }
     })
 
-    // Cleanup on component unmount - prevent memory leaks from Maps and Sets
-    onUnmounted(() => {
-      // These are from useExpandable() composable - reactive Maps (need .value)
-      projectStagesMap.clear()
-      loadingProjectStages.clear()
-      // These ARE refs - need .value
-      projectMembersMap.value.clear()
-      loadingProjectMembers.value.clear()
-      archivingProjects.value.clear()
-      archivingStages.value.clear()
-      settlingStages.value.clear()
-      showGanttChart.value.clear()
-      ganttCenterTime.value.clear()
-    })
+    // Reload stages to get updated status
+    await loadProjectStagesForExpansion(projectId)
+  } catch (error: any) {
+    console.error('Error unarchiving stage:', error)
+    ElMessage.error('解除封存階段失敗，請重試')
+  } finally {
+    // Remove from archiving set
+    archivingStages.value.delete(stage.stageId)
+  }
+}
 
-    onBeforeUnmount(() => {
-      // Cleanup: unregister refresh and action functions
-      registerRefresh(null)
-      registerAction(null)
-    })
+const getFilteredStages = (projectId: string) => {
+  const stages = projectStagesMap.get(projectId) || []
+  if (showArchivedStages.value) {
+    return stages  // Show all stages including archived
+  }
+  return stages.filter((s: Stage) => s.status !== 'archived')  // Hide archived stages
+}
 
-    // Watch for URL projectId changes to auto-load stages and members
-    watch(currentProjectId, async (newProjectId) => {
-      if (newProjectId) {
-        // Auto-load stages for the expanded project
-        if (!projectStagesMap.has(newProjectId)) {
-          await loadProjectStagesForExpansion(newProjectId)
-        }
-        // Auto-load members for the expanded project
-        if (!projectMembersMap.value.has(newProjectId)) {
-          await loadProjectMembers(newProjectId)
-        }
-      }
-    }, { immediate: true })
+// Gantt chart helper functions
+const toggleGanttChart = (projectId: string, value: boolean) => {
+  showGanttChart.value.set(projectId, value)
 
-    return {
-      // Permission checks
-      hasPermission,
-      hasAnyPermission,
-      projects,
-      // Responsive design
-      isPortrait,
-      searchText,
-      statusFilter,
-      creatorFilter,
-      showArchivedProjects,
-      showCreateModal,
-      showEditModal,
-      showViewModal,
-      selectedProject,
-      creating,
-      updating,
-      loading,
-      projectForm,
-      editForm,
-      stats,
-      filteredProjects,
-      exportConfig,
-      activeFilterCount,
-      formatTime,
-      formatWeight,
-      formatCommentRanking,
-      truncateText,
-      getProgressPercentage,
-      getStageCompletionPercentage,
-      getProjectStatusIcon,
-      getProjectStatusText,
-      // DISABLED: Tag management - tags system disabled
-      // showTagModal,
-      // allTags,
-      // currentProjectTags,
-      // tagFilterText,
-      // tagCategoryFilter,
-      // filteredAvailableTags,
-      // openTagAssignment,
-      // assignTagToProject,
-      // removeTagFromProject,
-      // loadAllTags,
-      // loadProjectTags,
-      // DISABLED: Project creation tag management - tags system disabled
-      // selectedTags,
-      // availableTags,
-      openCreateProjectModal,
-      // addProjectTag,
-      // removeProjectTag,
-      // loadTagsForCreation,
-      // assignTagsToProject,
-      refreshProjects,
-      handleResetFilters,
-      createProject,
-      editProject,
-      updateProject,
-      viewProject,
-      archiveProject,
-      unarchiveProject,
-      openCloneProjectDrawer,
-      showCloneProjectDrawer,
-      selectedProjectForClone,
-      // Archive Project Drawer
-      showArchiveProjectDrawer,
-      selectedProjectForArchive,
-      openArchiveProjectDrawer,
-      handleArchiveConfirm,
-      navigateToWallet,
-      openEventLogViewer,
-      showEventLogDrawer,
-      // Viewer management
-      handleViewerCommand,
-      navigateToProjectGroups,
-      openViewerManagement,
-      showViewerDrawer,
-      loadingViewers,
-      projectViewers,
-      newViewer,
-      searchResults,
-      selectedUsers,
-      searchingUsers,
-      selectedViewers,
-      batchRole,
-      viewerSearchText,
-      viewerSortField,
-      viewerSortOrder,
-      filteredViewers,
-      sortViewers,
-      getSortIcon,
-      loadProjectViewers,
-      searchUsers,
-      toggleUserSelection,
-      addSelectedViewers,
-      updateViewerRole,
-      removeViewer,
-      toggleViewerSelection,
-      toggleAllViewers,
-      batchUpdateRoles,
-      batchRemoveViewers,
-      getDisplayName,
-      showStageEditor,
-      showEditStageModal,
-      showVotingAnalysisModal,
-      showCommentAnalysisModal,
-      selectedStageForAnalysis,
-      settlingStages,
-      showSettlementDrawer,
-      selectedStageForSettlement,
-      projectStages,
-      draggedStage,
-      editingStage,
-      newStage,
-      newStageForm,
-      editStageForm,
-      stageFormError,
-      isVotingLocked,
-      checkingVotingLock,
-      openStageEditor,
-      loadProjectStages,
-      addNewStage,
-      editStage,
-      updateStageDetails,
-      settleStage,
-      handleSettlementComplete,
-      handleSettlementError,
-      handleDrawerClosed,
-      handleDistributionCommand,
-      reverseSettlement,
-      archiveStage,
-      openCloneStageDrawer,
-      handleStageCloned,
-      showCloneStageDrawer,
-      selectedStageForClone,
-      saveStageOrder,
-      onDragStart,
-      onDrop,
-      handleDragStart,
-      handleDragOver,
-      handleDrop,
-      handleDragEnd,
-      formatDate,
-      getStageStatusText,
-      getStageStatusType,
-      loadingStages,
-      loadingStageDetails,
-      savingStageDetails,
-      savingStageOrder,
-      activeCollapse,
-      // Project expansion
-      currentProjectId,
-      expandedProjects,
-      projectStagesMap,
-      loadingProjectStages,
-      toggleProjectExpansion,
-      loadProjectStagesForExpansion,
-      showSettlementDistribution,
-      canSettleStage,
-      openVotingAnalysisModal,
-      // Gantt chart
-      showGanttChart,
-      ganttCenterTime,
-      toggleGanttChart,
-      transformStagesForGantt,
-      handleGanttStageClick,
-      focusStageInGantt,
-      // Project members
-      projectMembersMap,
-      loadingProjectMembers,
-      showAddMemberDialog,
-      addingMember,
-      newMember,
-      selectedProjectForMember,
-      loadProjectMembers,
-      openAddMemberDialog,
-      addMemberToProject,
-      handleMemberRoleChange,
-      removeMember,
-      getRoleLabel,
-      getRoleTagType,
-      // Avatar helpers
-      generateDicebearUrl,
-      parseAvatarOptions,
-      getAvatarUrl,
-      handleAvatarError,
-      selectedStage,
-      cloningProject,
-      cloningStage,
-      // Reverse Settlement Drawer
-      showReverseSettlementDrawer,
-      reversingSettlement,
-      selectedStageForReverse,
-      selectedProjectForReverse,
-      handleReverseSuccess,
-      // Settlement Confirmation Drawer
-      showSettlementConfirmDrawer,
-      selectedStageForConfirm,
-      openSettlementConfirmDrawer,
-      handleSettlementConfirmed,
-      openForceVotingDrawer,
-      handleForceVotingConfirmed,
-      showForceVotingDrawer,
-      selectedForceVotingStage,
-      // Clear Stage Votes Drawer
-      showClearVotesDrawer,
-      clearVotesStage,
-      openClearVotesDrawer,
-      handleClearVotesConfirmed,
-      // Pause Stage Drawer
-      showPauseStageDrawer,
-      pauseStageData,
-      openPauseStageDrawer,
-      handlePauseStageConfirmed,
-      // Resume Stage Drawer
-      showResumeStageDrawer,
-      resumeStageData,
-      openResumeStageDrawer,
-      handleResumeStageConfirmed,
-      selectStage,
-      getStageIndex,
-      moveStageToTop,
-      moveStageUp,
-      moveStageDown,
-      moveStageUpInProject,
-      moveStageDownInProject,
-      moveStageToBottom,
-      updateStageOrders,
-      openCreateStageForProject,
-      openCreateStagePanel,
-      // Archive functionality
-      archivingProjects,
-      archivingStages,
-      showArchivedStages,
-      unarchiveStage,
-      getFilteredStages,
-      saveProject
-      // DISABLED: getTagColor - tags system disabled
+  // Initialize centerTime to today when opening
+  if (value && !ganttCenterTime.value.has(projectId)) {
+    ganttCenterTime.value.set(projectId, Date.now())
+  }
+}
+
+const transformStagesForGantt = (projectId: string) => {
+  const stages = getFilteredStages(projectId)
+  return stages.map((stage: Stage & { settledTime?: number }) => ({
+    stageName: stage.stageName,
+    startTime: stage.startTime,
+    endTime: stage.endTime,
+    status: stage.status,
+    extraTime: stage.status === 'completed' ? (stage.settledTime || undefined) : Infinity,
+    extraTimeText: stage.status === 'completed' ? '投票階段' : '投票階段將由老師手動關閉結算'
+  }))
+}
+
+const handleGanttStageClick = (stage: unknown, _projectId: string) => {
+  console.log('Gantt stage clicked:', stage)
+}
+
+const focusStageInGantt = (stage: Stage, projectId: string) => {
+  if (!showGanttChart.value.get(projectId)) return
+  if (stage.startTime == null || stage.endTime == null) return
+
+  const startTime = typeof stage.startTime === 'string' ? new Date(stage.startTime).getTime() : stage.startTime
+  const endTime = typeof stage.endTime === 'string' ? new Date(stage.endTime).getTime() : stage.endTime
+  const centerTime = Math.floor((startTime + endTime) / 2)
+
+  // Update centerTime will trigger gantt chart to re-center
+  ganttCenterTime.value.set(projectId, centerTime)
+}
+
+// Open clone project drawer
+const openCloneProjectDrawer = (project: Project | ExtendedProject) => {
+  selectedProjectForClone.value = project as ExtendedProject
+  showCloneProjectDrawer.value = true
+}
+
+// Open clone stage drawer
+const openCloneStageDrawer = (stage: Stage) => {
+  selectedStageForClone.value = stage
+  showCloneStageDrawer.value = true
+}
+
+// Refresh stages for affected projects that are currently expanded
+const handleStageCloned = async (targetProjectIds: string[]) => {
+  for (const projectId of targetProjectIds) {
+    if (isProjectExpanded(projectId)) {
+      await loadProjectStagesForExpansion(projectId)
     }
   }
 }
+
+// Force Voting Drawer Functions
+const openForceVotingDrawer = (stage: Stage & { projectId?: string }) => {
+  selectedForceVotingStage.value = stage
+  showForceVotingDrawer.value = true
+}
+
+const handleForceVotingConfirmed = () => {
+  // Reload stage list after force voting
+  if (selectedForceVotingStage.value?.projectId) {
+    loadProjectStagesForExpansion(selectedForceVotingStage.value.projectId)
+  }
+  selectedForceVotingStage.value = null
+}
+
+// Clear Stage Votes Drawer Functions (force-revert to pre-voting)
+const openClearVotesDrawer = (stage: Stage & { projectId?: string; stageName?: string }) => {
+  clearVotesStage.value = stage
+  showClearVotesDrawer.value = true
+}
+
+const handleClearVotesConfirmed = () => {
+  // Reload stage list after clearing votes
+  if (clearVotesStage.value?.projectId) {
+    loadProjectStagesForExpansion(clearVotesStage.value.projectId)
+  }
+  clearVotesStage.value = null
+}
+
+// Pause Stage Drawer Functions
+const openPauseStageDrawer = (stage: any, project: any) => {
+  pauseStageData.value = { stage, project }
+  showPauseStageDrawer.value = true
+}
+
+const handlePauseStageConfirmed = () => {
+  // Reload stage list after pausing
+  if (pauseStageData.value?.project?.projectId) {
+    loadProjectStagesForExpansion(pauseStageData.value.project.projectId)
+  }
+  pauseStageData.value = null
+}
+
+// Resume Stage Drawer Functions
+const openResumeStageDrawer = (stage: any, project: any) => {
+  resumeStageData.value = { stage, project }
+  showResumeStageDrawer.value = true
+}
+
+const handleResumeStageConfirmed = () => {
+  // Reload stage list after resuming
+  if (resumeStageData.value?.project?.projectId) {
+    loadProjectStagesForExpansion(resumeStageData.value.project.projectId)
+  }
+  resumeStageData.value = null
+}
+
+// 為專案列表中的空階段打開階段編輯器
+const openCreateStageForProject = async (project: Project | ExtendedProject) => {
+  console.log('=== openCreateStageForProject called ===')
+  console.log('Project:', project)
+
+  selectedProject.value = project
+
+  // Clear any previous errors
+  stageFormError.value = null
+
+  // 載入真實的階段資料以便計算新階段的順序
+  await loadProjectStagesForExpansion(project.projectId)
+
+  // 重置表單為新增模式
+  editingStage.value = null
+  editStageForm.stageId = ''
+  editStageForm.stageName = ''
+  editStageForm.description = ''
+  editStageForm.reportRewardPool = 0
+  editStageForm.commentRewardPool = 0
+
+  // 設定預設時間（現在到一週後）
+  const now = new Date()
+  const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+  const formatDatetimeLocal = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    return `${year}-${month}-${day}T${hours}:${minutes}`
+  }
+
+  editStageForm.startTime = formatDatetimeLocal(now)
+  editStageForm.endTime = formatDatetimeLocal(nextWeek)
+
+  // 重要：關閉載入狀態，否則drawer會一直顯示"載入中..."
+  loadingStageDetails.value = false
+
+  console.log('Opening drawer with form:', editStageForm)
+
+  // 打開編輯階段的drawer（新增模式）
+  showEditStageModal.value = true
+}
+
+// WebSocket settlement progress handler
+
+// No onMounted needed - TanStack Query automatically fetches when auth is ready
+// But we do need to register the refresh function with parent SystemAdmin
+onMounted(() => {
+  registerRefresh(refreshProjects)
+  registerAction(openCreateProjectModal)
+})
+
+// Cleanup on component unmount - prevent memory leaks from Maps and Sets
+onUnmounted(() => {
+  // These are from useExpandable() composable - reactive Maps (need .value)
+  projectStagesMap.clear()
+  loadingProjectStages.clear()
+  // These ARE refs - need .value
+  projectMembersMap.value.clear()
+  loadingProjectMembers.value.clear()
+  archivingProjects.value.clear()
+  archivingStages.value.clear()
+  settlingStages.value.clear()
+  showGanttChart.value.clear()
+  ganttCenterTime.value.clear()
+})
+
+onBeforeUnmount(() => {
+  // Cleanup: unregister refresh and action functions
+  registerRefresh(null)
+  registerAction(null)
+})
+
+// Watch for URL projectId changes to auto-load stages and members
+watch(currentProjectId, async (newProjectId) => {
+  if (newProjectId) {
+    // Auto-load stages for the expanded project
+    if (!projectStagesMap.has(newProjectId)) {
+      await loadProjectStagesForExpansion(newProjectId)
+    }
+    // Auto-load members for the expanded project
+    if (!projectMembersMap.value.has(newProjectId)) {
+      await loadProjectMembers(newProjectId)
+    }
+  }
+}, { immediate: true })
+
 </script>
 
 <style scoped>
