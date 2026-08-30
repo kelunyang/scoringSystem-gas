@@ -70,7 +70,8 @@ export function useLogin(): UseLoginReturn {
   const errorMessage = ref('');
   const userEmail = ref('');
   // Timestamp (ms) of the last successful email-code send. 0 = none sent yet.
-  // Drives the 2FA email panel: 0 → show manual "send code" button; >0 → show resend countdown.
+  // Drives the 2FA email panel: 0 → show manual "send code" button (SMTP down /
+  // dev mode); >0 → show the resend countdown.
   const lastEmailSentAt = ref(0);
 
   const canSubmitPassword = computed(() => {
@@ -119,8 +120,8 @@ export function useLogin(): UseLoginReturn {
         passkeyAvailable.value = response.data?.passkeyAvailable === true;
         // Track available methods
         availableMethods.value = response.data?.availableMethods || ['email'];
-        // Backend no longer auto-sends the first email (emailSent is false), but keep
-        // this defensive in case that behavior changes again.
+        // Backend auto-sends the first verification email when SMTP is configured;
+        // emailSent is false only when it could not (no SMTP / send failure).
         if (response.data?.emailSent === true) {
           lastEmailSentAt.value = Date.now();
         }
@@ -146,7 +147,7 @@ export function useLogin(): UseLoginReturn {
     // In dev mode (email method only), use a dummy code that passes schema validation
     // TOTP users must always provide a real code regardless of dev mode
     const isDevBypass = devMode.value && twoFactorMethod.value === 'email';
-    const codeToSend = isDevBypass ? 'DEVMODEBYPAS' : twoFactorData.code;
+    const codeToSend = isDevBypass ? '000000' : twoFactorData.code;
 
     if (!isDevBypass && !twoFactorData.code) {
       errorMessage.value = '請輸入驗證碼';
@@ -161,6 +162,8 @@ export function useLogin(): UseLoginReturn {
         json: {
           userEmail: twoFactorData.email.trim(),
           code: codeToSend.trim(),
+          // Email OTP and TOTP are both 6 digits — tell the server which one this is
+          method: twoFactorData.method ?? (twoFactorMethod.value === 'totp' ? 'totp' : 'email'),
           turnstileToken: twoFactorData.turnstileToken || ''
         }
       });

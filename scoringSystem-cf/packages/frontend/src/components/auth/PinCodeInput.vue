@@ -99,9 +99,12 @@ function handleInput(index: number, event: Event) {
   const target = event.target as HTMLInputElement;
   let value = target.value;
 
-  // Allow all printable ASCII characters (deception strategy)
-  // Frontend appears to accept any character, but backend only validates specific set
-  value = value.replace(/[^\x20-\x7E]/g, '').toUpperCase();
+  // Numeric mode (TOTP / email OTP): digits only
+  // Text mode: allow all printable ASCII (deception strategy) — the frontend
+  // appears to accept any character, while the backend validates the real set
+  value = props.inputMode === 'numeric'
+    ? value.replace(/\D/g, '')
+    : value.replace(/[^\x20-\x7E]/g, '').toUpperCase();
 
   if (value.length > 1) {
     // If user pastes multiple characters, take only the first one
@@ -165,11 +168,13 @@ function handlePaste(event: ClipboardEvent) {
   const pasteData = event.clipboardData?.getData('text') || '';
   // Allow all printable ASCII (deception strategy)
   // Remove hyphens (they are just format separators) and trim to expected length
-  const cleaned = pasteData
-    .replace(/[^\x20-\x7E]/g, '')  // Remove non-ASCII
-    .replace(/-/g, '')              // Remove hyphens (format separators)
-    .toUpperCase()
-    .slice(0, props.length);
+  const cleaned = (props.inputMode === 'numeric'
+    ? pasteData.replace(/\D/g, '')   // Numeric mode: keep digits only
+    : pasteData
+        .replace(/[^\x20-\x7E]/g, '')  // Remove non-ASCII
+        .replace(/-/g, '')              // Remove hyphens (format separators)
+        .toUpperCase()
+  ).slice(0, props.length);
 
   if (cleaned) {
     const chars = cleaned.split('');

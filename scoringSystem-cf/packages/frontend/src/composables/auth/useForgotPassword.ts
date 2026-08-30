@@ -11,6 +11,8 @@ import type { EmailVerificationResponse, Project } from '../../types/auth';
 export interface UseForgotPasswordReturn {
   loading: Ref<boolean>;
   resendLoading: Ref<boolean>;
+  /** Timestamp (ms) of the last verification mail sent. 0 = none sent yet. */
+  lastEmailSentAt: Ref<number>;
   emailVerified: Ref<boolean>;
   codeVerified: Ref<boolean>;
   resetSent: Ref<boolean>;
@@ -69,6 +71,9 @@ export interface UseForgotPasswordReturn {
 export function useForgotPassword(): UseForgotPasswordReturn {
   const loading = ref(false);
   const resendLoading = ref(false);
+  // Step 1 always sends a verification mail, so the 2FA step shows the resend
+  // countdown instead of the manual "send code" button.
+  const lastEmailSentAt = ref(0);
   const emailVerified = ref(false);
   const codeVerified = ref(false);
   const resetSent = ref(false);
@@ -125,6 +130,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
 
       if (response.success && response.data) {
         emailVerified.value = true;
+        lastEmailSentAt.value = Date.now();
         userEmail.value = email;
         // No longer receives projects here - moved to step 2
         return true;
@@ -208,6 +214,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
       const response = await httpResponse.json();
 
       if (response.success) {
+        lastEmailSentAt.value = Date.now();
         return true;
       } else {
         errorMessage.value = response.error?.message || '重新發送失敗';
@@ -283,6 +290,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
 
     loading.value = false;
     resendLoading.value = false;
+    lastEmailSentAt.value = 0;
     emailVerified.value = false;
     codeVerified.value = false;
     resetSent.value = false;
@@ -306,6 +314,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
   return {
     loading,
     resendLoading,
+    lastEmailSentAt,
     emailVerified,
     codeVerified,
     resetSent,

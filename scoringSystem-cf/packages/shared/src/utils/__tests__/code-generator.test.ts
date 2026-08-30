@@ -103,9 +103,15 @@ describe('code-generator', () => {
   });
 
   describe('generateVerificationCode', () => {
-    test('generates 12-character code with 4-4-4 format', () => {
+    test('generates a plain 6-digit code (same shape as a TOTP code)', () => {
       const code = generateVerificationCode();
-      expect(code).toMatch(/^[A-Z@#!]{4}-[A-Z@#!]{4}-[A-Z@#!]{4}$/);
+      expect(code).toMatch(/^\d{6}$/);
+    });
+
+    test('never contains letters, symbols or separators', () => {
+      for (let i = 0; i < 50; i++) {
+        expect(generateVerificationCode()).toMatch(/^[0-9]{6}$/);
+      }
     });
 
     test('generates different codes on each call', () => {

@@ -516,11 +516,8 @@ export async function sendPasswordReset2FAEmail(
           <p>有人正在嘗試重設您的帳號密碼。請使用以下驗證碼完成身份驗證：</p>
 
           <div class="code-box">
-            <div class="code-label">驗證碼（12位字元，包含字母與符號）</div>
+            <div class="code-label">驗證碼（6 位數字）</div>
             <div class="code-value">${verificationCode}</div>
-            <p style="font-size: 12px; color: #666; margin-top: 8px; text-align: center;">
-              提示：格式 XXXX-XXXX-XXXX（連字號可省略）
-            </p>
           </div>
 
           <div class="security-info">

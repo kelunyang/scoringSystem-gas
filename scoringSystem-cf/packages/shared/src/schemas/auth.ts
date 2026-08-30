@@ -53,44 +53,33 @@ export const LoginVerifyPasswordRequestSchema = z.object({
 export type LoginVerifyPasswordRequest = z.infer<typeof LoginVerifyPasswordRequestSchema>;
 
 /**
- * Email verification code schema (12-char OTP)
- * - Strips hyphens before validation (separators only)
- * - Converts to uppercase
- * - Validates character set and length
+ * Email verification code schema (6-digit OTP)
+ * - Strips whitespace and hyphens (separators only)
+ * - Same shape as an authenticator (TOTP) code: exactly 6 digits
  */
 const EmailVerificationCodeSchema = z.string()
-  .transform(val => {
-    // Remove whitespace, hyphens, and convert to uppercase
-    // This ensures consistent 12-character format throughout the pipeline
-    return val.trim().replace(/-/g, '').toUpperCase();
-  })
+  .transform(val => val.trim().replace(/[\s-]/g, ''))
   .refine(
-    (cleanCode) => {
-      // Validate length and character set (A-Z excluding I,O + @#!)
-      // At this point, cleanCode is already 12 characters without hyphens
-      return cleanCode.length === 12 && /^[A-Z@#!]+$/.test(cleanCode);
-    },
+    (cleanCode) => /^\d{6}$/.test(cleanCode),
     { message: 'Invalid verification code format' }
   );
 
 /**
  * Flexible verification code schema for login 2FA
  * Accepts:
- * - 12-char email OTP codes (A-Z@#!, with optional hyphens)
- * - 6-digit TOTP codes (numeric)
- * - 8-char recovery codes (alphanumeric)
- * Backend determines which verification path based on user's totpEnabled flag
+ * - 6-digit codes (email OTP and TOTP share the same format)
+ * - 8-char recovery codes (A-Z, 2-9, excluding I,O,0,1)
+ * Email OTP and TOTP are told apart by the request's `method` field,
+ * not by the code shape (see LoginVerify2FARequestSchema).
  */
 const FlexibleVerificationCodeSchema = z.string()
-  .transform(val => val.trim().replace(/-/g, '').toUpperCase())
+  .transform(val => val.trim().replace(/[\s-]/g, '').toUpperCase())
   .refine(
     (cleanCode) => {
-      // 6-digit TOTP code
+      // 6-digit code: email OTP or TOTP
       if (/^\d{6}$/.test(cleanCode)) return true;
       // 8-char recovery code (A-Z, 2-9, excluding I,O,0,1)
       if (cleanCode.length === 8 && /^[A-HJ-NP-Z2-9]+$/.test(cleanCode)) return true;
-      // 12-char email OTP code
-      if (cleanCode.length === 12 && /^[A-Z@#!]+$/.test(cleanCode)) return true;
       return false;
     },
     { message: 'Invalid verification code format' }
@@ -102,6 +91,13 @@ const FlexibleVerificationCodeSchema = z.string()
 export const LoginVerify2FARequestSchema = z.object({
   userEmail: EmailSchema,
   code: FlexibleVerificationCodeSchema,
+  /**
+   * Which 2FA channel the code came from.
+   * Required to disambiguate email OTP from TOTP now that both are 6 digits.
+   * Optional for backward compatibility — omitted requests fall back to
+   * format-based routing on the server.
+   */
+  method: z.enum(['email', 'totp']).optional(),
   turnstileToken: TurnstileTokenSchema
 });
 

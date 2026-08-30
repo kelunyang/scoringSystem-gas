@@ -17,6 +17,8 @@ export interface LoginCredentials {
 export interface TwoFactorData {
   email: string;
   code: string;
+  /** Which 2FA channel the code came from (email OTP and TOTP are both 6 digits) */
+  method?: 'email' | 'totp';
   turnstileToken?: string;
 }
 

@@ -477,10 +477,13 @@ authRouter.post(
     availableMethods.push('email'); // Email is always available
 
     // Determine preferred method: passkey > totp > email
-    const preferredMethod = passkeyAvailable ? 'passkey' : (totpEnabled ? 'totp' : 'email');
+    const preferredMethod: 'passkey' | 'totp' | 'email' =
+      passkeyAvailable ? 'passkey' : (totpEnabled ? 'totp' : 'email');
 
     if (passkeyAvailable || totpEnabled) {
-      // User has passkey or TOTP enabled - skip email code
+      // User has a second factor of their own — do NOT send a verification mail.
+      // Email stays available as a fallback tab, but its first code is sent only
+      // if the user explicitly asks for it (resend-2fa endpoint).
       const message = passkeyAvailable
         ? '請使用 Passkey 或其他驗證方式'
         : '請使用驗證器 App 輸入驗證碼';
@@ -503,37 +506,54 @@ authRouter.post(
     const smtpConfigured = smtpConfig !== null;
 
     if (smtpConfigured) {
-      // Do NOT auto-send the first verification email here. The first email is
-      // triggered manually by the user (purple "send code" button in the 2FA
-      // step), which calls the resend-2fa endpoint. This keeps email consistent
-      // with passkey/TOTP (a deliberate user action) and prevents the resend
-      // countdown from running before any email has actually been sent.
-      return c.json({
-        success: true,
-        data: {
-          message: '請寄送驗證碼到您的信箱以繼續',
-          emailSent: false,
-          devMode: false,
-          twoFactorMethod: 'email' as const,
-          passkeyAvailable: false,
-          availableMethods: ['email'] as const
-        }
-      });
-    } else {
-      // Dev mode: No SMTP configured
+      // Email-only user: SMTP is reliable again, so send the first verification
+      // mail automatically here (restores the pre-2026-07-06 behavior) instead
+      // of making the user press a button first.
+      const { generateVerificationCode, storeVerificationCode, sendVerificationCodeEmail } =
+        await import('../handlers/auth/two-factor');
 
+      const verificationCode = generateVerificationCode();
+
+      const storeResult = await storeVerificationCode(c.env, body.userEmail, verificationCode);
+      const emailResult = storeResult.success
+        ? await sendVerificationCodeEmail(c.env, body.userEmail, verificationCode)
+        : { success: false, error: 'Failed to store verification code' };
+
+      if (emailResult.success) {
+        return c.json({
+          success: true,
+          data: {
+            message: '驗證碼已發送到您的信箱',
+            emailSent: true,
+            devMode: false,
+            twoFactorMethod: preferredMethod,
+            passkeyAvailable,
+            availableMethods,
+            expiresAt: storeResult.expiresAt
+          }
+        });
+      }
+
+      // Email is this user's only second factor, so a send failure is fatal
+      console.error('[2FA] Failed to send email:', emailResult.error);
       return c.json({
-        success: true,
-        data: {
-          message: '密碼驗證成功（開發模式：無需驗證碼）',
-          emailSent: false,
-          devMode: true,
-          twoFactorMethod: 'email' as const,
-          passkeyAvailable: false,
-          availableMethods: ['email'] as const
-        }
-      });
+        success: false,
+        error: { code: 'EMAIL_ERROR', message: '系統錯誤，無法寄出兩階段驗證信' }
+      }, 500);
     }
+
+    // Dev mode: No SMTP configured and no other second factor
+    return c.json({
+      success: true,
+      data: {
+        message: '密碼驗證成功（開發模式：無需驗證碼）',
+        emailSent: false,
+        devMode: true,
+        twoFactorMethod: 'email' as const,
+        passkeyAvailable: false,
+        availableMethods: ['email'] as const
+      }
+    });
   }
 );
 
@@ -582,10 +602,17 @@ authRouter.post(
     const totpEnabled = user.totpEnabled === 1;
 
     // Email is a universal 2FA fallback: TOTP/Passkey users may choose to receive
-    // an email code instead. Route by submitted code format —
-    // TOTP = 6 digits, recovery = 8 chars; anything else (12-char) is an email code.
-    const isTotpFormatCode = /^\d{6}$/.test(body.code) || body.code.length === 8;
-    const useTotp = totpEnabled && isTotpFormatCode;
+    // an email code instead. Email OTP and TOTP are both 6 digits, so the code
+    // shape alone cannot tell them apart — route by the client-declared method.
+    // Recovery codes (8 chars) always go down the TOTP path.
+    const isRecoveryFormatCode = body.code.length === 8;
+    const useTotp = totpEnabled && (
+      isRecoveryFormatCode ||
+      (body.method
+        ? body.method === 'totp'
+        // Legacy clients omit `method`: fall back to format-based routing
+        : /^\d{6}$/.test(body.code))
+    );
 
     if (useTotp) {
       // ─── TOTP Verification Path ───

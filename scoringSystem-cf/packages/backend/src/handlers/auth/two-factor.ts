@@ -11,8 +11,8 @@ import { generateVerificationCode as generateCode } from '@repo/shared/utils/cod
 import { constantTimeCompare } from '@repo/shared/utils/secure-compare';
 
 /**
- * Generate 12-character verification code (XXXX-XXXX-XXXX)
- * Now uses shared code generator with 27-character set (A-Z excluding I,O + @#!)
+ * Generate 6-digit verification code (identical in shape to a TOTP code)
+ * Uses the shared code generator (crypto-secure digits, no letters or symbols)
  */
 export function generateVerificationCode(): string {
   return generateCode();
@@ -38,9 +38,9 @@ export async function storeVerificationCode(
 
     // DEBUG: Log original code from generator
 
-    // CRITICAL: Remove hyphens before storing to ensure consistent 12-character format
-    // The code generator returns formatted codes (XXXX-XXXX-XXXX), but we store clean version
-    const cleanCode = verificationCode.replace(/-/g, '').toUpperCase();
+    // Normalize before storing: codes are 6 digits, but strip any separators
+    // a caller or a user's paste may have introduced
+    const cleanCode = verificationCode.replace(/[\s-]/g, '').toUpperCase();
 
     // DEBUG: Log cleaned code
 
@@ -94,10 +94,10 @@ export async function verifyTwoFactorCode(
 ): Promise<{ success: boolean; error?: string; message?: string; attemptsLeft?: number; user?: any }> {
   const db = env.DB;
   try {
-    // Trim whitespace and remove hyphens from inputs
+    // Trim whitespace and remove separators from inputs
     userEmail = userEmail.trim();
-    // Remove hyphens from user input to match stored format (clean 12-character code)
-    inputCode = inputCode.trim().replace(/-/g, '').toUpperCase();
+    // Normalize user input to match the stored format (clean 6-digit code)
+    inputCode = inputCode.trim().replace(/[\s-]/g, '').toUpperCase();
 
     const now = Date.now();
 

@@ -72,6 +72,54 @@
 
 ## B. 已裁決的疑問（封存，勿重啟）
 
+### 2026-08-30 ｜ Email 2FA 恢復自動寄信（撤回 2026-07-06 的 SMTP 防禦性調整）
+
+**背景**：commit `0648802`（2026-07-06）把「密碼驗證通過即自動寄出第一封驗證信」
+改成使用者手動按鈕觸發，理由是當時 SMTP 會退信、信件常寄不出去，
+自動寄信會讓倒數計時在信根本沒送出時就開跑。
+
+**現況**：SMTP 已修好，不再退信。
+
+**裁決**（`packages/backend/src/router/auth.ts` `login-verify-password`）：
+**只有「沒有 passkey／TOTP」的使用者**在密碼驗證通過後自動收到驗證信
+（產碼、存檔、寄出，回傳 `emailSent: true` 與 `expiresAt`，前端直接進入倒數）。
+寄送失敗對這類使用者是致命的（email 是他唯一的第二因素），維持回 500 `EMAIL_ERROR`。
+
+**已啟用 passkey／TOTP 的使用者不寄信**，`preferredMethod` 維持 passkey > totp > email。
+理由：他們登入時根本不會用到那封信，每次登入都寄等於製造垃圾信與無謂的 SMTP 負載。
+email 仍留在 `availableMethods` 當備援分頁，但那條路徑的第一封信只在使用者
+主動按「寄發密碼驗證信」時才寄（走 `resend-2fa`）。
+
+**曾經考慮過並否決**：把 email 設成所有人的預設分頁。預設分頁要能直接輸入，
+信就得先寄出去 —— 代價是 TOTP／passkey 使用者每次登入都收信，不划算。
+
+**順帶修正**：忘記密碼流程的 step 1 本來就會寄碼，但 `ForgotPasswordForm.vue`
+沒有把寄送時間傳給 `TwoFactorStep`，導致畫面顯示「請點擊下方按鈕寄信」的手動按鈕，
+與實際狀態不符。已補上 `lastEmailSentAt`。
+
+### 2026-08-30 ｜ Email 2FA 驗證碼改為 6 位純數字後，後端如何分辨 email OTP 與 TOTP？→ 由前端明示 `method` 欄位
+
+**背景**：Email 2FA 原本是 12 碼（A-Z 去除 I/O，加 @#!，格式 XXXX-XXXX-XXXX），
+與驗證器的 6 位數字明顯不同，因此
+`packages/backend/src/router/auth.ts` 的 `login-verify-2fa` **靠碼的長相分流**：
+6 位數字 → TOTP、8 碼 → 備用碼、其餘（12 碼）→ email OTP。
+
+**問題**：把 email 碼改成 6 位數字後，兩者長相完全一樣，格式分流失效。
+對「已啟用 TOTP 但選擇改收 email 驗證信」的使用者（email 是全域 fallback），
+6 位數字會被誤判成 TOTP，走錯驗證路徑而必定失敗。
+
+**裁決**：請求體新增 `method: 'email' | 'totp'`（`packages/shared/src/schemas/auth.ts`
+`LoginVerify2FARequestSchema`），前端 `TwoFactorStep.vue` 依當前分頁送出；
+後端優先依 `method` 分流，`method` 缺席時才退回舊的格式判斷（相容尚未更新的前端）。
+8 碼備用碼不受影響，一律走 TOTP 路徑。
+
+**為何不用「先試 TOTP、失敗再試 email」**：兩條路徑各自有嘗試次數與漸進式鎖定
+（`check2FAFailureAndLock`），互試會讓一次輸入吃掉兩邊的失敗額度，鎖定行為變得不可預期。
+
+**熵的取捨**：6 位數字約 19.9 bits，遠低於原本的約 57 bits。安全性改由周邊控制承擔——
+10 分鐘有效期、單碼 3 次嘗試上限、漸進式帳號鎖定。此為與驗證器體驗一致的刻意取捨。
+（注意：A 區 #001 指出漸進式鎖定目前並未真正生效，該項修好前這裡的防護是打折的。）
+
 ### 2026-07-17 ｜「用 KV 快取取代 D1 查詢會不會更快？」→ 會，但代價打在要害上。目前無必要
 
 **背景**：`middleware/auth.ts` 每個請求查 D1 兩次（`users.status` + 全域權限），

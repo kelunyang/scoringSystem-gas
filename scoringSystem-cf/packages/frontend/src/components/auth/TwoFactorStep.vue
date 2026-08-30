@@ -40,11 +40,11 @@
     <div v-else-if="currentMethod === 'email'" class="info-message">
       <template v-if="emailCodeSent">
         <p>驗證碼已發送到 <strong>{{ userEmail }}</strong></p>
-        <p class="hint">請查收您的電子郵件並輸入12位驗證碼（連字號可省略）</p>
+        <p class="hint">請查收您的電子郵件並輸入 6 位數字驗證碼</p>
       </template>
       <template v-else>
         <p>請點擊下方按鈕，將驗證碼寄到 <strong>{{ userEmail }}</strong></p>
-        <p class="hint">收到信後輸入12位驗證碼（連字號可省略）</p>
+        <p class="hint">收到信後輸入 6 位數字驗證碼</p>
       </template>
     </div>
 
@@ -96,13 +96,15 @@
     <!-- Code input (TOTP always; email only after a code has been sent) -->
     <div v-else-if="currentMethod !== 'email' || emailCodeSent" class="form-group">
       <label class="pin-label">驗證碼</label>
-      <!-- Email OTP: 12-char input -->
+      <!-- Email OTP: 6-digit numeric input (same shape as TOTP, XXX-XXX) -->
       <PinCodeInput
         v-if="currentMethod === 'email'"
         v-model="code"
-        :length="12"
+        :length="6"
+        :pin-group-size="3"
         :disabled="loading"
         :theme-color="themeColor"
+        input-mode="numeric"
         @complete="handleSubmit"
       />
       <!-- TOTP: 6-digit numeric input (grouped as XXX-XXX) -->
@@ -341,8 +343,8 @@ const canSubmit = computed(() => {
     }
     return code.value.length === 6;
   }
-  // email mode
-  return code.value.length === 12;
+  // email mode (6-digit code, same as TOTP)
+  return code.value.length === 6;
 });
 
 function toggleRecoveryInput() {
@@ -378,6 +380,8 @@ function handleSubmit() {
   emit('submit', {
     email: props.userEmail,
     code: code.value,
+    // Email OTP and TOTP are both 6 digits — the server routes by this field
+    method: currentMethod.value === 'totp' ? 'totp' : 'email',
     turnstileToken: turnstileToken.value || ''
   });
 }
@@ -388,6 +392,7 @@ function handleSubmitRecovery() {
   emit('submit', {
     email: props.userEmail,
     code: recoveryCode.value,
+    method: 'totp',
     turnstileToken: turnstileToken.value || ''
   });
 }

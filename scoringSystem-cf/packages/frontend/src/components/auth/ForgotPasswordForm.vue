@@ -72,6 +72,7 @@
       theme-color="#E17055"
       :loading="loading"
       :resend-loading="resendLoading"
+      :last-email-sent-at="lastEmailSentAt"
       @submit="handleTwoFactorSubmit"
       @resend="handleResendCode"
     />
@@ -122,6 +123,7 @@ const {
   resendLoading,
   emailVerified,
   codeVerified,
+  lastEmailSentAt,
   resetSent,
   errorMessage,
   projects,

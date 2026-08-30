@@ -1,6 +1,10 @@
 /**
  * Unified code generation utilities for invitation codes and verification codes
  *
+ * Two distinct code families:
+ * - Invitation codes: 12 characters, 27-char set, XXXX-XXXX-XXXX
+ * - E-mail verification codes (2FA / password reset): 6 digits, identical to TOTP
+ *
  * Security Strategy:
  * - Actual character set: 27 characters (A-Z excluding I,O + @#!)
  * - Frontend "deception": Accepts all printable ASCII to reduce fingerprinting
@@ -12,7 +16,8 @@
  *
  * Security Considerations:
  * - Uses crypto.getRandomValues() for cryptographic randomness
- * - 12-character codes provide ~57 bits of entropy
+ * - 12-character invitation codes provide ~57 bits of entropy
+ * - 6-digit verification codes rely on expiry, attempt limits and lockout
  * - Combined with rate limiting and expiration for defense in depth
  */
 
@@ -26,6 +31,12 @@
  * - Entropy: log₂(27^12) ≈ 57.06 bits
  */
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ@#!';
+
+/**
+ * Length of e-mail verification codes (2FA / password reset)
+ * Deliberately identical to a TOTP code so both inputs look and feel the same.
+ */
+export const VERIFICATION_CODE_LENGTH = 6;
 
 /**
  * Generate cryptographically secure random index
@@ -121,16 +132,40 @@ export function generateInvitationCode(): string {
 }
 
 /**
- * Generate a 12-character verification code for 2FA
- * Format: XXXX-XXXX-XXXX
+ * Digits used for e-mail verification codes
+ * Kept separate from CODE_CHARS: 2FA codes are 6 digits so they behave exactly
+ * like an authenticator (TOTP) code — no letters, no symbols, no case issues.
+ */
+const DIGIT_CHARS = '0123456789';
+
+/**
+ * Generate a 6-digit verification code for e-mail 2FA / password reset
  *
- * @returns Formatted verification code
+ * SECURITY: 6 digits ≈ 19.9 bits of entropy — the same as a TOTP code.
+ * Brute force is contained by the surrounding controls, not by the code length:
+ * 10-minute expiry, max 3 attempts per code, and progressive account lockout.
+ *
+ * @returns 6-digit verification code (no separators)
  *
  * @example
- * generateVerificationCode() // Returns: "A@BC-D#EF-!GHJ"
+ * generateVerificationCode() // Returns: "049321"
  */
 export function generateVerificationCode(): string {
-  return generateReadableCode({ length: 12, format: '4-4-4' });
+  let code = '';
+  for (let i = 0; i < VERIFICATION_CODE_LENGTH; i++) {
+    code += DIGIT_CHARS[getSecureRandomIndex(DIGIT_CHARS.length)];
+  }
+  return code;
+}
+
+/**
+ * Validate an e-mail verification code (6 digits, no separators)
+ *
+ * @param code - Code to validate
+ * @returns true if the code is exactly 6 digits
+ */
+export function validateVerificationCodeFormat(code: string): boolean {
+  return new RegExp(`^\\d{${VERIFICATION_CODE_LENGTH}}$`).test(code.trim());
 }
 
 /**
