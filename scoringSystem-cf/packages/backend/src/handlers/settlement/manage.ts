@@ -361,7 +361,16 @@ export async function getSettlementHistory(
       SELECT gu.globalUserGroupId
       FROM globalusergroups gu
       JOIN globalgroups g ON gu.globalGroupId = g.globalGroupId
-      WHERE gu.userEmail = ? AND g.globalPermissions LIKE '%create_project%'
+      JOIN users u ON u.userEmail = gu.userEmail
+      WHERE gu.userEmail = ?
+        AND gu.isActive = 1
+        AND g.isActive = 1
+        AND u.status = 'active'
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(g.globalPermissions)
+          WHERE json_each.value = 'create_project'
+        )
     `).bind(userEmail).first();
 
     if (!globalPMCheck) {
@@ -538,9 +547,17 @@ export async function getStageSettlementRankings(
         SELECT CASE
           WHEN EXISTS (
             SELECT 1 FROM users u
-            JOIN globalusergroups gu ON u.userId = gu.userEmail
+            JOIN globalusergroups gu ON gu.userEmail = u.userEmail
             JOIN globalgroups g ON gu.globalGroupId = g.globalGroupId
-            WHERE u.userEmail = ? AND g.globalPermissions LIKE '%system_admin%'
+            WHERE u.userEmail = ?
+              AND gu.isActive = 1
+              AND g.isActive = 1
+              AND u.status = 'active'
+              AND EXISTS (
+                SELECT 1
+                FROM json_each(g.globalPermissions)
+                WHERE json_each.value = 'system_admin'
+              )
           ) THEN 1
           WHEN EXISTS (
             SELECT 1 FROM projects p
@@ -658,9 +675,17 @@ export async function getCommentSettlementRankings(
         SELECT CASE
           WHEN EXISTS (
             SELECT 1 FROM users u
-            JOIN globalusergroups gu ON u.userId = gu.userEmail
+            JOIN globalusergroups gu ON gu.userEmail = u.userEmail
             JOIN globalgroups g ON gu.globalGroupId = g.globalGroupId
-            WHERE u.userEmail = ? AND g.globalPermissions LIKE '%system_admin%'
+            WHERE u.userEmail = ?
+              AND gu.isActive = 1
+              AND g.isActive = 1
+              AND u.status = 'active'
+              AND EXISTS (
+                SELECT 1
+                FROM json_each(g.globalPermissions)
+                WHERE json_each.value = 'system_admin'
+              )
           ) THEN 1
           WHEN EXISTS (
             SELECT 1 FROM projects p

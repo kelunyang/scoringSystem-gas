@@ -39,12 +39,19 @@ async function checkUserPermissionAndGroups(
       CASE WHEN EXISTS (
         SELECT 1 FROM globalusergroups gu
         JOIN globalgroups g ON gu.globalGroupId = g.globalGroupId
-        WHERE gu.userEmail = ? AND g.globalPermissions LIKE '%create_project%'
+        WHERE gu.userEmail = ?
+          AND gu.isActive = 1
+          AND g.isActive = 1
+          AND EXISTS (
+            SELECT 1
+            FROM json_each(g.globalPermissions)
+            WHERE json_each.value = 'create_project'
+          )
       ) THEN 1 ELSE 0 END as isGlobalPM,
-      (SELECT role FROM projectviewers WHERE userEmail = ? AND projectId = ?) as viewerRole,
+      (SELECT role FROM projectviewers WHERE userEmail = ? AND projectId = ? AND isActive = 1) as viewerRole,
       CASE WHEN EXISTS (
         SELECT 1 FROM usergroups WHERE userEmail = ? AND projectId = ? AND isActive = 1
-        UNION SELECT 1 FROM projectviewers WHERE userEmail = ? AND projectId = ?
+        UNION SELECT 1 FROM projectviewers WHERE userEmail = ? AND projectId = ? AND isActive = 1
       ) THEN 1 ELSE 0 END as hasAccess
   `).bind(
     userEmail,                    // isGlobalPM check

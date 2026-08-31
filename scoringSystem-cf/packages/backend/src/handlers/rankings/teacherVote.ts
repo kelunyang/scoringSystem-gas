@@ -79,7 +79,7 @@ export async function submitTeacherComprehensiveVote(
     const teacherCheck = await env.DB.prepare(`
       SELECT role
       FROM projectviewers
-      WHERE projectId = ? AND userEmail = ? AND role = 'teacher'
+      WHERE projectId = ? AND userEmail = ? AND role = 'teacher' AND isActive = 1
     `).bind(projectId, userEmail).first();
 
     if (!teacherCheck) {

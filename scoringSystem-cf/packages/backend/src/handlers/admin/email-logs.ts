@@ -82,8 +82,11 @@ async function checkEmailLogsPermission(
       SELECT 1 as hasPermission
       FROM globalusergroups gu
       JOIN globalgroups g ON gu.globalGroupId = g.globalGroupId
+      JOIN users u ON u.userEmail = gu.userEmail
       WHERE gu.userEmail = ?
+        AND gu.isActive = 1
         AND g.isActive = 1
+        AND u.status = 'active'
         AND EXISTS (
           SELECT 1
           FROM json_each(g.globalPermissions)

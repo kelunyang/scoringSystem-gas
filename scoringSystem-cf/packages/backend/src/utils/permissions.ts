@@ -129,7 +129,7 @@ export async function hasGlobalPermission(
         `SELECT gg.globalPermissions
          FROM globalusergroups ug
          JOIN globalgroups gg ON ug.globalGroupId = gg.globalGroupId
-         WHERE ug.userEmail = ? AND gg.isActive = 1`
+         WHERE ug.userEmail = ? AND ug.isActive = 1 AND gg.isActive = 1`
       )
       .bind(userEmail)
       .all();
@@ -204,7 +204,8 @@ export async function hasProjectPermission(
       .bind(projectId)
       .first();
 
-    if (project && project.createdBy === userEmail) {
+    // NOTE: projects.createdBy stores a userId (usr_...), not an email.
+    if (project && project.createdBy === userId) {
       return true; // Project creators have all permissions
     }
 
@@ -271,149 +272,6 @@ export async function hasProjectPermission(
 }
 
 /**
- * Get user's group membership in a project
- * Returns the group and role information
- *
- * @param db - D1 database instance
- * @param userId - User ID to check
- * @param projectId - Project ID
- * @returns Object with groupId, groupName, and role, or null if not a member
- *
- * @example
- * const membership = await getUserProjectGroup(db, userId, projectId);
- * // Returns: { groupId: 'grp_123', groupName: 'Team A', role: 'leader' }
- */
-export async function getUserProjectGroup(
-  db: D1Database,
-  userId: string,
-  projectId: string
-): Promise<{ groupId: string; groupName: string; role: string } | null> {
-  try {
-    const result = await db
-      .prepare(
-        `SELECT ug.groupId, g.groupName, ug.role
-         FROM usergroups ug
-         JOIN groups g ON ug.groupId = g.groupId
-         WHERE ug.userId = ? AND ug.projectId = ? AND ug.isActive = 1`
-      )
-      .bind(userId, projectId)
-      .first();
-
-    if (!result) {
-      return null;
-    }
-
-    return {
-      groupId: result.groupId as string,
-      groupName: result.groupName as string,
-      role: result.role as string
-    };
-  } catch (error) {
-    console.error('Error getting user project group:', error);
-    return null;
-  }
-}
-
-/**
- * Check if user is a member of a project
- * (Has any active group assignment in the project)
- *
- * @param db - D1 database instance
- * @param userId - User ID to check
- * @param projectId - Project ID
- * @returns true if user is a project member
- *
- * @example
- * const isMember = await isProjectMember(db, userId, projectId);
- */
-export async function isProjectMember(
-  db: D1Database,
-  userId: string,
-  projectId: string
-): Promise<boolean> {
-  try {
-    const result = await db
-      .prepare(
-        `SELECT COUNT(*) as count
-         FROM usergroups
-         WHERE userId = ? AND projectId = ? AND isActive = 1`
-      )
-      .bind(userId, projectId)
-      .first();
-
-    return (result?.count as number) > 0;
-  } catch (error) {
-    console.error('Error checking project membership:', error);
-    return false;
-  }
-}
-
-/**
- * Check if user is the creator/owner of a project
- *
- * @param db - D1 database instance
- * @param userId - User ID to check
- * @param projectId - Project ID
- * @returns true if user is the project creator
- *
- * @example
- * const isOwner = await isProjectCreator(db, userId, projectId);
- */
-export async function isProjectCreator(
-  db: D1Database,
-  userId: string,
-  projectId: string
-): Promise<boolean> {
-  try {
-    const project = await db
-      .prepare(
-        `SELECT creatorId FROM projects WHERE projectId = ?`
-      )
-      .bind(projectId)
-      .first();
-
-    return project?.creatorId === userId;
-  } catch (error) {
-    console.error('Error checking project creator:', error);
-    return false;
-  }
-}
-
-/**
- * Check if user is a leader of a specific group
- *
- * @param db - D1 database instance
- * @param userId - User ID to check
- * @param projectId - Project ID
- * @param groupId - Group ID
- * @returns true if user is the group leader
- *
- * @example
- * const isLeader = await isGroupLeader(db, userId, projectId, groupId);
- */
-export async function isGroupLeader(
-  db: D1Database,
-  userId: string,
-  projectId: string,
-  groupId: string
-): Promise<boolean> {
-  try {
-    const result = await db
-      .prepare(
-        `SELECT role FROM usergroups
-         WHERE userId = ? AND projectId = ? AND groupId = ? AND isActive = 1`
-      )
-      .bind(userId, projectId, groupId)
-      .first();
-
-    return result?.role === 'leader';
-  } catch (error) {
-    console.error('Error checking group leader:', error);
-    return false;
-  }
-}
-
-/**
  * Get all global permissions for a user
  *
  * @param db - D1 database instance
@@ -429,120 +287,48 @@ export async function getUserGlobalPermissions(
   userId: string
 ): Promise<string[]> {
   try {
-    console.log('🔍 [getUserGlobalPermissions] Starting for userId:', userId);
-
     // First, get the user's email and check if user is active
     const user = await db
       .prepare('SELECT userEmail, status FROM users WHERE userId = ?')
       .bind(userId)
       .first();
 
-    console.log('🔍 [getUserGlobalPermissions] User found:', user);
-
     if (!user) {
-      console.error('❌ [getUserGlobalPermissions] User not found:', userId);
       return [];
     }
 
     // Check if user is active
     if (user.status !== 'active') {
-      console.error('❌ [getUserGlobalPermissions] User is not active:', userId, user.status);
       return [];
     }
 
     const userEmail = user.userEmail as string;
-    console.log('🔍 [getUserGlobalPermissions] Looking up permissions for email:', userEmail);
 
     // Now query globalusergroups using the email
     const userGroups = await db
       .prepare(
-        `SELECT gg.globalPermissions, gg.groupName, ug.globalGroupId
+        `SELECT gg.globalPermissions
          FROM globalusergroups ug
          JOIN globalgroups gg ON ug.globalGroupId = gg.globalGroupId
-         WHERE ug.userEmail = ? AND gg.isActive = 1`
+         WHERE ug.userEmail = ? AND ug.isActive = 1 AND gg.isActive = 1`
       )
       .bind(userEmail)
       .all();
 
-    console.log('🔍 [getUserGlobalPermissions] User groups query result:', {
-      resultsCount: userGroups.results?.length || 0,
-      results: userGroups.results
-    });
-
     if (!userGroups.results || userGroups.results.length === 0) {
-      console.warn('⚠️ [getUserGlobalPermissions] No global groups found for email:', userEmail);
       return [];
     }
 
     // Collect all unique permissions
     const permissionsSet = new Set<string>();
     for (const group of userGroups.results) {
-      console.log('🔍 [getUserGlobalPermissions] Processing group:', {
-        groupName: group.groupName,
-        rawPermissions: group.globalPermissions
-      });
-
       const permissions = parseJsonArray(group.globalPermissions as string);
-      console.log('🔍 [getUserGlobalPermissions] Parsed permissions:', permissions);
-
-      permissions.forEach(p => permissionsSet.add(p));
-    }
-
-    const finalPermissions = Array.from(permissionsSet);
-    console.log('✅ [getUserGlobalPermissions] Final permissions:', finalPermissions);
-
-    return finalPermissions;
-  } catch (error) {
-    console.error('❌ [getUserGlobalPermissions] Error getting user global permissions:', error);
-    return [];
-  }
-}
-
-/**
- * Get all project permissions for a user
- *
- * @param db - D1 database instance
- * @param userId - User ID
- * @param projectId - Project ID
- * @returns Array of permission strings
- *
- * @example
- * const permissions = await getUserProjectPermissions(db, userId, projectId);
- * // Returns: ['manage_project', 'manage_stages', 'score_submissions']
- */
-export async function getUserProjectPermissions(
-  db: D1Database,
-  userId: string,
-  projectId: string
-): Promise<string[]> {
-  try {
-    const userGroups = await db
-      .prepare(
-        `SELECT pp.permissions
-         FROM usergroups ug
-         JOIN projectpermissions pp ON ug.groupId = pp.groupId
-         WHERE ug.userId = ?
-           AND ug.projectId = ?
-           AND ug.isActive = 1
-           AND pp.projectId = ?`
-      )
-      .bind(userId, projectId, projectId)
-      .all();
-
-    if (!userGroups.results || userGroups.results.length === 0) {
-      return [];
-    }
-
-    // Collect all unique permissions
-    const permissionsSet = new Set<string>();
-    for (const group of userGroups.results) {
-      const permissions = parseJsonArray(group.permissions as string);
       permissions.forEach(p => permissionsSet.add(p));
     }
 
     return Array.from(permissionsSet);
   } catch (error) {
-    console.error('Error getting user project permissions:', error);
+    console.error('Error getting user global permissions:', error);
     return [];
   }
 }
@@ -777,7 +563,8 @@ export async function checkIsAdminTeacherOrObserver(
       .bind(projectId)
       .first();
 
-    if (project && project.createdBy === userEmail) {
+    // NOTE: projects.createdBy stores a userId (usr_...), not an email.
+    if (project && project.createdBy === userId) {
       return true;
     }
 

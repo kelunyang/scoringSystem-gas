@@ -318,6 +318,9 @@ async function checkGlobalPermission(env: Env, userEmail: string, permission: st
       JOIN globalgroups gg ON gug.globalGroupId = gg.globalGroupId
       JOIN users u ON gug.userEmail = u.userEmail
       WHERE u.userEmail = ?
+        AND gug.isActive = 1
+        AND gg.isActive = 1
+        AND u.status = 'active'
     `).bind(userEmail).all();
 
     for (const row of result.results) {

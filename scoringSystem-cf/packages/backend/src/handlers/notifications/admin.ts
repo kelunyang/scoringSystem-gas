@@ -29,7 +29,16 @@ export async function listAllNotifications(
       SELECT gu.globalUserGroupId
       FROM globalusergroups gu
       JOIN globalgroups g ON gu.globalGroupId = g.globalGroupId
-      WHERE gu.userEmail = ? AND g.globalPermissions LIKE '%system_admin%'
+      JOIN users u ON u.userEmail = gu.userEmail
+      WHERE gu.userEmail = ?
+        AND gu.isActive = 1
+        AND g.isActive = 1
+        AND u.status = 'active'
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(g.globalPermissions)
+          WHERE json_each.value = 'system_admin'
+        )
     `).bind(userEmail).first();
 
     if (!globalPMCheck) {
@@ -125,7 +134,16 @@ export async function sendSingleNotification(
       SELECT gu.globalUserGroupId
       FROM globalusergroups gu
       JOIN globalgroups g ON gu.globalGroupId = g.globalGroupId
-      WHERE gu.userEmail = ? AND g.globalPermissions LIKE '%system_admin%'
+      JOIN users u ON u.userEmail = gu.userEmail
+      WHERE gu.userEmail = ?
+        AND gu.isActive = 1
+        AND g.isActive = 1
+        AND u.status = 'active'
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(g.globalPermissions)
+          WHERE json_each.value = 'system_admin'
+        )
     `).bind(userEmail).first();
 
     if (!globalPMCheck) {
@@ -198,7 +216,16 @@ export async function sendBatchNotifications(
       SELECT gu.globalUserGroupId
       FROM globalusergroups gu
       JOIN globalgroups g ON gu.globalGroupId = g.globalGroupId
-      WHERE gu.userEmail = ? AND g.globalPermissions LIKE '%system_admin%'
+      JOIN users u ON u.userEmail = gu.userEmail
+      WHERE gu.userEmail = ?
+        AND gu.isActive = 1
+        AND g.isActive = 1
+        AND u.status = 'active'
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(g.globalPermissions)
+          WHERE json_each.value = 'system_admin'
+        )
     `).bind(userEmail).first();
 
     if (!globalPMCheck) {
@@ -315,7 +342,16 @@ export async function deleteNotificationAdmin(
       SELECT gu.globalUserGroupId
       FROM globalusergroups gu
       JOIN globalgroups g ON gu.globalGroupId = g.globalGroupId
-      WHERE gu.userEmail = ? AND g.globalPermissions LIKE '%system_admin%'
+      JOIN users u ON u.userEmail = gu.userEmail
+      WHERE gu.userEmail = ?
+        AND gu.isActive = 1
+        AND g.isActive = 1
+        AND u.status = 'active'
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(g.globalPermissions)
+          WHERE json_each.value = 'system_admin'
+        )
     `).bind(userEmail).first();
 
     if (!globalPMCheck) {
@@ -362,7 +398,16 @@ export async function getNotificationStatistics(
       SELECT gu.globalUserGroupId
       FROM globalusergroups gu
       JOIN globalgroups g ON gu.globalGroupId = g.globalGroupId
-      WHERE gu.userEmail = ? AND g.globalPermissions LIKE '%system_admin%'
+      JOIN users u ON u.userEmail = gu.userEmail
+      WHERE gu.userEmail = ?
+        AND gu.isActive = 1
+        AND g.isActive = 1
+        AND u.status = 'active'
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(g.globalPermissions)
+          WHERE json_each.value = 'system_admin'
+        )
     `).bind(userEmail).first();
 
     if (!globalPMCheck) {
@@ -427,7 +472,16 @@ export async function getPendingEmailNotifications(
       SELECT gu.globalUserGroupId
       FROM globalusergroups gu
       JOIN globalgroups g ON gu.globalGroupId = g.globalGroupId
-      WHERE gu.userEmail = ? AND g.globalPermissions LIKE '%system_admin%'
+      JOIN users u ON u.userEmail = gu.userEmail
+      WHERE gu.userEmail = ?
+        AND gu.isActive = 1
+        AND g.isActive = 1
+        AND u.status = 'active'
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(g.globalPermissions)
+          WHERE json_each.value = 'system_admin'
+        )
     `).bind(userEmail).first();
 
     if (!globalPMCheck) {
@@ -523,7 +577,16 @@ export async function getNotificationPatrolStatistics(
       SELECT gu.globalUserGroupId
       FROM globalusergroups gu
       JOIN globalgroups g ON gu.globalGroupId = g.globalGroupId
-      WHERE gu.userEmail = ? AND g.globalPermissions LIKE '%system_admin%'
+      JOIN users u ON u.userEmail = gu.userEmail
+      WHERE gu.userEmail = ?
+        AND gu.isActive = 1
+        AND g.isActive = 1
+        AND u.status = 'active'
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(g.globalPermissions)
+          WHERE json_each.value = 'system_admin'
+        )
     `).bind(userEmail).first();
 
     if (!globalPMCheck) {

@@ -33,11 +33,15 @@ export async function getTeacherRankings(
       WHERE projectId = ? AND userEmail = ? AND role = 'teacher' AND isActive = 1
     `).bind(projectId, userEmail).first();
 
+    // NOTE: projects.createdBy stores a userId (usr_...), so resolve it to an email.
     const project = await env.DB.prepare(`
-      SELECT createdBy FROM projects WHERE projectId = ?
+      SELECT u.userEmail AS creatorEmail
+      FROM projects p
+      JOIN users u ON u.userId = p.createdBy
+      WHERE p.projectId = ?
     `).bind(projectId).first();
 
-    const isCreator = project && project.createdBy === userEmail;
+    const isCreator = !!project && project.creatorEmail === userEmail;
 
     // Check for system admin permission
     const globalPermissions = await env.DB.prepare(`

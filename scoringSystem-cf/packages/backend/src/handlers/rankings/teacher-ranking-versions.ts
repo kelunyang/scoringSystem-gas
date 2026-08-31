@@ -51,7 +51,7 @@ export async function getTeacherRankingVersions(
       SELECT role, displayName
       FROM projectviewers pv
       LEFT JOIN users u ON pv.userEmail = u.userEmail
-      WHERE pv.projectId = ? AND pv.userEmail = ? AND pv.role = 'teacher'
+      WHERE pv.projectId = ? AND pv.userEmail = ? AND pv.role = 'teacher' AND pv.isActive = 1
     `).bind(projectId, userEmail).first();
 
     if (!teacherCheck) {

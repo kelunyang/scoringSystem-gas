@@ -106,11 +106,17 @@ export async function notifyAdmins(
   // Get all admin users (DB error = propagate)
   const admins = await env.DB.prepare(`
     SELECT DISTINCT u.userId, u.userEmail
-    FROM Users u
-    INNER JOIN global_user_groups gug ON u.userId = gug.userId
-    INNER JOIN GlobalGroups gg ON gug.globalGroupId = gg.globalGroupId
-    WHERE gg.globalPermissions LIKE '%system_admin%'
-      AND u.userStatus = 'active'
+    FROM users u
+    INNER JOIN globalusergroups gug ON gug.userEmail = u.userEmail
+    INNER JOIN globalgroups gg ON gug.globalGroupId = gg.globalGroupId
+    WHERE gug.isActive = 1
+      AND gg.isActive = 1
+      AND u.status = 'active'
+      AND EXISTS (
+        SELECT 1
+        FROM json_each(gg.globalPermissions)
+        WHERE json_each.value = 'system_admin'
+      )
   `).all<{ userId: string; userEmail: string }>();
 
   if (!admins.results || admins.results.length === 0) {
@@ -170,15 +176,25 @@ export async function disableUserAccount(
 
   // Use D1 batch for atomic transaction
   const batch = [
-    // Update user status
+    // Update user status.
+    // Column names must match the users table: status / lockUntil / lockReason.
+    // A permanent lock sets status='disabled', which is what authMiddleware and the
+    // login handler check; a temporary lock leaves status alone and relies on lockUntil.
+    // This mirrors the 2FA lockout path in handlers/auth/login.ts.
     env.DB.prepare(`
-      UPDATE Users
-      SET userStatus = ?,
-          accountLockedUntil = ?,
-          accountLockReason = ?,
+      UPDATE users
+      SET status = ?,
+          lockUntil = ?,
+          lockReason = ?,
           updatedAt = ?
       WHERE userId = ?
-    `).bind('locked', lockUntil, reason, now, userId),
+    `).bind(
+      lockType === LOCK_TYPE.PERMANENT ? 'disabled' : 'active',
+      lockUntil,
+      reason,
+      now,
+      userId
+    ),
 
     // Log the action
     env.DB.prepare(`
