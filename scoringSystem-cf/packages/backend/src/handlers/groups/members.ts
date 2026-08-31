@@ -6,7 +6,8 @@
 import type { Env} from '@/types';
 import { successResponse, errorResponse } from '@utils/response';
 import { generateId } from '@utils/id-generator';
-import { hasProjectPermission as checkProjectPermission, hasGlobalPermission } from '@utils/permissions';
+import { hasGlobalPermission } from '@utils/permissions';
+import { checkProjectPermission } from '@middleware/permissions';
 import { logProjectOperation } from '@utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
 import { getConfigValue } from '@utils/config';
@@ -454,16 +455,17 @@ async function checkGlobalPermission(env: Env, userEmail: string, permission: st
   return await hasGlobalPermission(env.DB, userId, permission);
 }
 
-// Wrapper for hasProjectPermission that handles userEmail -> userId conversion
+// Project permission check.
+// Uses middleware/permissions.ts, whose vocabulary ('manage' | 'view' | ...) matches
+// what router/groups.ts already gates on. utils/permissions.ts uses a different
+// vocabulary ('manage_project' | 'view_project' | ...) and must NOT be used here.
 async function hasProjectPermission(
   env: Env,
   userEmail: string,
   projectId: string,
   permission: string
 ): Promise<boolean> {
-  const userId = await getUserId(env, userEmail);
-  if (!userId) return false;
-  return await checkProjectPermission(env.DB, userId, projectId, permission);
+  return await checkProjectPermission(env, userEmail, projectId, permission);
 }
 
 // Logging is now handled by centralized utils/logging module

@@ -6,8 +6,8 @@
 import type { Env } from '@/types';
 import { successResponse, errorResponse } from '@utils/response';
 import { generateId } from '@utils/id-generator';
-import { parseJSON } from '@utils/json';
-import { hasProjectPermission as checkProjectPermission } from '@utils/permissions';
+import { hasGlobalPermission } from '@utils/permissions';
+import { checkProjectPermission } from '@middleware/permissions';
 import { logProjectOperation, generateChanges } from '@utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
 import { getGroupMemberEmails } from '@utils/notifications';
@@ -27,76 +27,29 @@ export async function createGroup(
   }
 ): Promise<Response> {
   try {
-    console.log('🔍 [createGroup] Entry:', { userEmail, projectId, groupData });
-    console.log('  - groupData details:');
-    console.log('    - groupName:', groupData.groupName);
-    console.log('    - description:', groupData.description);
-    console.log('    - allowChange:', groupData.allowChange, typeof groupData.allowChange);
-
     if (!groupData.groupName) {
-      console.log('❌ [createGroup] Group name is missing');
       return errorResponse('INVALID_INPUT', 'Group name is required');
     }
-    console.log('✅ [createGroup] Group name validation passed');
 
     // Check permissions
-    console.log('🔍 [createGroup] Starting permission checks...');
-
-    let hasManagePermission = false;
-    try {
-      console.log('🔍 [createGroup] Calling hasProjectPermission...');
-      hasManagePermission = await hasProjectPermission(env, userEmail, projectId, 'manage');
-      console.log('✅ [createGroup] hasProjectPermission result:', hasManagePermission);
-    } catch (error) {
-      console.error('❌ [createGroup] hasProjectPermission error:', {
-        errorType: error?.constructor?.name,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined
-      });
-      throw error; // Re-throw to be caught by outer catch
-    }
-
-    let isCreator = false;
-    try {
-      console.log('🔍 [createGroup] Calling isProjectCreator...');
-      isCreator = await isProjectCreator(env, userEmail, projectId);
-      console.log('✅ [createGroup] isProjectCreator result:', isCreator);
-    } catch (error) {
-      console.error('❌ [createGroup] isProjectCreator error:', {
-        errorType: error?.constructor?.name,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined
-      });
-      throw error; // Re-throw to be caught by outer catch
-    }
-
-    console.log('🔍 [createGroup] Permission check results:', {
-      hasManagePermission,
-      isCreator,
-      hasAccess: hasManagePermission || isCreator
-    });
+    const hasManagePermission = await hasProjectPermission(env, userEmail, projectId, 'manage');
+    const isCreator = await isProjectCreator(env, userEmail, projectId);
 
     if (!hasManagePermission && !isCreator) {
-      console.log('❌ [createGroup] Access denied - insufficient permissions');
       return errorResponse('ACCESS_DENIED', 'Insufficient permissions to create groups');
     }
-    console.log('✅ [createGroup] Permission checks passed');
 
     // Check group limit first
-    console.log('🔍 [createGroup] Checking group limit...');
     const maxGroupsPerProject = await getConfigValue(env, 'MAX_GROUPS_PER_PROJECT', { parseAsInt: true });
     const activeGroupsCount = await env.DB.prepare(`
       SELECT COUNT(*) as count FROM groups WHERE projectId = ? AND status = 'active'
     `).bind(projectId).first();
-    console.log('✅ [createGroup] Active groups count:', activeGroupsCount, 'max:', maxGroupsPerProject);
 
     if (activeGroupsCount && (activeGroupsCount.count as number) >= maxGroupsPerProject) {
-      console.log('❌ [createGroup] Group limit exceeded');
       return errorResponse('LIMIT_EXCEEDED', `Maximum groups per project limit (${maxGroupsPerProject}) reached`);
     }
 
     // Generate unique group ID and system-generated group name
-    console.log('🔍 [createGroup] Generating group ID and timestamp...');
     const groupId = generateId('group');
     const timestamp = Date.now();
 
@@ -109,38 +62,16 @@ export async function createGroup(
       ? groupData.description.substring(0, 200)
       : userProvidedName;
 
-    console.log('✅ [createGroup] Generated:', {
-      groupId,
-      systemGroupName,
-      userProvidedName,
-      description,
-      timestamp
-    });
-
-    console.log('🔍 [createGroup] Getting userId...');
     const userId = await getUserId(env, userEmail);
-    console.log('🔍 [createGroup] getUserId result:', { userEmail, userId });
 
     if (!userId) {
-      console.error('❌ [createGroup] userId is null for userEmail:', userEmail);
+      console.error('[createGroup] userId is null for userEmail:', userEmail);
       return errorResponse('SYSTEM_ERROR', 'Failed to get user ID');
     }
 
-    console.log('🔍 [createGroup] Preparing to insert group:', {
-      groupId,
-      projectId,
-      systemGroupName,
-      description,
-      userId,
-      timestamp
-    });
-
     const allowChangeValue = groupData.allowChange !== false ? 1 : 0;
-    console.log('💾 [createGroup] Before DB insert:');
-    console.log('  - groupData.allowChange:', groupData.allowChange, typeof groupData.allowChange);
-    console.log('  - calculated allowChangeValue:', allowChangeValue);
 
-    const insertResult = await env.DB.prepare(`
+    await env.DB.prepare(`
       INSERT INTO groups (
         groupId, projectId, groupName, description, createdBy,
         createdTime, status, allowChange
@@ -156,17 +87,9 @@ export async function createGroup(
       allowChangeValue
     ).run();
 
-    console.log('✅ [createGroup] Group inserted successfully:', {
-      groupId,
-      insertResult: insertResult?.meta
-    });
-
     // Log creation
-    console.log('🔍 [createGroup] Calling logProjectOperation...');
     await logProjectOperation(env, userEmail, projectId, 'group_created', 'group', groupId, {});
-    console.log('✅ [createGroup] logProjectOperation completed');
 
-    console.log('🔍 [createGroup] Preparing successResponse...');
     return successResponse({
       groupId,
       groupName: systemGroupName,
@@ -176,14 +99,7 @@ export async function createGroup(
       allowChange: groupData.allowChange !== false
     }, 'Group created successfully');
   } catch (error) {
-    console.error('❌ [createGroup] FATAL ERROR:', {
-      errorType: error?.constructor?.name,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorStack: error instanceof Error ? error.stack : undefined,
-      userEmail,
-      projectId,
-      groupData
-    });
+    console.error('Create group error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to create group');
   }
 }
@@ -202,56 +118,39 @@ export async function batchCreateGroups(
   }
 ): Promise<Response> {
   try {
-    console.log('🔍 [batchCreateGroups] Entry:', { userEmail, projectId, params });
-
     const { groupCount, allowChange = true, namePrefix = '學生分組' } = params;
 
     // Validate groupCount
     if (groupCount < 1 || groupCount > 20) {
-      console.log('❌ [batchCreateGroups] Invalid group count:', groupCount);
       return errorResponse('INVALID_INPUT', 'Group count must be between 1 and 20');
     }
 
     // Check permissions
-    console.log('🔍 [batchCreateGroups] Starting permission checks...');
     const hasManagePermission = await hasProjectPermission(env, userEmail, projectId, 'manage');
     const isCreator = await isProjectCreator(env, userEmail, projectId);
 
-    console.log('🔍 [batchCreateGroups] Permission check results:', {
-      hasManagePermission,
-      isCreator,
-      hasAccess: hasManagePermission || isCreator
-    });
-
     if (!hasManagePermission && !isCreator) {
-      console.log('❌ [batchCreateGroups] Access denied - insufficient permissions');
       return errorResponse('ACCESS_DENIED', 'Insufficient permissions to create groups');
     }
-    console.log('✅ [batchCreateGroups] Permission checks passed');
 
     // Check total group limit
-    console.log('🔍 [batchCreateGroups] Checking group limit...');
     const maxGroupsPerProject = await getConfigValue(env, 'MAX_GROUPS_PER_PROJECT', { parseAsInt: true });
     const activeGroupsCount = await env.DB.prepare(`
       SELECT COUNT(*) as count FROM groups WHERE projectId = ? AND status = 'active'
     `).bind(projectId).first();
 
     const currentCount = (activeGroupsCount?.count as number) || 0;
-    console.log('✅ [batchCreateGroups] Current active groups:', currentCount, 'max:', maxGroupsPerProject);
 
     if (currentCount + groupCount > maxGroupsPerProject) {
-      console.log('❌ [batchCreateGroups] Group limit would be exceeded');
       return errorResponse('LIMIT_EXCEEDED',
         `Cannot create ${groupCount} groups. Current: ${currentCount}, Max: ${maxGroupsPerProject}`);
     }
 
     // Get userId
-    console.log('🔍 [batchCreateGroups] Getting userId...');
     const userId = await getUserId(env, userEmail);
-    console.log('🔍 [batchCreateGroups] getUserId result:', { userEmail, userId });
 
     if (!userId) {
-      console.error('❌ [batchCreateGroups] userId is null for userEmail:', userEmail);
+      console.error('[batchCreateGroups] userId is null for userEmail:', userEmail);
       return errorResponse('SYSTEM_ERROR', 'Failed to get user ID');
     }
 
@@ -266,7 +165,6 @@ export async function batchCreateGroups(
     const insertStatements = [];
 
     // Prepare batch insert statements
-    console.log(`💾 [batchCreateGroups] Preparing ${groupCount} groups for insertion...`);
     const allowChangeValue = allowChange ? 1 : 0;
 
     for (let i = 1; i <= groupCount; i++) {
@@ -302,12 +200,9 @@ export async function batchCreateGroups(
     }
 
     // Execute batch insert
-    console.log(`💾 [batchCreateGroups] Executing batch insert for ${groupCount} groups...`);
     await env.DB.batch(insertStatements);
-    console.log('✅ [batchCreateGroups] Batch insert completed successfully');
 
     // Log batch creation operation with rich metadata
-    console.log('🔍 [batchCreateGroups] Logging batch operation...');
     await logProjectOperation(env, userEmail, projectId, 'groups_batch_created', 'group', 'batch', {
       totalGroups: groupCount,
       namePrefix,
@@ -329,9 +224,6 @@ export async function batchCreateGroups(
       }
     });
 
-    console.log('✅ [batchCreateGroups] Batch operation logged successfully');
-    console.log(`✅ [batchCreateGroups] Successfully created ${groupCount} groups`);
-
     return successResponse({
       createdCount: groupCount,
       groups: createdGroups.map(g => ({
@@ -347,14 +239,7 @@ export async function batchCreateGroups(
     }, `Successfully created ${groupCount} groups`);
 
   } catch (error) {
-    console.error('❌ [batchCreateGroups] FATAL ERROR:', {
-      errorType: error?.constructor?.name,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorStack: error instanceof Error ? error.stack : undefined,
-      userEmail,
-      projectId,
-      params
-    });
+    console.error('Batch create groups error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to batch create groups');
   }
 }
@@ -444,22 +329,6 @@ export async function updateGroup(
       SELECT role FROM usergroups
       WHERE projectId = ? AND groupId = ? AND userEmail = ? AND role = 'leader'
     `).bind(projectId, groupId, userEmail).first();
-
-    const userGroupRole = await env.DB.prepare(`
-      SELECT * FROM usergroups
-      WHERE projectId = ? AND groupId = ? AND userEmail = ?
-    `).bind(projectId, groupId, userEmail).first();
-
-    console.log('🔍 [updateGroup] Permission check:', {
-      userEmail,
-      projectId,
-      groupId,
-      isAdmin,
-      hasManagePermission,
-      isGroupLeader,
-      userGroupRole,
-      canUpdateBasicInfo: !!(isAdmin || hasManagePermission || isGroupLeader)
-    });
 
     // Permission levels
     const canUpdateAnyField = isAdmin || hasManagePermission;
@@ -662,16 +531,17 @@ export async function deleteGroup(
  * Helper functions
  */
 
-// Wrapper for hasProjectPermission that handles userEmail -> userId conversion
+// Project permission check.
+// Uses middleware/permissions.ts, whose vocabulary ('manage' | 'view' | ...) matches
+// what router/groups.ts already gates on. utils/permissions.ts uses a different
+// vocabulary ('manage_project' | 'view_project' | ...) and must NOT be used here.
 async function hasProjectPermission(
   env: Env,
   userEmail: string,
   projectId: string,
   permission: string
 ): Promise<boolean> {
-  const userId = await getUserId(env, userEmail);
-  if (!userId) return false;
-  return await checkProjectPermission(env.DB, userId, projectId, permission);
+  return await checkProjectPermission(env, userEmail, projectId, permission);
 }
 
 async function isProjectCreator(env: Env, userEmail: string, projectId: string): Promise<boolean> {
@@ -708,27 +578,9 @@ async function getUserId(env: Env, userEmail: string): Promise<string | null> {
 }
 
 async function checkGlobalPermission(env: Env, userEmail: string, permission: string): Promise<boolean> {
-  try {
-    const result = await env.DB.prepare(`
-      SELECT gg.globalPermissions
-      FROM globalusergroups gug
-      JOIN globalgroups gg ON gug.globalGroupId = gg.globalGroupId
-      JOIN users u ON gug.userEmail = u.userEmail
-      WHERE u.userEmail = ?
-    `).bind(userEmail).all();
-
-    for (const row of result.results) {
-      const permissions = parseJSON<string[]>(row.globalPermissions as string, []);
-      if (permissions.includes(permission)) {
-        return true;
-      }
-    }
-
-    return false;
-  } catch (error) {
-    console.warn('Check global permission error:', error);
-    return false;
-  }
+  const userId = await getUserId(env, userEmail);
+  if (!userId) return false;
+  return await hasGlobalPermission(env.DB, userId, permission);
 }
 
 /**

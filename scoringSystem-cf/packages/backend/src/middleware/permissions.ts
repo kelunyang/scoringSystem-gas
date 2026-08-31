@@ -235,8 +235,12 @@ export async function checkProjectPermission(
     const userId = (await env.DB.prepare('SELECT userId FROM users WHERE userEmail = ?').bind(userEmail).first())?.userId;
     if (!userId) return false;
 
-    // Level 0: System admins and project creators have management permissions only
-    // They can: manage, view (but NOT comment or vote - those are teacher/student privileges)
+    // Level 0: System admins and project creators hold an administrative role only.
+    // They can: manage, view. They CANNOT: comment, vote, submit — those belong to the
+    // teacher/student roles, and an admin who wants them is expected to also hold a
+    // projectviewers role in this project (checked below).
+    // This matches the frontend permission flags and utils/permissions.ts's note on
+    // role separation. Decided 2026-08-31.
     const isAdmin = await hasGlobalPermission(env.DB, userId as string, GLOBAL_PERMISSIONS.SYSTEM_ADMIN);
     const project = await env.DB.prepare(`
       SELECT createdBy FROM projects WHERE projectId = ?
@@ -245,12 +249,10 @@ export async function checkProjectPermission(
     const isCreator = project && project.createdBy === userId;
 
     if (isAdmin || isCreator) {
-      // Admins/Creators can: manage, view
-      // They CANNOT: comment, vote, submit (those are teacher/student privileges)
       if (['manage', 'view'].includes(permission)) {
         return true;
       }
-      // If requesting other permissions, check if they also have teacher/student roles below
+      // Other permissions fall through to the teacher/student checks below.
     }
 
     // Level 1-2: Check projectViewers (teacher/observer roles)
