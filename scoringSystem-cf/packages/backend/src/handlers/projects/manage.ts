@@ -372,9 +372,26 @@ async function checkProjectAccess(env: Env, userEmail: string, projectId: string
       .bind(projectId).first();
     if (project && project.createdBy === userId) return true;
 
+    // Check if teacher/observer. This was missing, so a teacher who was neither
+    // the creator nor a system admin was refused access to their own project.
+    //
+    // Only 'teacher' and 'observer' grant access on their own. A projectviewers
+    // row with role='member' is just a roster entry: those users reach the
+    // project through group membership below, and a member with no group is
+    // meant to be locked out entirely (matching the frontend's canEnter=false
+    // for permissionLevel 'member').
+    const viewer = await env.DB.prepare(`
+      SELECT COUNT(*) as count FROM projectviewers
+      WHERE projectId = ? AND userEmail = ? AND isActive = 1
+        AND role IN ('teacher', 'observer')
+    `).bind(projectId, userEmail).first();
+
+    if (viewer && (viewer.count as number) > 0) return true;
+
     // Check if member
     const membership = await env.DB.prepare(`
-      SELECT COUNT(*) as count FROM usergroups WHERE projectId = ? AND userEmail = ?
+      SELECT COUNT(*) as count FROM usergroups
+      WHERE projectId = ? AND userEmail = ? AND isActive = 1
     `).bind(projectId, userEmail).first();
 
     return membership ? (membership.count as number) > 0 : false;

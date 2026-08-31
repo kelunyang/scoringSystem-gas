@@ -2,5 +2,9 @@
 
 from .api_client import APIClient, APIResponse, extract_list_data
 from .auth_helper import AuthHelper, AuthToken, TestUserFactory
+from .role_scenario import RoleAccount, RoleScenario, RoleScenarioBuilder
 
-__all__ = ['APIClient', 'APIResponse', 'AuthHelper', 'AuthToken', 'TestUserFactory', 'extract_list_data']
+__all__ = [
+    'APIClient', 'APIResponse', 'AuthHelper', 'AuthToken', 'TestUserFactory',
+    'extract_list_data', 'RoleAccount', 'RoleScenario', 'RoleScenarioBuilder',
+]

@@ -167,6 +167,34 @@ def test_users(auth_helper: AuthHelper, config: TestConfig) -> Dict[str, AuthTok
         pytest.fail(f"Test users creation failed: {str(e)}")
 
 
+@pytest.fixture(scope='session')
+def role_scenario(api_client: APIClient, auth_helper: AuthHelper, admin_token: str):
+    """
+    A project with one account per permission level.
+
+    Levels: teacher, observer, group_leader, group_member, member_no_group.
+    ('admin' is the existing admin_token fixture — it holds no project role,
+    which is itself the case under test.)
+
+    Session-scoped: building it registers five users and creates a project, so
+    it is far too slow to repeat per test. Tests must therefore treat it as
+    read-mostly — anything that changes a role would leak into later tests.
+
+    The generated project is deleted on teardown.
+    """
+    from utils import RoleScenarioBuilder
+
+    builder = RoleScenarioBuilder(api_client, auth_helper, admin_token)
+    try:
+        scenario = builder.build()
+    except Exception as e:
+        pytest.skip(f"Could not build role scenario: {e}")
+        return
+
+    yield scenario
+    builder.teardown()
+
+
 # ============================================================================
 # Utility fixtures
 # ============================================================================

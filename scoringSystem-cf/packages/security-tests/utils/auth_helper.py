@@ -203,11 +203,16 @@ class AuthHelper:
         """
         Register a new user
 
+        The request body must match RegisterRequestSchema, which names the field
+        userEmail (not email) and has no username field at all — accounts are
+        identified by email. `username` is kept as a parameter because callers
+        use it to derive unique display names, but it is not sent.
+
         Args:
             invitation_code: Valid invitation code
-            username: Desired username
+            username: Caller-side identifier; not part of the request body
             password: User password
-            email: User email
+            email: User email (sent as userEmail)
             display_name: User's display name
             turnstile_token: Turnstile token (default: 'test' for dev)
 
@@ -219,9 +224,8 @@ class AuthHelper:
         """
         response = self.client.post('/api/auth/register', json={
             'invitationCode': invitation_code,
-            'username': username,
             'password': password,
-            'email': email,
+            'userEmail': email,
             'displayName': display_name,
             'turnstileToken': turnstile_token
         })
