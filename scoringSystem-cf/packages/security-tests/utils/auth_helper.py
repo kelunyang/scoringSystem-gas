@@ -3,7 +3,7 @@ Authentication Helper for Security Testing
 
 Handles the two-step login process:
 1. Password verification
-2. 2FA verification (can use 'DEVMODE' in development)
+2. 2FA verification (dev mode accepts any well-formed code)
 """
 
 from typing import Optional, Dict, Any
@@ -42,16 +42,28 @@ class AuthHelper:
         self,
         email: str,
         password: str,
-        twofa_code: str = 'DEVMODE',
+        twofa_code: str = '000000',
         turnstile_token: str = 'test'
     ) -> str:
         """
         Perform complete login flow and return JWT token
 
+        The 2FA step relies on the backend's dev-mode bypass: when no SMTP config
+        is present, router/auth.ts skips email OTP verification entirely and any
+        well-formed code is accepted. Two constraints follow from that:
+
+        - The code must satisfy the shared schema (6 digits, or an 8-char recovery
+          code). The old 'DEVMODE' placeholder stopped working once email OTP moved
+          to 6 numeric digits, because Zod now rejects it before the bypass is hit.
+        - method='email' must be sent explicitly. Email OTP and TOTP are both 6
+          digits, so a request without `method` falls back to format-based routing
+          and a 6-digit code is treated as TOTP — which is verified for real and
+          has no dev bypass. Accounts with TOTP enabled would fail to log in.
+
         Args:
             email: User email
             password: User password
-            twofa_code: 2FA code (default: 'DEVMODE' for dev mode)
+            twofa_code: 2FA code (default: '000000', accepted in dev mode)
             turnstile_token: Cloudflare Turnstile token (default: 'test' for dev)
 
         Returns:
@@ -80,6 +92,7 @@ class AuthHelper:
         response = self.client.post('/api/auth/login-verify-2fa', json={
             'userEmail': email,
             'code': twofa_code,
+            'method': 'email',
             'turnstileToken': turnstile_token
         })
 
@@ -103,7 +116,7 @@ class AuthHelper:
         self,
         email: str,
         password: str,
-        twofa_code: str = 'DEVMODE',
+        twofa_code: str = '000000',
         turnstile_token: str = 'test'
     ) -> AuthToken:
         """

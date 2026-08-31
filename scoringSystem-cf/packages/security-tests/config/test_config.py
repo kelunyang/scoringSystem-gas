@@ -94,8 +94,11 @@ class TestConfig(BaseSettings):
 
     # 2FA
     twofa_code: str = Field(
-        default='DEVMODE',
-        description='2FA code (use "DEVMODE" for dev mode)'
+        default='000000',
+        description=(
+            '2FA code. Must be 6 digits or an 8-char recovery code to pass schema '
+            'validation; in dev mode (no SMTP configured) the value itself is ignored.'
+        )
     )
 
     # Logging

@@ -65,7 +65,7 @@ def admin_token(auth_helper: AuthHelper, config: TestConfig) -> str:
 
     This fixture performs the two-step login:
     1. Password verification
-    2. 2FA verification (uses DEVMODE for development)
+    2. 2FA verification (dev mode: no SMTP configured, code not checked)
 
     Returns:
         Admin JWT token string
