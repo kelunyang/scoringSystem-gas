@@ -4,6 +4,96 @@
 > 新坑往上加，讓最近的教訓最先被看到。
 
 ---
+## 2026-08-31 ｜ 權限層八份實作各自為政，撤銷失效、老師被鎖在門外 🔥
+
+**症狀**：三類同時存在，方向相反所以互相掩蓋。
+
+1. **擋太多**：`projectviewers.role='teacher'` 的老師無法建立／刪除分組、改成員角色；
+   連 `/api/projects/get` 都拿到 403「No access to this project」，而學生讀得到。
+2. **放太寬**：把使用者踢出全域群組後，`system_admin` 不會被收回，登出重登也一樣。
+   把老師移出專案後，他仍能提交老師評分。
+3. **從未執行**：`utils/security.ts` 的 `notifyAdmins` 與 `disableUserAccount` 對著
+   不存在的表和欄位下查詢，必定拋錯。惡意登入偵測的警報信八個月來一封都沒寄出。
+
+**根因**：同一個問題有八份實作，每份的 WHERE 條件都不一樣。
+
+- `utils/permissions.ts` 用長字彙（`manage_project`／`view_project`）
+- `middleware/permissions.ts` 用短字彙（`manage`／`view`／`comment`）
+- 另外六份散在 handler 裡自己刻（`groups/manage.ts`、`groups/members.ts`、
+  `projects/manage.ts`、`projects/list.ts`、`projects/create.ts`、`users/profile.ts`）
+
+`router/groups.ts` 用短字彙守門（正確），handler 的 wrapper 卻把同樣的字串轉手丟給
+長字彙那支——老師過了第一關、被第二關擋下。全庫另有 71 段直接對權限表寫的 SQL，
+重複的其實只有三件事：「是不是 system_admin」30 次、「是不是 teacher/observer」24 次、
+「是不是建立者」17 次。抄 71 遍，抄錯的比例不是零。
+
+軟刪除的撤銷失效同源：`globalusergroups` 和 `projectviewers` 的移除都是
+`SET isActive = 0`，但多數查詢只濾了群組的 `isActive`，沒濾成員資格的。
+
+**為什麼漏掉**：資料剛好讓每個洞都繞過去了。
+
+- `projectviewers` 裡 `role='teacher'` 只有 8 筆，**全部是同一個人**
+- 那 8 個專案的 `createdBy` 也是他
+- 全站唯一有 `system_admin` 的還是他
+
+每個老師都走 system_admin 捷徑，所以「老師被擋」從來沒發生過。
+`globalusergroups` 116 筆全是 `isActive=1`、`users` 116 筆全是 `active`——
+沒有人被踢出過群組、沒有帳號被停用過，所以撤銷失效也沒被觸發。
+
+`notifyAdmins` 的呼叫端有 `try/catch`，錯誤只印一行 `console.error` 就吞掉；
+`sys_logs` 查無 `CRITICAL_SECURITY_FAILURE`，代表那條路徑根本沒被走到過。
+
+`git log` 佐證：`middleware/permissions.ts` **一輩子只有一個 commit**，就是專案第一天的
+`init build`（2025-12-26），八個月沒人動過。2026-07 那個月改了 49 次，一次都沒踩到權限層。
+
+**教訓與防護**：
+
+1. **「同一個問題只能有一個函式回答」比「權限用什麼字彙」重要得多。**
+   `middleware/permissions.ts` 那套短字彙本身寫得是對的，`router/` 全線用它也沒出事。
+   出事的是同一件事被抄了八遍。
+2. **軟刪除的每一個消費端都要濾 `isActive`。** 寫下 `SET isActive = 0` 的當下，
+   就要 grep 全庫確認所有讀取端都跟著濾——漏一個，撤銷就是假的。
+3. **fail-closed 的 bug 一樣要修。** 這批 bug 幾乎全是「擋太多」，所以沒有資安事故，
+   但它同時代表功能從沒被使用過。「沒人抱怨」不等於「沒壞」。
+4. **一種角色只有一個人時，等於沒有測試那個角色。**
+   已補 `packages/security-tests/utils/role_scenario.py`：建立五種角色各一個帳號的
+   完整專案。上線第一次跑就抓到 `projects/manage.ts` 的存取漏洞，
+   以及我自己第一版修正開太大（放行了沒分組的成員）。
+5. **拿前端的權限表當規格來源。** `useDetailedProjectPermissions.ts` 是角色模型唯一
+   被完整寫下來的地方。但要先分辨活旗標與死旗標——`canManageMembers` 和 `canViewAll`
+   由 composable 計算但無人讀取，抄進測試等於把使用者觀察不到的行為凍結成契約。
+
+---
+
+## 2026-08-31 ｜ 2FA 改 6 位數字，整套 OWASP 測試登不進去
+
+**症狀**：`pnpm test:security` 所有需要驗證的測試全數失敗，
+`2FA verification failed: 400 ... Invalid verification code format`。
+
+**根因**：兩層，第二層只改第一層修不好。
+
+1. 測試用的佔位碼 `'DEVMODE'` 是 7 個字元。`FlexibleVerificationCodeSchema`
+   （`packages/shared/src/schemas/auth.ts:75`）只接受 6 位數字或 8 碼備用碼，
+   於是在 Zod 驗證層就被擋下，走不到 `router/auth.ts:782-785`
+   「SMTP 未設定則跳過驗證」的 dev 分支。
+2. 改成 6 位數字仍然失敗：email OTP 與 TOTP 現在長相相同，
+   `router/auth.ts:609-614` 在請求未帶 `method` 時退回格式判斷，會把 6 位數字當成 TOTP。
+   TOTP 是真的驗證、沒有 dev 繞道，而測試管理員帳號 `totpEnabled=1`。
+
+**為什麼漏掉**：2FA 那個 commit（`70dff12`）只跑了 unit test（Vitest），
+沒跑 `pnpm test:security`——後者需要先啟動 backend，不在預設流程裡。
+
+**教訓與防護**：
+
+1. **動到 auth schema 就要跑 `pnpm test:security`**，unit test 不會發現，
+   因為它不打真的 HTTP 端點。
+2. 修法寫進 `AuthHelper.login()` 的 docstring 了（送 `method='email'` 的理由），
+   下次再調整 2FA 時先看那段。
+3. 順帶發現 `AuthHelper.register_user` 送的欄位名是 `email`，
+   schema 要的是 `userEmail`——**這支從來沒成功執行過**，
+   因為需要它的 fixture 一直因缺少邀請碼而跳過。壞了兩層都沒人知道。
+
+---
 
 ## 2026-07-02 ｜ Vite 8 advancedChunks 手動分組 → production 白屏 🔥
 

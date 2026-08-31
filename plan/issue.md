@@ -15,6 +15,90 @@
 
 ## A. 未解決 Issues
 
+### #007 ｜ 邀請碼的 `targetEmail` 從未被比對 ｜ 中
+
+**問題**：`scoringSystem-cf/packages/backend/src/handlers/auth/register.ts:332`
+的 `validateInvitationCode(db, code)` 只收 code，簽名裡根本沒有 email 參數。
+查詢是 `SELECT * FROM invitation_codes_with_status WHERE invitationCode = ? AND status = 'active'`
+（`:341`），**沒有任何一處比對 `targetEmail`**。
+
+但 `GenerateInvitationRequestSchema`（`packages/shared/src/schemas/invitations.ts:13`）
+把 `targetEmail` 設為必填。
+
+**後果**：發給 A 的邀請碼，B 只要拿到就能用，且能用任何信箱註冊。
+實際控制只有「持有」。此行為在寫多角色測試 fixture 時被利用（一個碼註冊任意帳號），
+確認可重現。
+
+**待決**：這是刻意的「持有即有效」設計，還是漏檢？
+- 若是刻意的：`targetEmail` 應改為 optional，或改名為 `sentTo` 以免誤導
+- 若是漏檢：加上比對會影響「把碼轉寄給別人」的既有流程，需先確認實務用法
+
+---
+
+### #006 ｜ 前端有四套權限實作，其中兩套幾乎全死 ｜ 中
+
+**問題**：`packages/frontend/src/composables/` 底下有四個各自計算權限的地方：
+
+| 檔案 | 被誰用 | 實際被讀的部分 |
+|------|--------|----------------|
+| `useProjectPermissions.ts` | ProjectDetail.vue | 5 個旗標（`ProjectDetail.vue:1530-1534`） |
+| `useDetailedProjectPermissions.ts` | Dashboard.vue → `project.permissions` | ProjectCard 讀 3 個 |
+| `useProjectRole.ts` | Wallet.vue | **只有 `permissionLevel`**，其餘 9 個旗標無人讀 |
+| `usePermissionConfig.ts` | 1 處 | 另一套機制 |
+
+且**不是拿後端算好的答案**——`Dashboard.vue:532` 的 `calculateProjectPermissions(project, globalPermissions)`
+是前端自己從 `viewerRole` + `userGroups` 重算一遍。
+
+**已確認的死旗標**：
+- `canManageMembers`：全前端只剩 `ProjectCard.vue:667` 的一行註解說它被移除了
+- `canViewAll`：composable 算了但沒人讀
+
+**已確認的分歧**：`useDetailedProjectPermissions.ts:65-66` 把
+`create_project` 也算成 Level 0 管理員，後端的 `checkProjectPermission` 只認 `system_admin`。
+目前無人觸發（唯一的 Global PM 兩個權限都有），但一旦開出「能開課、非系統管理員」的
+帳號就會炸：按鈕全在，按下去全部 403。
+
+**建議方向**：後端回專案資料時一併回傳 `permissions` 物件，前端直接用，不要自己算。
+四套變兩套（一套判斷、一套顯示）。**優先度低於補測試**——前端算錯最多是按鈕多顯示或
+少顯示，按下去後端還是會擋。
+
+---
+
+### #005 ｜ 71 段權限判斷的原始 SQL 尚未收斂 ｜ 中
+
+**問題**：全庫仍有 16 個檔案直接對權限表寫 SQL 做授權判斷，重複的只有三件事：
+
+```
+自己查「是不是 system_admin」        30 次
+自己查「是不是 teacher/observer」    24 次
+自己查「是不是建立者」              17 次
+```
+
+2026-08-31 那一輪已修掉其中 6 段寫錯的（`u.userId = gu.userEmail`、
+`global_user_groups` 表名、`createdBy === userEmail` ×2、缺 `isActive` ×4），
+但**沒有逐一讀過全部 71 段**，剩下的錯誤比例不明。
+
+**目標形狀**：除了一個模組，其他地方不准對權限表寫 SQL。
+加一條 grep 守門（CI 或 pre-commit）：`handlers/` 與 `router/` 底下出現
+`FROM globalusergroups` 就擋。
+
+**前置條件**：多角色測試已在 2026-08-31 補上
+（`packages/security-tests/tests/test_permission_matrix.py`，22 項），
+但目前只覆蓋 canEnter／canSubmit／canManageStages／canTeacherVote／分組管理。
+收斂前應先把斷言補到覆蓋這三類判斷的主要呼叫點。
+
+---
+
+### #004 ｜ WebSocket 端點路徑不符，4 個測試長期跳過 ｜ 低
+
+**問題**：`packages/security-tests/tests/test_websocket.py` 連 `/ws/notifications`
+拿到 404「Endpoint not found」，4 個測試因此 skip。
+`index.ts:251` 掛的是 `app.route('/ws', websocketRouter)`，實際子路徑待確認。
+
+**後果**：WebSocket 的認證與授權從未被測試覆蓋。
+
+---
+
 以下三項皆已讀原始碼確認，非推測。均為 2026-07-17 討論 JWT 認證機制時順帶挖出。
 
 ### #001 ｜ 2FA 帳號鎖定實際上沒生效 🔥 高
@@ -72,6 +156,116 @@
 
 ## B. 已裁決的疑問（封存，勿重啟）
 
+### 2026-08-31 ｜ `utils/permissions.ts` 和 `middleware/permissions.ts` 該留哪一套？→ 兩套都留，它們是不同層
+
+**疑問**：兩個檔案對每個角色的定義都不一樣，看起來是同一件事的兩份實作，該合併成一套。
+
+**結論**：不是競爭關係，是**分層**。合併會出事。
+
+**證據**：
+
+`utils/permissions.ts` 的 `PROJECT_PERMISSIONS` 共 24 個權限，
+**沒有 `submit`、沒有 `vote`、沒有「發表留言」**。跟 comment 有關的只有兩個：
+
+```
+MODERATE_COMMENTS: 'moderate_comments'   ← 管別人的留言
+DELETE_ANY_COMMENT: 'delete_any_comment' ← 刪別人的留言
+```
+
+全部 24 個都是「你能對別人的東西做什麼」——它是**角色能力表**，
+從來不打算回答「學生能不能交作業」。
+
+而交作業／投票實際上怎麼擋？`router/submissions.ts:70` 的註解寫得很清楚：
+
+```
+// Check basic project access - handler will verify group membership
+checkProjectPermission(..., 'view')
+```
+
+router 只擋「進不進得來」，真正的資格（有沒有在分組裡、階段開了沒）由 handler
+自己查 `usergroups` 和 stage 狀態。
+
+實際用到的權限字串統計：`'view'` 36 次、`'manage'` 22 次、`'comment'` 2 次，
+**`'submit'` 和 `'vote'` 各 0 次**——middleware 白名單裡那兩個是死字彙。
+
+**所以正確的理解是**：
+
+| | 在回答什麼 |
+|---|---|
+| `middleware/permissions.ts` | 門口的粗略關卡：進不進得來、大概哪一級 |
+| `utils/permissions.ts` | 門內的角色能力表：這個身分能行使哪些權力 |
+| 交作業／投票資格 | 不歸權限系統管，靠分組成員資格 + 階段狀態 |
+
+**推論**：早先「utils 認為學生連交作業都不行，所以 utils 是壞的」這個判斷是誤讀，
+已撤回。utils 的 member 只給 `view_project` 是正確的——在它的字彙裡，交作業不是一種
+「權力」。
+
+**但 utils 確實沒寫完**：它宣告的 24 個權限中有 13 個從未發給任何角色，包括
+`manage_groups`、`manage_members`、`invite_members`、`delete_project`、
+`edit_project_settings`、`create_stages`/`edit_stages`/`delete_stages`、
+`reverse_transactions` 等。老師的白名單只有 9 個，`manage_groups` 不在裡面——
+所以就算當初改成傳 `'manage_groups'` 給 utils，老師一樣建不了分組。
+
+**待辦（未決）**：那 13 個要一個一個決定發給誰，還是先用一條「老師 = 專案內全部管理權」
+的粗規則？目前傾向後者，細分等真有需求再拆。
+
+---
+
+### 2026-08-31 ｜ 五個角色的能力邊界（依使用者裁決）
+
+**背景**：合併權限實作前必須先確定角色語意，否則會在大 diff 裡順手替使用者做產品決策。
+以下為 2026-08-31 逐題確認的結果。
+
+| 問題 | 裁決 |
+|------|------|
+| 系統管理員該有全部權限嗎？ | **純行政**。可開關階段、改設定、看全部、管錢包、刪別人留言；**不能**自己發言、交作業、投票。使用者每次進專案都會切換身分，需要留言時是以老師身分 |
+| 建立者跟老師是同一件事嗎？ | 老師可以建立自己的專案，建立者視同該專案的完整權限持有者 |
+| 老師能改錢包／發點數嗎？ | 可以，限自己的專案 |
+| 觀察者看得到什麼？ | 專案內**全部資訊**，跟老師的差別只在**不能操作** |
+| 組長比組員多什麼？ | 依 `utils/permissions.ts` 現有定義（`view_all_submissions`、`invite_members`） |
+
+**實作對照結果**：
+
+- 管理員純行政 → `middleware/permissions.ts:247` 維持 `['manage', 'view']`。
+  曾一度依「管理員什麼都有」改為全部通過，確認裁決後**已退回**，行為與原本完全一致，
+  只補上說明註解與裁決日期
+- 觀察者看全部但不能操作 → 已符合。錢包**寫入**擋 `'manage'`（觀察者被擋），
+  **讀取**走 `checkIsTeacherOrAbove`（觀察者通過）
+- 老師改錢包 → 已符合，錢包寫入擋 `'manage'`，老師通過
+- 前端有三處 `canComment: false, // Admins don't comment` 與此裁決一致，不需更動
+
+**注意**：`utils/permissions.ts:186` 的 `hasProjectPermission` 對 system_admin 是無條件
+`return true`。這與「純行政」看似矛盾，但不衝突——utils 的字彙裡沒有 comment/submit/vote，
+它回答不了那個問題（見上一條）。
+
+---
+
+### 2026-08-31 ｜ 該不該重構權限層？→ 該，但順序是「先修洞、再補測試、最後才合併」
+
+**疑問**：發現八份實作各自為政後，是否應直接重構成一套。
+
+**結論**：不要直接跳到合併。理由是**失敗方向會反轉**。
+
+現在那些壞掉的路徑是 fail-closed：SQL 對著不存在的欄位查 → 拋錯 → 被 `catch` 吞掉
+→ `return false` → 拒絕。壞掉 = 擋住。
+
+合併成一支能跑的實作之後，這些路徑會**開始真的放行**。也就是重構的淨效果是
+「一次放寬十幾個授權點」，而當時沒有任何測試能分辨「這是修好了」還是「這開太大了」。
+
+**實證**：2026-08-31 補上多角色測試後，第一次跑就抓到
+`projects/manage.ts` 的 `checkProjectAccess` 漏查 `projectviewers`；
+而**修正的第一版開太大**（放行了任何 `projectviewers` 列，連沒分組的成員都能讀專案），
+也是測試立刻擋下來的。沒有測試的話這兩件事都會靜默上線。
+
+**已完成的順序**：
+1. 修安全洞（撤銷失效、壞掉的 SQL、子字串比對）
+2. 換 import 修老師的分組權限
+3. 刪死碼（5 支查不存在欄位／表的函式）
+4. 補多角色測試 fixture ← **合併的前置條件**
+
+**剩下**：第 5 步（71 段 SQL 收斂）見 A 區 #005。
+
+---
 ### 2026-08-30 ｜ Email 2FA 恢復自動寄信（撤回 2026-07-06 的 SMTP 防禦性調整）
 
 **背景**：commit `0648802`（2026-07-06）把「密碼驗證通過即自動寄出第一封驗證信」
