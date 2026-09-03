@@ -126,29 +126,3 @@ export const scoringSystemConfigCategories: ConfigCategory[] = [
   }
 ]
 
-/**
- * 根據 key 查找欄位配置
- */
-export function getScoringFieldConfig(key: string) {
-  for (const category of scoringSystemConfigCategories) {
-    const field = category.fields.find(f => f.key === key)
-    if (field) return field
-  }
-  return undefined
-}
-
-/**
- * 根據分類 key 查找分類配置
- */
-export function getScoringCategoryConfig(key: string) {
-  return scoringSystemConfigCategories.find(c => c.key === key)
-}
-
-/**
- * 取得所有欄位的 keys
- */
-export function getAllScoringFieldKeys(): string[] {
-  return scoringSystemConfigCategories.flatMap(category =>
-    category.fields.map(field => field.key)
-  )
-}

@@ -76,14 +76,6 @@ export interface Project {
 // Type Guards
 // ============================================================================
 
-export function isProjectGroup(group: ProjectGroup | GlobalGroup): group is ProjectGroup {
-  return 'allowChange' in group
-}
-
-export function isGlobalGroup(group: ProjectGroup | GlobalGroup): group is GlobalGroup {
-  return 'globalPermissions' in group
-}
-
 // ============================================================================
 // Permissions
 // ============================================================================

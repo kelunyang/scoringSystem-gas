@@ -216,60 +216,6 @@ export async function getAIServiceCallsByStage(
 }
 
 /**
- * Get AI service call history for a project
- * @param db - D1 database instance
- * @param projectId - Project ID to query
- * @param options - Query options
- * @returns List of AI service call records
- */
-export async function getAIServiceCallsByProject(
-  db: D1Database,
-  projectId: string,
-  options?: {
-    stageId?: string;
-    rankingType?: 'submission' | 'comment';
-    serviceType?: AIServiceType;
-    status?: AIServiceCallStatus;
-    limit?: number;
-  }
-): Promise<AIServiceCallRecord[]> {
-  const conditions: string[] = ['projectId = ?'];
-  const values: (string | number)[] = [projectId];
-
-  if (options?.stageId) {
-    conditions.push('stageId = ?');
-    values.push(options.stageId);
-  }
-
-  if (options?.rankingType) {
-    conditions.push('rankingType = ?');
-    values.push(options.rankingType);
-  }
-
-  if (options?.serviceType) {
-    conditions.push('serviceType = ?');
-    values.push(options.serviceType);
-  }
-
-  if (options?.status) {
-    conditions.push('status = ?');
-    values.push(options.status);
-  }
-
-  const limit = options?.limit ?? 20;
-  values.push(limit);
-
-  const result = await db.prepare(`
-    SELECT * FROM aiservicecalls
-    WHERE ${conditions.join(' AND ')}
-    ORDER BY createdAt DESC
-    LIMIT ?
-  `).bind(...values).all<AIServiceCallRecord>();
-
-  return result.results ?? [];
-}
-
-/**
  * Mark AI service call as completed with results
  * @param db - D1 database instance
  * @param callId - Call ID to update
@@ -323,25 +269,6 @@ export async function failAIServiceCall(
     errorMessage,
     responseTimeMs,
     completedAt: Date.now()
-  });
-}
-
-/**
- * Update BT ranking progress with comparison results
- * @param db - D1 database instance
- * @param callId - Call ID to update
- * @param btComparisons - BT comparisons (JSON stringified)
- * @param btStrengthParams - BT strength parameters (JSON stringified)
- */
-export async function updateBTProgress(
-  db: D1Database,
-  callId: string,
-  btComparisons: string,
-  btStrengthParams?: string
-): Promise<void> {
-  await updateAIServiceCall(db, callId, {
-    btComparisons,
-    btStrengthParams
   });
 }
 
@@ -434,95 +361,6 @@ export async function completeMultiAgentRankingCall(
     tokenUsage.totalTokens ?? null,
     responseTimeMs,
     completedAt,
-    callId
-  ).run();
-}
-
-/**
- * Create a sub-call record for Multi-Agent mode
- * Each provider's individual call is recorded as a sub-call
- * @param db - D1 database instance
- * @param parentCallId - Parent call ID
- * @param data - Sub-call data
- * @returns Created sub-call record
- */
-export async function createMultiAgentSubCall(
-  db: D1Database,
-  parentCallId: string,
-  data: {
-    projectId: string;
-    stageId: string;
-    userEmail: string;
-    rankingType: 'submission' | 'comment';
-    providerId: string;
-    providerName: string;
-    model: string;
-    itemCount: number;
-    debateRound: 1 | 2;
-  }
-): Promise<string> {
-  const callId = generateCallId();
-  const createdAt = Date.now();
-
-  await db.prepare(`
-    INSERT INTO aiservicecalls (
-      callId, projectId, stageId, userEmail,
-      serviceType, rankingType,
-      providerId, providerName, model,
-      itemCount, status,
-      parentCallId, debateRound,
-      createdAt
-    ) VALUES (?, ?, ?, ?, 'ranking_multi_agent', ?, ?, ?, ?, ?, 'processing', ?, ?, ?)
-  `).bind(
-    callId,
-    data.projectId,
-    data.stageId,
-    data.userEmail,
-    data.rankingType,
-    data.providerId,
-    data.providerName,
-    data.model,
-    data.itemCount,
-    parentCallId,
-    data.debateRound,
-    createdAt
-  ).run();
-
-  return callId;
-}
-
-/**
- * Update Multi-Agent sub-call with round result
- * @param db - D1 database instance
- * @param callId - Sub-call ID
- * @param result - Ranking result
- * @param reason - Reasoning
- * @param changed - Whether position changed (Round 2 only)
- * @param critique - Critique of other rankings (Round 2 only)
- */
-export async function updateMultiAgentSubCall(
-  db: D1Database,
-  callId: string,
-  result: string,
-  reason: string,
-  changed?: boolean,
-  critique?: string
-): Promise<void> {
-  await db.prepare(`
-    UPDATE aiservicecalls
-    SET status = 'success',
-        result = ?,
-        reason = ?,
-        debateChanged = ?,
-        debateCritique = ?,
-        completedAt = ?
-    WHERE callId = ?
-  `).bind(
-    result,
-    reason,
-    changed !== undefined ? (changed ? 1 : 0) : null,
-    critique ?? null,
-    Date.now(),
     callId
   ).run();
 }

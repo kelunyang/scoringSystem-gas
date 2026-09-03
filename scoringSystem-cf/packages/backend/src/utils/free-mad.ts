@@ -111,36 +111,6 @@ export function calculateRankingSimilarity(rankingA: string[], rankingB: string[
   return (tau + 1) / 2;
 }
 
-/**
- * Check if two rankings are identical
- *
- * @param rankingA - First ranking array
- * @param rankingB - Second ranking array
- * @returns True if rankings are identical
- */
-export function areRankingsIdentical(rankingA: string[], rankingB: string[]): boolean {
-  if (rankingA.length !== rankingB.length) return false;
-  return rankingA.every((id, index) => id === rankingB[index]);
-}
-
-/**
- * Calculate Borda count score for a ranking
- * First place gets n-1 points, last place gets 0 points
- *
- * @param ranking - Ranking array (best to worst)
- * @returns Record of item ID to score
- */
-export function calculateBordaScores(ranking: string[]): Record<string, number> {
-  const scores: Record<string, number> = {};
-  const n = ranking.length;
-
-  for (let i = 0; i < n; i++) {
-    scores[ranking[i]] = n - 1 - i;
-  }
-
-  return scores;
-}
-
 // ============================================
 // Core Free-MAD Algorithm
 // ============================================

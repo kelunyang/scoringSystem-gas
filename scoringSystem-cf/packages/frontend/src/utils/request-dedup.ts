@@ -51,32 +51,3 @@ export async function dedupRequest<T>(
   return promise
 }
 
-/**
- * 清除指定的進行中請求
- * 用於取消或強制刷新的場景
- *
- * @param key - 請求的唯一標識符
- */
-export function clearPendingRequest(key: string): void {
-  if (pendingRequests.has(key)) {
-    pendingRequests.delete(key)
-    console.log(`[dedupRequest] 🗑️ 已清除請求: ${key}`)
-  }
-}
-
-/**
- * 清除所有進行中的請求
- * 用於頁面切換或組件卸載時
- */
-export function clearAllPendingRequests(): void {
-  const count = pendingRequests.size
-  pendingRequests.clear()
-  console.log(`[dedupRequest] 🗑️ 已清除所有請求 (${count} 個)`)
-}
-
-/**
- * 獲取當前進行中的請求數量
- */
-export function getPendingRequestCount(): number {
-  return pendingRequests.size
-}

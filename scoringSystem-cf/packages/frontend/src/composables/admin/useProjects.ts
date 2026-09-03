@@ -203,26 +203,6 @@ export function useUpdateProject(): UseMutationReturnType<any, Error, UpdateProj
 }
 
 /**
- * Get project details (mutation pattern for on-demand fetching)
- */
-export function useGetProject(): UseMutationReturnType<any, Error, GetProjectParams, unknown> {
-  return useMutation({
-    mutationFn: async ({ projectId }: GetProjectParams) => {
-      const httpResponse = await rpcClient.projects.get.$post({
-        json: { projectId }
-      })
-      const response = await httpResponse.json() as any
-
-      if (!response.success) {
-        throw new Error(response.error?.message || '載入專案詳情失敗')
-      }
-
-      return response.data
-    }
-  })
-}
-
-/**
  * Update project scoring configuration
  */
 export function useUpdateScoringConfig(): UseMutationReturnType<any, Error, UpdateScoringConfigParams, unknown> {

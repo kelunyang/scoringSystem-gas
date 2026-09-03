@@ -113,41 +113,6 @@ export function useGlobalGroups(
 // useGlobalGroupMembers - Query for Group Members
 // ============================================================================
 
-/**
- * Get members of a specific global group
- *
- * @param groupId - The group ID to fetch members for
- * @returns Query result with members array
- */
-export function useGlobalGroupMembers(
-  groupId: Ref<string | null> | ComputedRef<string | null>
-): UseQueryReturnType<GlobalGroupMembersResult | null, Error> {
-  const userQuery = useCurrentUser()
-
-  const isEnabled = computed(() => {
-    const gid = getValue(groupId)
-    return userQuery.isSuccess.value && !!userQuery.data.value && !!gid
-  })
-
-  return useQuery({
-    queryKey: computed(() => ['admin', 'globalGroups', 'members', getValue(groupId)]),
-    queryFn: async (): Promise<GlobalGroupMembersResult | null> => {
-      const gid = getValue(groupId)
-      if (!gid) return null
-
-      const response = await adminApi.globalGroups.members(gid)
-
-      if (!response.success) {
-        throw new Error(response.error?.message || '載入群組成員失敗')
-      }
-
-      return response.data as unknown as GlobalGroupMembersResult
-    },
-    enabled: isEnabled,
-    staleTime: 1000 * 60 * 2
-  })
-}
-
 // ============================================================================
 // Mutation Types
 // ============================================================================

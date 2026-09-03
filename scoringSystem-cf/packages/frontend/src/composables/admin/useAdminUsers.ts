@@ -218,37 +218,6 @@ interface GlobalGroupsListResult {
   groups: GlobalGroup[]
 }
 
-/**
- * Get all active global groups for filter dropdowns
- *
- * @returns Query result with groups array
- */
-export function useGlobalGroupsList(): UseQueryReturnType<GlobalGroupsListResult, Error> {
-  const userQuery = useCurrentUser()
-
-  const isEnabled = computed(() => {
-    return userQuery.isSuccess.value && !!userQuery.data.value
-  })
-
-  return useQuery({
-    queryKey: ['admin', 'globalGroups', 'list'],
-    queryFn: async (): Promise<GlobalGroupsListResult> => {
-      const response = await adminApi.globalGroups.list()
-
-      if (!response.success) {
-        throw new Error(response.error?.message || '載入全域群組列表失敗')
-      }
-
-      const data = response.data
-      const groups = (data?.groups || []).filter((group) => group.isActive) as unknown as GlobalGroup[]
-
-      return { groups }
-    },
-    enabled: isEnabled,
-    staleTime: 1000 * 60 * 5 // 5 minutes cache for groups
-  })
-}
-
 // ============================================================================
 // useAdminUsersStats - Query for User Statistics
 // ============================================================================
@@ -257,21 +226,6 @@ interface UserStats {
   totalUsers: number
   activeUsers: number
   inactiveUsers: number
-}
-
-/**
- * Compute user statistics from flattened users data
- * This is a helper function, not a TanStack Query hook
- *
- * @param users - Array of users from infinite query
- * @returns User statistics object
- */
-export function computeUserStats(users: ExtendedUser[]): UserStats {
-  return {
-    totalUsers: users.length,
-    activeUsers: users.filter((u) => u.status === 'active').length,
-    inactiveUsers: users.filter((u) => u.status === 'disabled' || u.status === 'inactive').length
-  }
 }
 
 // ============================================================================

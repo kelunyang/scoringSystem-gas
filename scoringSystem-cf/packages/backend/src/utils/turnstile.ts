@@ -132,55 +132,6 @@ export async function verifyTurnstileToken(
 }
 
 /**
- * Get Turnstile configuration (public info only) - KV-first strategy
- * @param env - Environment variables
- * @returns Turnstile config
- */
-export async function getTurnstileConfig(env: any): Promise<{
-  enabled: boolean;
-  siteKey: string | null;
-}> {
-  const enabled = await getConfigValue(env, 'TURNSTILE_ENABLED');
-  const siteKey = await getConfigValue(env, 'TURNSTILE_SITE_KEY');
-
-  return {
-    enabled: enabled === 'true',
-    siteKey: siteKey || null
-  };
-}
-
-/**
- * Check if Turnstile is properly configured - KV-first strategy
- * @param env - Environment variables
- * @returns Configuration status
- */
-export async function checkTurnstileConfiguration(env: any): Promise<{
-  configured: boolean;
-  enabled: boolean;
-  issues: string[];
-}> {
-  const issues: string[] = [];
-
-  const siteKey = await getConfigValue(env, 'TURNSTILE_SITE_KEY');
-  const secretKey = await getConfigValue(env, 'TURNSTILE_SECRET_KEY');
-  const enabled = await getConfigValue(env, 'TURNSTILE_ENABLED');
-
-  if (!siteKey) {
-    issues.push('TURNSTILE_SITE_KEY not configured');
-  }
-
-  if (!secretKey) {
-    issues.push('TURNSTILE_SECRET_KEY not configured');
-  }
-
-  return {
-    configured: issues.length === 0,
-    enabled: enabled === 'true',
-    issues
-  };
-}
-
-/**
  * Middleware-style verification function for use in route handlers
  * Returns null if verification passes, or error response if it fails
  *

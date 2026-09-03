@@ -113,22 +113,6 @@ export const EmailQueueMessageSchema = z.discriminatedUnion('type', [
     }),
   }),
 
-  // 安全巡邏報告
-  z.object({
-    type: z.literal('security_report'),
-    triggeredBy: z.string(),
-    timestamp: z.number(),
-    data: z.object({
-      adminEmail: z.string().email(),
-      reportHtml: z.string(),
-      reportText: z.string(),
-      summary: z.object({
-        expiredCodesCount: z.number(),
-        failedAttemptsCount: z.number(),
-        issuesFound: z.number(),
-      }),
-    }),
-  }),
 
   // 管理員通知
   z.object({
@@ -297,20 +281,6 @@ export const NotificationQueueMessageSchema = z.discriminatedUnion('type', [
 ]);
 
 export type NotificationQueueMessage = z.infer<typeof NotificationQueueMessageSchema>;
-
-// ==================== Settlement Queue ====================
-
-export const SettlementQueueMessageSchema = z.object({
-  type: z.literal('settle_stage'),
-  taskId: z.string(),
-  operatorEmail: z.string().email(),
-  projectId: z.string(),
-  stageId: z.string(),
-  timestamp: z.number(),
-  force: z.boolean().optional(),
-});
-
-export type SettlementQueueMessage = z.infer<typeof SettlementQueueMessageSchema>;
 
 // ==================== AI Ranking Queue ====================
 

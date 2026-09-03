@@ -86,18 +86,6 @@ export function getCurrentActiveStages(stages: Stage[] | null | undefined): Stag
 }
 
 /**
- * 找到專案中當前進行中的階段（優先選擇第一個）
- * @param stages - 階段陣列（status 已由 backend 計算）
- * @returns 當前進行中的階段
- */
-export function getCurrentActiveStage(stages: Stage[] | null | undefined): Stage | null {
-  if (!stages || stages.length === 0) return null
-
-  const activeStages = getCurrentActiveStages(stages)
-  return activeStages.length > 0 ? activeStages[0] : null
-}
-
-/**
  * 獲取專案當前階段的顯示資訊（包含前後各一個階段）
  * @param stages - 階段陣列（需要按順序排序，status 已由 backend 計算）
  * @returns 包含當前階段和前後階段的資訊

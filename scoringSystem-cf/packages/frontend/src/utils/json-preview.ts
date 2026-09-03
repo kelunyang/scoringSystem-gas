@@ -65,25 +65,3 @@ export function jsonToMarkdown(
   }
 }
 
-/**
- * 安全地格式化 JSON 字串
- * 用於已經是字串格式的 JSON 資料
- *
- * @param jsonString - JSON 字串
- * @param indent - 縮排空格數
- * @returns 格式化後的 Markdown code block
- */
-export function formatJsonString(jsonString: string | null | undefined, indent = 2): string {
-  if (!jsonString) {
-    return '```json\nnull\n```'
-  }
-
-  try {
-    const parsed = JSON.parse(jsonString)
-    const formatted = JSON.stringify(parsed, null, indent)
-    return '```json\n' + formatted + '\n```'
-  } catch {
-    // 解析失敗，返回原始字串
-    return '```json\n' + jsonString + '\n```'
-  }
-}

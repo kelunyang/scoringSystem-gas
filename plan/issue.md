@@ -15,6 +15,379 @@
 
 ## A. 未解決 Issues
 
+### #009 ｜ 死模組普查：重構殘骸清單 ｜ 已完成清理
+
+> **2026-09-03 完成**：前後端皆已清理。合計 110 個檔案異動、
+> **刪除 15 個整檔、淨減約 11,150 行**。四道驗證全過。
+> 刻意保留未刪的兩項與理由見本條目末段。
+
+**背景**：2026-09-03 修 email 速率限制時發現 508 行中介層從未被 import。
+既然踩過一次，就把整個 codebase 掃一遍。
+
+**結論先講**：**沒有找到新的破洞。** 初判列了四項「防線沒接上」，
+逐項查證後三項是誤判——它們都有**另一支實作接手**，只是我只看了 handler 沒看路由層。
+剩下的全部是**重構殘骸**：功能還在、由新版服務，舊版沒清掉。
+本條目因此從「破洞普查」改為「清理清單」，嚴重性由高降為中。
+
+**掃法**：對每個 `export function/const/class`，分別數「其他檔案的參照」「同檔案內的參照」
+「只有測試用到」，三者皆無即為死碼。腳本邏輯見本條目下方註記。
+
+---
+
+#### 甲級：原判「防線沒接上」——**四項有三項是誤判，已全部撤回**
+
+**2026-09-03 當日更正。** 初判把「沒被 import」直接當成「防線缺口」，
+沒有先確認**是不是另一支實作接手了**。這個 codebase 的既有病症正是
+「同一件事有三、四份實作」（見 #005、#006、pitfalls 2026-08-31），
+所以「這支死了」的正常解讀是**「另一支贏了」**，不是「沒人做這件事」。
+
+**甲-1（撤回）｜ 學生階段投票其實有守衛，而且比死掉那支更嚴格**
+
+原判：`requireActiveOrVotingStage` 沒人用，且 `stage-vote.ts:46` 撈了 `status` 沒讀
+→ 推論「階段狀態沒檢查」。
+
+**錯。** 守衛在**路由層**，我只看了 handler：
+`utils/stage-validation.ts:15` 的 `checkStageAcceptsRankings` 做的正是同一件事
+（`:48` `status !== 'active' && status !== 'voting'` → 拒絕），
+而且多擋了 `settling`（`:31`）和 `completed`（`:39`）兩種狀態。
+
+它掛在 **5 條路由**上：
+
+| 位置 | 路由 |
+|------|------|
+| `router/rankings.ts:358` | `/rankings/stage-vote` |
+| `router/rankings.ts:296` | `/rankings/vote`（先查提案的 stageId 再驗） |
+| `router/rankings.ts:262` | `/rankings/teacher-comprehensive-vote` |
+| `router/rankings.ts:222` | `/rankings/proposals` |
+| `router/comments.ts:411` | 留言相關 |
+
+所以 `stage-vote.ts` 內不讀 `status` 是**正確的**（路由層已擋）。
+`requireActiveOrVotingStage` 是**被取代的第三套實作** → 移至丙級（重構孤兒，可刪）。
+
+**甲-2（保留，但不是新發現）｜ 邀請碼比對函式沒接上**
+
+`handlers/invitations/validate.ts:140` 的 `validateInvitationCodeForEmail` 無人呼叫，
+其 JSDoc（`:138`）宣稱「This is called during user registration」——這句是假的。
+
+**洞是真的，但它就是既有的 #007**，普查之前已知且已記錄。
+本條的價值只在於：它證明 #007 **偏向漏檢而非刻意設計**——
+沒有人會刻意寫一支比對函式再刻意不用它。修法所需的程式碼早就寫好了。
+
+**甲-3（撤回）｜ 前端 UI 是有擋的，只是沒用那個元件**
+
+原判：`PermissionGate.vue` 沒人 import → 推論「權限閘門是死的」。
+
+**錯。** 全前端有 **43 個 .vue 檔**用 `v-if` + 權限旗標直接控制顯示。
+`PermissionGate.vue` 是一個**沒被採用的宣告式抽象**，不是缺口
+→ 移至丙級（可刪，或反過來推廣它以收斂 #006 的四套實作）。
+
+**另註**：前端權限控制本來就只是 UX，真正的閘門在後端。
+就算某個 UI 沒擋，也是體驗問題不是安全問題。
+
+**甲-4（保留，但不是「壞掉」）｜ Turnstile 輔助函式死掉**
+
+`getTurnstileConfig`、`checkTurnstileConfiguration` 無人呼叫。
+但 Turnstile 整套本來就是關的（`TURNSTILE_ENABLED = "false"`），
+所以這是「第二道防線沒開」，不是「防線壞了」。已記錄於 #008。
+
+---
+
+**甲級結論：這次普查沒有找到任何新的破洞。**
+唯一的真洞（#007）在普查之前就已知。其餘全是重構殘骸。
+
+---
+
+#### 乙級：整條管線空轉（Cloudflare 資源配了沒用）
+
+**乙-1 ｜ 排程機器人從來沒有自動跑過，而且解開也會爆**
+
+- `wrangler.toml:184-185`：`[triggers]` / `crons` **整組被註解掉**
+- `index.ts:387`：`scheduled` handler **也是註解**
+- 註解中的程式碼 import `./handlers/robots/security-patrol`，
+  但 **`src/handlers/robots/` 底下只有 `notification-patrol.ts`，那個檔案不存在**
+
+**後果**：通知彙整信「每 12 小時自動寄」是文件上的幻覺，實際只有管理員手動打
+`POST /admin/robots/notification-patrol`（`router/admin.ts:1593`）才會跑。
+安全巡邏機器人完全不存在（`EmailTrigger.SECURITY_PATROL`、
+`queueSecurityReportEmail` 都是死的）。
+
+**2026-09-03 補充（使用者指出）**：這兩隻機器人的工作實際上已被取代——
+即時 WebSocket 通知（NotificationHub DO）＋前端通知面板，讓「彙整信」失去存在意義。
+所以這不是「壞掉沒修」，是「功能被淘汰但殘骸沒清」。
+
+**✅ 2026-09-03 已清理**：
+
+| 清掉的東西 | 位置 |
+|-----------|------|
+| 註解掉的 cron 設定區塊 | `wrangler.toml`，換成一段說明「為何刻意沒有 cron」 |
+| 註解掉的 `scheduled` handler（102 行） | `index.ts`——它 import 的 `handlers/robots/security-patrol` 根本不存在，解開必爆 |
+| `security-patrol-ws` 的註解 import 與 route | `index.ts` |
+| 整條安全巡邏報告信路徑 | consumer case、`buildSecurityReportEmailContent`、zod schema、`EmailTrigger.SECURITY_PATROL`、優先級對應 |
+
+**保留**：`handlers/robots/notification-patrol.ts` 與 `/admin/robots/notification-patrol/*`
+路由——前端 `api/admin.ts:502-520` 有在用，是**手動觸發**的活功能。
+
+**順帶更正一則過時註解**：`wrangler.toml` 的 `[limits]` 區塊原本寫
+「CPU limits require paid plan - commenting out for free plan」。
+本專案用了 Queues 和 Durable Objects，**本來就是付費方案**，這句是錯的。
+已改寫並指向乙-2 的同步結算 CPU 議題。
+
+**過程中的一個發現**：刪掉 `EmailTrigger.SECURITY_PATROL` 後 `tsc` 沒有報錯，
+是**單元測試**抓到的（測試裡引用了該列舉成員）。原因是
+`packages/backend/tsconfig.json` 沒有把 `tests/` 納入編譯範圍，
+所以型別檢查涵蓋不到測試檔。這本身是個小坑。
+
+**副作用**：這讓每日 email 用量比原先估的低——2026-09-03 的預算估算
+把「彙整信每天自動跑 2 次、每次最多 400 封」算進去了，實際不會發生。
+預設值偏保守，不需要改，但心裡要有底。
+
+**乙-2 ｜（已解決，2026-09-03 刪除）settlement-queue 從來不可能運作**
+
+原判：`queueSettleStage` 沒人呼叫，整條非同步結算管線空轉。
+
+**再查證後發現比「沒人用」更徹底——它依賴的 `settlementtasks` 表在任何 migration 裡都不存在。**
+就算真的送訊息進去，consumer 第一步 `SELECT ... FROM settlementtasks`（`settlement-consumer.ts:36`）
+就會炸 `no such table`。所以這不是「寫好沒接」，是**從未完成、也從未能運作**的半成品。
+
+這也讓「接回去」不成為選項：要啟用得先補一支 migration 建表，
+等於重做，而不是接線。**已全部刪除。**
+
+**刪除範圍**：
+
+| 刪掉 | 說明 |
+|------|------|
+| `queues/settlement-producer.ts`、`queues/settlement-consumer.ts` | 整檔 |
+| `notifySettlementFailed` | 連鎖孤兒——它是唯一「活著」的 notify 包裝，但唯一的呼叫點就在死掉的 consumer 裡 |
+| `SettlementQueueMessageSchema` / `SettlementQueueMessage` | `queues/types.ts` |
+| `SETTLEMENT_QUEUE` binding | `types.ts` |
+| queue router 的 `case 'settlement-queue'` 與 import | `index.ts` |
+| producer binding、consumer 設定、`settlement-dlq` | `wrangler.toml` |
+
+**保留**：`settlement_failed` **通知類型**——`handlers/wallets/transactions.ts:316,449`
+有在發，前端 `NotificationManagement.vue` 也有對應 UI。死的只是那個型別化包裝。
+
+**待辦（不是程式碼）**：Cloudflare 帳號上的 `settlement-queue` 與 `settlement-dlq`
+兩條佇列現在沒有任何 Worker 綁定，成了孤兒資源。空佇列不計費，
+但建議到 dashboard 手動刪除以免日後困惑。
+
+#### 現行結算管線（釐清用）
+
+結算**一直都是同步的**，DO 只是進度條的通道：
+
+1. 教師按下結算 → `POST /api/scoring/settle`（`router/scoring.ts:94`）
+2. 權限檢查 `checkProjectPermission(..., 'manage')`
+3. **同步** `await settleStage(...)`（`handlers/scoring/settlement.ts:310`，774 行單一函式）
+4. 過程中透過 `NOTIFICATION_HUB` Durable Object 用 WebSocket 推
+   `settlement_progress` 給該教師（`settlement.ts:106-111`）
+5. 前端 `MainLayout.vue:782` 收到事件更新進度條
+6. 算完，結果直接由 HTTP response 回傳
+
+所以是「**同步計算 ＋ DO 推進度 ＋ response 回結果**」。
+教師按下去看得到進度條、也馬上拿得到結果，設計是連貫的。
+
+**唯一殘留風險**：774 行同步跑在 request 裡，而 `wrangler.toml` 的
+`[limits] cpu_ms` 仍是註解狀態（用預設值）。建議實測真實專案規模下的耗時；
+若逼近上限，把 `cpu_ms = 30000` 解開即可，不需要改架構。
+
+---
+
+**乙-3 ｜（已撤回，降為丁級）通知系統是活的，死的只是 16 個便利包裝**
+
+**初判錯誤，2026-09-03 當日更正。** 原本寫成「一整套站內通知寫好了沒接」，是錯的。
+
+實際情況：`queueSingleNotification` 被呼叫 **37 次**、`queueBatchNotifications` **11 次**，
+遍布 `handlers/` 底下十幾支（admin/users、auth/login、comments/manage、groups/members、
+projects/viewers…）。通知面板與 WebSocket 廣播都正常運作。
+
+死的是 16 個**型別化便利包裝**（`notifySubmissionCreated` 之類），
+它們只是把資料組好再呼叫泛用版；呼叫端選擇直接用泛用版、自己組資料。
+
+比對「實際產生的 type」與「包裝覆蓋的 type」，只有四個 type 沒有任何地方產生：
+
+| 未產生的 type | 是否真的缺 |
+|---------------|-----------|
+| `ranking_proposal_submitted` | 可能真的缺 |
+| `ranking_proposal_withdrawn` | 可能真的缺 |
+| `stage_status_changed` | 否，已被更細的 `stage_paused` / `stage_resumed` / `stage_settled` 取代 |
+| `submission_withdrawn` | 否，已被 `submission_force_withdrawn` 取代 |
+
+**結論**：16 個包裝是純死重量（丁級可刪）。唯一值得追的是排名提案送出／撤回
+要不要通知組員——那是產品問題，不是死碼問題。
+
+---
+
+#### 丙級：功能寫了但路由不到（後端 handler 無人呼叫）
+
+| 模組 | 死掉的 handler |
+|------|----------------|
+| comments | `deleteComment`、`updateComment`、`getTargetComments`、`getBatchCommentReactions`、`calculateCommentRankings` |
+| submissions | `compareSubmissionVersions`、`getGroupVersionHistory` |
+| stages | `deleteStage` |
+| wallets | `getWalletLeaderboard`、`getGroupWealthStats`、`getAllProjectTransactions`、`getUserWallet` |
+| scoring / settlement | `previewStageScores`、`getSettledStageResults`、`getSettlementTransactions` |
+| projects | `exportProject` |
+| invitations | `getAllInvitations`、`deleteInvitation`、`cleanupExpiredInvitations` |
+| admin / system | `getSystemEventLogs`、`getSystemHealth`、`getNotificationStatistics`、`getSecretsChecklist` |
+| ai-service | `getAIServiceCallsByProject`、`updateBTProgress`、`createMultiAgentSubCall`、`updateMultiAgentSubCall` |
+
+前端另有 **10 個 .vue 元件無人 import**（`PermissionGate`、`PlaceholderPage`、
+`BatchSelectionBar`、`UserListFilters`、`UserTableVirtual`、`AvatarCustomizer`、
+`GlobalGroupBatchActions`、`ProjectGroupBatchActions`、`GroupFilters`、`GroupStatsBar`）
+與約 20 個死 composable（`useAvatarManagement`、`useInvitations`、`useProjectCRUD`、
+`useStageManagement`、`useBatchOperations` 全套等）。
+
+**2026-09-03 抽驗結果：丙級大多是「重構後的孤兒」，不是「功能沒做完」。**
+
+使用者質疑「前端明明有這些功能」——查證後**使用者是對的**，
+但這反而確認了處置方向是刪除：功能還在，只是**由另一支實作在服務**，死的是被取代的舊版。
+
+| 功能 | 前端有？ | 實際服務它的路由與函式 | 死掉的舊版 |
+|------|---------|------------------------|-----------|
+| 錢包排行榜 | 有（`Wallet.vue`、`ProjectDetail.vue`） | `/wallets/project-ladder` → `getProjectWalletLadder` | `getWalletLeaderboard` |
+| 成果版本歷史 | 有 | `/submissions/versions` → `getSubmissionVersions` | `getGroupVersionHistory`、`compareSubmissionVersions` |
+| 錢包匯出 | 有 | `/wallets/export` | — |
+
+**例外（確認是真的沒有的功能）**：
+
+- **刪除留言／編輯留言**：後端 `router/comments.ts` **沒有 `/delete` 或 `/update` 路由**；
+  前端 `types/composables.ts:116` 的 `deleteComment` 只是**沒人實作的介面型別宣告**；
+  `UserActivityDetail.vue:177` 的 `delete_comment` 是活動日誌的**標籤字典**，不是功能。
+- **刪除階段**：`router/stages.ts` 只有 create/get/update/list/clone/pause/resume 等，
+  沒有 `/delete`；`types/composables.ts:152` 同樣只是型別宣告。
+- **`/wallets/group-stats`**：`router/wallets.ts:15` 的**檔頭註解宣稱有這個路由，實際不存在**，
+  對應的 `getGroupWealthStats` 也是死的。文件與實作不符。
+
+**判斷方法（要重驗時）**：對每個死 handler，先在 `router/` 找有沒有同語意的路由，
+再看那條路由呼叫的是誰。呼叫別人 = 重構孤兒（刪）；查無路由 = 功能沒做完（產品決定）。
+
+---
+
+#### 丁級：純殘留，可直接刪
+
+- `db/operations.ts` 整支（`executeQuery`、`executeBatch`、`readGlobalData`、
+  `readProjectData`、`insertRow`、`updateRow`、`deleteRow`）——GAS 時代的資料層殘留
+- `utils/id-generator.ts` 12 個沒用的產生器（`generateProjectId`、`generateGroupId`…）
+- `utils/array.ts`、`utils/json.ts`、`utils/random.ts`、`utils/validation.ts` 大半
+- `utils/email.ts` 的 `sendPasswordResetEmail`、`sendPasswordReset2FAEmail`、`sendBatchEmails`
+  （已被 queue + email-service 取代）
+
+---
+
+#### 2026-09-03 刪除執行結果
+
+**已刪除**：105 個匯出符號 + 2 個整檔（`db/operations.ts`、`handlers/users/projects.ts`），
+42 個檔案異動，淨減約 3900 行。
+
+**驗證方式（四道）**：`tsc --build` 全 monorepo 通過 → 262 個測試通過 →
+`wrangler deploy --dry-run` 打包成功（2593 KiB）→ 前端 `vite build` 成功。
+
+**過程中抓到的三類錯誤，是靠這幾道關卡擋下的**：
+
+1. **跨 package 同名碰撞**：初版掃描把前端的 `groupBy`、`exportProject`、
+   `calculateCommentRankings` 當成對後端符號的參照。實際上**全 repo 沒有任何一處
+   `import ... from '@repo/backend'`**（package.json 有宣告但原始碼沒用），
+   所以後端符號只可能被 `packages/backend/` 內部參照。修正掃描範圍後偽陽性歸零。
+2. **註解中的提及被當成使用**：例如
+   `CommentVotingAnalysisModal.vue:654` 的註解「與後端 calculateCommentRankings 一致」。
+   剝除註解後才正確。
+3. **同名定義互指**：`utils/email.ts` 和 `services/email-service.ts` **各自**定義了
+   `sendBatchEmails`，互相被判定為「對方的參照」。兩支其實都沒被呼叫
+   （真正在用的是 `resendBatchEmails`）。
+
+**兩類刪除後才浮現的問題**：
+
+- **多行函式簽章**害自動刪除的邊界判斷提早收尾（掃描找 `^}` 時撞到簽章的收尾括號），
+  在 `utils/turnstile.ts`、`utils/email.ts`、`middleware/rate-limit.ts` 留下孤兒函式體。
+  **`tsc` 立刻報 TS1128 抓到**，手動修掉。
+- **連鎖孤兒**：`handlers/users/projects.ts` 的 `getUserProjects` 原本只被
+  `getUserStats` 使用；刪掉後者之後整檔歸零。**刪除後重掃**才發現。
+  → 教訓：批次刪除後**必須重跑掃描**，一次不夠。
+
+#### 前端清理（2026-09-03）
+
+前端比後端難驗，因為 Vue 元件有四種被引用的方式：`<script setup>` 的 PascalCase import、
+模板裡的 kebab-case 標籤、router 的路徑動態載入（`() => import('@/components/X.vue')`）、
+以及 `<component :is>`。掃描三種都比對（PascalCase / kebab-case / 檔名路徑），
+並先確認**專案沒有元件自動註冊**（無 `unplugin-vue-components`、無 `app.component`），
+名稱比對才成立。
+
+**成果**：刪除 13 個無法觸及的 .vue 元件、105 + 9 個零參照匯出符號，前端淨減約 7,460 行。
+建置時間從 1 分 20 秒降到 26 秒。
+
+**抽驗過、確認是重構孤兒而非功能缺口的三項**：
+
+| 死掉的東西 | 功能其實走哪裡 |
+|-----------|---------------|
+| `GlobalAuthModal.vue` | 已拆成 LoginForm / ForgotPasswordForm 等。只剩 `useTurnstile.ts:22` 一句註解「in the monolithic GlobalAuthModal.vue」還記得它 |
+| `useAuth.ts` 的 `useChangePassword` | `UserSettings.vue:851` 直接呼叫 `rpcClient.api.auth['change-password']`，繞過 composable |
+| `rpc-client.ts` 的 `clearSessionToken` | 登出走 `utils/api.ts:80` 的 `clearToken()`。**這項有特別查證**——如果登出真的沒清 token 就是安全問題，結果是重複實作敗下陣 |
+
+**演算法改良**：後端刪除時「多行函式簽章」害邊界判斷提早收尾，手動修了三次。
+前端改成**「刪到下一個頂層宣告為止」**（比對行首的 `export` / `/**` / `function` / `const` …），
+不再去找配對的 `}`。前端 105 個符號一次過，vue-tsc 零錯誤。
+
+**連鎖孤兒要迭代到收斂**：刪掉 `UserTableVirtual.vue` 之後，
+只被它使用的 `UserRow.vue`、`UserActivityExpansion.vue` 才浮現，
+連同另外 9 個符號。**跑到掃描回報 0 為止**，一輪不夠。
+
+---
+
+#### 刻意保留未刪的兩項
+
+| 項目 | 理由 |
+|------|------|
+| `handlers/invitations/validate.ts` 的 `validateInvitationCodeForEmail` | 這是 #007 的修法本體，刪掉等於把答案丟了 |
+| `queues/settlement-producer.ts`（`queueSettleStage`、`getSettlementTaskStatus`）＋ consumer ＋ wrangler 佇列設定 | 等「同步結算 vs 非同步結算」的架構決定（見乙-2）。刪掉等於替使用者做了決定 |
+
+
+**順帶補上的一個缺口**：速率限制（2026-09-03 新增）原本沒有任何解鎖手段——
+被鎖的使用者只能等一小時。已把既有的 `getRateLimitStatus` / `resetRateLimit`
+接到 `POST /admin/rate-limit/status` 與 `POST /admin/rate-limit/reset`
+（`router/admin.ts:1521` 前）。只清 actor 桶，per-recipient 與 per-IP 是防濫用控制，
+刻意不清。
+
+---
+
+**掃描腳本邏輯**（要重跑時）：對每個 `export function|const|let|class|enum`，
+用 word-boundary regex 分別在「其他 src 檔」「同檔案（>1 次出現）」「tests/」搜尋，
+三者皆無 = 完全死碼；只有同檔 = 不該 export；只有測試 = 測試專用。
+純 type/interface 匯出已排除（雜訊太多）。
+**已知誤判**：字串式呼叫、動態 `await import()` 後解構、
+Vue template 內只出現在字串裡的元件名，可能被誤判為死碼——逐項確認過再刪。
+
+
+### #008 ｜ 四支 auth 路由宣告了 turnstileToken 卻從未驗證 ｜ 中
+
+**問題**：以下四支路由的 request schema 都有 `turnstileToken` 欄位，
+router 內卻**沒有呼叫 `verifyTurnstileMiddleware`**：
+
+| 路由 | 定義 | schema |
+|------|------|--------|
+| `/auth/login-verify-password` | `router/auth.ts:301` | `shared/src/schemas/auth.ts:50` |
+| `/auth/resend-2fa` | `router/auth.ts:919` | `auth.ts:198` |
+| `/auth/verify-email-for-reset` | `router/auth.ts:1011` | `auth.ts:210` |
+| `/auth/password-reset-verify-code` | `router/auth.ts:1033` | `auth.ts:221` |
+
+整個 auth router 只有 `/register`（`:67`）、`/reset-password`（`:1068`）和 `:1634`
+真的驗證。而且 `TurnstileTokenSchema = z.string().optional()`
+（`shared/src/schemas/common.ts:157`），所以連「有沒有給 token」都不驗——
+欄位在 JSDoc 註解裡被寫成必填，實際上是純裝飾。
+
+再加上 `wrangler.toml:135` 是 `TURNSTILE_ENABLED = "false"`，目前整套 CAPTCHA 是關的。
+
+**目前的緩解**：2026-09-03 已補上 D1 版速率限制（見 pitfalls.md 同日條目），
+這四支現在都有每信箱冷卻／時窗，免密碼的兩支另有每 IP 限制，
+全系統另有每日寄信預算。所以「無限催信」的洞已經堵住，Turnstile 是第二道防線。
+
+**待決**：要不要真的啟用？
+- 要啟用：把那四支的 `verifyTurnstileMiddleware` 補上，`TurnstileTokenSchema`
+  在需要的地方改成必填，並確認前端這四支都有送 token（目前 `useLogin.ts` 有送，
+  但沒驗證過其他路徑）
+- 不啟用：把 schema 裡的欄位與 JSDoc 拿掉，免得下一個人以為有保護
+  （**最糟的是現狀**：看起來有、實際沒有）
+
+---
+
 ### #007 ｜ 邀請碼的 `targetEmail` 從未被比對 ｜ 中
 
 **問題**：`scoringSystem-cf/packages/backend/src/handlers/auth/register.ts:332`
@@ -28,6 +401,11 @@
 **後果**：發給 A 的邀請碼，B 只要拿到就能用，且能用任何信箱註冊。
 實際控制只有「持有」。此行為在寫多角色測試 fixture 時被利用（一個碼註冊任意帳號），
 確認可重現。
+
+**2026-09-03 補充**：死模組普查（#009 甲-2）發現
+`handlers/invitations/validate.ts:140` 早就有 `validateInvitationCodeForEmail(env, code, userEmail)`，
+只是**沒有任何地方呼叫**。它自己的 JSDoc 還寫著「This is called during user registration」。
+沒有人會刻意寫一支比對函式再刻意不用它，所以**這題偏向漏檢，不是刻意設計**。
 
 **待決**：這是刻意的「持有即有效」設計，還是漏檢？
 - 若是刻意的：`targetEmail` 應改為 optional，或改名為 `sentTo` 以免誤導

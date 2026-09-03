@@ -242,15 +242,6 @@ export type WebSocketEventHandler<T extends MessageType = MessageType> = (
 ) => void
 
 /**
- * Type guard to check if a message has data
- */
-export function hasMessageData(
-  message: WebSocketMessage
-): message is Extract<WebSocketMessage, { data: any }> {
-  return 'data' in message && message.data !== undefined
-}
-
-/**
  * Example usage:
  *
  * ```typescript

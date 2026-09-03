@@ -149,34 +149,6 @@ export function useAdminNotifications(
 // useNotificationStatistics - Query for Notification Statistics
 // ============================================================================
 
-/**
- * Get notification statistics for dashboard display
- *
- * @returns Query result with notification statistics
- */
-export function useNotificationStatistics(): UseQueryReturnType<NotificationStatistics, Error> {
-  const userQuery = useCurrentUser()
-
-  const isEnabled = computed(() => {
-    return userQuery.isSuccess.value && !!userQuery.data.value
-  })
-
-  return useQuery({
-    queryKey: ['admin', 'notifications', 'statistics'],
-    queryFn: async (): Promise<NotificationStatistics> => {
-      const response = await adminApi.notifications.statistics()
-
-      if (!response.success) {
-        throw new Error(response.error?.message || '載入通知統計失敗')
-      }
-
-      return response.data as unknown as NotificationStatistics
-    },
-    enabled: isEnabled,
-    staleTime: 1000 * 60 * 5
-  })
-}
-
 // ============================================================================
 // useSendNotification - Mutation to send a notification
 // ============================================================================
@@ -186,32 +158,6 @@ interface SendNotificationParams {
   title: string
   message: string
   type?: 'info' | 'success' | 'warning' | 'error'
-}
-
-export function useSendNotification(): UseMutationReturnType<
-  void,
-  Error,
-  SendNotificationParams,
-  unknown
-> {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (params: SendNotificationParams) => {
-      const response = await adminApi.notifications.sendSingle(params as any)
-
-      if (!response.success) {
-        throw new Error(response.error?.message || '發送通知失敗')
-      }
-    },
-    onSuccess: () => {
-      ElMessage.success('通知已發送')
-      queryClient.invalidateQueries({ queryKey: ['admin', 'notifications'] })
-    },
-    onError: (error: Error) => {
-      ElMessage.error(`發送失敗: ${error.message}`)
-    }
-  })
 }
 
 // ============================================================================
@@ -228,38 +174,6 @@ interface SendBatchNotificationsParams {
 interface BatchSendResult {
   successCount: number
   failedCount: number
-}
-
-export function useSendBatchNotifications(): UseMutationReturnType<
-  BatchSendResult,
-  Error,
-  SendBatchNotificationsParams,
-  unknown
-> {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (params: SendBatchNotificationsParams) => {
-      const response = await adminApi.notifications.sendBatch(params as any)
-
-      if (!response.success) {
-        throw new Error(response.error?.message || '批量發送通知失敗')
-      }
-
-      return response.data as unknown as BatchSendResult
-    },
-    onSuccess: (data) => {
-      if (data.failedCount === 0) {
-        ElMessage.success(`成功發送 ${data.successCount} 則通知`)
-      } else {
-        ElMessage.warning(`成功: ${data.successCount}, 失敗: ${data.failedCount}`)
-      }
-      queryClient.invalidateQueries({ queryKey: ['admin', 'notifications'] })
-    },
-    onError: (error: Error) => {
-      ElMessage.error(`批量發送失敗: ${error.message}`)
-    }
-  })
 }
 
 // ============================================================================

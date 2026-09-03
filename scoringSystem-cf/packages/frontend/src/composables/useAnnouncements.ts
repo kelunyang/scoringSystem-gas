@@ -187,52 +187,6 @@ export function useAdminAnnouncements(
 }
 
 /**
- * 獲取單一公告詳情
- *
- * @param {string} announcementId - 公告 ID
- * @returns {Object} TanStack Query 結果
- */
-export function useAdminAnnouncement(
-  announcementId: Ref<string | null> | ComputedRef<string | null>
-): UseQueryReturnType<AdminAnnouncement, Error> {
-  const { token } = useAuth()
-
-  return useQuery({
-    queryKey: ['announcements', 'admin', 'detail', announcementId],
-    queryFn: async (): Promise<AdminAnnouncement> => {
-      if (!announcementId.value) {
-        throw new Error('公告 ID 不能為空')
-      }
-
-      console.log(`📢 [useAnnouncements] 載入公告詳情: ${announcementId.value}`)
-
-      const httpResponse = await rpcClient.api.announcements.admin.get.$post({
-        json: {
-          announcementId: announcementId.value
-        }
-      })
-      const response = await httpResponse.json() as ApiResponse<AdminAnnouncement>
-
-      if (!response.success) {
-        throw new Error(response.error?.message || '載入公告詳情失敗')
-      }
-
-      return response.data!
-    },
-
-    enabled: computed(() => {
-      if (!token.value || isTokenExpired(token.value)) {
-        return false
-      }
-      return !!announcementId.value
-    }),
-
-    staleTime: 1000 * 60, // 1 分鐘
-    gcTime: 1000 * 60 * 5 // 5 分鐘
-  })
-}
-
-/**
  * 創建公告
  *
  * @returns {Object} TanStack Mutation 結果

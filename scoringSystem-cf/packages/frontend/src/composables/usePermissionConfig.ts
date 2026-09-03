@@ -171,20 +171,6 @@ export function usePermissionConfig() {
 }
 
 /**
- * Get visible navigation items as computed ref
- *
- * @returns {ComputedRef<Array>}
- *
- * @example
- * const navItems = useVisibleNavItems()
- * // In template: v-for="item in navItems"
- */
-export function useVisibleNavItems() {
-  const { getVisibleNavItems } = usePermissionConfig()
-  return computed(() => getVisibleNavItems())
-}
-
-/**
  * Get visible tabs for a section as computed ref
  *
  * @param {string} section - Section key
@@ -198,32 +184,3 @@ export function useVisibleTabs(section: any) {
   return computed(() => getVisibleTabs(section))
 }
 
-/**
- * Check if navigation item should be visible (computed)
- *
- * @param {string} navKey - Navigation item key
- * @returns {ComputedRef<null | boolean>}
- *
- * @example
- * const showAdmin = useCanShowNav('admin')
- */
-export function useCanShowNav(navKey: any) {
-  const { canShowNav } = usePermissionConfig()
-  return computed(() => canShowNav(navKey))
-}
-
-/**
- * Check if a feature should be visible (computed)
- *
- * @param {string} section - Section key (e.g., 'systemAdmin')
- * @param {string} tab - Tab key (e.g., 'settings')
- * @param {string} featureKey - Feature key (e.g., 'systemLogs')
- * @returns {ComputedRef<null | boolean>}
- *
- * @example
- * const canViewLogs = useFeaturePermission('systemAdmin', 'settings', 'systemLogs')
- */
-export function useFeaturePermission(section: any, tab: any, featureKey: any) {
-  const { canShowFeature } = usePermissionConfig()
-  return computed(() => canShowFeature(section, featureKey))
-}

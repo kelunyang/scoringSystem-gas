@@ -73,43 +73,6 @@ export async function getUserInvitations(
 }
 
 /**
- * Get all invitations (admin only)
- */
-export async function getAllInvitations(env: Env): Promise<Response> {
-  try {
-    const invitations = await env.DB.prepare(`
-      SELECT
-        ic.*,
-        u.displayName as creatorDisplayName,
-        u.userEmail as creatorEmail
-      FROM invitation_codes_with_status ic
-      LEFT JOIN users u ON ic.createdBy = u.userId
-      ORDER BY ic.createdTime DESC
-    `).all();
-
-    const formattedInvitations = invitations.results.map((inv: any) => ({
-      invitationId: inv.invitationId,
-      invitationCode: inv.displayCode || '****-****-****',
-      targetEmail: inv.targetEmail,
-      createdBy: inv.creatorDisplayName && inv.creatorEmail
-        ? `${inv.creatorDisplayName} (${inv.creatorEmail})`
-        : inv.createdBy || 'Unknown',
-      createdTime: inv.createdTime,
-      expiryTime: inv.expiryTime,
-      status: inv.status,
-      usedTime: inv.usedTime,
-      defaultTags: parseJSON(inv.defaultTags, []),
-      defaultGlobalGroups: parseJSON(inv.defaultGlobalGroups, [])
-    }));
-
-    return successResponse(formattedInvitations);
-  } catch (error) {
-    console.error('Get all invitations error:', error);
-    return errorResponse('SYSTEM_ERROR', 'Failed to get invitations');
-  }
-}
-
-/**
  * Deactivate an invitation code
  */
 export async function deactivateInvitation(
@@ -234,78 +197,5 @@ export async function reactivateInvitation(
   } catch (error) {
     console.error('Reactivate invitation error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to reactivate invitation');
-  }
-}
-
-/**
- * Delete an invitation code (soft delete)
- */
-export async function deleteInvitation(
-  env: Env,
-  invitationId: string,
-  userEmail: string,
-  isAdmin: boolean
-): Promise<Response> {
-  try {
-    const invitation = await env.DB.prepare(`
-      SELECT i.*, u.userEmail as creatorEmail
-      FROM invitation_codes_with_status i
-      JOIN users u ON i.createdBy = u.userId
-      WHERE i.invitationId = ?
-    `).bind(invitationId).first() as InvitationRow | null;
-
-    if (!invitation) {
-      return errorResponse('INVITATION_NOT_FOUND', 'Invitation not found');
-    }
-
-    // Check if user has permission to delete
-    if (invitation.creatorEmail !== userEmail && !isAdmin) {
-      return errorResponse('ACCESS_DENIED', 'Only the creator or admin can delete this invitation');
-    }
-
-    // Soft delete
-    await env.DB.prepare(`
-      UPDATE invitation_codes
-      SET status = 'deleted'
-      WHERE invitationId = ?
-    `).bind(invitationId).run();
-
-    // Log deletion
-    await logGlobalOperation(
-      env,
-      userEmail,
-      'invitation_deleted',
-      'invitation',
-      invitationId,
-      {
-        targetEmail: invitation.targetEmail,
-        deletedByAdmin: isAdmin && invitation.creatorEmail !== userEmail,
-        originalStatus: invitation.status
-      },
-      { level: 'warning' }
-    );
-
-    return successResponse(null, 'Invitation deleted successfully');
-  } catch (error) {
-    console.error('Delete invitation error:', error);
-    return errorResponse('SYSTEM_ERROR', 'Failed to delete invitation');
-  }
-}
-
-/**
- * Cleanup expired invitations
- * NOTE: This function is now a no-op since invitation_codes_with_status VIEW
- * automatically calculates 'expired' status based on expiryTime.
- * Kept for backward compatibility.
- */
-export async function cleanupExpiredInvitations(_env: Env): Promise<number> {
-  try {
-    // No-op: Status is auto-calculated by VIEW
-    // Expired invitations are automatically shown as 'expired' in queries
-    console.log('Cleanup expired invitations: No action needed (status auto-calculated by VIEW)');
-    return 0;
-  } catch (error) {
-    console.error('Cleanup expired invitations error:', error);
-    return 0;
   }
 }

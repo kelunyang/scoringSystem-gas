@@ -193,20 +193,6 @@ export async function generateFaviconFromIcon(
 }
 
 /**
- * 同步版本的 favicon 生成（僅支援預設圖標）
- * 用於不需要等待的場景
- */
-export function generateFaviconFromIconSync(iconClass: string, color = '#1A9B8E'): string {
-  const normalizedClass = iconClass.startsWith('fa-') ? iconClass : `fa-${iconClass}`
-
-  if (normalizedClass in FA_PATH_MAP) {
-    return generateFaviconFromPath(normalizedClass, color)
-  }
-
-  return generateFaviconFromPath('fa-star', color)
-}
-
-/**
  * 更新 document head 中的 favicon
  * @param iconClass - FontAwesome 圖示 class (例如: 'fa-star')
  * @param color - 圖示顏色 (可選)
@@ -226,20 +212,3 @@ export async function updateFavicon(iconClass: string, color?: string): Promise<
   document.head.appendChild(link)
 }
 
-/**
- * 取得支援快速渲染的圖示清單（有 SVG path 的）
- * @returns 圖示清單 (class name)
- */
-export function getSupportedIcons(): string[] {
-  return Object.keys(FA_PATH_MAP)
-}
-
-/**
- * 檢查圖示是否支援快速渲染（有 SVG path）
- * @param iconClass - FontAwesome 圖示 class
- * @returns 是否支援快速渲染
- */
-export function isFaviconSupported(iconClass: string): boolean {
-  const normalizedClass = iconClass.startsWith('fa-') ? iconClass : `fa-${iconClass}`
-  return normalizedClass in FA_PATH_MAP
-}

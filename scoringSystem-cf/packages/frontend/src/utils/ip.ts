@@ -134,28 +134,6 @@ export async function getCachedClientIP(): Promise<IPInfo> {
   return cachedIP
 }
 
-/**
- * Clear IP cache (useful for testing or when network changes)
- */
-export function clearIPCache(): void {
-  cachedIP = null
-  cacheTime = null
-}
-
-/**
- * Get user agent string
- */
-export function getUserAgent(): string {
-  return navigator.userAgent || 'unknown'
-}
-
-/**
- * Get accept language
- */
-export function getAcceptLanguage(): string {
-  return navigator.language || (navigator as any).userLanguage || 'unknown'
-}
-
 export interface ClientInfo extends IPInfo {
   userAgent: string
   language: string
@@ -163,18 +141,3 @@ export interface ClientInfo extends IPInfo {
   timestamp: number
 }
 
-/**
- * Get complete client info for logging
- * Combines IP, geolocation, and browser info
- */
-export async function getClientInfo(): Promise<ClientInfo> {
-  const ipInfo = await getCachedClientIP()
-
-  return {
-    ...ipInfo,
-    userAgent: getUserAgent(),
-    language: getAcceptLanguage(),
-    screenResolution: `${window.screen.width}x${window.screen.height}`,
-    timestamp: Date.now()
-  }
-}

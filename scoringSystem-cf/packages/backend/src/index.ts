@@ -31,15 +31,12 @@ import ipRouter from './router/ip';
 import settlementRouter from './router/settlement';
 import maintenanceRouter from './router/maintenance';
 import websocketRouter from './router/websocket';
-// REMOVED: Security Patrol Robot (replaced with queue-based login security)
-// import securityPatrolWsRouter from './router/security-patrol-ws';
 import rankingsRouter from './router/rankings';
 import announcementsRouter from './router/announcements';
 
 // Import queue consumers
 import emailQueue from './queues/email-consumer';
 import notificationQueue from './queues/notification-consumer';
-import settlementQueue from './queues/settlement-consumer';
 import loginEventsQueue from './queues/login-events-consumer';
 import aiRankingQueue from './queues/ai-ranking-consumer';
 
@@ -249,8 +246,6 @@ app.route('/api/announcements', announcementsRouter);
 
 // WebSocket routes (real-time notifications)
 app.route('/ws', websocketRouter);
-// REMOVED: Security Patrol Robot WebSocket endpoint
-// app.route('/ws/security-patrol', securityPatrolWsRouter);
 
 /**
  * 404 handler
@@ -342,9 +337,6 @@ export default {
         case 'notification-queue':
           await notificationQueue.queue(batch as any, env);
           break;
-        case 'settlement-queue':
-          await settlementQueue.queue(batch as any, env);
-          break;
         case 'login-events-queue':
           await loginEventsQueue.queue(batch as any, env);
           break;
@@ -371,108 +363,6 @@ export default {
 export type AppType = typeof app;
 
 /**
- * Scheduled Event Handler (Cron Triggers)
- * Uncomment this handler when you enable cron triggers in wrangler.toml
- *
- * This handler is called when a cron trigger fires
- * Currently configured for:
- * - Notification Patrol Robot (every 12 hours)
- * - Security Patrol Robot (daily, configurable interval via settings)
- *
- * IMPORTANT: The KV securityRobotInterval config provides a secondary throttling layer.
- * - wrangler.toml cron: Fixed schedule (e.g., daily at midnight)
- * - KV config: Dynamic interval check (e.g., only run every 3 days)
- * This allows admins to adjust frequency without redeployment.
- */
-// export default {
-//   ...app,
-//   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-//     console.log('Cron trigger fired at:', new Date(event.scheduledTime).toISOString());
-//     const cron = event.cron; // Cron expression that triggered this execution
-//
-//     try {
-//       // Execute Notification Patrol (runs every 12 hours)
-//       if (cron === '0 */12 * * *') {
-//         console.log('🔔 Executing Notification Patrol...');
-//         const { executeNotificationPatrol } = await import('./handlers/robots/notification-patrol');
-//
-//         const result = await executeNotificationPatrol(env, {
-//           timeWindowHours: 12,
-//           dryRun: false
-//         });
-//
-//         const response = await result.json();
-//         console.log('Notification patrol result:', response);
-//
-//         if (response.success) {
-//           console.log(`✅ Notification patrol completed: ${response.data.emailsSent} emails sent`);
-//         } else {
-//           console.error('❌ Notification patrol failed:', response.error);
-//         }
-//       }
-//
-//       // Execute Security Patrol (runs daily, checks interval config)
-//       if (cron === '0 0 * * *') {
-//         console.log('🔒 Checking Security Patrol schedule...');
-//
-//         // Check if it's time to run based on configured interval
-//         const statusStr = await env.CONFIG.get('robot_status_security_patrol');
-//         const configStr = await env.CONFIG.get('securityRobotInterval');
-//
-//         let shouldRun = false;
-//
-//         if (statusStr && configStr) {
-//           const status = JSON.parse(statusStr);
-//           const config = JSON.parse(configStr);
-//           const intervalMs = (config.intervalDays || 1) * 24 * 60 * 60 * 1000;
-//
-//           if (!status.lastRun) {
-//             // Never run before - execute now
-//             shouldRun = true;
-//           } else {
-//             const timeSinceLastRun = Date.now() - status.lastRun;
-//             if (timeSinceLastRun >= intervalMs) {
-//               shouldRun = true;
-//             }
-//           }
-//         } else {
-//           // No config found - run with default (daily)
-//           shouldRun = true;
-//         }
-//
-//         if (shouldRun) {
-//           console.log('⚡ Executing Security Patrol...');
-//           const { executeSecurityPatrol } = await import('./handlers/robots/security-patrol');
-//
-//           const result = await executeSecurityPatrol(env, {
-//             timeWindowHours: 24,
-//             dryRun: false
-//           });
-//
-//           const response = await result.json();
-//           console.log('Security patrol result:', response);
-//
-//           if (response.success) {
-//             console.log(`✅ Security patrol completed: ${response.data.suspiciousLogins.length} suspicious logins found, ${response.data.emailsSent} emails sent`);
-//           } else {
-//             console.error('❌ Security patrol failed:', response.error);
-//           }
-//         } else {
-//           console.log('⏭️  Skipping security patrol - not yet time based on configured interval');
-//         }
-//       }
-//     } catch (error) {
-//       console.error('Cron handler error:', error);
-//     }
-//   }
-// };
-
-/**
- * Export Durable Objects
- */
-export { NotificationHub } from './durable-objects/NotificationHub';
-
-/**
  * Export Queue Consumers (for type inference and testing)
  */
-export { emailQueue, notificationQueue, settlementQueue, loginEventsQueue, aiRankingQueue };
+export { emailQueue, notificationQueue, loginEventsQueue, aiRankingQueue };

@@ -18,17 +18,6 @@ export const formatDate = (
 }
 
 /**
- * 格式化為短日期格式
- * @param dateString - 日期字符串
- * @returns 格式化後的短日期（YYYY/MM/DD）
- */
-export const formatShortDate = (
-  dateString: string | number | Date | null | undefined
-): string => {
-  return formatDate(dateString, 'YYYY/MM/DD')
-}
-
-/**
  * 格式化為時間格式
  * @param dateString - 日期字符串
  * @returns 格式化後的時間（HH:mm:ss）

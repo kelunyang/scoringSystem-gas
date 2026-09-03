@@ -4,6 +4,106 @@
 > 新坑往上加，讓最近的教訓最先被看到。
 
 ---
+## 2026-09-03 ｜ 寫好的 email 速率限制沒接上，任何人都能把全系統的寄信額度打光 🔥
+
+**症狀**：沒有症狀——這是最麻煩的地方。`middleware/rate-limit.ts` 有 508 行完整的
+email 速率限制程式碼，看起來一切正常，實際上**沒有任何一處 import 它**。
+同一個檔案的 `aiRateLimitMiddleware` 有掛（`router/rankings.ts:476, 501, 571`），
+所以掃過去會以為整檔都在服役。
+
+**根因**：三層互相掩蓋。
+
+1. **中介層是死碼**。`emailRateLimitMiddleware`、`batchEmailRateLimitMiddleware`
+   從未被掛上任何路由。
+2. **唯一「用到」的檢查永遠不會觸發**。`/admin/notifications/send-batch`
+   呼叫 `getRateLimitStatus` 想擋批次寄信，但因為沒人呼叫 `updateRateLimitCounter`，
+   KV 裡永遠沒有 `rate_limit:email:*` 這個 key，`remaining` 永遠等於 limit，
+   `remaining === 0` 恆為 false。**讀了計數器，但沒人寫過它。**
+3. **就算接上也不會準**。原本存在 KV：同一個 key 約每秒只能寫一次、讀取是最終一致。
+   一節課 40 人同時登入打同一個計數器，KV 會嚴重漏算。
+
+**看起來像防線、但都不擋的四樣東西**：
+
+| 東西 | 為什麼不擋 |
+|------|-----------|
+| Turnstile | `wrangler.toml` 是 `TURNSTILE_ENABLED = "false"`；而且 `/resend-2fa`、`/verify-email-for-reset`、`/password-reset-verify-code`、`/login-verify-password` 的 schema 宣告了 `turnstileToken`，router 卻**從未呼叫 `verifyTurnstileMiddleware`**。加上 `TurnstileTokenSchema` 是 `z.string().optional()`，連有沒有給都不驗 |
+| 前端 60 秒倒數 | `TwoFactorStep.vue` 的純 UI，curl 直接繞過 |
+| Queue idempotency | key 含 `queueMessageId`，每次請求都不同，只防 Cloudflare 自己的重試 |
+| 登入失敗鎖帳號 | 只分析 `login_failed`／`login_success`，而 `resend-2fa` 不產生 login event |
+
+**後果**：不是騷擾，是 DoS。SMTP 走 Gmail 直連，額度是硬牆。有人打光額度之後，
+**全系統**的登入驗證碼、邀請信、通知信都寄不出去。而且不用有攻擊者——
+400 人的登入信（最多 400/日）＋ 通知彙整信（每次最多 400、每天 2 次）
+＋ 期初邀請信（一次 400），正常操作就會撞牆。
+
+**教訓與防護**：
+
+1. **「有寫」不等於「有接」**。死掉的中介層比沒有中介層危險，因為它會讓人以為問題解決了。
+   新增守衛時，同一個 commit 裡要有一個測試證明它真的會拒絕，不是只證明函式回傳正確。
+2. **只讀不寫的計數器是永遠不會響的警報**。看到 `getXxxStatus()` 被用來做判斷時，
+   先 grep 誰在寫那個計數器。
+3. **KV 不是計數器**。同 key 每秒一寫、讀取最終一致。要精確計數就用 D1
+   （單語句 upsert 是原子的）或 Durable Object。這次改用 D1，
+   `rate_limit_counters` 表，測試用 `node:sqlite` 跑真的 SQLite 驗證 upsert 語意。
+4. **限流的 key 選錯會製造新的 DoS**。兩個實例：
+   - 學校整班 40 人共用一個 NAT 出口 IP，所以「每 IP 限制」只能套在**不需要密碼**
+     的端點（重寄驗證碼、忘記密碼）。一般登入若也套，整班會互相把對方擠掉。
+   - 若免密碼端點和登入共用同一個「每信箱」計數器，攻擊者狂打重寄就能耗光受害者額度，
+     害本人也登不進來。所以拆成 `open`／`verified` 兩個獨立的桶。
+5. **限流要在密碼驗證之後才扣**。在之前扣的話，任何人用錯誤密碼就能燒掉別人的額度。
+6. **全域預算要分優先級，不能一刀切**。早上 8 點的通知彙整機器人若吃光當日額度，
+   10 點上課的人就登不進來——被電子報鎖在門外。現在 bulk 用到 50%、normal 用到 65%
+   就停，剩下的保留給登入驗證碼。
+7. **對外部額度要用滾動視窗**。Gmail 算的是滾動 24 小時；用「每日午夜歸零」的固定視窗，
+   跨日邊界會放行到 2 倍額度，剛好撞破上限。
+
+**追記（2026-09-03 稍晚）｜ 反過來的坑：把「沒被 import」當成「防線缺口」**
+
+修完速率限制後掃全庫找同類死模組，一口氣列了四項「防線沒接上」。
+逐項查證後**三項是誤判**——它們都有另一支實作接手，我只看了 handler 沒看路由層。
+
+最典型的是 `requireActiveOrVotingStage`：它確實沒人用，而且對應的
+`stage-vote.ts:46` 撈了 `status` 欄位卻沒讀，看起來像鐵證。
+實際上守衛在路由層的 `checkStageAcceptsRankings`（`utils/stage-validation.ts:48`），
+掛在 5 條路由上，而且比死掉那支更嚴格。
+
+**教訓（與上面那條互為鏡像）**：
+在一個「同一件事有三四份實作」的 codebase 裡（見 issue #005、#006），
+「這支死了」的**預設解讀應該是「另一支贏了」**，不是「沒人做這件事」。
+判定順序必須是：
+1. 先在 `router/` 找**同語意的路由**（不是同名函式）
+2. 看那條路由呼叫誰
+3. 呼叫別人 = 重構孤兒（刪）；查無路由 = 真的缺（補）
+
+只 grep 函式名會同時產生兩種錯誤方向：
+速率限制那次是**漏掉**真洞（死中介層看起來像活的），
+這次是**捏造**假洞（活守衛換了名字看起來像沒有）。
+
+**再追記（2026-09-03 清理死碼時學到的三件事）**：
+
+1. **跨 package 的同名符號會製造假相依**。前端的 `groupBy`、`exportProject` 被判定為
+   「參照了後端同名函式」。查證後：**全 repo 沒有任何一處 `import from '@repo/backend'`**
+   （package.json 有宣告但原始碼沒用）。判定相依前要先確認**依賴方向真的存在**。
+2. **註解會冒充使用**。`CommentVotingAnalysisModal.vue:654` 的
+   「與後端 calculateCommentRankings 一致」讓那支函式看起來活著。掃描要先剝註解。
+3. **連鎖孤兒必須迭代到收斂**。刪掉 `UserTableVirtual.vue` 之後，
+   只被它使用的 `UserRow.vue` 才浮現；刪掉 `getUserStats` 之後，
+   `getUserProjects` 才變成零參照。**跑到掃描回報 0 為止，一輪絕對不夠。**
+
+另外，自動刪除程式碼時**不要去找配對的 `}`**——多行函式簽章會讓你提早在簽章的
+收尾括號停住，留下孤兒函式體（後端這樣壞了三次）。改成
+**「刪到下一個頂層宣告為止」**，前端 105 個符號一次過。
+真正的保命符是 `tsc`：三次孤兒殘骸都是 TS1128 當場抓到的。
+
+**修法落點**：`utils/rate-limiter.ts`（通用計數器）、`utils/email-budget.ts`（政策與優先級）、
+`middleware/rate-limit.ts`（改用 D1）、`migrations/0006_add_rate_limit_counters.sql`。
+守衛接在 `/auth/login-verify-password`、`/auth/resend-2fa`、`/auth/verify-email-for-reset`、
+邀請碼發送／重送、管理員批次通知與重送郵件；全域預算接在 `services/email-service.ts`
+的 `sendEmail`——那是每封信唯一都會經過的地方，含 cron 機器人。
+
+**還沒修的**：Turnstile 那四支路由仍未驗證 token（見 issue.md B 區）。
+
+---
 ## 2026-08-31 ｜ 權限層八份實作各自為政，撤銷失效、老師被鎖在門外 🔥
 
 **症狀**：三類同時存在，方向相反所以互相掩蓋。

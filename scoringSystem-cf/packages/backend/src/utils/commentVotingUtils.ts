@@ -3,7 +3,6 @@
  * 用於教師投票和學生投票共用的驗證邏輯
  */
 
-
 /**
  * 檢查用戶是否為專案的 Group Leader 或 Member
  */
@@ -466,95 +465,6 @@ export async function validateCommentEligibility(
   }
 
   return { valid: true, comment };
-}
-
-/**
- * 獲取可投票的評論列表（優化版：使用 JOIN 過濾）
- * 只返回有至少一個 "helpful" 反應的頂級評論
- */
-export async function getRankableComments(
-  db: D1Database,
-  projectId: string,
-  stageId: string,
-  excludeAuthorEmail?: string
-): Promise<any[]> {
-  // Append-only architecture: Use CTE to get latest helpful reactions only
-  // 使用 CTE 獲取每個評論的最新有效 helpful 反應
-  const comments = await db.prepare(`
-    WITH latest_helpful_reactions AS (
-      SELECT
-        targetId as commentId,
-        reactionType,
-        ROW_NUMBER() OVER (
-          PARTITION BY targetId, userEmail
-          ORDER BY createdAt DESC
-        ) as rn
-      FROM reactions
-      WHERE targetType = 'comment'
-    )
-    SELECT DISTINCT
-      c.commentId,
-      c.authorEmail,
-      c.content,
-      c.mentionedGroups,
-      c.mentionedUsers,
-      c.createdTime,
-      u.displayName as authorDisplayName
-    FROM comments c
-    LEFT JOIN users u ON u.userEmail = c.authorEmail
-    INNER JOIN latest_helpful_reactions lhr
-      ON lhr.commentId = c.commentId
-      AND lhr.rn = 1
-      AND lhr.reactionType = 'helpful'
-    INNER JOIN usergroups ug ON ug.userEmail = c.authorEmail
-      AND ug.projectId = c.projectId
-      AND ug.isActive = 1
-      AND (ug.role = 'leader' OR ug.role = 'member')
-    WHERE c.projectId = ?
-      AND c.stageId = ?
-      AND (c.isReply = 0 OR c.isReply IS NULL)
-      AND (c.replyLevel = 0 OR c.replyLevel IS NULL)
-    ORDER BY c.createdTime DESC
-  `).bind(projectId, stageId).all();
-
-  if (!comments.results || comments.results.length === 0) {
-    return [];
-  }
-
-  // 進一步過濾：檢查 mentions 和排除作者
-  const validComments = [];
-
-  for (const comment of comments.results) {
-    // 檢查 mentions
-    let mentionedGroups: string[] = [];
-    let mentionedUsers: string[] = [];
-
-    try {
-      if (comment.mentionedGroups) {
-        mentionedGroups = JSON.parse(comment.mentionedGroups as string);
-      }
-      if (comment.mentionedUsers) {
-        mentionedUsers = JSON.parse(comment.mentionedUsers as string);
-      }
-    } catch (e) {
-      console.warn('Failed to parse mentions:', e);
-      continue;
-    }
-
-    const hasMentions = mentionedGroups.length > 0 || mentionedUsers.length > 0;
-    if (!hasMentions) {
-      continue;
-    }
-
-    // 排除指定作者
-    if (excludeAuthorEmail && comment.authorEmail === excludeAuthorEmail) {
-      continue;
-    }
-
-    validComments.push(comment);
-  }
-
-  return validComments;
 }
 
 /**

@@ -134,61 +134,9 @@ export const rpcClient: any = hc<AppType>(getApiBaseUrl(), {
 });
 
 /**
- * Helper function to handle RPC responses
- * Automatically checks response status and parses JSON
- */
-export async function handleRpcResponse<T>(
-  responsePromise: Promise<Response>
-): Promise<T> {
-  const response = await responsePromise;
-
-  if (!response.ok) {
-    // Try to parse error response
-    try {
-      const errorData = await response.json() as { error?: { message?: string } };
-      throw new Error(errorData.error?.message || 'API request failed');
-    } catch (e) {
-      throw new Error(`API request failed with status ${response.status}`, { cause: e });
-    }
-  }
-
-  return response.json();
-}
-
-/**
- * Type-safe wrapper for RPC calls with automatic error handling
- *
- * @example
- * const data = await callRpc(() => rpcClient.api.system.info.$get());
- */
-export async function callRpc<T>(
-  fn: () => Promise<Response>
-): Promise<T> {
-  return handleRpcResponse<T>(fn());
-}
-
-/**
- * Update session token in headers
- * Call this after login or when token is refreshed
- */
-export function updateSessionToken(token: string | null) {
-  if (token) {
-    sessionStorage.setItem('sessionId', token);
-  } else {
-    sessionStorage.removeItem('sessionId');
-  }
-}
-
-/**
  * Get current session token
  */
 export function getSessionToken(): string | null {
   return sessionStorage.getItem('sessionId');
 }
 
-/**
- * Clear session token (on logout)
- */
-export function clearSessionToken() {
-  sessionStorage.removeItem('sessionId');
-}

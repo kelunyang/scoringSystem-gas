@@ -675,29 +675,6 @@ ${notificationsText}
 }
 
 /**
- * 構建安全巡邏報告郵件內容
- */
-export function buildSecurityReportEmailContent(
-  adminEmail: string,
-  reportHtml: string,
-  reportText: string,
-  summary: { expiredCodesCount: number; failedAttemptsCount: number; issuesFound: number },
-  systemTitle: string
-): { subject: string; htmlBody: string; textBody: string } {
-  const subject = `[${systemTitle}] 安全巡邏報告 - ${summary.issuesFound} 個問題`;
-  const htmlBody = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family: sans-serif; padding: 20px;"><h2>安全巡邏報告</h2><div style="background: #ecf0f1; padding: 20px; margin: 20px 0;"><h3>摘要</h3><ul><li>過期驗證碼：${summary.expiredCodesCount} 個</li><li>失敗登入嘗試：${summary.failedAttemptsCount} 次</li><li>發現問題：${summary.issuesFound} 個</li></ul></div>${reportHtml}</body></html>`;
-  const textBody = `${systemTitle} 安全巡邏報告
-
-摘要：
-- 過期驗證碼：${summary.expiredCodesCount} 個
-- 失敗登入嘗試：${summary.failedAttemptsCount} 次
-- 發現問題：${summary.issuesFound} 個
-
-${reportText}`.trim();
-  return { subject, htmlBody, textBody };
-}
-
-/**
  * 構建管理員通知郵件內容
  */
 export function buildAdminNotificationEmailContent(

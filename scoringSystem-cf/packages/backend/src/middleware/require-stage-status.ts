@@ -177,8 +177,3 @@ export function requireStageStatus(allowedStatuses: string[]) {
  * Convenience middleware for most common case: require active stage
  */
 export const requireActiveStage = requireStageStatus(['active']);
-
-/**
- * Convenience middleware for voting operations: allow active or voting stage
- */
-export const requireActiveOrVotingStage = requireStageStatus(['active', 'voting']);

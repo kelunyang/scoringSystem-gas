@@ -959,17 +959,6 @@ export async function callAIProvider(
   }
 }
 
-/**
- * Generate a unique query ID
- *
- * @returns Query ID string
- */
-export function generateQueryId(): string {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 8);
-  return `${timestamp}_${random}`;
-}
-
 /** Test connection timeout in milliseconds */
 const TEST_CONNECTION_TIMEOUT_MS = 15000; // 15 seconds
 

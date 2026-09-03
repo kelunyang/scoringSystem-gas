@@ -213,46 +213,6 @@ export function useAvailableGroupUsers(projectId: Ref<string | null>): UseQueryR
 }
 
 /**
- * Add a member to a group
- *
- * @returns {Object} Mutation object
- */
-export function useAddGroupMember() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ projectId, groupId, userEmail, role }: { projectId: string; groupId: string; userEmail: string; role?: 'leader' | 'member' }) => {
-      const httpResponse = await (rpcClient.groups as any)['add-member'].$post({
-        json: {
-          projectId,
-          groupId,
-          userEmail,
-          role: role || 'member'
-        }
-      })
-      const response = await httpResponse.json() as ApiResponse<AddMemberResponse>
-
-      if (!response.success) {
-        throw new Error(response.error?.message || '新增成員失敗')
-      }
-
-      return response.data
-    },
-    onSuccess: (_data, variables) => {
-      // Invalidate all related queries to ensure consistency
-      queryClient.invalidateQueries({ queryKey: ['groupMembers', variables.projectId] })
-      queryClient.invalidateQueries({ queryKey: ['projectGroups', variables.projectId] })
-      queryClient.invalidateQueries({ queryKey: ['availableGroupUsers', variables.projectId] })
-
-      ElMessage.success('成員已成功加入群組')
-    },
-    onError: (error) => {
-      ElMessage.error(getErrorMessage(error) || '新增成員失敗')
-    }
-  })
-}
-
-/**
  * Batch add multiple members to a group (OPTIMIZED)
  *
  * Uses single D1 batch transaction instead of sequential API calls.

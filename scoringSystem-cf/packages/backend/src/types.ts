@@ -57,7 +57,6 @@ export interface Env {
   // Cloudflare Queues
   EMAIL_QUEUE: Queue<unknown>;
   NOTIFICATION_QUEUE: Queue<unknown>;
-  SETTLEMENT_QUEUE: Queue<unknown>;
   LOGIN_EVENTS: Queue<unknown>;
   AI_RANKING_QUEUE: Queue<unknown>;
 

@@ -252,36 +252,6 @@ export async function queueNotificationDigestEmail(
 }
 
 /**
- * 推送安全巡邏報告郵件到 Queue
- */
-export async function queueSecurityReportEmail(
-  env: Env,
-  adminEmail: string,
-  reportHtml: string,
-  reportText: string,
-  summary: {
-    expiredCodesCount: number;
-    failedAttemptsCount: number;
-    issuesFound: number;
-  }
-): Promise<void> {
-  const message: EmailQueueMessage = {
-    type: 'security_report',
-    triggeredBy: 'system',
-    timestamp: Date.now(),
-    data: {
-      adminEmail,
-      reportHtml,
-      reportText,
-      summary,
-    },
-  };
-
-  await env.EMAIL_QUEUE.send(message);
-  console.log(`[Email Queue] Queued security report email for ${adminEmail}`);
-}
-
-/**
  * 推送管理員通知郵件到 Queue
  */
 export async function queueAdminNotificationEmail(

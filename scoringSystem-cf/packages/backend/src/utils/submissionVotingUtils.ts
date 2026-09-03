@@ -5,7 +5,6 @@
 
 import { validateWeakOrder } from '@repo/shared';
 
-
 /**
  * 驗證成果是否符合投票資格
  */
@@ -52,48 +51,6 @@ export async function validateSubmissionEligibility(
   }
 
   return { valid: true, submission };
-}
-
-/**
- * 獲取可投票的成果列表
- */
-export async function getRankableSubmissions(
-  db: D1Database,
-  projectId: string,
-  stageId: string,
-  excludeGroupId?: string
-): Promise<any[]> {
-  // 獲取所有已批准的成果
-  const submissions = await db.prepare(`
-    SELECT
-      s.submissionId,
-      s.groupId,
-      s.status,
-      s.submitTime,
-      s.contentMarkdown,
-      g.groupName
-    FROM submissions_with_status s
-    LEFT JOIN groups g ON g.groupId = s.groupId AND g.projectId = s.projectId
-    WHERE s.projectId = ?
-      AND s.stageId = ?
-      AND s.status = 'approved'
-    ORDER BY s.submitTime DESC
-  `).bind(projectId, stageId).all();
-
-  if (!submissions.results || submissions.results.length === 0) {
-    return [];
-  }
-
-  // 過濾掉排除的組別
-  let validSubmissions = submissions.results;
-
-  if (excludeGroupId) {
-    validSubmissions = validSubmissions.filter(
-      sub => sub.groupId !== excludeGroupId
-    );
-  }
-
-  return validSubmissions;
 }
 
 /**

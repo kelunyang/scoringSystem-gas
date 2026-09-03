@@ -311,12 +311,6 @@ export async function checkProjectPermission(
 }
 
 /**
- * Generic permission check (alias for checkGlobalPermission)
- * @deprecated Use checkGlobalPermission or checkProjectPermission directly
- */
-export const checkPermission = checkGlobalPermission;
-
-/**
  * Check if user is Teacher level or above (Level 0-2)
  * Includes: Admin, Project Creator, Teacher, Observer
  *

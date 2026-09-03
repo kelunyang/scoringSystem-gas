@@ -154,29 +154,6 @@ export function calculateStagesWithEarnings(
 }
 
 /**
- * 计算钱包摘要信息
- * @param transactions - 交易列表
- * @returns 包含总收入和交易数量的对象
- */
-export function calculateWalletSummary(transactions: Transaction[] | null | undefined): WalletSummary {
-  if (!transactions || transactions.length === 0) {
-    return { totalEarned: 0, transactionCount: 0 }
-  }
-
-  let totalEarned = 0
-
-  transactions.forEach(transaction => {
-    // Sum all transactions (both positive and negative) for correct net balance
-    totalEarned += transaction.points
-  })
-
-  return {
-    totalEarned: totalEarned,
-    transactionCount: transactions.length
-  }
-}
-
-/**
  * 生成头像URL
  * @param person - 人员对象
  * @returns 头像URL
@@ -210,46 +187,6 @@ export function generateAvatarUrl(person: Person): string {
 }
 
 /**
- * 过滤交易列表
- * @param transactions - 交易列表
- * @param filters - 过滤条件
- * @returns 过滤后的交易列表
- */
-export function filterTransactions(
-  transactions: Transaction[] | null | undefined,
-  filters: TransactionFilters = {}
-): Transaction[] {
-  if (!transactions || !Array.isArray(transactions)) {
-    console.warn('Transactions is not an array:', transactions)
-    return []
-  }
-
-  let filtered = [...transactions]
-
-  // 点数过滤
-  if (filters.points !== null && filters.points !== undefined) {
-    filtered = filtered.filter(t => t.points === filters.points)
-  }
-
-  // 说明过滤
-  if (filters.description && filters.description.trim()) {
-    const searchText = filters.description.trim().toLowerCase()
-    filtered = filtered.filter(t =>
-      t.description && t.description.toLowerCase().includes(searchText)
-    )
-  }
-
-  // 排序并限制数量
-  const sorted = filtered.sort((a, b) => b.timestamp - a.timestamp)
-
-  if (filters.limit && filters.limit > 0) {
-    return sorted.slice(0, filters.limit)
-  }
-
-  return sorted
-}
-
-/**
  * 检查交易是否已被撤销
  * @param transaction - 交易对象
  * @param allTransactions - 所有交易列表
@@ -266,36 +203,6 @@ export function isTransactionReversed(transaction: Transaction, allTransactions:
     t.transactionType === 'reversal' &&
     t.relatedTransactionId === (transaction.transactionId || transaction.id)
   )
-}
-
-/**
- * 创建CSV内容
- * @param transactions - 交易列表
- * @returns CSV内容字符串
- */
-export function createTransactionCSV(transactions: Transaction[]): string {
-  // CSV标题行
-  const headers = ['时间', '金额', '类型', '说明', '阶段', '阶段名称', '交易ID']
-
-  // 转换交易记录为CSV格式
-  const csvData = transactions.map(transaction => [
-    formatTime(transaction.timestamp),
-    transaction.points.toString(),
-    transaction.transactionType || '',
-    (transaction.description || '').replace(/"/g, '""'), // 处理CSV中的引号
-    transaction.stage.toString(),
-    (transaction.stageName || '').replace(/"/g, '""'),
-    transaction.id || transaction.transactionId || ''
-  ])
-
-  // 组合CSV内容
-  const csvContent = [headers, ...csvData]
-    .map(row => row.map(field => `"${field}"`).join(','))
-    .join('\n')
-
-  // 添加BOM以支持中文字符
-  const BOM = '\uFEFF'
-  return BOM + csvContent
 }
 
 /**

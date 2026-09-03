@@ -154,20 +154,6 @@ export async function processSudoHeaders(c: Context<{ Bindings: Env; Variables: 
 }
 
 /**
- * Sudo middleware (standalone version)
- * Processes X-Sudo-As and X-Sudo-Project headers
- *
- * Must be used AFTER auth middleware
- */
-export const sudoMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: HonoVariables }> = async (c, next) => {
-  const result = await processSudoHeaders(c);
-  if (result) {
-    return result;
-  }
-  return await next();
-};
-
-/**
  * Helper to get the effective user in handlers
  * In sudo mode, returns the impersonated user's info
  * Otherwise returns the actual authenticated user
@@ -204,18 +190,4 @@ export function getEffectiveUser(c: Context<{ Bindings: Env; Variables: HonoVari
     displayName: user.displayName,
     isSudo: false
   };
-}
-
-/**
- * Check if current request is in sudo mode
- */
-export function isSudoMode(c: Context<{ Bindings: Env; Variables: HonoVariables }>): boolean {
-  return c.get('sudoMode') === true;
-}
-
-/**
- * Get the sudo project ID (if in sudo mode)
- */
-export function getSudoProjectId(c: Context<{ Bindings: Env; Variables: HonoVariables }>): string | undefined {
-  return c.get('sudoProjectId');
 }

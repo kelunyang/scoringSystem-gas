@@ -185,32 +185,6 @@ interface CloudflareEmailTestResult {
   messageId?: string
 }
 
-/**
- * Test Cloudflare Email Service connection
- * Sends a test email to the current admin user
- *
- * @returns Mutation object for testing Cloudflare Email
- */
-export function useTestCloudflareEmail(): UseMutationReturnType<CloudflareEmailTestResult, Error, void, unknown> {
-  return useMutation({
-    mutationFn: async () => {
-      const response = await adminApi.email.testCloudflare()
-
-      if (!response.success) {
-        throw new Error(response.error?.message || 'Cloudflare Email 測試失敗')
-      }
-
-      return response.data as CloudflareEmailTestResult
-    },
-    onSuccess: (data) => {
-      ElMessage.success(data.message || 'Cloudflare Email 測試成功！')
-    },
-    onError: (error: Error) => {
-      ElMessage.error(`Cloudflare Email 測試失敗: ${error.message}`)
-    }
-  })
-}
-
 // ============================================================================
 // Re-export types
 // ============================================================================

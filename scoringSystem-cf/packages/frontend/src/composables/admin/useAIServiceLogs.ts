@@ -143,34 +143,6 @@ export function useAIServiceLogs(
 // useAIServiceStatistics - Query for AI Service Statistics
 // ============================================================================
 
-/**
- * Get AI service usage statistics
- *
- * @returns Query result with AI service statistics
- */
-export function useAIServiceStatistics(): UseQueryReturnType<AIServiceStatistics, Error> {
-  const userQuery = useCurrentUser()
-
-  const isEnabled = computed(() => {
-    return userQuery.isSuccess.value && !!userQuery.data.value
-  })
-
-  return useQuery({
-    queryKey: ['admin', 'ai-service-logs', 'statistics'],
-    queryFn: async (): Promise<AIServiceStatistics> => {
-      const response = await adminApi.aiServiceLogs.statistics()
-
-      if (!response.success) {
-        throw new Error(response.error?.message || '載入 AI 服務統計失敗')
-      }
-
-      return response.data as unknown as AIServiceStatistics
-    },
-    enabled: isEnabled,
-    staleTime: 1000 * 60 * 5
-  })
-}
-
 // ============================================================================
 // useAIServiceLogDetail - Query/Mutation for Log Details
 // ============================================================================

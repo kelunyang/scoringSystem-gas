@@ -105,17 +105,3 @@ export function createSudoSafeDB(db: D1Database): D1Database {
     }
   });
 }
-
-/**
- * Check if a request is in sudo mode based on headers
- */
-export function isSudoRequest(request: Request): { isSudo: boolean; sudoAs?: string; projectId?: string } {
-  const sudoAs = request.headers.get('X-Sudo-As');
-  const projectId = request.headers.get('X-Sudo-Project');
-
-  if (sudoAs && projectId) {
-    return { isSudo: true, sudoAs, projectId };
-  }
-
-  return { isSudo: false };
-}

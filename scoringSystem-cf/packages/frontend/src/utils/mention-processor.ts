@@ -34,19 +34,3 @@ export function processMentions(
   })
 }
 
-/**
- * 建立 mention 前處理函數
- * 用於傳入 MdPreviewWrapper 的 preProcess prop
- *
- * @param emailToDisplayName - email 對應 displayName 的映射表
- * @returns 前處理函數
- *
- * @example
- * const preProcess = createMentionProcessor({ "john@example.com": "John Doe" })
- * <MdPreviewWrapper :content="content" :preProcess="preProcess" />
- */
-export function createMentionProcessor(
-  emailToDisplayName: Record<string, string>
-): (content: string) => string {
-  return (content: string) => processMentions(content, emailToDisplayName)
-}

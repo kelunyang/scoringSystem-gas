@@ -38,14 +38,6 @@ export function setCurrentUserId(userId: string | null): void {
   currentUserId = userId
 }
 
-/**
- * 獲取當前用戶 ID
- * @returns 當前用戶 ID
- */
-export function getCurrentUserId(): string | null {
-  return currentUserId
-}
-
 class ErrorHandler {
   private maxLogSize: number = 20 // 最多保留 20 筆錯誤
 

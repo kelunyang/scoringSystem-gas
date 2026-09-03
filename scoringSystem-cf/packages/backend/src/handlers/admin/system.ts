@@ -87,55 +87,6 @@ export async function getSystemStats(env: Env, userEmail?: string): Promise<Resp
 }
 
 /**
- * Get system event logs (recent activities)
- */
-export async function getSystemEventLogs(
-  env: Env,
-  limit: number = 100
-): Promise<Response> {
-  try {
-    // Get recent logs
-    const result = await env.DB.prepare(`
-      SELECT
-        el.*,
-        u.displayName,
-        u.userEmail
-      FROM eventlogs el
-      LEFT JOIN users u ON el.userId = u.userId
-      ORDER BY el.timestamp DESC
-      LIMIT ?
-    `).bind(limit).all();
-
-    const logs = result.results?.map((log: any) => {
-      // Parse details if it's a JSON string
-      let parsedDetails = log.details;
-      if (typeof log.details === 'string') {
-        parsedDetails = parseJSON(log.details, {});
-      }
-
-      return {
-        logId: log.logId,
-        projectId: log.projectId,
-        userEmail: log.userEmail,
-        displayName: log.displayName || log.userEmail,
-        action: log.action,
-        resourceType: log.resourceType,
-        resourceId: log.resourceId,
-        details: parsedDetails,
-        timestamp: log.timestamp,
-        ipAddress: log.ipAddress
-      };
-    }) || [];
-
-    return successResponse(logs);
-
-  } catch (error) {
-    console.error('Get system logs error:', error);
-    return errorResponse('SYSTEM_ERROR', 'Failed to get system logs');
-  }
-}
-
-/**
  * Get system logs with filtering
  */
 export async function getSystemLogs(

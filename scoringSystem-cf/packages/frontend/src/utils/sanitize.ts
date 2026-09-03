@@ -80,19 +80,3 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   }
 })
 
-/**
- * Sanitize plain text (escape HTML entities)
- * Use this for displaying user input that should NOT contain any HTML
- *
- * @param text - Plain text to escape
- * @returns HTML-escaped text
- */
-export function sanitizeText(text: string | null | undefined): string {
-  if (!text || typeof text !== 'string') {
-    return ''
-  }
-
-  const div = document.createElement('div')
-  div.textContent = text
-  return div.innerHTML
-}

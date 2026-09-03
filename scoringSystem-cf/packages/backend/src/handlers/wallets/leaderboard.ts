@@ -10,51 +10,6 @@ import { successResponse, errorResponse } from '../../utils/response';
 import { parseJSON } from '../../utils/json';
 
 /**
- * Get wallet leaderboard (top users by balance)
- * Balance calculated from all transactions in real-time
- */
-export async function getWalletLeaderboard(
-  env: Env,
-  userEmail: string,
-  projectId: string,
-  limit: number = 10
-): Promise<Response> {
-  try {
-    // Calculate balance for each user from transactions
-    const userBalances = await env.DB.prepare(`
-      SELECT
-        u.userId, u.userEmail, u.displayName,
-        SUM(t.amount) as balance,
-        COUNT(t.transactionId) as transactionCount
-      FROM transactions t
-      JOIN users u ON t.userEmail = u.userEmail
-      WHERE t.projectId = ?
-      GROUP BY u.userId, u.userEmail, u.displayName
-      ORDER BY balance DESC
-      LIMIT ?
-    `).bind(projectId, limit).all();
-
-    const leaderboard = userBalances.results.map((user, index) => ({
-      rank: index + 1,
-      userId: user.userId,
-      userEmail: user.userEmail,
-      displayName: user.displayName,
-      balance: user.balance || 0,
-      transactionCount: user.transactionCount || 0
-    }));
-
-    return successResponse({
-      leaderboard,
-      total: leaderboard.length
-    });
-
-  } catch (error) {
-    console.error('Get wallet leaderboard error:', error);
-    return errorResponse('SYSTEM_ERROR', 'Failed to get wallet leaderboard');
-  }
-}
-
-/**
  * Get project wallet ladder (user-based with permission masking)
  * GAS-compatible implementation for WalletLadderChart visualization
  *
@@ -230,51 +185,6 @@ export async function getProjectWalletLadder(
   } catch (error) {
     console.error('Get project wallet ladder error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to get project wallet ladder');
-  }
-}
-
-/**
- * Get group wealth statistics
- * Calculate total balance per group
- */
-export async function getGroupWealthStats(
-  env: Env,
-  userEmail: string,
-  projectId: string
-): Promise<Response> {
-  try {
-    const groupStats = await env.DB.prepare(`
-      SELECT
-        pg.groupId, pg.groupName,
-        COUNT(DISTINCT pug.userEmail) as memberCount,
-        COALESCE(SUM(t.amount), 0) as totalBalance,
-        COALESCE(AVG(t.amount), 0) as avgBalancePerMember
-      FROM groups pg
-      JOIN usergroups pug ON pg.groupId = pug.groupId
-      LEFT JOIN users u ON pug.userEmail = u.userEmail
-      LEFT JOIN transactions t ON u.userEmail = t.userEmail AND t.projectId = ?
-      WHERE pg.projectId = ?
-      GROUP BY pg.groupId, pg.groupName
-      ORDER BY totalBalance DESC
-    `).bind(projectId, projectId).all();
-
-    const stats = groupStats.results.map((group, index) => ({
-      rank: index + 1,
-      groupId: group.groupId,
-      groupName: group.groupName,
-      memberCount: group.memberCount || 0,
-      totalBalance: group.totalBalance || 0,
-      avgBalance: group.avgBalancePerMember || 0
-    }));
-
-    return successResponse({
-      stats,
-      totalGroups: stats.length
-    });
-
-  } catch (error) {
-    console.error('Get group wealth stats error:', error);
-    return errorResponse('SYSTEM_ERROR', 'Failed to get group wealth statistics');
   }
 }
 

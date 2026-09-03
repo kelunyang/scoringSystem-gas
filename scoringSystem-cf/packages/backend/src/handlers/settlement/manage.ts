@@ -487,48 +487,6 @@ export async function getSettlementDetails(
 }
 
 /**
- * Get transactions by settlement ID
- */
-export async function getSettlementTransactions(
-  env: Env,
-  userEmail: string,
-  projectId: string,
-  settlementId: string
-): Promise<Response> {
-  try {
-    // Check project access
-    const projectAccess = await env.DB.prepare(`
-      SELECT ug.membershipId
-      FROM usergroups ug
-      WHERE ug.userEmail = ? AND ug.projectId = ? AND ug.isActive = 1
-    `).bind(userEmail, projectId).first();
-
-    if (!projectAccess) {
-      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view transactions');
-    }
-
-    // Get transactions for this settlement
-    const transactionsResult = await env.DB.prepare(`
-      SELECT * FROM transactions WHERE settlementId = ? AND projectId = ?
-    `).bind(settlementId, projectId).all();
-
-    const settlementTransactions = transactionsResult.results || [];
-    const totalAmount = settlementTransactions.reduce((sum, t) => sum + Number(t.amount), 0);
-
-    return successResponse({
-      transactions: settlementTransactions,
-      totalCount: settlementTransactions.length,
-      totalAmount: totalAmount
-    });
-
-  } catch (error) {
-    console.error('Get settlement transactions error:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return errorResponse('INTERNAL_ERROR', `Failed to get settlement transactions: ${message}`);
-  }
-}
-
-/**
  * Get stage settlement rankings for a specific stage
  */
 export async function getStageSettlementRankings(

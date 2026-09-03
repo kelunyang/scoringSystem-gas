@@ -207,55 +207,6 @@ export function useLogout(): UseMutationReturnType<ApiResponse, Error, void, unk
 }
 
 /**
- * Change password mutation
- *
- * @returns {UseMutationReturnType} Mutation object
- */
-export function useChangePassword(): UseMutationReturnType<any, Error, ChangePasswordParams, unknown> {
-  return useMutation({
-    mutationFn: async ({ oldPassword, newPassword }: ChangePasswordParams): Promise<any> => {
-      const token = sessionStorage.getItem('sessionId')
-      if (!token) throw new Error('未登入')
-
-      const httpResponse = await (rpcClient.api.auth as any)['change-password'].$post({
-        json: {
-          sessionId: token,
-          oldPassword,
-          newPassword
-        }
-      })
-
-      const response = await httpResponse.json() as ApiResponse
-
-      if (!response.success) {
-        throw new Error(response.error?.message || '修改密碼失敗')
-      }
-
-      return response.data
-    },
-    onSuccess: () => {
-      ElMessage.success('密碼修改成功')
-    },
-    onError: (error) => {
-      ElMessage.error(getErrorMessage(error) || '修改密碼失敗')
-    }
-  })
-}
-
-/**
- * Computed helper to check if user is authenticated
- *
- * @param {UseQueryResult} userQuery - Result from useCurrentUser()
- * @returns {ComputedRef<boolean>}
- */
-export function useIsAuthenticated(userQuery: UseQueryReturnType<AuthUser, Error>): ComputedRef<boolean> {
-  return computed(() => {
-    // IMPORTANT: userQuery properties are refs, need to access .value
-    return userQuery.isSuccess.value && !!userQuery.data.value
-  })
-}
-
-/**
  * @deprecated Use usePermissions().hasPermission() from @/composables/usePermissions instead
  *
  * This function is kept for backward compatibility but will be removed in future versions.
