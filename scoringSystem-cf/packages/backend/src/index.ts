@@ -363,6 +363,17 @@ export default {
 export type AppType = typeof app;
 
 /**
+ * Export the Durable Object classes.
+ *
+ * REQUIRED: the runtime resolves `durable_objects.bindings` in wrangler.toml
+ * against the classes this entry point exports. Dropping this line makes
+ * `wrangler deploy` fail with "does not export class 'NotificationHub' which is
+ * depended on by existing Durable Objects" — and nothing catches it earlier:
+ * tsc is happy, the bundle builds, and `--dry-run` does not check it either.
+ */
+export { NotificationHub } from './durable-objects/NotificationHub';
+
+/**
  * Export Queue Consumers (for type inference and testing)
  */
 export { emailQueue, notificationQueue, loginEventsQueue, aiRankingQueue };
