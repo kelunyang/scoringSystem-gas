@@ -50,6 +50,10 @@ pnpm-debug.log*
 # Database backups
 *.sql
 backup-*.sql
+# ...but D1 migrations are source code, not backups. The rule above had been
+# silently excluding every migration since the Cloudflare rewrite, so a fresh
+# clone had no schema at all.
+!packages/backend/migrations/*.sql
 
 # Test coverage
 coverage/
