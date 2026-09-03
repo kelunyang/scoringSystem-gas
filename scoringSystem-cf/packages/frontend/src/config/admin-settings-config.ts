@@ -414,32 +414,123 @@ export const systemConfigCategories: ConfigCategory[] = [
         prependIcon: 'fa-key'
       }
     ]
+  },
+
+  // ========================================================================
+  // 10. 郵件速率限制
+  // 對應 backend: utils/email-budget.ts、utils/rate-limiter.ts
+  // 預設值是照「約 400 人、一節課約 40 人同時登入、Google Workspace 每日
+  // 2000 封」估的。換寄件帳號或人數規模變動時，這一區要跟著調。
+  // ========================================================================
+  {
+    key: 'email_limits',
+    title: '郵件速率限制',
+    icon: 'fa-gauge-high',
+    description: '控制系統寄信的速度與總量。每日預算是為了不要把 SMTP 帳號的每日額度用光——額度一旦用光，所有人的登入驗證碼都會寄不出去。',
+    fields: [
+      {
+        key: 'EMAIL_DAILY_BUDGET',
+        label: '每日寄信總預算',
+        type: 'slider',
+        category: 'email_limits',
+        min: 0,
+        max: 3000,
+        step: 50,
+        marks: { 0: '關閉', 500: '一般 Gmail', 1500: '預設', 2000: 'Workspace 上限' },
+        description: '滾動 24 小時內全系統最多寄幾封。應設在寄件帳號每日上限之下（一般 Gmail 約 500、Google Workspace 約 2000）。設 0 表示不限制。',
+        suffix: '封',
+        showTooltip: true
+      },
+      {
+        key: 'EMAIL_BUDGET_BULK_PCT',
+        label: '批次信可用預算比例',
+        type: 'slider',
+        category: 'email_limits',
+        min: 10,
+        max: 100,
+        step: 5,
+        marks: { 30: '30%', 50: '50%', 80: '80%' },
+        description: '通知彙整信、巡邏報告等機器人信件用掉這個比例的預算後就停寄。調低可以替登入驗證碼留更多餘裕。',
+        suffix: '%',
+        showTooltip: true
+      },
+      {
+        key: 'EMAIL_BUDGET_NORMAL_PCT',
+        label: '一般信可用預算比例',
+        type: 'slider',
+        category: 'email_limits',
+        min: 10,
+        max: 100,
+        step: 5,
+        marks: { 50: '50%', 65: '65%', 90: '90%' },
+        description: '邀請信、成果撤回通知等用掉這個比例後就停寄。剩下的預算全部保留給登入驗證碼與密碼重設。應大於「批次信」比例。',
+        suffix: '%',
+        showTooltip: true
+      },
+      {
+        key: 'EMAIL_COOLDOWN_SECONDS',
+        label: '同一信箱寄信冷卻',
+        type: 'slider',
+        category: 'email_limits',
+        min: 0,
+        max: 300,
+        step: 10,
+        marks: { 0: '關閉', 60: '60秒', 180: '3分鐘' },
+        description: '同一個信箱兩封信之間至少要隔多久。應與前端「重新發送」倒數一致（目前 60 秒）。設 0 表示不限制。',
+        suffix: '秒',
+        showTooltip: true
+      },
+      {
+        key: 'EMAIL_MAX_PER_RECIPIENT_HOUR',
+        label: '每信箱每小時上限',
+        type: 'slider',
+        category: 'email_limits',
+        min: 0,
+        max: 30,
+        step: 1,
+        description: '同一個信箱每小時最多收幾封。免密碼觸發（重寄驗證碼、忘記密碼）與已驗證密碼的登入分開計算，所以有人惡意連打也不會害本人登不進來。',
+        suffix: '封',
+        showTooltip: true
+      },
+      {
+        key: 'EMAIL_MAX_PER_RECIPIENT_DAY',
+        label: '每信箱每日上限',
+        type: 'slider',
+        category: 'email_limits',
+        min: 0,
+        max: 100,
+        step: 5,
+        description: '同一個信箱每日最多收幾封，同樣分開計算。',
+        suffix: '封',
+        showTooltip: true
+      },
+      {
+        key: 'EMAIL_MAX_PER_IP_HOUR',
+        label: '每 IP 每小時上限',
+        type: 'slider',
+        category: 'email_limits',
+        min: 0,
+        max: 500,
+        step: 10,
+        marks: { 60: '預設', 200: '200' },
+        description: '只套用在「不需要密碼就會寄信」的端點（重寄驗證碼、忘記密碼）。一般登入不受此限制，所以整班共用學校 NAT 出口 IP 同時登入不會被擋。設 0 表示不限制。',
+        suffix: '封',
+        showTooltip: true
+      },
+      {
+        key: 'MAX_EMAILS_PER_HOUR',
+        label: '每帳號每小時寄信上限',
+        type: 'slider',
+        category: 'email_limits',
+        min: 0,
+        max: 2000,
+        step: 50,
+        marks: { 0: '關閉', 500: '預設' },
+        description: '單一管理員/教師帳號每小時能觸發幾封信（發邀請碼、批次通知、重送郵件）。一次發 400 張邀請碼會一口氣扣 400。設 0 表示不限制。',
+        suffix: '封',
+        showTooltip: true
+      }
+    ]
   }
 ]
 
-/**
- * 根據 key 查找欄位配置
- */
-export function getFieldConfig(key: string): ConfigField | undefined {
-  for (const category of systemConfigCategories) {
-    const field = category.fields.find(f => f.key === key)
-    if (field) return field
-  }
-  return undefined
-}
-
-/**
- * 根據分類 key 查找分類配置
- */
-export function getCategoryConfig(key: string): ConfigCategory | undefined {
-  return systemConfigCategories.find(c => c.key === key)
-}
-
-/**
- * 取得所有欄位的 keys
- */
-export function getAllFieldKeys(): string[] {
-  return systemConfigCategories.flatMap(category =>
-    category.fields.map(field => field.key)
-  )
-}

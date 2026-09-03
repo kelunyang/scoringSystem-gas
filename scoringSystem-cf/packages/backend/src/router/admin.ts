@@ -1453,32 +1453,24 @@ app.post(
     const user = c.get('user');
     const body = c.req.valid('json');
 
-    // Manual rate limit check for batch operations
-    const { getRateLimitStatus } = await import('../middleware/rate-limit');
-    const rateLimitStatus = await getRateLimitStatus(c.env, user.userEmail);
+    // Charge this actor's hourly quota up front. The previous version only
+    // *read* the counter, and nothing in the codebase ever incremented it, so
+    // `remaining === 0` could never be true and the check never fired.
+    //
+    // The batch's real size is not known until the filter query runs, so
+    // charge the configured ceiling for it; MAX_BATCH_EMAIL_SIZE is what the
+    // handler will cap the query at anyway.
+    const { guardActorEmailQuota, rateLimitResponse } = await import('../middleware/rate-limit');
+    const { getTypedConfig } = await import('../utils/config');
+    const maxBatchSize = (await getTypedConfig(c.env, 'MAX_BATCH_EMAIL_SIZE')) as number;
+    const batchCost = Math.min(body.limit ?? maxBatchSize, maxBatchSize);
 
-    if (rateLimitStatus && rateLimitStatus.remaining === 0) {
-      const retryAfterSeconds = Math.ceil((rateLimitStatus.resetTime - Date.now()) / 1000);
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: {
-            code: 'RATE_LIMIT_EXCEEDED',
-            message: `Email rate limit exceeded. Maximum ${rateLimitStatus.limit} emails per hour allowed.`,
-            retryAfter: retryAfterSeconds,
-            resetTime: rateLimitStatus.resetTime
-          }
-        }),
-        {
-          status: 429,
-          headers: {
-            'Content-Type': 'application/json',
-            'Retry-After': String(retryAfterSeconds),
-            'X-RateLimit-Limit': String(rateLimitStatus.limit),
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': String(rateLimitStatus.resetTime)
-          }
-        }
+    const decision = await guardActorEmailQuota(c.env, user.userEmail, batchCost);
+    if (!decision.allowed) {
+      return rateLimitResponse(
+        decision,
+        'RATE_LIMIT_EXCEEDED',
+        `這批最多 ${batchCost} 封信會超過每小時寄信上限（剩餘 ${decision.remaining ?? 0} 封），請稍後再試`
       );
     }
 
@@ -1526,6 +1518,63 @@ app.post(
  * Get status of all automated robots/jobs
  * Uses KV cache to avoid repeated database queries
  */
+/**
+ * POST /admin/rate-limit/status
+ * Read one account's email rate limit usage.
+ * Body: { userEmail }
+ */
+app.post('/rate-limit/status', async (c) => {
+  const body = await c.req.json<{ userEmail?: string }>();
+  if (!body.userEmail) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: '缺少 userEmail' } }, 400);
+  }
+
+  const { getRateLimitStatus } = await import('../middleware/rate-limit');
+  const status = await getRateLimitStatus(c.env, body.userEmail);
+
+  if (!status) {
+    return c.json({ success: false, error: { code: 'SYSTEM_ERROR', message: '無法讀取速率限制狀態' } }, 500);
+  }
+  return c.json({ success: true, data: status });
+});
+
+/**
+ * POST /admin/rate-limit/reset
+ * Clear one account's email rate limit buckets.
+ *
+ * The operational escape hatch for the limits added 2026-09-03: without it, a
+ * user who hits the hourly cap has no recourse but to wait it out. Only clears
+ * the actor bucket — the per-recipient and per-IP buckets are anti-abuse
+ * controls and are left alone deliberately.
+ *
+ * Body: { userEmail }
+ */
+app.post('/rate-limit/reset', async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json<{ userEmail?: string }>();
+  if (!body.userEmail) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: '缺少 userEmail' } }, 400);
+  }
+
+  const { resetRateLimit } = await import('../middleware/rate-limit');
+  const ok = await resetRateLimit(c.env, body.userEmail);
+
+  await logGlobalOperation(
+    c.env,
+    user.userEmail,
+    'rate_limit_reset',
+    'user',
+    body.userEmail,
+    { targetUser: body.userEmail, resetBy: user.userEmail, success: ok },
+    { level: 'warning' }
+  );
+
+  return c.json({
+    success: ok,
+    data: { userEmail: body.userEmail, message: ok ? '已清除該帳號的寄信速率限制' : '清除失敗' }
+  });
+});
+
 app.post('/robots/status', async (c) => {
   try {
     const user = c.get('user');
@@ -1990,6 +2039,12 @@ app.post(
   async (c) => {
     const user = c.get('user');
     const body = c.req.valid('json');
+    const { guardActorEmailQuota, rateLimitResponse } = await import('../middleware/rate-limit');
+    const quota = await guardActorEmailQuota(c.env, user.userEmail, 1);
+    if (!quota.allowed) {
+      return rateLimitResponse(quota, 'RATE_LIMIT_EXCEEDED', '寄信次數已達每小時上限，請稍後再試');
+    }
+
     return await resendSingleEmail(c.env, user.userEmail, body.logId);
   }
 );
@@ -2015,6 +2070,16 @@ app.post(
   async (c) => {
     const user = c.get('user');
     const body = c.req.valid('json');
+    const { guardActorEmailQuota, rateLimitResponse } = await import('../middleware/rate-limit');
+    const quota = await guardActorEmailQuota(c.env, user.userEmail, body.logIds.length);
+    if (!quota.allowed) {
+      return rateLimitResponse(
+        quota,
+        'RATE_LIMIT_EXCEEDED',
+        `這批 ${body.logIds.length} 封信會超過每小時寄信上限（剩餘 ${quota.remaining ?? 0} 封），請稍後再試`
+      );
+    }
+
     return await resendBatchEmailsHandler(c.env, user.userEmail, body.logIds);
   }
 );

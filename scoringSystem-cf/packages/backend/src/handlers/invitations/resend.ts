@@ -7,6 +7,7 @@ import { Env } from '../../types';
 import { successResponse, errorResponse } from '../../utils/response';
 import { sendInvitationEmail } from './email';
 import { logGlobalOperation } from '../../utils/logging';
+import { guardEmailTrigger } from '../../utils/email-budget';
 
 /**
  * Resend invitation email
@@ -58,6 +59,20 @@ export async function resendInvitationEmail(
     const remainingTime = (invitation.expiryTime as number) - now;
     const remainingDays = Math.ceil(remainingTime / (24 * 60 * 60 * 1000));
     const validDays = remainingDays > 0 ? remainingDays : 7; // fallback to 7 days
+
+    // Stop the same address being re-invited over and over. Checked here
+    // rather than in the router because this is where targetEmail is known.
+    const recipientGuard = await guardEmailTrigger(env, {
+      recipient: invitation.targetEmail as string,
+      channel: 'verified'
+    });
+    if (!recipientGuard.allowed) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((recipientGuard.retryAfterMs ?? 0) / 1000));
+      return errorResponse(
+        'EMAIL_RATE_LIMITED',
+        `這個信箱最近已收過邀請信，請 ${retryAfterSeconds} 秒後再試`
+      );
+    }
 
     // Queue invitation email (async, non-blocking)
     try {

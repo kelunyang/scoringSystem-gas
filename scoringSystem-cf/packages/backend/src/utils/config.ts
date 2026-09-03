@@ -32,6 +32,14 @@ const CONFIG_KEY_MAP: Record<string, string> = {
   MAX_BATCH_EMAIL_SIZE: 'config:max_batch_email_size',
   EMAIL_BATCH_DELAY_MS: 'config:email_batch_delay_ms',
   MAX_EMAILS_PER_HOUR: 'config:max_emails_per_hour',
+  // Email Rate Limiting (see utils/email-budget.ts)
+  EMAIL_COOLDOWN_SECONDS: 'config:email_cooldown_seconds',
+  EMAIL_MAX_PER_RECIPIENT_HOUR: 'config:email_max_per_recipient_hour',
+  EMAIL_MAX_PER_RECIPIENT_DAY: 'config:email_max_per_recipient_day',
+  EMAIL_MAX_PER_IP_HOUR: 'config:email_max_per_ip_hour',
+  EMAIL_DAILY_BUDGET: 'config:email_daily_budget',
+  EMAIL_BUDGET_BULK_PCT: 'config:email_budget_bulk_pct',
+  EMAIL_BUDGET_NORMAL_PCT: 'config:email_budget_normal_pct',
   // Email Sending Configuration (Cloudflare Email Service + SMTP fallback)
   EMAIL_FROM_EMAIL: 'config:email_from_email',
   EMAIL_FROM_NAME: 'config:email_from_name',
@@ -52,6 +60,22 @@ const CONFIG_KEY_MAP: Record<string, string> = {
   DEFAULT_MAX_COMMENT_SELECTIONS: 'config:default_max_comment_selections',
   DEFAULT_COMMENT_REWARD_PERCENTILE: 'config:default_comment_reward_percentile',
 };
+
+/**
+ * Integer-valued email rate limiting keys.
+ * Shared by both intKeys sets below so they cannot drift apart — a key missing
+ * from one of them silently returns a string, and `limit * pct / 100` on a
+ * string is a bug that only shows up in production.
+ */
+const EMAIL_RATE_LIMIT_INT_KEYS = [
+  'EMAIL_COOLDOWN_SECONDS',
+  'EMAIL_MAX_PER_RECIPIENT_HOUR',
+  'EMAIL_MAX_PER_RECIPIENT_DAY',
+  'EMAIL_MAX_PER_IP_HOUR',
+  'EMAIL_DAILY_BUDGET',
+  'EMAIL_BUDGET_BULK_PCT',
+  'EMAIL_BUDGET_NORMAL_PCT'
+] as const;
 
 /**
  * Default values for configuration parameters
@@ -78,7 +102,19 @@ const DEFAULT_VALUES: Record<string, any> = {
   // Notification/Email Configuration
   MAX_BATCH_EMAIL_SIZE: 100, // Maximum emails per batch operation
   EMAIL_BATCH_DELAY_MS: 100, // Delay between emails in milliseconds
-  MAX_EMAILS_PER_HOUR: 500, // Rate limit for email sending
+  MAX_EMAILS_PER_HOUR: 500, // Per authenticated actor, per hour
+  // Email Rate Limiting.
+  // Sized for ~400 users on a Google Workspace sender (2000 recipients/day):
+  // logins alone are up to 400/day, the digest robot up to 400 per run, and a
+  // cohort's invitations are another 400 in one burst — so the budget has to
+  // arbitrate between them rather than run first-come-first-served.
+  EMAIL_COOLDOWN_SECONDS: 60, // Matches the frontend resend countdown
+  EMAIL_MAX_PER_RECIPIENT_HOUR: 5,
+  EMAIL_MAX_PER_RECIPIENT_DAY: 20,
+  EMAIL_MAX_PER_IP_HOUR: 60, // Only on endpoints that send without a password
+  EMAIL_DAILY_BUDGET: 1500, // 75% of the Workspace 2000/day ceiling
+  EMAIL_BUDGET_BULK_PCT: 50, // Digests stop here, leaving 750 for the rest
+  EMAIL_BUDGET_NORMAL_PCT: 65, // Invitations stop here, leaving 525 for logins
   // Email Sending Configuration (Cloudflare Email Service + SMTP fallback)
   EMAIL_FROM_EMAIL: '',
   EMAIL_FROM_NAME: '評分系統',
@@ -184,6 +220,7 @@ export async function getAllConfigValues(env: Env): Promise<Record<string, any>>
     'MAX_STAGE_DURATION_DAYS',
     'MAX_BATCH_EMAIL_SIZE', 'EMAIL_BATCH_DELAY_MS',
     'MAX_EMAILS_PER_HOUR',
+    ...EMAIL_RATE_LIMIT_INT_KEYS,
     'SMTP_PORT',
     'AI_RATE_LIMIT_PER_MINUTE', 'AI_RATE_LIMIT_PER_HOUR',
     'DEFAULT_MAX_COMMENT_SELECTIONS', 'DEFAULT_COMMENT_REWARD_PERCENTILE'
@@ -311,6 +348,7 @@ export async function getTypedConfig<K extends ConfigKey>(
     'MAX_BATCH_EMAIL_SIZE',
     'EMAIL_BATCH_DELAY_MS',
     'MAX_EMAILS_PER_HOUR',
+    ...EMAIL_RATE_LIMIT_INT_KEYS,
     'SESSION_TIMEOUT',
     'INVITE_CODE_TIMEOUT',
     'SMTP_PORT',

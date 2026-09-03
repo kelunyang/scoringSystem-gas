@@ -215,6 +215,12 @@ export interface Props {
   themeColor?: string;
   /** Timestamp (ms) of the last successful email-code send. 0 = none sent yet. */
   lastEmailSentAt?: number;
+  /**
+   * Seconds the resend button stays disabled. Driven by the server: it comes
+   * from EMAIL_COOLDOWN_SECONDS, or from a 429's Retry-After when the send was
+   * rate limited, so the button is never enabled before the server will accept.
+   */
+  cooldownSeconds?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -223,7 +229,8 @@ const props = withDefaults(defineProps<Props>(), {
   loading: false,
   resendLoading: false,
   themeColor: '#E17055',
-  lastEmailSentAt: 0
+  lastEmailSentAt: 0,
+  cooldownSeconds: 60
 });
 
 // Whether a verification email has been sent in this 2FA session
@@ -294,14 +301,15 @@ const countdownRef = ref<InstanceType<typeof CountdownButton> | null>(null);
  */
 function syncEmailCountdown() {
   if (currentMethod.value !== 'email' || props.lastEmailSentAt <= 0) return;
-  const remaining = 60 - (Date.now() - props.lastEmailSentAt) / 1000;
+  const remaining = props.cooldownSeconds - (Date.now() - props.lastEmailSentAt) / 1000;
   if (remaining > 0) {
     nextTick(() => countdownRef.value?.startCountdown(Math.ceil(remaining)));
   }
 }
 
-// Start/refresh the countdown whenever a new email is sent
-watch(() => props.lastEmailSentAt, () => {
+// Start/refresh the countdown whenever a new email is sent, or when the
+// server revises how long the wait is
+watch(() => [props.lastEmailSentAt, props.cooldownSeconds], () => {
   if (currentMethod.value === 'email') {
     nextTick(syncEmailCountdown);
   }

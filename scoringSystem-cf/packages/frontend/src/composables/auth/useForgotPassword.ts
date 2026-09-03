@@ -8,11 +8,15 @@ import { rpcClient } from '@/utils/rpc-client';
 import type { Ref, ComputedRef } from 'vue';
 import type { EmailVerificationResponse, Project } from '../../types/auth';
 
+/** Server default; a 429 replaces it with the actual remaining wait. */
+const DEFAULT_RESEND_COOLDOWN_SECONDS = 60;
+
 export interface UseForgotPasswordReturn {
   loading: Ref<boolean>;
   resendLoading: Ref<boolean>;
   /** Timestamp (ms) of the last verification mail sent. 0 = none sent yet. */
   lastEmailSentAt: Ref<number>;
+  resendCooldownSeconds: Ref<number>;
   emailVerified: Ref<boolean>;
   codeVerified: Ref<boolean>;
   resetSent: Ref<boolean>;
@@ -74,6 +78,22 @@ export function useForgotPassword(): UseForgotPasswordReturn {
   // Step 1 always sends a verification mail, so the 2FA step shows the resend
   // countdown instead of the manual "send code" button.
   const lastEmailSentAt = ref(0);
+  const resendCooldownSeconds = ref(DEFAULT_RESEND_COOLDOWN_SECONDS);
+
+  /**
+   * Restart the resend countdown from a rate-limited (429) response, so the
+   * button cannot be re-enabled before the server would accept another send.
+   *
+   * @param response - Parsed error body; `error.retryAfter` is in seconds
+   */
+  function applyRateLimitCountdown(response: any): void {
+    const retryAfter = Number(response?.error?.retryAfter);
+    if (!Number.isFinite(retryAfter) || retryAfter <= 0) return;
+
+    resendCooldownSeconds.value = Math.ceil(retryAfter);
+    // Not an actual send, but it is the instant the countdown runs from.
+    lastEmailSentAt.value = Date.now();
+  }
   const emailVerified = ref(false);
   const codeVerified = ref(false);
   const resetSent = ref(false);
@@ -215,8 +235,10 @@ export function useForgotPassword(): UseForgotPasswordReturn {
 
       if (response.success) {
         lastEmailSentAt.value = Date.now();
+        resendCooldownSeconds.value = DEFAULT_RESEND_COOLDOWN_SECONDS;
         return true;
       } else {
+        applyRateLimitCountdown(response);
         errorMessage.value = response.error?.message || '重新發送失敗';
         return false;
       }
@@ -291,6 +313,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
     loading.value = false;
     resendLoading.value = false;
     lastEmailSentAt.value = 0;
+    resendCooldownSeconds.value = DEFAULT_RESEND_COOLDOWN_SECONDS;
     emailVerified.value = false;
     codeVerified.value = false;
     resetSent.value = false;
@@ -315,6 +338,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
     loading,
     resendLoading,
     lastEmailSentAt,
+    resendCooldownSeconds,
     emailVerified,
     codeVerified,
     resetSent,

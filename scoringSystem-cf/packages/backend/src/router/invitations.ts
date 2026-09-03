@@ -16,6 +16,8 @@ import type { Env } from '../types';
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { authMiddleware } from '../middleware/auth';
+import { guardActorEmailQuota, rateLimitResponse } from '../middleware/rate-limit';
+import { guardEmailTrigger } from '../utils/email-budget';
 import { hasGlobalPermission, GLOBAL_PERMISSIONS } from '../utils/permissions';
 import {
   generateInvitationCode,
@@ -95,6 +97,26 @@ app.post(
       defaultGlobalGroups = []
     } = body;
 
+    // An invitation always sends a mail, so charge before creating the code.
+    // The per-recipient rule is what stops "resend the invite 50 times to
+    // annoy someone"; channel 'verified' because the caller is an
+    // authenticated staff account, and no per-IP rule for the same reason.
+    const quota = await guardActorEmailQuota(c.env, user.userEmail, 1);
+    if (!quota.allowed) {
+      return rateLimitResponse(quota, 'RATE_LIMIT_EXCEEDED', '寄信次數已達每小時上限，請稍後再試');
+    }
+    const recipientGuard = await guardEmailTrigger(c.env, {
+      recipient: targetEmail,
+      channel: 'verified'
+    });
+    if (!recipientGuard.allowed) {
+      return rateLimitResponse(
+        recipientGuard,
+        'EMAIL_RATE_LIMITED',
+        '這個信箱最近已收過邀請信，請稍後再試'
+      );
+    }
+
     const response = await generateInvitationCode(
       c.env,
       user.userEmail,
@@ -136,6 +158,19 @@ app.post(
       defaultTags = [],
       defaultGlobalGroups = []
     } = body;
+
+    // Charge the whole batch. No per-recipient check here: a batch sends each
+    // address exactly one mail, so the actor quota plus the system-wide daily
+    // budget are the controls that matter, and looping the per-recipient rule
+    // over 400 addresses would cost 400 extra round trips for nothing.
+    const quota = await guardActorEmailQuota(c.env, user.userEmail, targetEmails.length);
+    if (!quota.allowed) {
+      return rateLimitResponse(
+        quota,
+        'RATE_LIMIT_EXCEEDED',
+        `這批 ${targetEmails.length} 封邀請信會超過每小時寄信上限（剩餘 ${quota.remaining ?? 0} 封），請分批寄送`
+      );
+    }
 
     const response = await generateBatchInvitationCodes(
       c.env,
@@ -273,6 +308,13 @@ app.post(
     const body = c.req.valid('json');
     const { invitationId } = body;
 
+    const quota = await guardActorEmailQuota(c.env, user.userEmail, 1);
+    if (!quota.allowed) {
+      return rateLimitResponse(quota, 'RATE_LIMIT_EXCEEDED', '寄信次數已達每小時上限，請稍後再試');
+    }
+
+    // The per-recipient guard lives inside resendInvitationEmail, which is
+    // where the target address is looked up.
     const response = await resendInvitationEmail(
       c.env,
       invitationId,

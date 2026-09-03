@@ -13,12 +13,12 @@ import {
   buildAccountLockedEmailContent,
   buildAccountUnlockedEmailContent,
   buildNotificationDigestEmailContent,
-  buildSecurityReportEmailContent,
   buildAdminNotificationEmailContent,
   buildSecurityAlertEmailContent,
   buildSubmissionForceWithdrawnEmailContent,
 } from './email-templates';
 import { sendEmail, EmailTrigger } from '../services/email-service';
+import { sweepExpiredRateLimits } from '../utils/rate-limiter';
 import { logGlobalOperation } from '../utils/logging';
 import { getSystemTitle } from '../utils/email';
 import { getConfigValue } from '../utils/config';
@@ -468,46 +468,6 @@ export default {
             break;
           }
 
-          case 'security_report': {
-            const { adminEmail, reportHtml, reportText, summary } = parsedMessage.data;
-
-            // 🔥 NEW: Idempotency check
-            const alreadyProcessed = await checkIdempotency(env, 'security_report', adminEmail, messageId);
-            if (alreadyProcessed) {
-              console.log(`[Email Consumer] ⏭️ Skipping duplicate security_report email for ${adminEmail}`);
-              break;
-            }
-
-            const emailContent = buildSecurityReportEmailContent(
-              adminEmail,
-              reportHtml,
-              reportText,
-              summary,
-              systemTitle
-            );
-
-            const result = await sendEmail(env, {
-              trigger: EmailTrigger.SECURITY_PATROL,
-              triggeredBy: parsedMessage.triggeredBy,
-              triggerSource: 'auto',
-              recipient: adminEmail,
-              subject: emailContent.subject,
-              htmlBody: emailContent.htmlBody,
-              textBody: emailContent.textBody,
-              emailContext: {
-                summary,
-                queueMessageType: 'security_report',
-              },
-            });
-
-            // 🔥 NEW: Record idempotency
-            if (result.emailId) {
-              await recordIdempotency(env, 'security_report', adminEmail, messageId, result.emailId, result.logId);
-            }
-
-            console.log(`[Email Consumer] Sent security report email to ${adminEmail}`);
-            break;
-          }
 
           case 'admin_notification': {
             const { adminEmail, subject, htmlBody, textBody, priority } = parsedMessage.data;
@@ -575,7 +535,7 @@ export default {
             );
 
             const result = await sendEmail(env, {
-              trigger: EmailTrigger.ADMIN_NOTIFICATION,
+              trigger: EmailTrigger.SECURITY_ALERT,
               triggeredBy: parsedMessage.triggeredBy,
               triggerSource: 'auto',
               recipient: adminEmail,
@@ -680,6 +640,18 @@ export default {
           console.log(`[Email Consumer] ⚠️ Message ${messageId} ACKed despite error (non-retryable, logged to globalemaillogs)`);
         }
       }
+    }
+
+    // Drop rate limit buckets whose window has closed. Runs here because the
+    // consumer is the one thing that runs whenever mail is flowing, and the
+    // table only grows when mail flows. Indexed range delete, never fatal.
+    try {
+      const swept = await sweepExpiredRateLimits(env);
+      if (swept > 0) {
+        console.log(`[Email Consumer] Swept ${swept} expired rate limit buckets`);
+      }
+    } catch (sweepError) {
+      console.error('[Email Consumer] Rate limit sweep failed (non-fatal):', sweepError);
     }
 
     console.log(`[Email Consumer] Batch processing complete`);

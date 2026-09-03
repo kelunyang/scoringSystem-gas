@@ -73,6 +73,7 @@
       :loading="loading"
       :resend-loading="resendLoading"
       :last-email-sent-at="lastEmailSentAt"
+      :cooldown-seconds="resendCooldownSeconds"
       @submit="handleTwoFactorSubmit"
       @resend="handleResendCode"
     />
@@ -124,6 +125,7 @@ const {
   emailVerified,
   codeVerified,
   lastEmailSentAt,
+  resendCooldownSeconds,
   resetSent,
   errorMessage,
   projects,

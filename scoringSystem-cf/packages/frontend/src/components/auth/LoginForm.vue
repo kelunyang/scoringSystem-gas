@@ -48,6 +48,7 @@
       :method="twoFactorMethod"
       :available-methods="availableMethods"
       :last-email-sent-at="lastEmailSentAt"
+      :cooldown-seconds="resendCooldownSeconds"
       theme-color="#1A9B8E"
       :loading="loading"
       :resend-loading="resendLoading"
@@ -99,6 +100,7 @@ const {
   errorMessage,
   userEmail,
   lastEmailSentAt,
+  resendCooldownSeconds,
   verifyPassword,
   verifyTwoFactor,
   resendVerificationCode,

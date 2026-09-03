@@ -13,6 +13,8 @@ import { registerUser, checkEmailAvailability } from '../handlers/auth/register'
 import { authMiddleware } from '../middleware/auth';
 import { jsonResponse, ERROR_CODES } from '../utils/response';
 import { verifyTurnstileMiddleware } from '../utils/turnstile';
+import { guardEmailTrigger } from '../utils/email-budget';
+import { rateLimitResponse } from '../middleware/rate-limit';
 import { getConfigValue } from '../utils/config';
 import { generateToken } from '../handlers/auth/jwt';
 import { logGlobalOperation } from '../utils/logging';
@@ -509,6 +511,25 @@ authRouter.post(
       // Email-only user: SMTP is reliable again, so send the first verification
       // mail automatically here (restores the pre-2026-07-06 behavior) instead
       // of making the user press a button first.
+      // Rate limit only now, after the password was verified. Charging the
+      // recipient's bucket earlier would let anyone with the victim's address
+      // burn their quota using wrong passwords.
+      //
+      // No per-IP rule here: a whole class starts at once from one school NAT
+      // address, and these callers already proved they know the password.
+      const emailGuard = await guardEmailTrigger(c.env, {
+        recipient: body.userEmail,
+        ip: requestContext.ipAddress,
+        channel: 'verified'
+      });
+      if (!emailGuard.allowed) {
+        return rateLimitResponse(
+          emailGuard,
+          'EMAIL_RATE_LIMITED',
+          '驗證碼寄送太頻繁，請稍後再試'
+        );
+      }
+
       const { generateVerificationCode, storeVerificationCode, sendVerificationCodeEmail } =
         await import('../handlers/auth/two-factor');
 
@@ -922,6 +943,29 @@ authRouter.post(
   async (c) => {
     const body = c.req.valid('json');
 
+    // Rate limit before the user lookup, so a throttled response looks the
+    // same whether or not the address exists and this check adds no new
+    // enumeration oracle. (The 401 below is a pre-existing one — see
+    // plan/issue.md.)
+    //
+    // This endpoint sends mail without any password, so it carries the per-IP
+    // rule as well. The per-recipient buckets are the `open` channel, kept
+    // separate from the password-verified login path so flooding here cannot
+    // stop the real user from getting their own login code.
+    const emailGuard = await guardEmailTrigger(c.env, {
+      recipient: body.userEmail,
+      ip: c.req.header('CF-Connecting-IP'),
+      channel: 'open',
+      applyIpLimit: true
+    });
+    if (!emailGuard.allowed) {
+      return rateLimitResponse(
+        emailGuard,
+        'EMAIL_RATE_LIMITED',
+        '驗證碼寄送太頻繁，請稍後再試'
+      );
+    }
+
     // Get user by email
     const user = await c.env.DB
       .prepare('SELECT * FROM users WHERE userEmail = ?')
@@ -1018,6 +1062,24 @@ authRouter.post(
     const ipAddress = c.req.header('CF-Connecting-IP') || 'unknown';
     const cf = c.req.raw.cf as any;
     const country = cf?.country || 'unknown';
+
+    // Sends mail with no password, so per-IP applies. verifyEmailForReset
+    // deliberately returns success for unknown addresses to avoid user
+    // enumeration; limiting here keeps that property, because the decision
+    // never depends on whether the account exists.
+    const emailGuard = await guardEmailTrigger(c.env, {
+      recipient: body.userEmail,
+      ip: c.req.header('CF-Connecting-IP'),
+      channel: 'open',
+      applyIpLimit: true
+    });
+    if (!emailGuard.allowed) {
+      return rateLimitResponse(
+        emailGuard,
+        'EMAIL_RATE_LIMITED',
+        '重設密碼信寄送太頻繁，請稍後再試'
+      );
+    }
 
     const { verifyEmailForReset } = await import('../handlers/auth/password-reset');
     const result = await verifyEmailForReset(c.env, body.userEmail, ipAddress, country);

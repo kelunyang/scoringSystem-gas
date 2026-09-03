@@ -10,6 +10,9 @@ import { apiClient } from '@/utils/api';
 import type { Ref, ComputedRef } from 'vue';
 import type { LoginCredentials, TwoFactorData, TwoFactorMethod } from '../../types/auth';
 
+/** Server default; a 429 replaces it with the actual remaining wait. */
+const DEFAULT_RESEND_COOLDOWN_SECONDS = 60;
+
 export interface UseLoginReturn {
   loading: Ref<boolean>;
   resendLoading: Ref<boolean>;
@@ -21,6 +24,7 @@ export interface UseLoginReturn {
   errorMessage: Ref<string>;
   userEmail: Ref<string>;
   lastEmailSentAt: Ref<number>;
+  resendCooldownSeconds: Ref<number>;
   canSubmitPassword: ComputedRef<boolean>;
   canSubmitVerificationCode: ComputedRef<boolean>;
   verifyPassword: (credentials: LoginCredentials, turnstileToken: string) => Promise<boolean>;
@@ -73,6 +77,22 @@ export function useLogin(): UseLoginReturn {
   // Drives the 2FA email panel: 0 → show manual "send code" button (SMTP down /
   // dev mode); >0 → show the resend countdown.
   const lastEmailSentAt = ref(0);
+  const resendCooldownSeconds = ref(DEFAULT_RESEND_COOLDOWN_SECONDS);
+
+  /**
+   * Restart the resend countdown from a rate-limited (429) response, so the
+   * button cannot be re-enabled before the server would accept another send.
+   *
+   * @param response - Parsed error body; `error.retryAfter` is in seconds
+   */
+  function applyRateLimitCountdown(response: any): void {
+    const retryAfter = Number(response?.error?.retryAfter);
+    if (!Number.isFinite(retryAfter) || retryAfter <= 0) return;
+
+    resendCooldownSeconds.value = Math.ceil(retryAfter);
+    // Not an actual send, but it is the instant the countdown runs from.
+    lastEmailSentAt.value = Date.now();
+  }
 
   const canSubmitPassword = computed(() => {
     return userEmail.value.trim().length > 0 && !loading.value;
@@ -127,6 +147,7 @@ export function useLogin(): UseLoginReturn {
         }
         return true;
       } else {
+        applyRateLimitCountdown(response);
         errorMessage.value = response.error?.message || '密碼驗證失敗';
         return false;
       }
@@ -222,8 +243,10 @@ export function useLogin(): UseLoginReturn {
 
       if (response.success) {
         lastEmailSentAt.value = Date.now();
+        resendCooldownSeconds.value = DEFAULT_RESEND_COOLDOWN_SECONDS;
         return true;
       } else {
+        applyRateLimitCountdown(response);
         errorMessage.value = response.error?.message || '重新發送失敗';
         return false;
       }
@@ -259,6 +282,7 @@ export function useLogin(): UseLoginReturn {
     errorMessage.value = '';
     userEmail.value = '';
     lastEmailSentAt.value = 0;
+    resendCooldownSeconds.value = DEFAULT_RESEND_COOLDOWN_SECONDS;
   }
 
   return {
@@ -272,6 +296,7 @@ export function useLogin(): UseLoginReturn {
     errorMessage,
     userEmail,
     lastEmailSentAt,
+    resendCooldownSeconds,
     canSubmitPassword,
     canSubmitVerificationCode,
     verifyPassword,

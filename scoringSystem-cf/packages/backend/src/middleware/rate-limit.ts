@@ -1,282 +1,157 @@
 /**
- * Rate Limiting Middleware
- * Implements KV-based rate limiting for email operations and AI API calls
+ * @fileoverview Rate limiting middleware for email and AI operations.
+ *
+ * Backed by the D1 store in utils/rate-limiter, not KV. The previous KV
+ * implementation could not have been correct even once wired up: KV allows
+ * about one write per second to a given key and reads are eventually
+ * consistent, so a counter shared by 40 simultaneous logins undercounts.
+ *
+ * Per-recipient and per-IP limits for *unauthenticated* mail triggers live in
+ * utils/email-budget (`guardEmailTrigger`); this file covers limits keyed on
+ * an authenticated actor.
  */
 
 import type { Context, Next } from 'hono';
 import type { Env, AuthUser } from '../types';
 import { errorResponse } from '../utils/response';
 import { getTypedConfig } from '../utils/config';
+import {
+  consumeRateLimit,
+  peekWindow,
+  resetRateLimitIdentity,
+  type RateLimitDecision,
+  type WindowRule
+} from '../utils/rate-limiter';
+
+const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+
+/** Limits keyed on the authenticated account that triggered the mail. */
+const EMAIL_ACTOR_SCOPE = 'email_actor';
+
+/** Limits on AI API calls. */
+const AI_SCOPE = 'ai';
+
+/** Effectively unlimited, so local development never hits a wall. */
+const DEV_LIMIT = 999999;
+
+/** Default AI rate limit: 10 requests per minute */
+const DEFAULT_AI_RATE_LIMIT_PER_MINUTE = 10;
+
+/** Default AI rate limit: 60 requests per hour */
+const DEFAULT_AI_RATE_LIMIT_PER_HOUR = 60;
 
 /**
- * Rate limit key prefix for KV storage
- */
-const RATE_LIMIT_PREFIX = 'rate_limit:email:';
-const AI_RATE_LIMIT_PREFIX = 'rate_limit:ai:';
-
-/**
- * Get rate limit info from KV
- */
-async function getRateLimitInfo(
-  env: Env,
-  key: string
-): Promise<{ count: number; resetTime: number } | null> {
-  if (!env.CONFIG) {
-    return null;
-  }
-
-  const data = await env.CONFIG.get(key, 'json');
-  return data as { count: number; resetTime: number } | null;
-}
-
-/**
- * Update rate limit counter in KV
- */
-async function updateRateLimitCounter(
-  env: Env,
-  key: string,
-  count: number,
-  resetTime: number
-): Promise<void> {
-  if (!env.CONFIG) {
-    return;
-  }
-
-  const ttl = Math.ceil((resetTime - Date.now()) / 1000);
-  if (ttl > 0) {
-    // Cloudflare KV requires minimum 60 second TTL
-    const effectiveTtl = Math.max(ttl, 60);
-    await env.CONFIG.put(
-      key,
-      JSON.stringify({ count, resetTime }),
-      { expirationTtl: effectiveTtl }
-    );
-  }
-}
-
-/**
- * Email rate limiting middleware
- * Limits email sending operations based on configured hourly limit
+ * Build the 429 for a rejected decision.
  *
- * Usage:
- * app.post('/send-email', emailRateLimitMiddleware, async (c) => { ... })
+ * @param decision - The rejecting decision from the limiter
+ * @param code - Error code the frontend switches on
+ * @param message - Human-readable, user-facing (Traditional Chinese)
+ * @returns A 429 Response carrying standard rate limit headers
  */
-export async function emailRateLimitMiddleware(
-  c: Context<{ Bindings: Env; Variables: { user: AuthUser } }>,
-  next: Next
-): Promise<Response | void> {
-  try {
-    const user = c.get('user');
-    if (!user || !user.userEmail) {
-      return errorResponse('UNAUTHORIZED', 'User not authenticated');
+export function rateLimitResponse(
+  decision: RateLimitDecision,
+  code: string,
+  message: string
+): Response {
+  const retryAfterSeconds = Math.max(1, Math.ceil((decision.retryAfterMs ?? 0) / 1000));
+
+  return new Response(
+    JSON.stringify({
+      success: false,
+      error: {
+        code,
+        message,
+        rule: decision.rule,
+        retryAfter: retryAfterSeconds,
+        resetTime: decision.resetAt
+      }
+    }),
+    {
+      status: 429,
+      headers: {
+        'Content-Type': 'application/json',
+        'Retry-After': String(retryAfterSeconds),
+        'X-RateLimit-Limit': String(decision.limit ?? 0),
+        'X-RateLimit-Remaining': '0',
+        'X-RateLimit-Reset': String(decision.resetAt ?? Date.now())
+      }
     }
-
-    // Get configured rate limit (skip in development)
-    const maxEmailsPerHour = c.env.ENVIRONMENT === 'development'
-      ? 999999
-      : (await getTypedConfig(c.env, 'MAX_EMAILS_PER_HOUR')) as number;
-
-    // Skip rate limiting if disabled (value set to 0)
-    if (maxEmailsPerHour === 0) {
-      return next();
-    }
-
-    // Create rate limit key (per user)
-    const rateLimitKey = `${RATE_LIMIT_PREFIX}${user.userEmail}`;
-
-    // Get current rate limit info
-    const now = Date.now();
-    let rateLimitInfo = await getRateLimitInfo(c.env, rateLimitKey);
-
-    // Initialize or reset if window expired
-    if (!rateLimitInfo || rateLimitInfo.resetTime <= now) {
-      const resetTime = now + 3600000; // 1 hour from now
-      rateLimitInfo = {
-        count: 0,
-        resetTime
-      };
-    }
-
-    // Check if limit exceeded
-    if (rateLimitInfo.count >= maxEmailsPerHour) {
-      const retryAfterSeconds = Math.ceil((rateLimitInfo.resetTime - now) / 1000);
-
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: {
-            code: 'RATE_LIMIT_EXCEEDED',
-            message: `Email rate limit exceeded. Maximum ${maxEmailsPerHour} emails per hour allowed.`,
-            retryAfter: retryAfterSeconds,
-            resetTime: rateLimitInfo.resetTime
-          }
-        }),
-        {
-          status: 429,
-          headers: {
-            'Content-Type': 'application/json',
-            'Retry-After': String(retryAfterSeconds),
-            'X-RateLimit-Limit': String(maxEmailsPerHour),
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': String(rateLimitInfo.resetTime)
-          }
-        }
-      );
-    }
-
-    // Increment counter
-    rateLimitInfo.count += 1;
-    await updateRateLimitCounter(
-      c.env,
-      rateLimitKey,
-      rateLimitInfo.count,
-      rateLimitInfo.resetTime
-    );
-
-    // Add rate limit headers to response
-    c.header('X-RateLimit-Limit', String(maxEmailsPerHour));
-    c.header('X-RateLimit-Remaining', String(maxEmailsPerHour - rateLimitInfo.count));
-    c.header('X-RateLimit-Reset', String(rateLimitInfo.resetTime));
-
-    return next();
-
-  } catch (error) {
-    console.error('Rate limit middleware error:', error);
-    // On error, allow the request (fail open)
-    return next();
-  }
+  );
 }
 
 /**
- * Batch email rate limiting middleware
- * Checks if the batch size would exceed hourly limit
+ * The hourly rule for one authenticated actor.
+ *
+ * @param env - Worker bindings
+ * @param actorEmail - Account being charged
+ * @returns The rule, or null when limiting is disabled (config value 0)
  */
-export async function batchEmailRateLimitMiddleware(
-  c: Context<{ Bindings: Env; Variables: { user: AuthUser } }>,
-  next: Next
-): Promise<Response | void> {
-  try {
-    const user = c.get('user');
-    if (!user || !user.userEmail) {
-      return errorResponse('UNAUTHORIZED', 'User not authenticated');
-    }
+async function getActorEmailRule(env: Env, actorEmail: string): Promise<WindowRule | null> {
+  const limit = env.ENVIRONMENT === 'development'
+    ? DEV_LIMIT
+    : (await getTypedConfig(env, 'MAX_EMAILS_PER_HOUR')) as number;
 
-    // Get request body to determine batch size
-    const body = await c.req.json();
-    let batchSize = 0;
+  if (limit === 0) return null;
 
-    // Determine batch size based on request structure
-    if (body.notificationIds && Array.isArray(body.notificationIds)) {
-      batchSize = body.notificationIds.length;
-    } else if (body.userEmails && Array.isArray(body.userEmails)) {
-      batchSize = body.userEmails.length;
-    } else {
-      // For filter-based batch sends, we can't determine size beforehand
-      // Let it proceed and count after sending
-      return next();
-    }
-
-    // Get configured rate limit (skip in development)
-    const maxEmailsPerHour = c.env.ENVIRONMENT === 'development'
-      ? 999999
-      : (await getTypedConfig(c.env, 'MAX_EMAILS_PER_HOUR')) as number;
-
-    // Skip rate limiting if disabled
-    if (maxEmailsPerHour === 0) {
-      return next();
-    }
-
-    // Create rate limit key
-    const rateLimitKey = `${RATE_LIMIT_PREFIX}${user.userEmail}`;
-
-    // Get current rate limit info
-    const now = Date.now();
-    let rateLimitInfo = await getRateLimitInfo(c.env, rateLimitKey);
-
-    // Initialize or reset if window expired
-    if (!rateLimitInfo || rateLimitInfo.resetTime <= now) {
-      const resetTime = now + 3600000; // 1 hour from now
-      rateLimitInfo = {
-        count: 0,
-        resetTime
-      };
-    }
-
-    // Check if batch would exceed limit
-    const remainingQuota = maxEmailsPerHour - rateLimitInfo.count;
-    if (batchSize > remainingQuota) {
-      const retryAfterSeconds = Math.ceil((rateLimitInfo.resetTime - now) / 1000);
-
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: {
-            code: 'RATE_LIMIT_EXCEEDED',
-            message: `Batch size (${batchSize}) exceeds remaining hourly quota (${remainingQuota}/${maxEmailsPerHour})`,
-            retryAfter: retryAfterSeconds,
-            resetTime: rateLimitInfo.resetTime,
-            remainingQuota
-          }
-        }),
-        {
-          status: 429,
-          headers: {
-            'Content-Type': 'application/json',
-            'Retry-After': String(retryAfterSeconds),
-            'X-RateLimit-Limit': String(maxEmailsPerHour),
-            'X-RateLimit-Remaining': String(remainingQuota),
-            'X-RateLimit-Reset': String(rateLimitInfo.resetTime)
-          }
-        }
-      );
-    }
-
-    // Increment counter by batch size
-    rateLimitInfo.count += batchSize;
-    await updateRateLimitCounter(
-      c.env,
-      rateLimitKey,
-      rateLimitInfo.count,
-      rateLimitInfo.resetTime
-    );
-
-    // Add rate limit headers
-    c.header('X-RateLimit-Limit', String(maxEmailsPerHour));
-    c.header('X-RateLimit-Remaining', String(maxEmailsPerHour - rateLimitInfo.count));
-    c.header('X-RateLimit-Reset', String(rateLimitInfo.resetTime));
-
-    return next();
-
-  } catch (error) {
-    console.error('Batch rate limit middleware error:', error);
-    // On error, allow the request (fail open)
-    return next();
-  }
+  return {
+    name: 'actor_hour',
+    identity: `actor:${actorEmail.trim().toLowerCase()}`,
+    limit,
+    windowMs: HOUR_MS
+  };
 }
 
 /**
- * Reset rate limit for a user (admin function)
+ * Check and consume an authenticated actor's hourly email quota.
+ *
+ * Called directly from routes rather than wrapped as middleware, because each
+ * route knows its own cost: one mail for an invitation, `logIds.length` for a
+ * batch resend, the configured cap for a filter-driven send.
+ *
+ * @param env - Worker bindings
+ * @param actorEmail - Account triggering the mail
+ * @param cost - Number of mails this operation will send
+ * @returns Decision; nothing is consumed when it rejects
+ *
+ * @example
+ * const decision = await guardActorEmailQuota(c.env, user.userEmail, ids.length);
+ * if (!decision.allowed) return rateLimitResponse(decision, 'RATE_LIMIT_EXCEEDED', '...');
  */
-export async function resetRateLimit(
+export async function guardActorEmailQuota(
   env: Env,
-  userEmail: string
-): Promise<boolean> {
-  try {
-    if (!env.CONFIG) {
-      return false;
-    }
+  actorEmail: string,
+  cost: number = 1
+): Promise<RateLimitDecision> {
+  const rule = await getActorEmailRule(env, actorEmail);
+  if (!rule) return { allowed: true };
 
-    const rateLimitKey = `${RATE_LIMIT_PREFIX}${userEmail}`;
-    await env.CONFIG.delete(rateLimitKey);
+  return await consumeRateLimit(env, {
+    scope: EMAIL_ACTOR_SCOPE,
+    windows: [rule],
+    cost
+  });
+}
+
+/**
+ * Reset an actor's email rate limit (admin action).
+ *
+ * @returns True when the buckets were cleared
+ */
+export async function resetRateLimit(env: Env, userEmail: string): Promise<boolean> {
+  try {
+    await resetRateLimitIdentity(env, EMAIL_ACTOR_SCOPE, `actor:${userEmail.trim().toLowerCase()}`);
     return true;
   } catch (error) {
-    console.error('Error resetting rate limit:', error);
+    console.error('[RateLimit] Error resetting rate limit:', error);
     return false;
   }
 }
 
 /**
- * Get current rate limit status for a user
+ * Read an actor's current email rate limit usage.
+ *
+ * @returns Usage, or null if it could not be read
  */
 export async function getRateLimitStatus(
   env: Env,
@@ -288,32 +163,21 @@ export async function getRateLimitStatus(
   resetTime: number;
 } | null> {
   try {
-    const maxEmailsPerHour = env.ENVIRONMENT === 'development'
-      ? 999999
-      : (await getTypedConfig(env, 'MAX_EMAILS_PER_HOUR')) as number;
-
-    const rateLimitKey = `${RATE_LIMIT_PREFIX}${userEmail}`;
-    const rateLimitInfo = await getRateLimitInfo(env, rateLimitKey);
-
-    const now = Date.now();
-
-    if (!rateLimitInfo || rateLimitInfo.resetTime <= now) {
-      return {
-        count: 0,
-        limit: maxEmailsPerHour,
-        remaining: maxEmailsPerHour,
-        resetTime: now + 3600000
-      };
+    const rule = await getActorEmailRule(env, userEmail);
+    if (!rule) {
+      // Limiting disabled: report unlimited headroom rather than "0 used of 0".
+      return { count: 0, limit: 0, remaining: Number.MAX_SAFE_INTEGER, resetTime: Date.now() + HOUR_MS };
     }
 
+    const status = await peekWindow(env, EMAIL_ACTOR_SCOPE, rule);
     return {
-      count: rateLimitInfo.count,
-      limit: maxEmailsPerHour,
-      remaining: Math.max(0, maxEmailsPerHour - rateLimitInfo.count),
-      resetTime: rateLimitInfo.resetTime
+      count: status.used,
+      limit: status.limit,
+      remaining: status.remaining,
+      resetTime: status.resetAt
     };
   } catch (error) {
-    console.error('Error getting rate limit status:', error);
+    console.error('[RateLimit] Error getting rate limit status:', error);
     return null;
   }
 }
@@ -322,17 +186,37 @@ export async function getRateLimitStatus(
 // AI API Rate Limiting
 // ============================================
 
-/** Default AI rate limit: 10 requests per minute */
-const DEFAULT_AI_RATE_LIMIT_PER_MINUTE = 10;
+/**
+ * The minute and hour rules for one actor's AI usage.
+ *
+ * @returns Both rules; an empty array means limiting is disabled
+ */
+async function getAIRules(env: Env, actorEmail: string): Promise<WindowRule[]> {
+  const isDev = env.ENVIRONMENT === 'development';
 
-/** Default AI rate limit: 60 requests per hour */
-const DEFAULT_AI_RATE_LIMIT_PER_HOUR = 60;
+  const maxPerMinute = isDev
+    ? DEV_LIMIT
+    : ((await getTypedConfig(env, 'AI_RATE_LIMIT_PER_MINUTE')) as number ?? DEFAULT_AI_RATE_LIMIT_PER_MINUTE);
+  const maxPerHour = isDev
+    ? DEV_LIMIT
+    : ((await getTypedConfig(env, 'AI_RATE_LIMIT_PER_HOUR')) as number ?? DEFAULT_AI_RATE_LIMIT_PER_HOUR);
+
+  const identity = `actor:${actorEmail.trim().toLowerCase()}`;
+  const rules: WindowRule[] = [];
+
+  if (maxPerMinute > 0) {
+    rules.push({ name: 'ai_minute', identity, limit: maxPerMinute, windowMs: MINUTE_MS });
+  }
+  if (maxPerHour > 0) {
+    rules.push({ name: 'ai_hour', identity, limit: maxPerHour, windowMs: HOUR_MS });
+  }
+  return rules;
+}
 
 /**
- * AI rate limiting middleware
- * Limits AI API calls based on minute and hourly limits
+ * AI rate limiting middleware.
  *
- * Usage:
+ * @example
  * app.post('/ai-suggestion', aiRateLimitMiddleware, async (c) => { ... })
  */
 export async function aiRateLimitMiddleware(
@@ -345,164 +229,27 @@ export async function aiRateLimitMiddleware(
       return errorResponse('UNAUTHORIZED', 'User not authenticated');
     }
 
-    // Get configured rate limits (skip in development)
-    const maxPerMinute = c.env.ENVIRONMENT === 'development'
-      ? 999999
-      : ((await getTypedConfig(c.env, 'AI_RATE_LIMIT_PER_MINUTE')) as number ?? DEFAULT_AI_RATE_LIMIT_PER_MINUTE);
+    const rules = await getAIRules(c.env, user.userEmail);
+    if (rules.length === 0) return next();
 
-    const maxPerHour = c.env.ENVIRONMENT === 'development'
-      ? 999999
-      : ((await getTypedConfig(c.env, 'AI_RATE_LIMIT_PER_HOUR')) as number ?? DEFAULT_AI_RATE_LIMIT_PER_HOUR);
+    const decision = await consumeRateLimit(c.env, { scope: AI_SCOPE, windows: rules });
 
-    // Skip rate limiting if disabled (value set to 0)
-    if (maxPerMinute === 0 && maxPerHour === 0) {
-      return next();
-    }
-
-    const now = Date.now();
-    const userEmail = user.userEmail;
-
-    // Check minute limit
-    const minuteKey = `${AI_RATE_LIMIT_PREFIX}minute:${userEmail}`;
-    let minuteInfo = await getRateLimitInfo(c.env, minuteKey);
-
-    if (!minuteInfo || minuteInfo.resetTime <= now) {
-      minuteInfo = { count: 0, resetTime: now + 60000 }; // 1 minute window
-    }
-
-    if (minuteInfo.count >= maxPerMinute) {
-      const retryAfterSeconds = Math.ceil((minuteInfo.resetTime - now) / 1000);
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: {
-            code: 'AI_RATE_LIMIT_EXCEEDED',
-            message: `AI API rate limit exceeded. Maximum ${maxPerMinute} requests per minute allowed.`,
-            retryAfter: retryAfterSeconds,
-            resetTime: minuteInfo.resetTime
-          }
-        }),
-        {
-          status: 429,
-          headers: {
-            'Content-Type': 'application/json',
-            'Retry-After': String(retryAfterSeconds),
-            'X-RateLimit-Limit-Minute': String(maxPerMinute),
-            'X-RateLimit-Remaining-Minute': '0'
-          }
-        }
+    if (!decision.allowed) {
+      const per = decision.rule === 'ai_minute' ? '分鐘' : '小時';
+      return rateLimitResponse(
+        decision,
+        'AI_RATE_LIMIT_EXCEEDED',
+        `AI 呼叫已達每${per}上限（${decision.limit} 次），請稍後再試`
       );
     }
 
-    // Check hour limit
-    const hourKey = `${AI_RATE_LIMIT_PREFIX}hour:${userEmail}`;
-    let hourInfo = await getRateLimitInfo(c.env, hourKey);
-
-    if (!hourInfo || hourInfo.resetTime <= now) {
-      hourInfo = { count: 0, resetTime: now + 3600000 }; // 1 hour window
-    }
-
-    if (hourInfo.count >= maxPerHour) {
-      const retryAfterSeconds = Math.ceil((hourInfo.resetTime - now) / 1000);
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: {
-            code: 'AI_RATE_LIMIT_EXCEEDED',
-            message: `AI API rate limit exceeded. Maximum ${maxPerHour} requests per hour allowed.`,
-            retryAfter: retryAfterSeconds,
-            resetTime: hourInfo.resetTime
-          }
-        }),
-        {
-          status: 429,
-          headers: {
-            'Content-Type': 'application/json',
-            'Retry-After': String(retryAfterSeconds),
-            'X-RateLimit-Limit-Hour': String(maxPerHour),
-            'X-RateLimit-Remaining-Hour': '0'
-          }
-        }
-      );
-    }
-
-    // Increment both counters
-    minuteInfo.count += 1;
-    hourInfo.count += 1;
-
-    await Promise.all([
-      updateRateLimitCounter(c.env, minuteKey, minuteInfo.count, minuteInfo.resetTime),
-      updateRateLimitCounter(c.env, hourKey, hourInfo.count, hourInfo.resetTime)
-    ]);
-
-    // Add rate limit headers
-    c.header('X-RateLimit-Limit-Minute', String(maxPerMinute));
-    c.header('X-RateLimit-Remaining-Minute', String(maxPerMinute - minuteInfo.count));
-    c.header('X-RateLimit-Limit-Hour', String(maxPerHour));
-    c.header('X-RateLimit-Remaining-Hour', String(maxPerHour - hourInfo.count));
+    c.header('X-RateLimit-Limit', String(decision.limit ?? 0));
+    c.header('X-RateLimit-Remaining', String(Math.max(0, decision.remaining ?? 0)));
+    c.header('X-RateLimit-Reset', String(decision.resetAt ?? Date.now()));
 
     return next();
-
   } catch (error) {
-    console.error('AI rate limit middleware error:', error);
-    // On error, allow the request (fail open)
+    console.error('[RateLimit] AI middleware error, allowing request:', error);
     return next();
-  }
-}
-
-/**
- * Get current AI rate limit status for a user
- */
-export async function getAIRateLimitStatus(
-  env: Env,
-  userEmail: string
-): Promise<{
-  minute: { count: number; limit: number; remaining: number; resetTime: number };
-  hour: { count: number; limit: number; remaining: number; resetTime: number };
-} | null> {
-  try {
-    const maxPerMinute = env.ENVIRONMENT === 'development'
-      ? 999999
-      : ((await getTypedConfig(env, 'AI_RATE_LIMIT_PER_MINUTE')) as number ?? DEFAULT_AI_RATE_LIMIT_PER_MINUTE);
-
-    const maxPerHour = env.ENVIRONMENT === 'development'
-      ? 999999
-      : ((await getTypedConfig(env, 'AI_RATE_LIMIT_PER_HOUR')) as number ?? DEFAULT_AI_RATE_LIMIT_PER_HOUR);
-
-    const now = Date.now();
-
-    // Get minute info
-    const minuteKey = `${AI_RATE_LIMIT_PREFIX}minute:${userEmail}`;
-    const minuteInfo = await getRateLimitInfo(env, minuteKey);
-
-    // Get hour info
-    const hourKey = `${AI_RATE_LIMIT_PREFIX}hour:${userEmail}`;
-    const hourInfo = await getRateLimitInfo(env, hourKey);
-
-    return {
-      minute: {
-        count: minuteInfo && minuteInfo.resetTime > now ? minuteInfo.count : 0,
-        limit: maxPerMinute,
-        remaining: minuteInfo && minuteInfo.resetTime > now
-          ? Math.max(0, maxPerMinute - minuteInfo.count)
-          : maxPerMinute,
-        resetTime: minuteInfo && minuteInfo.resetTime > now
-          ? minuteInfo.resetTime
-          : now + 60000
-      },
-      hour: {
-        count: hourInfo && hourInfo.resetTime > now ? hourInfo.count : 0,
-        limit: maxPerHour,
-        remaining: hourInfo && hourInfo.resetTime > now
-          ? Math.max(0, maxPerHour - hourInfo.count)
-          : maxPerHour,
-        resetTime: hourInfo && hourInfo.resetTime > now
-          ? hourInfo.resetTime
-          : now + 3600000
-      }
-    };
-  } catch (error) {
-    console.error('Error getting AI rate limit status:', error);
-    return null;
   }
 }

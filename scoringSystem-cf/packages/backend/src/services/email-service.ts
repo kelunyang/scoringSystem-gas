@@ -6,30 +6,13 @@
 import type { Env } from '../types';
 import { generateId } from '../utils/id-generator';
 import { sendEmail as sendSmtpEmail } from '../utils/email';
+import { EmailTrigger, type TriggerSource } from './email-triggers';
 
-/**
- * Email trigger sources (which module triggered the email)
- */
-export enum EmailTrigger {
-  NOTIFICATION_PATROL = 'notification_patrol',
-  INVITATION = 'invitation',
-  PASSWORD_RESET = 'password_reset',
-  PASSWORD_RESET_2FA = 'password_reset_2fa',
-  TWO_FACTOR_LOGIN = 'two_factor_login',
-  ACCOUNT_LOCKED = 'account_locked',
-  ACCOUNT_UNLOCKED = 'account_unlocked',
-  SECURITY_PATROL = 'security_patrol',
-  ADMIN_NOTIFICATION = 'admin_notification',
-  SYSTEM_ANNOUNCEMENT = 'system_announcement',
-  MANUAL_ADMIN = 'manual_admin',
-  RESEND = 'resend',
-  SUBMISSION_FORCE_WITHDRAWN = 'submission_force_withdrawn'
-}
-
-/**
- * Trigger source types
- */
-export type TriggerSource = 'manual' | 'auto' | 'scheduled';
+// Re-exported so the many `from '../services/email-service'` imports keep
+// working; the definitions live in ./email-triggers.
+export { EmailTrigger } from './email-triggers';
+export type { TriggerSource } from './email-triggers';
+import { checkEmailBudget, chargeEmailBudget, priorityForTrigger } from '../utils/email-budget';
 
 /**
  * Email send options
@@ -74,6 +57,65 @@ export interface BatchSendResult {
 }
 
 /**
+ * Write one row to globalemaillogs.
+ *
+ * Extracted because sendEmail now has three exits that must all be logged
+ * (sent, send failed, refused by the daily budget) and three copies of a
+ * 21-column INSERT is three chances to drift.
+ *
+ * @param env - Worker bindings
+ * @param entry - Everything the row needs; `options` supplies the message
+ */
+async function recordEmailLog(
+  env: Env,
+  entry: {
+    logId: string;
+    emailId: string;
+    options: SendEmailOptions;
+    triggeredBy: string;
+    triggerSource: TriggerSource;
+    emailSize: number;
+    now: number;
+    durationMs: number;
+    status: 'sent' | 'failed';
+    statusCode: number | null;
+    error: string | null;
+    errorType: string | null;
+  }
+): Promise<void> {
+  await env.DB.prepare(`
+    INSERT INTO globalemaillogs (
+      logId, emailId, trigger, triggeredBy, triggerSource,
+      recipient, recipientUserId, subject, htmlBody, textBody, emailSize,
+      status, statusCode, error, errorType, retryCount, emailContext,
+      timestamp, durationMs, createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    entry.logId,
+    entry.emailId,
+    entry.options.trigger,
+    entry.triggeredBy,
+    entry.triggerSource,
+    entry.options.recipient,
+    entry.options.recipientUserId || null,
+    entry.options.subject,
+    entry.options.htmlBody,
+    entry.options.textBody || null,
+    entry.emailSize,
+    entry.status,
+    entry.statusCode,
+    entry.error,
+    entry.errorType,
+    0,
+    entry.options.emailContext ? JSON.stringify(entry.options.emailContext) : null,
+    entry.now,
+    entry.durationMs,
+    entry.now,
+    entry.now
+  ).run();
+}
+
+/**
  * Send email with automatic logging to globalemaillogs
  */
 export async function sendEmail(
@@ -90,6 +132,50 @@ export async function sendEmail(
   const triggerSource = options.triggerSource || 'auto';
 
   try {
+    // ── System-wide SMTP budget ────────────────────────────────────────────
+    // Every mail in the system funnels through here, including ones from cron
+    // robots that never touch an HTTP route, so this is the only place the
+    // daily quota can be enforced completely. Low-priority mail is refused
+    // first, which keeps headroom for login codes: without that, one digest
+    // robot run in the morning can eat the day's quota and lock everyone out.
+    const priority = priorityForTrigger(String(options.trigger));
+    let budgetBlocked = false;
+    try {
+      const budget = await checkEmailBudget(env, priority);
+      budgetBlocked = !budget.allowed;
+      if (budgetBlocked) {
+        console.warn(
+          `[Email] Budget exhausted for ${priority} mail: ${budget.used}/${budget.priorityCeiling} ` +
+          `(daily budget ${budget.limit}), dropping ${options.trigger} to ${options.recipient}`
+        );
+      }
+    } catch (budgetError) {
+      // Fail open: a D1 hiccup must not stop password resets going out. The
+      // provider's own quota is the remaining backstop.
+      console.error('[Email] Budget check failed, allowing send:', budgetError);
+    }
+
+    if (budgetBlocked) {
+      await recordEmailLog(env, {
+        logId, emailId, options, triggeredBy, triggerSource,
+        emailSize: 0, now, durationMs: Date.now() - startTime,
+        status: 'failed',
+        statusCode: 429,
+        error: `Daily email budget exhausted for priority "${priority}"`,
+        errorType: 'budget_exceeded'
+      });
+
+      return {
+        success: false,
+        logId,
+        emailId,
+        error: `Daily email budget exhausted for priority "${priority}"`,
+        errorType: 'budget_exceeded',
+        statusCode: 429,
+        durationMs: Date.now() - startTime
+      };
+    }
+
     // Calculate email size (using Web API - TextEncoder)
     const encoder = new TextEncoder();
     const htmlSize = encoder.encode(options.htmlBody).length;
@@ -104,64 +190,26 @@ export async function sendEmail(
       text: options.textBody
     });
 
+    // Charge only successful sends: a failed send consumed no provider quota,
+    // and the queue will retry it.
+    if (sendResult.success) {
+      try {
+        await chargeEmailBudget(env, 1);
+      } catch (chargeError) {
+        console.error('[Email] Failed to charge budget (send already happened):', chargeError);
+      }
+    }
+
     const durationMs = Date.now() - startTime;
 
-    // Prepare log entry
-    const logEntry = {
-      logId,
-      emailId,
-      trigger: options.trigger,
-      triggeredBy,
-      triggerSource,
-      recipient: options.recipient,
-      recipientUserId: options.recipientUserId || null,
-      subject: options.subject,
-      htmlBody: options.htmlBody,
-      textBody: options.textBody || null,
-      emailSize,
+    await recordEmailLog(env, {
+      logId, emailId, options, triggeredBy, triggerSource,
+      emailSize, now, durationMs,
       status: sendResult.success ? 'sent' : 'failed',
-      statusCode: sendResult.statusCode || null,
-      error: sendResult.error || null,
-      errorType: sendResult.errorType || null,
-      retryCount: 0,
-      emailContext: options.emailContext ? JSON.stringify(options.emailContext) : null,
-      timestamp: now,
-      durationMs,
-      createdAt: now,
-      updatedAt: now
-    };
-
-    // Log to database
-    await env.DB.prepare(`
-      INSERT INTO globalemaillogs (
-        logId, emailId, trigger, triggeredBy, triggerSource,
-        recipient, recipientUserId, subject, htmlBody, textBody, emailSize,
-        status, statusCode, error, errorType, retryCount, emailContext,
-        timestamp, durationMs, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      logEntry.logId,
-      logEntry.emailId,
-      logEntry.trigger,
-      logEntry.triggeredBy,
-      logEntry.triggerSource,
-      logEntry.recipient,
-      logEntry.recipientUserId,
-      logEntry.subject,
-      logEntry.htmlBody,
-      logEntry.textBody,
-      logEntry.emailSize,
-      logEntry.status,
-      logEntry.statusCode,
-      logEntry.error,
-      logEntry.errorType,
-      logEntry.retryCount,
-      logEntry.emailContext,
-      logEntry.timestamp,
-      logEntry.durationMs,
-      logEntry.createdAt,
-      logEntry.updatedAt
-    ).run();
+      statusCode: sendResult.statusCode ?? null,
+      error: sendResult.error ?? null,
+      errorType: sendResult.errorType ?? null
+    });
 
     return {
       success: sendResult.success,
@@ -178,36 +226,14 @@ export async function sendEmail(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
     // Log failed attempt
-    await env.DB.prepare(`
-      INSERT INTO globalemaillogs (
-        logId, emailId, trigger, triggeredBy, triggerSource,
-        recipient, recipientUserId, subject, htmlBody, textBody, emailSize,
-        status, statusCode, error, errorType, retryCount, emailContext,
-        timestamp, durationMs, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      logId,
-      emailId,
-      options.trigger,
-      triggeredBy,
-      triggerSource,
-      options.recipient,
-      options.recipientUserId || null,
-      options.subject,
-      options.htmlBody,
-      options.textBody || null,
-      0,
-      'failed',
-      null,
-      errorMessage,
-      'internal_error',
-      0,
-      options.emailContext ? JSON.stringify(options.emailContext) : null,
-      now,
-      durationMs,
-      now,
-      now
-    ).run();
+    await recordEmailLog(env, {
+      logId, emailId, options, triggeredBy, triggerSource,
+      emailSize: 0, now, durationMs,
+      status: 'failed',
+      statusCode: null,
+      error: errorMessage,
+      errorType: 'internal_error'
+    });
 
     return {
       success: false,
@@ -218,41 +244,6 @@ export async function sendEmail(
       durationMs
     };
   }
-}
-
-/**
- * Send batch emails
- */
-export async function sendBatchEmails(
-  env: Env,
-  emails: SendEmailOptions[]
-): Promise<BatchSendResult> {
-  const results: BatchSendResult['results'] = [];
-  let successCount = 0;
-  let failedCount = 0;
-
-  for (const emailOptions of emails) {
-    const result = await sendEmail(env, emailOptions);
-
-    results.push({
-      recipient: emailOptions.recipient,
-      success: result.success,
-      logId: result.logId,
-      error: result.error
-    });
-
-    if (result.success) {
-      successCount++;
-    } else {
-      failedCount++;
-    }
-  }
-
-  return {
-    success: successCount,
-    failed: failedCount,
-    results
-  };
 }
 
 /**
