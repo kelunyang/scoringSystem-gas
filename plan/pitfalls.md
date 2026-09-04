@@ -4,6 +4,36 @@
 > 新坑往上加，讓最近的教訓最先被看到。
 
 ---
+## 2026-09-04 ｜ 手機直向一進 dashboard 就被滿版通知抽屜蓋住
+
+**症狀**：手機（直向）登入後進 dashboard，只要有未讀通知，通知中心抽屜就自動彈出來
+把整個畫面蓋掉，要先手動關掉才看得到專案列表。橫向與桌機不會，因為抽屜只有 600px。
+
+**根因**：兩件事疊在一起。
+
+1. `MainLayout.vue` 的 auto-open watcher（`:589`）只看「有沒有未讀」和使用者偏好
+   `autoOpenNotificationCenter`，完全沒有考慮螢幕方向。
+2. 抽屜寬度是 `600px` 固定值（`NotificationCenter.vue:425` 的 `drawerSize`，
+   只有 `variant="sidebar"` 才是 `100%`）。手機視窗寬度普遍小於 600px，
+   所以「600px 的抽屜」在手機上就等於滿版。桌機看起來沒問題，是因為視窗夠寬。
+
+**修法**：直向時不自動開，改成跳一則 toast 告訴使用者有幾則未讀、去左上角選單看。
+偏好設定關掉 auto-open 的人依然完全不會被打擾（判斷放在 `autoOpen` 之後）。
+
+順手修掉 `composables/useMediaQuery.ts` 的一個潛在雷：`isPortrait` 原本只在
+`onMounted` 才第一次賦值，setup 階段讀到的一律是 `false`。凡是在 mount 前做方向判斷
+（例如這次的 watcher，`{ immediate: true }` 會在 setup 就跑一次）都會誤判成橫向。
+改成宣告 ref 時就用 `window.matchMedia` 取初始值。
+
+**教訓與防護**：
+
+1. **「自動彈出」類的行為要先問一句：在最小的螢幕上它會蓋掉多少？**
+   桌機看不出問題不代表沒問題，px 固定寬度的抽屜／彈窗在手機上都是滿版。
+2. **`onMounted` 裡才賦值的 ref，在 setup 階段是預設值。**
+   `watch(..., { immediate: true })` 與 computed 的第一次求值都發生在 mount 之前，
+   拿這種 ref 做判斷會安靜地走錯分支。需要在 setup 就正確，就在宣告時取值。
+
+---
 ## 2026-09-04 ｜ 子組件把資料 emit 出去，父層卻讀自己那份永遠是空的 state 🔥
 
 **症狀**：後台「群組帳號管理 → 存取者清單 → 專案存取權設定」裡，勾選一批人、

@@ -225,6 +225,7 @@ import { authEventBus } from '@/utils/authEventBus'
 import { rpcClient } from '@/utils/rpc-client'
 import { apiClient } from '@/utils/api'
 import { useBreadcrumb } from '../composables/useBreadcrumb'
+import { useMediaQuery } from '../composables/useMediaQuery'
 import NotificationCenter from '../components/NotificationCenter.vue'
 import { ElMessage } from 'element-plus'
 import { usePermissionsDrawerStore } from '../stores/permissionsDrawer'
@@ -242,6 +243,9 @@ const route = useRoute()
 const queryClient = useQueryClient()
 const websocket = useWebSocketStore()
 const { breadcrumbItems, fetchSystemTitle, clearProjectTitle } = useBreadcrumb()
+
+// 螢幕方向（直向時通知中心抽屜會蓋住整個畫面）
+const { isPortrait } = useMediaQuery()
 
 // Vue 3 Best Practice: Use unified useAuth() composable
 const { user: userFromAuth, token, logout, userQuery } = useAuth()
@@ -603,6 +607,17 @@ watch(
 
     // Check unread count - count is already a number from useNotificationCount
     if (count > 0 && autoOpen && !notificationCenterStore.isOpen) {
+      // 直向畫面：抽屜是滿版的，一開就把整個 dashboard 蓋住，所以只提示不自動開啟
+      if (isPortrait.value) {
+        ElMessage.info({
+          message: `您有 ${count} 則未讀通知，請從左上角選單的通知圖示查看。`,
+          duration: 5000,
+          showClose: true
+        })
+        console.log('🔔 [MainLayout] Portrait mode, skip auto-open')
+        return
+      }
+
       // Show toast with message about how to disable
       ElMessage.info({
         message: `您有 ${count} 則未讀通知。如不想自動開啟，請至「用戶設定」關閉此功能。`,
