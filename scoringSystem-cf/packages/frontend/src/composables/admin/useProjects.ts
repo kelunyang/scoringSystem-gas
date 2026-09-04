@@ -94,6 +94,17 @@ interface RemoveViewerParams {
   userEmail: string
 }
 
+interface BatchUpdateViewerRolesParams {
+  projectId: string
+  userEmails: string[]
+  role: string
+}
+
+interface BatchRemoveViewersParams {
+  projectId: string
+  userEmails: string[]
+}
+
 // Stage types
 interface StageData {
   stageName: string
@@ -379,6 +390,56 @@ export function useRemoveViewer(): UseMutationReturnType<any, Error, RemoveViewe
   })
 }
 
+/**
+ * Batch update viewer roles
+ * Returns { updated, unchanged, notFound } - caller reports the summary
+ */
+export function useBatchUpdateViewerRoles(): UseMutationReturnType<any, Error, BatchUpdateViewerRolesParams, unknown> {
+  return useMutation({
+    mutationFn: async ({ projectId, userEmails, role }: BatchUpdateViewerRolesParams) => {
+      const httpResponse = await rpcClient.projects.viewers['update-roles-batch'].$post({
+        json: { projectId, userEmails, role }
+      })
+      const response = await httpResponse.json() as any
+
+      if (!response.success) {
+        throw new Error(response.error?.message || '批次轉換角色失敗')
+      }
+
+      return response.data
+    },
+    // No success message - caller reports it based on the summary
+    onError: (error: Error) => {
+      ElMessage.error(`批次轉換角色失敗: ${error.message}`)
+    }
+  })
+}
+
+/**
+ * Batch remove viewers
+ * Returns { removed, notFound } - caller reports the summary
+ */
+export function useBatchRemoveViewers(): UseMutationReturnType<any, Error, BatchRemoveViewersParams, unknown> {
+  return useMutation({
+    mutationFn: async ({ projectId, userEmails }: BatchRemoveViewersParams) => {
+      const httpResponse = await rpcClient.projects.viewers['remove-batch'].$post({
+        json: { projectId, userEmails }
+      })
+      const response = await httpResponse.json() as any
+
+      if (!response.success) {
+        throw new Error(response.error?.message || '批次刪除存取者失敗')
+      }
+
+      return response.data
+    },
+    // No success message - caller reports it based on the summary
+    onError: (error: Error) => {
+      ElMessage.error(`批次刪除失敗: ${error.message}`)
+    }
+  })
+}
+
 // ============================================================================
 // User Search Mutation
 // ============================================================================
@@ -588,6 +649,8 @@ export type {
   AddSingleViewerParams,
   UpdateViewerRoleParams,
   RemoveViewerParams,
+  BatchUpdateViewerRolesParams,
+  BatchRemoveViewersParams,
   StageData,
   CreateStageParams,
   UpdateStageParams,

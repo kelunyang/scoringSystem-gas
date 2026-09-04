@@ -100,7 +100,9 @@ const spies = vi.hoisted(() => ({
   listViewers: vi.fn(),
   cloneProject: vi.fn(),
   cloneStageToProjects: vi.fn(),
-  updateProject: vi.fn()
+  updateProject: vi.fn(),
+  batchUpdateViewerRoles: vi.fn(),
+  batchRemoveViewers: vi.fn()
 }))
 
 const asMutation = (spy: ReturnType<typeof vi.fn>) => ({
@@ -118,7 +120,9 @@ vi.mock('@/composables/admin/useProjects', async (importOriginal) => ({
   useListProjectViewers: () => asMutation(spies.listViewers),
   useCloneProject: () => asMutation(spies.cloneProject),
   useCloneStageToProjects: () => asMutation(spies.cloneStageToProjects),
-  useUpdateProject: () => asMutation(spies.updateProject)
+  useUpdateProject: () => asMutation(spies.updateProject),
+  useBatchUpdateViewerRoles: () => asMutation(spies.batchUpdateViewerRoles),
+  useBatchRemoveViewers: () => asMutation(spies.batchRemoveViewers)
 }))
 
 // ---------------------------------------------------------------------------
@@ -250,6 +254,12 @@ describe('ProjectManagement', () => {
     spies.cloneProject.mockResolvedValue(undefined)
     spies.cloneStageToProjects.mockResolvedValue(undefined)
     spies.updateProject.mockResolvedValue(undefined)
+    spies.batchUpdateViewerRoles.mockResolvedValue({
+      summary: { updated: 2, unchanged: 0, notFound: 0, total: 2 }
+    })
+    spies.batchRemoveViewers.mockResolvedValue({
+      summary: { removed: 2, notFound: 0, total: 2 }
+    })
     localStorage.clear()
     consoleErrorSpy = vi.spyOn(console, 'error')
   })
@@ -450,6 +460,59 @@ describe('ProjectManagement', () => {
       updates: { status: 'archived' }
     })
     expect(isDrawerOpen(findDrawer(wrapper, '封存專案'))).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  // -------------------------------------------------------------------------
+  // G. 存取者批次操作：drawer 事件 payload → 批次 API
+  //    迴歸防護：handler 一度忽略 payload、改讀父層自己的空 selectedViewers/
+  //    batchRole，導致「集體調整群組身分」永遠只跳「請選擇要更新的存取者」
+  // -------------------------------------------------------------------------
+  async function openViewerDrawer(wrapper: VueWrapper) {
+    // 第一個非匯出用的 dropdown = 列表第一列（prj_0001）的「存取者清單」
+    const dropdown = wrapper
+      .findAllComponents({ name: 'ElDropdown' })
+      .find(d => !d.classes('export-dropdown'))
+    expect(dropdown, '找不到存取者清單 dropdown').toBeTruthy()
+    dropdown!.vm.$emit('command', 'settings')
+    await flushPromises()
+
+    const drawer = wrapper.findComponent({ name: 'ViewerManagementDrawer' })
+    expect(drawer.exists(), '找不到 ViewerManagementDrawer').toBe(true)
+    return drawer
+  }
+
+  it('批次轉換角色：drawer 送出的 users/newRole 原封不動進到批次 API', async () => {
+    const wrapper = await mountAndSettle()
+    const drawer = await openViewerDrawer(wrapper)
+
+    drawer.vm.$emit('batch-update-roles', {
+      users: ['a@example.com', 'b@example.com'],
+      newRole: 'observer'
+    })
+    await flushPromises()
+
+    expect(spies.batchUpdateViewerRoles).toHaveBeenCalledWith({
+      projectId: 'prj_0001',
+      userEmails: ['a@example.com', 'b@example.com'],
+      role: 'observer'
+    })
+
+    wrapper.unmount()
+  })
+
+  it('批次刪除存取者：drawer 送出的 email 陣列原封不動進到批次 API', async () => {
+    const wrapper = await mountAndSettle()
+    const drawer = await openViewerDrawer(wrapper)
+
+    drawer.vm.$emit('batch-remove', ['a@example.com', 'b@example.com'])
+    await flushPromises()
+
+    expect(spies.batchRemoveViewers).toHaveBeenCalledWith({
+      projectId: 'prj_0001',
+      userEmails: ['a@example.com', 'b@example.com']
+    })
 
     wrapper.unmount()
   })

@@ -363,8 +363,6 @@ const newViewer = reactive({
 const searchResults = ref<SearchUser[]>([])
 const selectedUsers = ref<SelectedUser[]>([])
 const searchingUsers = ref(false)
-const selectedViewers = ref<string[]>([])
-const batchRole = ref<ViewerRole | ''>('')
 
 // Inline expansion state for groups - using useExpandable composable
 const {
@@ -1866,13 +1864,16 @@ const removeViewer = async (userEmail: string) => {
   }
 }
 
-const batchUpdateRoles = async () => {
-  if (selectedViewers.value.length === 0) {
+const batchUpdateRoles = async (payload: { users: string[]; newRole: ViewerRole }) => {
+  const userEmails = payload?.users || []
+  const newRole = payload?.newRole
+
+  if (userEmails.length === 0) {
     handleError('請選擇要更新的存取者', { type: 'error' })
     return
   }
 
-  if (!batchRole.value) {
+  if (!newRole) {
     handleError('請選擇目標角色', { type: 'error' })
     return
   }
@@ -1889,14 +1890,14 @@ const batchUpdateRoles = async () => {
     const httpResponse = await rpcClient.projects.viewers['update-roles-batch'].$post({
       json: {
         projectId: selectedProjectForViewers.value.projectId,
-        userEmails: selectedViewers.value,
-        role: batchRole.value
+        userEmails,
+        role: newRole
       }
     })
     const response = await httpResponse.json()
 
     if (response.success) {
-      const { updated, unchanged, notFound } = response.data
+      const { updated, unchanged, notFound } = response.data.summary
       const messages = []
       if (updated > 0) messages.push(`成功轉換 ${updated} 位`)
       if (unchanged > 0) messages.push(`${unchanged} 位角色未變`)
@@ -1908,9 +1909,6 @@ const batchUpdateRoles = async () => {
         handleError(messages.join('，'), { type: 'error' })
       }
 
-      // Reset and reload
-      selectedViewers.value = []
-      batchRole.value = ''
       await loadProjectViewers(selectedProjectForViewers.value.projectId)
     } else {
       handleError(response.error?.message || '批量轉換失敗', { type: 'error' })
@@ -1923,8 +1921,8 @@ const batchUpdateRoles = async () => {
   }
 }
 
-const batchRemoveViewers = async () => {
-  if (selectedViewers.value.length === 0) {
+const batchRemoveViewers = async (userEmails: string[]) => {
+  if (!userEmails || userEmails.length === 0) {
     handleError('請選擇要刪除的存取者', { type: 'error' })
     return
   }
@@ -1941,13 +1939,13 @@ const batchRemoveViewers = async () => {
     const httpResponse = await rpcClient.projects.viewers['remove-batch'].$post({
       json: {
         projectId: selectedProjectForViewers.value.projectId,
-        userEmails: selectedViewers.value
+        userEmails
       }
     })
     const response = await httpResponse.json()
 
     if (response.success) {
-      const { removed, notFound } = response.data
+      const { removed, notFound } = response.data.summary
       const messages = []
       if (removed > 0) messages.push(`成功刪除 ${removed} 位`)
       if (notFound > 0) messages.push(`${notFound} 位不存在`)
@@ -1958,8 +1956,6 @@ const batchRemoveViewers = async () => {
         handleError(messages.join('，'), { type: 'error' })
       }
 
-      // Reset and reload
-      selectedViewers.value = []
       await loadProjectViewers(selectedProjectForViewers.value.projectId)
     } else {
       handleError(response.error?.message || '批量刪除失敗', { type: 'error' })

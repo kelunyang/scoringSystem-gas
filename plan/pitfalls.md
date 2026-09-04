@@ -4,6 +4,54 @@
 > 新坑往上加，讓最近的教訓最先被看到。
 
 ---
+## 2026-09-04 ｜ 子組件把資料 emit 出去，父層卻讀自己那份永遠是空的 state 🔥
+
+**症狀**：後台「群組帳號管理 → 存取者清單 → 專案存取權設定」裡，勾選一批人、
+選好目標角色（教師／觀察者／成員）、按「轉換角色」，只會跳一句
+「請選擇要更新的存取者」，什麼都沒發生。批次刪除同樣壞掉。
+兩個入口（`GroupManagement.vue`、`ProjectManagement.vue`）都壞，症狀一模一樣。
+
+**根因**：`ViewerManagementDrawer.vue` 自己持有勾選清單與目標角色
+（`selectedViewers`、`batchRole`，`:466-467`），按下按鈕時把它們 emit 出來：
+
+```ts
+emit('batch-update-roles', { users: selectedViewers.value, newRole: batchRole.value })
+```
+
+但兩個父層的 handler **簽章不收參數**，改去讀自己檔案裡同名的 ref：
+
+```ts
+const batchUpdateRoles = async () => {
+  if (selectedViewers.value.length === 0) {   // ← 父層這份從來沒人寫進去
+    handleError('請選擇要更新的存取者')
+    return
+  }
+```
+
+父層那兩個 ref 是抽離 drawer 時留下的殘骸：勾選 UI 搬進子組件了，
+state 卻兩邊都留著一份。父層那份永遠是 `[]`，所以每次都在第一個 if 就 return。
+TypeScript 也擋不住——Vue 的 `@event="handler"` 對「handler 少收參數」是合法的。
+
+**同一批程式碼還藏了第二個錯**：批次 API 回的是
+`data.summary = { updated, unchanged, notFound }`（`handlers/projects/viewers.ts:1163`），
+前端卻寫 `const { updated, unchanged, notFound } = response.data`，三個值全是 `undefined`。
+就算第一個 bug 修好，成功訊息也會是空字串。這種錯只在「成功路徑」才會現形，
+而成功路徑當時根本走不到，於是被上一個 bug 蓋住。
+
+**教訓與防護**：
+
+1. **把 UI 搬進子組件時，要連 state 一起搬走，不要留一份在父層。**
+   留下的同名 ref 不會報錯，只會安靜地讓 handler 讀到空值。
+   判斷法：抽離後在父層 grep 那個 ref，若只剩「被 handler 讀」沒有「被寫」，就是殘骸。
+2. **`@event="handler"` 不檢查參數。** 子組件 emit 的 payload 型別再嚴謹，
+   父層寫成無參數函式依然編譯得過。跨組件的資料傳遞要靠測試釘住，型別釘不住。
+3. **每個 emit → API 的路徑至少要有一個測試斷言 payload 原封不動傳到底。**
+   已補在 `ProjectManagement.spec.ts`「G. 存取者批次操作」：從 drawer stub emit，
+   斷言批次 mutation 收到同一批 email 與角色。把 handler 改回舊寫法，該測試會紅。
+4. **後端回傳巢狀 summary 時，前端解構要對齊。** 這類錯誤只在成功路徑現形，
+   容易被前面的 early-return 蓋掉——修好一個 bug 之後，要把成功路徑整條再走一次。
+
+---
 ## 2026-09-03 ｜ 寫好的 email 速率限制沒接上，任何人都能把全系統的寄信額度打光 🔥
 
 **症狀**：沒有症狀——這是最麻煩的地方。`middleware/rate-limit.ts` 有 508 行完整的

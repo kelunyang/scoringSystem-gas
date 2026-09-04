@@ -619,7 +619,7 @@ const handleRemove = (userEmail: string) => {
 const handleBatchUpdateRoles = () => {
   if (!batchRole.value) return
   emit('batch-update-roles', {
-    users: selectedViewers.value,
+    users: [...selectedViewers.value],
     newRole: batchRole.value
   })
   selectedViewers.value = []
@@ -627,7 +627,7 @@ const handleBatchUpdateRoles = () => {
 }
 
 const handleBatchRemove = () => {
-  emit('batch-remove', selectedViewers.value)
+  emit('batch-remove', [...selectedViewers.value])
   selectedViewers.value = []
 }
 

@@ -1119,6 +1119,8 @@ import {
   useAddViewer,
   useUpdateViewerRole,
   useRemoveViewer,
+  useBatchUpdateViewerRoles,
+  useBatchRemoveViewers,
   useSearchUsers,
   useListStages,
   useGetStage,
@@ -1159,6 +1161,8 @@ const addViewersBatchMutation = useAddViewersBatch()
 const addViewerMutation = useAddViewer()
 const updateViewerRoleMutation = useUpdateViewerRole()
 const removeViewerMutation = useRemoveViewer()
+const batchUpdateViewerRolesMutation = useBatchUpdateViewerRoles()
+const batchRemoveViewersMutation = useBatchRemoveViewers()
 const searchUsersMutation = useSearchUsers()
 const listStagesMutation = useListStages()
 const getStageDetailMutation = useGetStage()
@@ -1342,8 +1346,6 @@ const newViewer = reactive({
 const searchResults = ref<User[]>([])
 const selectedUsers = ref<User[]>([])
 const searchingUsers = ref(false)
-const selectedViewers = ref<ProjectViewer[]>([])
-const batchRole = ref('')
 const stats = computed(() => ({
   totalProjects: projects.value.length,
   activeProjects: projects.value.filter(p => p.status === 'active').length,
@@ -2086,13 +2088,16 @@ const removeViewer = async (userEmail: string) => {
   }
 }
 
-const batchUpdateRoles = async () => {
-  if (selectedViewers.value.length === 0) {
+const batchUpdateRoles = async (payload: { users: string[]; newRole: string }) => {
+  const userEmails = payload?.users || []
+  const newRole = payload?.newRole
+
+  if (userEmails.length === 0) {
     ElMessage.warning('請選擇要更新的存取者')
     return
   }
 
-  if (!batchRole.value) {
+  if (!newRole) {
     ElMessage.warning('請選擇目標角色')
     return
   }
@@ -2104,48 +2109,36 @@ const batchUpdateRoles = async () => {
 
   try {
     loadingViewers.value = true
-    let successCount = 0
-    let failCount = 0
 
-    for (const viewer of selectedViewers.value) {
-      try {
-        // Use TanStack Query mutation (silent - no messages)
-        await updateViewerRoleMutation.mutateAsync({
-          projectId: selectedProject.value.projectId,
-          userEmail: viewer.userEmail,
-          role: batchRole.value
-        })
-        successCount++
-      } catch {
-        failCount++
-      }
-    }
+    const { summary } = await batchUpdateViewerRolesMutation.mutateAsync({
+      projectId: selectedProject.value.projectId,
+      userEmails,
+      role: newRole
+    })
+    const { updated, unchanged, notFound } = summary
 
-    // Show results
-    if (successCount > 0 && failCount === 0) {
-      ElMessage.success(`成功轉換 ${successCount} 位存取者的角色`)
-    } else if (successCount > 0 && failCount > 0) {
-      ElMessage.warning(`成功轉換 ${successCount} 位，失敗 ${failCount} 位`)
+    const messages = []
+    if (updated > 0) messages.push(`成功轉換 ${updated} 位`)
+    if (unchanged > 0) messages.push(`${unchanged} 位角色未變`)
+    if (notFound > 0) messages.push(`${notFound} 位不存在`)
+
+    if (updated > 0) {
+      ElMessage.success(messages.join('，'))
     } else {
-      ElMessage.error('批次轉換失敗')
+      ElMessage.warning(messages.join('，') || '沒有任何存取者被轉換')
     }
 
-    // Reset and reload
-    if (successCount > 0) {
-      selectedViewers.value = []
-      batchRole.value = ''
-      await loadProjectViewers(selectedProject.value.projectId)
-    }
+    await loadProjectViewers(selectedProject.value.projectId)
   } catch (error) {
     console.error('Error batch updating roles:', error)
-    ElMessage.error('批次轉換角色失敗')
+    // Error message already shown by mutation onError handler
   } finally {
     loadingViewers.value = false
   }
 }
 
-const batchRemoveViewers = async () => {
-  if (selectedViewers.value.length === 0) {
+const batchRemoveViewers = async (userEmails: string[]) => {
+  if (!userEmails || userEmails.length === 0) {
     ElMessage.warning('請選擇要刪除的存取者')
     return
   }
@@ -2157,39 +2150,27 @@ const batchRemoveViewers = async () => {
 
   try {
     loadingViewers.value = true
-    let successCount = 0
-    let failCount = 0
 
-    for (const viewer of selectedViewers.value) {
-      try {
-        // Use TanStack Query mutation (silent - no messages)
-        await removeViewerMutation.mutateAsync({
-          projectId: selectedProject.value.projectId,
-          userEmail: viewer.userEmail
-        })
-        successCount++
-      } catch {
-        failCount++
-      }
-    }
+    const { summary } = await batchRemoveViewersMutation.mutateAsync({
+      projectId: selectedProject.value.projectId,
+      userEmails
+    })
+    const { removed, notFound } = summary
 
-    // Show results
-    if (successCount > 0 && failCount === 0) {
-      ElMessage.success(`成功刪除 ${successCount} 位存取者`)
-    } else if (successCount > 0 && failCount > 0) {
-      ElMessage.warning(`成功刪除 ${successCount} 位，失敗 ${failCount} 位`)
+    const messages = []
+    if (removed > 0) messages.push(`成功刪除 ${removed} 位`)
+    if (notFound > 0) messages.push(`${notFound} 位不存在`)
+
+    if (removed > 0) {
+      ElMessage.success(messages.join('，'))
     } else {
-      ElMessage.error('批次刪除失敗')
+      ElMessage.warning(messages.join('，') || '沒有任何存取者被刪除')
     }
 
-    // Reset and reload
-    if (successCount > 0) {
-      selectedViewers.value = []
-      await loadProjectViewers(selectedProject.value.projectId)
-    }
+    await loadProjectViewers(selectedProject.value.projectId)
   } catch (error) {
     console.error('Error batch removing viewers:', error)
-    ElMessage.error('批次刪除存取者失敗')
+    // Error message already shown by mutation onError handler
   } finally {
     loadingViewers.value = false
   }
