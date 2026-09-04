@@ -4,6 +4,42 @@
 > 新坑往上加，讓最近的教訓最先被看到。
 
 ---
+## 2026-09-04 ｜ 元件測試裡 `el-tooltip` 包住的 DOM 全部消失，斷言抓到 0 個元素
+
+**症狀**：新寫的 `StagePointsShareChart` 元件測試，`wrapper.findAll('.share-seg')`
+永遠回傳 0 個，但同一個 wrapper 讀 `.hero-value`、`.legend-row` 都正常。
+元件在瀏覽器裡明明畫得出來。
+
+**根因**：`src/test/setup.ts:211` 的 `config.global.stubs` 把 `el-tooltip` 整個
+stub 成 `true`（空殼 stub）。空殼 stub **不渲染 default slot**，所以任何被
+`<el-tooltip>` 包住的內容在測試環境裡都不存在，渲染出來只剩
+`<el-tooltip-stub></el-tooltip-stub>`。這一條對 `el-button`、`el-dialog`、
+`el-row`、`el-col` 等同樣成立——清單裡 15 個以上元件都是空殼 stub。
+
+**修法**：在該測試的 mount options 覆寫成只渲染 slot、不加包裹層的 stub：
+
+```ts
+global: {
+  plugins: [ElementPlus],
+  stubs: { 'el-tooltip': { template: '<slot />' } }
+}
+```
+
+用 `<slot />` 當根（多根 template）而不是 `<div><slot /></div>`，是為了不多插一層
+DOM，讓 `.share-bar > .share-seg` 這種父子／flex 結構在測試裡跟正式環境一致。
+
+**教訓與防護**：
+
+1. **測試斷言抓到 0 個元素時，先 `console.log(wrapper.html())` 看實際渲染。**
+   看到 `xxx-stub` 就知道是全域 stub 吃掉了，不要往元件邏輯裡找。
+2. **`config.global.stubs` 的空殼 stub 會吞 slot。** 只要測試需要斷言被
+   Element Plus 容器包住的內容（tooltip、dialog、card、row/col 裡的東西），
+   就得在該測試就地覆寫 stub，全域清單不要動（動了會影響既有測試）。
+3. 正式環境沒這個問題：`el-tooltip` 用 `OnlyChild` 直接渲染唯一子節點、不加包裹層，
+   所以放在 flex/grid 容器裡的子元素版面正常（`ProjectDetail.vue` 的 `.hud-tile`
+   早就這樣用了）。
+
+---
 ## 2026-09-04 ｜ 手機直向一進 dashboard 就被滿版通知抽屜蓋住
 
 **症狀**：手機（直向）登入後進 dashboard，只要有未讀通知，通知中心抽屜就自動彈出來

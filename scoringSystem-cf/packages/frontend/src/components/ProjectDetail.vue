@@ -149,6 +149,17 @@
 
         <!-- 專案描述 -->
         <MarkdownViewer v-if="projectDescription" :content="projectDescription" />
+
+        <!-- 分隔線 -->
+        <el-divider />
+
+        <!-- 階段點數占比 -->
+        <div class="stage-share-section">
+          <h4 class="section-title">
+            <i class="fas fa-chart-simple"></i> 階段點數占比
+          </h4>
+          <StagePointsShareChart :stages="stagePointsShareStages" />
+        </div>
       </div>
     </PhysicsDrawerContainer>
 
@@ -1011,6 +1022,7 @@ import StageComments from './StageComments.vue'
 import StageGroupSubmissions from './StageGroupSubmissions.vue'
 import PhysicsDrawerContainer from './shared/PhysicsDrawerContainer.vue'
 import StageGanttChart from './charts/StageGanttChart.vue'
+import StagePointsShareChart from './charts/StagePointsShareChart.vue'
 import VoteResultModal from './VoteResultModal.vue'
 import SubmitReportModal from './SubmitReportModal.vue'
 import SubmitCommentModal from './SubmitCommentModal.vue'
@@ -1706,6 +1718,16 @@ const ganttChartStages = computed(() => {
     status: stage.status,
     extraTime: stage.status === 'completed' ? (stage.settledTime || undefined) : Infinity,
     extraTimeText: stage.status === 'completed' ? '投票階段' : '投票階段將由老師手動關閉結算'
+  }))
+})
+
+// 階段點數占比圖數據（報告獎金 + 評論獎金）
+const stagePointsShareStages = computed(() => {
+  return stages.value.map((stage: ExtendedStage) => ({
+    id: stage.id,
+    title: stage.title,
+    reportReward: stage.reportReward,
+    commentReward: stage.commentReward
   }))
 })
 
@@ -4458,6 +4480,21 @@ onBeforeUnmount(() => {
 }
 
 .scoring-params-section .section-title i {
+  color: #9B59B6;
+}
+
+/* 階段點數占比區 */
+.stage-share-section .section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #606266;
+  margin: 0 0 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stage-share-section .section-title i {
   color: #9B59B6;
 }
 
