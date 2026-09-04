@@ -534,6 +534,72 @@ router 內卻**沒有呼叫 `verifyTurnstileMiddleware`**：
 
 ## B. 已裁決的疑問（封存，勿重啟）
 
+### 2026-09-04 ｜ 管理員改帳號 Email 時，哪些表要跟著改、哪些不能改？→ 「現在的身分」全改，「當時發生的事」全留
+
+**疑問**：後台加了「變更 Email」功能。schema 對 `users` 沒有任何 foreign key，
+email 是**散落在各表的字串**（`sqlite_master` 查無一條 `REFERENCES users`），
+所以「改 email」不是改一個欄位，而是要決定 **49 個含 email 的欄位**裡哪些要跟著動。
+
+**結論**：分界線是「這一列在回答**你現在是誰、你現在有什麼**」還是
+「這一列在記錄**當時發生過什麼**」。前者全改，後者一律不動。
+
+**要改（24 個一般欄位 + 5 個 JSON 欄位 + 留言內文）**，
+清單見 `handlers/admin/users.ts` 的 `EMAIL_REFERENCE_COLUMNS` / `EMAIL_JSON_COLUMNS`。
+關鍵幾個與不改就會出事的後果：
+
+| 欄位 | 不改的後果 |
+|------|-----------|
+| `transactions.userEmail` | 錢包餘額是 `SUM(amount)` 現算的（沒有餘額欄位），不改 = 餘額歸零 |
+| `globalusergroups.userEmail` | 全域權限（含 system_admin）整個消失 |
+| `usergroups` / `projectviewers` | 專案存取權與分組成員資格消失 |
+| `submissions.participationProposal` | JSON 物件的 **key 就是 email**，貢獻度分配對不上人 |
+| `stagesettlements.memberPointsDistribution` | 同上，結算分潤查無此人 |
+| `notifications.targetUserEmail` | 之後的通知永遠收不到 |
+
+**不改（稽核軌跡）**：`sys_logs`、`eventlogs`（這兩個本來就存 userId，不受影響）、
+`globalemaillogs`、`email_idempotency`、`notification_idempotency`、
+`notifications.content`／`.metadata`、`transactions.source`／`.metadata`。
+它們記的是「當時寄給誰／當時誰做的」，改掉等於竄改稽核記錄。
+
+**額外裁決三則**：
+
+1. **`invitation_codes.targetEmail` 不改。** 邀請碼是註冊「之前」的東西，帳號都存在了，
+   那張碼跟這個人已經沒有關係。（另見 A 區 #007：`targetEmail` 目前根本沒被比對。）
+2. **留言內文 `comments.content` 要改。** `@mention` 是從內文字串解析的
+   （`utils/mention-processor.ts:30` 的 regex），不是從 `mentionedUsers` 渲染。
+   不改的話舊 mention 會退化成顯示 email 的 local part。
+   改寫用**同一條 regex 比對整個 token 再判等**，不能用字串 replace——
+   `@a@b.com` 是 `@a@b.com.tw` 的前綴，直接 replace 會把後者切爛。
+3. **JSON 欄位用 SQL `REPLACE()` 是安全的**（不必 read-modify-write）。
+   email 在 JSON 裡永遠帶雙引號（陣列元素 `"a@b.c"`、物件 key `"a@b.c":`），
+   而 email 不可能含雙引號，所以比對 `"old@x"` 這串**前後引號各擋一邊**：
+   前引號擋掉更長的 local part，後引號擋掉更長的網域。已在 116 個帳號的實際
+   D1 副本上驗過 55 筆改寫後 JSON 仍可 parse。
+
+**不需要處理的一項**：**既有登入狀態不會斷**。JWT payload 帶的是 `userId`
+（`handlers/auth/jwt.ts:13`），auth middleware 每次請求都用 userId 回查
+現在的 email（`middleware/auth.ts:76`）。改完不必強制登出，但下次登入要用新 email。
+
+**做法**：全部塞進**一個 `env.DB.batch()`**（D1 的 batch 是一個交易），
+`users.userEmail` 排在最後——這樣任何一張表撞到 UNIQUE 約束時整批回滾，
+不會出現「login email 改了、關聯資料沒改」的半殘狀態。
+
+**掃描與改寫共用同一份清單**：`EMAIL_REFERENCES` 這個陣列同時餵給
+`getUserEmailImpact`（管理員在抽屜裡看到的筆數）與 `changeUserEmail`（實際改寫），
+所以**預覽不可能跟實際結果不一致**。測試 `tests/handlers/admin/change-email.test.ts`
+第一條就是釘這件事：逐項比對掃描筆數 vs 改寫筆數。
+
+**測試為什麼用真的 SQLite**：`REPLACE()`、`instr()`、UNIQUE 違反、batch 回滾，
+regex 驅動的假 D1 一個都表達不出來。改用 `tests/mocks/d1-sqlite.ts`（`node:sqlite`），
+schema 從實際的 D1 dump 成 `tests/fixtures/email-cascade-schema.sql`
+（base schema 不在 migrations 裡，只存在於資料庫），
+用 `pnpm --filter @repo/backend dump:email-cascade-schema` 重新產生。
+
+> 順帶修掉一個地雷：`.gitignore` 的 `*.sql` / `*.sh` 會把這個 fixture 和 dump 腳本
+> 一起吃掉——跟當初「migrations 被 `*.sql` 靜靜排除掉」是同一個坑（見 21a57f6）。
+> 已加上 `!packages/backend/tests/fixtures/*.sql` 與 `!packages/*/scripts/*.sh`。
+
+
 ### 2026-08-31 ｜ `utils/permissions.ts` 和 `middleware/permissions.ts` 該留哪一套？→ 兩套都留，它們是不同層
 
 **疑問**：兩個檔案對每個角色的定義都不一樣，看起來是同一件事的兩份實作，該合併成一套。

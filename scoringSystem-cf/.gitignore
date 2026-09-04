@@ -54,6 +54,8 @@ backup-*.sql
 # silently excluding every migration since the Cloudflare rewrite, so a fresh
 # clone had no schema at all.
 !packages/backend/migrations/*.sql
+# 同理：測試 fixture 的 schema 也是原始碼。沒 commit 的話，clone 下來跑 test 會直接掛。
+!packages/backend/tests/fixtures/*.sql
 
 # Test coverage
 coverage/
@@ -78,6 +80,9 @@ temp/
 *.sh
 # 保留 pnpm 需要的 scripts 目錄
 !scripts/*.sh
+# `!scripts/*.sh` 只解除最外層那一層（含斜線的 pattern 錨定在 .gitignore 所在目錄），
+# 各 package 底下的 scripts/ 要各自解除
+!packages/*/scripts/*.sh
 
 # Auto-generated theme files
 packages/frontend/src/styles/_theme-generated.scss

@@ -76,6 +76,29 @@ export const ResetUserPasswordRequestSchema = z.object({
 export type ResetUserPasswordRequest = z.infer<typeof ResetUserPasswordRequestSchema>;
 
 /**
+ * Change user email request schema
+ * newEmail is normalised (trim + lowercase) on the backend before the
+ * uniqueness check, matching how registration stores emails.
+ */
+export const ChangeUserEmailRequestSchema = z.object({
+  userEmail: z.string().email('Invalid email format'),
+  newEmail: z.string().email('Invalid email format').max(100, 'Email must be at most 100 characters')
+});
+
+export type ChangeUserEmailRequest = z.infer<typeof ChangeUserEmailRequestSchema>;
+
+/**
+ * Email impact scan request schema
+ * Read-only pre-flight for the change-email drawer: counts every live reference
+ * to the address before an admin is allowed to confirm the rewrite.
+ */
+export const GetUserEmailImpactRequestSchema = z.object({
+  userEmail: z.string().email('Invalid email format')
+});
+
+export type GetUserEmailImpactRequest = z.infer<typeof GetUserEmailImpactRequestSchema>;
+
+/**
  * Batch update user status request schema
  */
 export const BatchUpdateUserStatusRequestSchema = z.object({

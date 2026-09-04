@@ -37,7 +37,8 @@
     "init:local": "tsx scripts/init-system.js",
     "init:remote": "tsx scripts/init-system.js --remote",
     "init:schema": "wrangler d1 execute scoring-system-db --local --file=migrations/0003_init_schema.sql",
-    "init:schema:remote": "wrangler d1 execute scoring-system-db --remote --file=migrations/0003_init_schema.sql"
+    "init:schema:remote": "wrangler d1 execute scoring-system-db --remote --file=migrations/0003_init_schema.sql",
+    "dump:email-cascade-schema": "./scripts/dump-email-cascade-schema.sh"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.8.0",

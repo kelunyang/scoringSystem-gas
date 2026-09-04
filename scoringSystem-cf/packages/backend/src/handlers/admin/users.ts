@@ -950,3 +950,420 @@ async function sendAccountUnlockedEmail(
     // Don't throw - email failure shouldn't break the unlock flow
   }
 }
+
+/**
+ * ========================================
+ * EMAIL CHANGE
+ * ========================================
+ */
+
+/**
+ * What kind of thing a reference represents, for the admin-facing impact scan.
+ */
+type EmailRefCategory = 'wallet' | 'permission' | 'record';
+
+/**
+ * How the email is stored in the column.
+ * - `plain`: the whole column is the email
+ * - `json`: the email appears as a quoted token inside JSON - either an array
+ *   element (`["a@b.c"]`) or an object key (`{"a@b.c":0.7}`)
+ */
+type EmailRefKind = 'plain' | 'json';
+
+interface EmailReference {
+  table: string;
+  column: string;
+  kind: EmailRefKind;
+  category: EmailRefCategory;
+  /** Admin-facing label, shown in the impact scan */
+  label: string;
+}
+
+/**
+ * Every column that holds a user's email as a *live* reference.
+ *
+ * The schema has no foreign keys on `users`; emails are copied into every table
+ * that needs to point at a person. Changing an email therefore has to rewrite
+ * all of them, or the account silently loses its groups, project access, wallet
+ * balance, votes and submissions.
+ *
+ * This one list drives both `getUserEmailImpact` (the pre-flight scan the admin
+ * sees) and `changeUserEmail` (the rewrite itself), so the preview can never
+ * disagree with what actually happens.
+ *
+ * Deliberately NOT in this list (they record what happened, not who someone is):
+ * sys_logs, eventlogs, globalemaillogs, email_idempotency,
+ * notification_idempotency, notifications.content / .metadata,
+ * transactions.source / .metadata, invitation_codes.targetEmail.
+ *
+ * For `json` entries the email is always wrapped in double quotes and emails
+ * cannot contain a quote, so swapping the exact `"old@example.com"` substring is
+ * unambiguous: the leading quote rules out a longer local part
+ * (`"x.old@example.com"`) and the trailing quote rules out a longer domain
+ * (`"old@example.com.tw"`).
+ */
+const EMAIL_REFERENCES: readonly EmailReference[] = [
+  // --- Permissions & access -------------------------------------------------
+  { table: 'globalusergroups', column: 'userEmail', kind: 'plain', category: 'permission', label: '全域群組成員資格' },
+  { table: 'usergroups', column: 'userEmail', kind: 'plain', category: 'permission', label: '專案分組成員資格' },
+  { table: 'projectviewers', column: 'userEmail', kind: 'plain', category: 'permission', label: '專案存取權' },
+  { table: 'projectviewers', column: 'assignedBy', kind: 'plain', category: 'permission', label: '由本人指派的專案存取權' },
+
+  // --- Wallet ---------------------------------------------------------------
+  // Balances are aggregated from this ledger (there is no balance column),
+  // so the money follows the email or it disappears.
+  { table: 'transactions', column: 'userEmail', kind: 'plain', category: 'wallet', label: '錢包交易紀錄' },
+
+  // --- Submissions ----------------------------------------------------------
+  { table: 'submissions', column: 'submitterEmail', kind: 'plain', category: 'record', label: '繳交的成果' },
+  { table: 'submissions', column: 'withdrawnBy', kind: 'plain', category: 'record', label: '由本人撤回的成果' },
+  { table: 'submissions', column: 'actualAuthors', kind: 'json', category: 'record', label: '成果的實際作者名單' },
+  { table: 'submissions', column: 'participationProposal', kind: 'json', category: 'record', label: '成果的貢獻度分配' },
+
+  // --- Ranking & voting -----------------------------------------------------
+  { table: 'rankingproposals', column: 'proposerEmail', kind: 'plain', category: 'record', label: '提出的排名提案' },
+  { table: 'rankingproposals', column: 'withdrawnBy', kind: 'plain', category: 'record', label: '由本人撤回的排名提案' },
+  { table: 'proposalvotes', column: 'voterEmail', kind: 'plain', category: 'record', label: '排名提案投票' },
+  { table: 'submissionapprovalvotes', column: 'voterEmail', kind: 'plain', category: 'record', label: '成果核可投票' },
+  { table: 'commentrankingproposals', column: 'authorEmail', kind: 'plain', category: 'record', label: '被提名的評論' },
+  { table: 'teachercommentrankings', column: 'teacherEmail', kind: 'plain', category: 'record', label: '本人給的評論評分' },
+  { table: 'teachercommentrankings', column: 'authorEmail', kind: 'plain', category: 'record', label: '本人評論被老師評分' },
+  { table: 'teachersubmissionrankings', column: 'teacherEmail', kind: 'plain', category: 'record', label: '本人給的成果評分' },
+
+  // --- Settlement -----------------------------------------------------------
+  { table: 'settlementhistory', column: 'operatorEmail', kind: 'plain', category: 'record', label: '由本人執行的結算' },
+  { table: 'settlementhistory', column: 'reversedBy', kind: 'plain', category: 'record', label: '由本人撤銷的結算' },
+  { table: 'commentsettlements', column: 'authorEmail', kind: 'plain', category: 'record', label: '評論結算明細' },
+  { table: 'stagesettlements', column: 'memberEmails', kind: 'json', category: 'record', label: '階段結算的成員名單' },
+  { table: 'stagesettlements', column: 'memberPointsDistribution', kind: 'json', category: 'record', label: '階段結算的分潤明細' },
+
+  // --- Comments & reactions -------------------------------------------------
+  { table: 'comments', column: 'authorEmail', kind: 'plain', category: 'record', label: '發表的留言' },
+  { table: 'comments', column: 'mentionedUsers', kind: 'json', category: 'record', label: '被 @提及 的留言' },
+  { table: 'reactions', column: 'userEmail', kind: 'plain', category: 'record', label: '留言表情回應' },
+
+  // --- Delivery & misc ------------------------------------------------------
+  { table: 'notifications', column: 'targetUserEmail', kind: 'plain', category: 'record', label: '站內通知' },
+  { table: 'aiservicecalls', column: 'userEmail', kind: 'plain', category: 'record', label: 'AI 服務呼叫紀錄' },
+  { table: 'two_factor_codes', column: 'userEmail', kind: 'plain', category: 'record', label: '兩步驟驗證碼' },
+  { table: 'announcements', column: 'createdBy', kind: 'plain', category: 'record', label: '由本人發布的公告' }
+] as const;
+
+/** Pseudo-reference for the Markdown `@mention` rewrite inside comment bodies */
+const COMMENT_CONTENT_REF = {
+  key: 'comments.content',
+  category: 'record' as EmailRefCategory,
+  label: '留言內文中的 @提及'
+};
+
+/**
+ * Same mention pattern the frontend renderer uses (utils/mention-processor.ts).
+ * Matching the whole `@email` token and comparing it for equality avoids
+ * corrupting a longer address that merely starts with the old one - a plain
+ * substring swap would turn `@a@b.com.tw` into `@new@x.com.tw`.
+ */
+const MENTION_PATTERN = /@([^\s@]+@[^\s@]+\.[^\s@]+)/g;
+
+/**
+ * Rewrite `@old@example.com` mentions in a Markdown comment body.
+ */
+function rewriteMentions(content: string, oldEmail: string, newEmail: string): string {
+  return content.replace(MENTION_PATTERN, (match, email: string) =>
+    email === oldEmail ? `@${newEmail}` : match
+  );
+}
+
+/** One row of the impact scan */
+interface EmailImpactItem {
+  key: string;
+  label: string;
+  category: EmailRefCategory;
+  count: number;
+}
+
+interface EmailImpactScan {
+  items: EmailImpactItem[];
+  totals: Record<EmailRefCategory, number> & { all: number };
+}
+
+/**
+ * Count every live reference to an email, grouped for display.
+ *
+ * Shares `EMAIL_REFERENCES` with `changeUserEmail`, so the numbers an admin
+ * approves are exactly the rows that will be rewritten.
+ */
+async function scanEmailReferences(env: Env, email: string): Promise<EmailImpactScan> {
+  const quoted = `"${email}"`;
+  const items: EmailImpactItem[] = [];
+
+  for (const ref of EMAIL_REFERENCES) {
+    const where = ref.kind === 'plain'
+      ? `${ref.column} = ?`
+      : `instr(${ref.column}, ?) > 0`;
+    const param = ref.kind === 'plain' ? email : quoted;
+
+    const row = await env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM ${ref.table} WHERE ${where}`
+    ).bind(param).first<{ n: number }>();
+
+    items.push({
+      key: `${ref.table}.${ref.column}`,
+      label: ref.label,
+      category: ref.category,
+      count: row?.n || 0
+    });
+  }
+
+  // Comment bodies: counted with the same equality check the rewrite uses, so a
+  // comment that only mentions a *longer* address is not counted here
+  const mentioning = await env.DB.prepare(
+    'SELECT content FROM comments WHERE instr(content, ?) > 0'
+  ).bind(`@${email}`).all<{ content: string }>();
+
+  const contentCount = (mentioning.results || []).filter(
+    row => rewriteMentions(row.content, email, '') !== row.content
+  ).length;
+
+  items.push({ ...COMMENT_CONTENT_REF, count: contentCount });
+
+  const totals = { wallet: 0, permission: 0, record: 0, all: 0 };
+  for (const item of items) {
+    totals[item.category] += item.count;
+    totals.all += item.count;
+  }
+
+  return { items, totals };
+}
+
+/**
+ * Scan what a user's email is attached to, without changing anything.
+ *
+ * Backs the pre-flight view in the admin "change email" drawer: the admin sees
+ * how many wallet, permission and activity rows the change will rewrite before
+ * they are allowed to confirm.
+ *
+ * @param env - Worker environment (D1 binding)
+ * @param userEmail - The account to scan
+ * @returns Response with per-reference counts, category totals and the wallet balance
+ *
+ * @example
+ * await getUserEmailImpact(env, 'student@school.tw');
+ * // → { totals: { wallet: 15, permission: 5, record: 392, all: 412 }, walletBalance: 3579, items: [...] }
+ */
+export async function getUserEmailImpact(
+  env: Env,
+  userEmail: string
+): Promise<Response> {
+  try {
+    const email = userEmail.trim();
+
+    const user = await env.DB.prepare(`
+      SELECT userId, userEmail, displayName FROM users WHERE userEmail = ?
+    `).bind(email).first<{ userId: string; userEmail: string; displayName: string | null }>();
+
+    if (!user) {
+      return errorResponse('USER_NOT_FOUND', 'User not found');
+    }
+
+    const { items, totals } = await scanEmailReferences(env, email);
+
+    // Ledger-only wallet: the balance is the sum of the transaction rows above,
+    // which is exactly what gets orphaned if the email moves without them
+    const balanceRow = await env.DB.prepare(
+      'SELECT COALESCE(SUM(amount), 0) AS balance FROM transactions WHERE userEmail = ?'
+    ).bind(email).first<{ balance: number }>();
+
+    return successResponse({
+      userEmail: user.userEmail,
+      userId: user.userId,
+      displayName: user.displayName,
+      walletBalance: balanceRow?.balance || 0,
+      totals,
+      // Only the references that actually have rows - an admin does not need to
+      // read 30 zeroes to find the 8 things that matter
+      items: items.filter(item => item.count > 0)
+    });
+
+  } catch (error) {
+    console.error('Get user email impact error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to scan email references');
+  }
+}
+
+/**
+ * Change a user's email address (admin function)
+ *
+ * Rewrites the account's email everywhere it is used as a live reference, in a
+ * single D1 batch so it either all lands or none of it does. Audit trails keep
+ * the old address on purpose.
+ *
+ * Existing sessions survive: JWTs carry userId, and the auth middleware reads
+ * the current email back from the database on every request.
+ *
+ * @param env - Worker environment (D1 binding)
+ * @param adminEmail - Email of the admin performing the change
+ * @param userEmail - The account's current email
+ * @param newEmailInput - Requested new email (trimmed + lowercased before use)
+ * @returns Response with the per-reference row counts that were rewritten
+ *
+ * @example
+ * await changeUserEmail(env, 'admin@school.tw', 'old@school.tw', 'new@school.tw');
+ */
+export async function changeUserEmail(
+  env: Env,
+  adminEmail: string,
+  userEmail: string,
+  newEmailInput: string
+): Promise<Response> {
+  try {
+    // Normalise the same way registration does, so the stored form is consistent
+    const oldEmail = userEmail.trim();
+    const newEmail = newEmailInput.trim().toLowerCase().slice(0, 100);
+
+    if (!newEmail) {
+      return errorResponse('INVALID_INPUT', 'New email is required');
+    }
+
+    if (newEmail === oldEmail) {
+      return errorResponse('INVALID_INPUT', 'New email is the same as the current email');
+    }
+
+    const user = await env.DB.prepare(`
+      SELECT userId, userEmail, displayName FROM users WHERE userEmail = ?
+    `).bind(oldEmail).first<{ userId: string; userEmail: string; displayName: string | null }>();
+
+    if (!user) {
+      return errorResponse('USER_NOT_FOUND', 'User not found');
+    }
+
+    // Uniqueness check. Compared case-insensitively so a new address cannot
+    // shadow an existing account that only differs by capitalisation.
+    const taken = await env.DB.prepare(`
+      SELECT userEmail FROM users WHERE LOWER(userEmail) = ? AND userId != ?
+    `).bind(newEmail, user.userId).first<{ userEmail: string }>();
+
+    if (taken) {
+      return errorResponse('EMAIL_ALREADY_EXISTS', `Email ${newEmail} is already used by another account`);
+    }
+
+    const statements: D1PreparedStatement[] = [];
+    const rewritten: Record<string, number> = {};
+    const quotedOld = `"${oldEmail}"`;
+    const quotedNew = `"${newEmail}"`;
+
+    // 1. Every live reference, plain columns and JSON alike
+    for (const ref of EMAIL_REFERENCES) {
+      const key = `${ref.table}.${ref.column}`;
+
+      if (ref.kind === 'plain') {
+        const countRow = await env.DB.prepare(
+          `SELECT COUNT(*) AS n FROM ${ref.table} WHERE ${ref.column} = ?`
+        ).bind(oldEmail).first<{ n: number }>();
+
+        const n = countRow?.n || 0;
+        if (n === 0) continue;
+
+        rewritten[key] = n;
+        statements.push(
+          env.DB.prepare(`UPDATE ${ref.table} SET ${ref.column} = ? WHERE ${ref.column} = ?`)
+            .bind(newEmail, oldEmail)
+        );
+        continue;
+      }
+
+      const countRow = await env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM ${ref.table} WHERE instr(${ref.column}, ?) > 0`
+      ).bind(quotedOld).first<{ n: number }>();
+
+      const n = countRow?.n || 0;
+      if (n === 0) continue;
+
+      rewritten[key] = n;
+      statements.push(
+        env.DB.prepare(
+          `UPDATE ${ref.table} SET ${ref.column} = REPLACE(${ref.column}, ?, ?) WHERE instr(${ref.column}, ?) > 0`
+        ).bind(quotedOld, quotedNew, quotedOld)
+      );
+    }
+
+    // 2. Markdown @mentions inside comment bodies. Done in JS rather than with
+    //    REPLACE() because the token has no closing delimiter, so a plain
+    //    substring swap could clobber a longer address that starts the same way.
+    const mentioningComments = await env.DB.prepare(`
+      SELECT commentId, content FROM comments WHERE instr(content, ?) > 0
+    `).bind(`@${oldEmail}`).all<{ commentId: string; content: string }>();
+
+    let contentRewrites = 0;
+    for (const row of mentioningComments.results || []) {
+      const updated = rewriteMentions(row.content, oldEmail, newEmail);
+      if (updated === row.content) continue;
+
+      contentRewrites++;
+      statements.push(
+        env.DB.prepare('UPDATE comments SET content = ? WHERE commentId = ?').bind(updated, row.commentId)
+      );
+    }
+    if (contentRewrites > 0) {
+      rewritten[COMMENT_CONTENT_REF.key] = contentRewrites;
+    }
+
+    // 3. The account itself, last - so a unique-constraint failure anywhere
+    //    above rolls the whole batch back before the login email moves
+    statements.push(
+      env.DB.prepare('UPDATE users SET userEmail = ?, updatedAt = ? WHERE userId = ?')
+        .bind(newEmail, Date.now(), user.userId)
+    );
+    rewritten['users.userEmail'] = 1;
+
+    try {
+      await env.DB.batch(statements);
+    } catch (batchError) {
+      console.error('Change user email batch failed:', batchError);
+      const message = batchError instanceof Error ? batchError.message : String(batchError);
+      if (message.includes('UNIQUE')) {
+        return errorResponse(
+          'EMAIL_ALREADY_EXISTS',
+          `${newEmail} already appears in project or voting records; nothing was changed`
+        );
+      }
+      return errorResponse('SYSTEM_ERROR', 'Failed to change email; nothing was changed');
+    }
+
+    const totalRows = Object.values(rewritten).reduce((sum, n) => sum + n, 0);
+
+    await logGlobalOperation(
+      env,
+      adminEmail,
+      'user_email_changed_by_admin',
+      'user',
+      newEmail,
+      {
+        changes: { userEmail: { from: oldEmail, to: newEmail } },
+        userId: user.userId,
+        displayName: user.displayName,
+        rewritten,
+        totalRows,
+        updatedBy: adminEmail
+      },
+      { level: 'warning' }
+    );
+
+    // Tell the account holder, in the in-app inbox that now belongs to the new address
+    queueSingleNotification(env, {
+      targetUserEmail: newEmail,
+      type: 'system_announcement',
+      title: '登入 Email 已變更',
+      content: `管理員已將你的登入 Email 從 ${oldEmail} 變更為 ${newEmail}，下次登入請使用新的 Email。`,
+      metadata: { oldEmail, newEmail, changedBy: adminEmail }
+    }).catch(err => console.error('[changeUserEmail] Notification error:', err));
+
+    return successResponse(
+      { oldEmail, newEmail, rewritten, totalRows },
+      'User email changed successfully'
+    );
+
+  } catch (error) {
+    console.error('Change user email error:', error);
+    return errorResponse('SYSTEM_ERROR', 'Failed to change user email');
+  }
+}

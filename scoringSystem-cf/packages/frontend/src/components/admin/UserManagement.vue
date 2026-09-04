@@ -252,6 +252,10 @@
                     <i class="fas fa-key"></i>
                     重設密碼
                   </el-button>
+                  <el-button type="danger" size="small" title="變更此帳號的登入 Email" @click="changeEmail(user)">
+                    <i class="fas fa-at"></i>
+                    變更 Email
+                  </el-button>
                   <el-button type="info" size="small" title="查看該用戶的登入記錄" @click="viewLoginLogs(user)">
                     <i class="fas fa-right-to-bracket"></i>
                     登入記錄
@@ -324,6 +328,10 @@
                 <el-button type="warning" size="small" @click.stop="resetPassword(user)">
                   <i class="fas fa-key"></i>
                   重設密碼
+                </el-button>
+                <el-button type="danger" size="small" title="變更此帳號的登入 Email" @click.stop="changeEmail(user)">
+                  <i class="fas fa-at"></i>
+                  Email
                 </el-button>
                 <el-button type="info" size="small" title="查看該用戶的登入記錄" @click.stop="viewLoginLogs(user)">
                   <i class="fas fa-right-to-bracket"></i>
@@ -410,6 +418,14 @@
     />
 
     <!-- <i class="fas fa-check-circle text-success"></i> Batch Reset Password is now handled by unified PasswordResetDrawer above -->
+
+    <!-- Change Email Drawer (Single user only) -->
+    <ChangeEmailDrawer
+      v-model:visible="showChangeEmailDrawer"
+      :user="selectedUser"
+      :changing="changingUserEmail"
+      @confirm="handleChangeEmailConfirm"
+    />
 
     <!-- Unlock User Drawer -->
     <el-drawer
@@ -551,7 +567,8 @@ import {
   useBatchUpdateUserStatus,
   useResetPassword,
   useUnlockUser,
-  useUpdateUserProfile
+  useUpdateUserProfile,
+  useChangeUserEmail
 } from '@/composables/admin/useUserMutations'
 import {
   useAddUserToGlobalGroup,
@@ -604,6 +621,7 @@ import UserActivityDetail, { type Event as ActivityEvent } from '@/components/sh
 import InvitationManagementDrawer from './user/InvitationManagementDrawer.vue'
 import UserEditorDrawer, { type User as DrawerUser } from './user/UserEditorDrawer.vue'
 import PasswordResetDrawer from './user/PasswordResetDrawer.vue'
+import ChangeEmailDrawer from './user/ChangeEmailDrawer.vue'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
@@ -645,6 +663,7 @@ const registerAction = inject<(fn: (() => void) | null) => void>('registerAction
 const updateUserStatusMutation = useUpdateUserStatus()
 const batchUpdateUserStatusMutation = useBatchUpdateUserStatus()
 const resetPasswordMutation = useResetPassword()
+const changeUserEmailMutation = useChangeUserEmail()
 const unlockUserMutation = useUnlockUser()
 const updateUserProfileMutation = useUpdateUserProfile()
 const addUserToGroupMutation = useAddUserToGlobalGroup()
@@ -698,6 +717,10 @@ const showInviteDrawer = ref(false)
 
 // Password Reset Drawer state (single user only)
 const showPasswordResetDrawer = ref(false)
+
+// Change Email Drawer state (single user only)
+const showChangeEmailDrawer = ref(false)
+const changingUserEmail = ref(false)
 
 const selectedUser = ref<ExtendedUser | null>(null)
 const loading = ref(false)
@@ -1036,6 +1059,27 @@ const handlePasswordResetConfirm = async ({ userEmail }: { userEmail: string }) 
   // 使用 TanStack Query mutation（會自動處理 success/error 訊息和 cache invalidation）
   await resetPasswordMutation.mutateAsync({ targetEmail: userEmail })
   showPasswordResetDrawer.value = false
+}
+
+// Open change email drawer for a single user
+const changeEmail = (user: ExtendedUser) => {
+  selectedUser.value = user
+  showChangeEmailDrawer.value = true
+}
+
+// Change email handler - the backend rewrites every reference in one transaction
+const handleChangeEmailConfirm = async ({ userEmail, newEmail }: { userEmail: string; newEmail: string }) => {
+  changingUserEmail.value = true
+  try {
+    const result = await changeUserEmailMutation.mutateAsync({ userEmail, newEmail })
+    ElMessage.success(`Email 已變更為 ${result.newEmail}，共改寫 ${result.totalRows} 筆關聯資料`)
+    showChangeEmailDrawer.value = false
+    await loadUsers()
+  } catch {
+    // Error message already shown by the mutation's onError handler
+  } finally {
+    changingUserEmail.value = false
+  }
 }
 
 // 編輯使用者相關方法

@@ -5,6 +5,8 @@
  * - useUpdateUserStatus() - Update single user status
  * - useBatchUpdateUserStatus() - Batch update user status
  * - useResetPassword() - Reset user password
+ * - useUserEmailImpact() - Scan what a user's email is attached to (read-only)
+ * - useChangeUserEmail() - Change a user's login email
  * - useUnlockUser() - Unlock user account
  * - useUpdateUserProfile() - Update user profile
  *
@@ -41,6 +43,43 @@ interface BatchUpdateStatusResult {
 
 interface ResetPasswordParams {
   targetEmail: string
+}
+
+/** One reference the rename would rewrite, e.g. "錢包交易紀錄: 15" */
+export interface EmailImpactItem {
+  key: string
+  label: string
+  category: 'wallet' | 'permission' | 'record'
+  count: number
+}
+
+/** Read-only pre-flight for the change-email drawer */
+export interface UserEmailImpact {
+  userEmail: string
+  userId: string
+  displayName: string | null
+  /** Ledger-only wallet: the sum that would be orphaned if the email moved alone */
+  walletBalance: number
+  totals: { wallet: number; permission: number; record: number; all: number }
+  /** Only references with count > 0 */
+  items: EmailImpactItem[]
+}
+
+interface UserEmailImpactParams {
+  userEmail: string
+}
+
+interface ChangeUserEmailParams {
+  userEmail: string
+  newEmail: string
+}
+
+/** Per-table row counts the backend rewrote, keyed as "table.column" */
+interface ChangeUserEmailResult {
+  oldEmail: string
+  newEmail: string
+  rewritten: Record<string, number>
+  totalRows: number
 }
 
 interface UnlockUserParams {
@@ -208,6 +247,99 @@ export function useResetPassword(): UseMutationReturnType<void, Error, ResetPass
     },
     onError: (error: Error) => {
       ElMessage.error(`密碼重設失敗: ${error.message}`)
+    }
+  })
+}
+
+// ============================================================================
+// useUserEmailImpact - Scan what a user's email is attached to
+// ============================================================================
+
+/**
+ * Count every live reference to a user's email, without changing anything.
+ *
+ * Shares its column list with the rename on the backend, so the numbers shown
+ * here are exactly the rows {@link useChangeUserEmail} would rewrite.
+ *
+ * A mutation rather than a query: it is an on-demand scan tied to a drawer, not
+ * cached page data.
+ *
+ * @returns Mutation object resolving to the impact scan
+ *
+ * @example
+ * ```typescript
+ * const scan = useUserEmailImpact()
+ * const impact = await scan.mutateAsync({ userEmail: 'user@example.com' })
+ * console.log(impact.totals.wallet, impact.walletBalance)
+ * ```
+ */
+export function useUserEmailImpact(): UseMutationReturnType<UserEmailImpact, Error, UserEmailImpactParams, unknown> {
+  return useMutation({
+    mutationFn: async ({ userEmail }: UserEmailImpactParams): Promise<UserEmailImpact> => {
+      const response = await fetchWithAuth<ApiResponse<UserEmailImpact>>(
+        '/api/admin/users/email-impact',
+        { method: 'POST', body: { userEmail } }
+      )
+
+      if (!response.success || !response.data) {
+        throw new Error(response.error?.message || '掃描失敗')
+      }
+
+      return response.data
+    },
+    onError: (error: Error) => {
+      ElMessage.error(`掃描關聯資料失敗: ${error.message}`)
+    }
+  })
+}
+
+// ============================================================================
+// useChangeUserEmail - Change a user's login email
+// ============================================================================
+
+/**
+ * Change a user's login email.
+ *
+ * The backend rewrites every live reference to the old address (group
+ * membership, project access, wallet ledger, votes, submissions, comments,
+ * notifications) inside one transaction, and reports how many rows it touched.
+ * Success is reported by the caller so it can show that count.
+ *
+ * @returns Mutation object resolving to the rewrite summary
+ *
+ * @example
+ * ```typescript
+ * const changeEmail = useChangeUserEmail()
+ *
+ * const result = await changeEmail.mutateAsync({
+ *   userEmail: 'old@example.com',
+ *   newEmail: 'new@example.com'
+ * })
+ * console.log(result.totalRows)
+ * ```
+ */
+export function useChangeUserEmail(): UseMutationReturnType<ChangeUserEmailResult, Error, ChangeUserEmailParams, unknown> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ userEmail, newEmail }: ChangeUserEmailParams): Promise<ChangeUserEmailResult> => {
+      const response = await fetchWithAuth<ApiResponse<ChangeUserEmailResult>>(
+        '/api/admin/users/change-email',
+        { method: 'POST', body: { userEmail, newEmail } }
+      )
+
+      if (!response.success || !response.data) {
+        throw new Error(response.error?.message || 'Email 變更失敗')
+      }
+
+      return response.data
+    },
+    onSuccess: () => {
+      // No success message - caller reports the rewrite summary
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+    },
+    onError: (error: Error) => {
+      ElMessage.error(`Email 變更失敗: ${error.message}`)
     }
   })
 }

@@ -88,6 +88,8 @@ import {
   UpdateUserStatusRequestSchema,
   UpdateUserProfileAdminRequestSchema,
   ResetUserPasswordRequestSchema,
+  ChangeUserEmailRequestSchema,
+  GetUserEmailImpactRequestSchema,
   UnlockUserRequestSchema,
   BatchUpdateUserStatusRequestSchema,
   BatchResetPasswordRequestSchema,
@@ -130,6 +132,8 @@ import {
   updateUserStatus,
   updateUserProfile,
   resetUserPassword,
+  changeUserEmail,
+  getUserEmailImpact,
   unlockUser,
   batchUpdateUserStatus,
   batchResetPassword,
@@ -428,6 +432,48 @@ app.post(
       c.env,
       user.userEmail,
       userEmail
+    );
+
+    return response;
+  }
+);
+
+/**
+ * Scan what a user's email is attached to (read-only)
+ * Body: { userEmail }
+ * Pre-flight for the change-email drawer - counts wallet, permission and
+ * activity rows that a rename would rewrite
+ */
+app.post(
+  '/users/email-impact',
+  zValidator('json', GetUserEmailImpactRequestSchema),
+  async (c) => {
+    const body = c.req.valid('json');
+
+    const response = await getUserEmailImpact(c.env, body.userEmail);
+
+    return response;
+  }
+);
+
+/**
+ * Change a user's login email
+ * Body: { userEmail, newEmail }
+ * Rewrites every live reference to the old email in one transaction
+ */
+app.post(
+  '/users/change-email',
+  zValidator('json', ChangeUserEmailRequestSchema),
+  async (c) => {
+    const user = c.get('user');
+    const body = c.req.valid('json');
+    const { userEmail, newEmail } = body;
+
+    const response = await changeUserEmail(
+      c.env,
+      user.userEmail,
+      userEmail,
+      newEmail
     );
 
     return response;
