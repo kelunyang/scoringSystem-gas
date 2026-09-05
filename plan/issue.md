@@ -289,6 +289,13 @@ mention 一個完全不在專案裡的人，會回傳他的顯示名稱與頭像
 但都沒去重；而共識演算法按列表位置計 Borda 分，重複項因此被計分兩次。
 已抽出 `normalizeAIRanking` 三處共用，測試直接斷言 Borda 分數數值。
 
+**BT 兩兩比較模式（追加，已修）**：`callBTComparison` 把任何讀不懂的模型回應
+一律判成 `'A'` 獲勝——截斷、限流、回 `"C"`、回純文字都算 A 贏。
+而 `utils/bradley-terry.ts` 本來就支援「沒有 winner」（`:172` 的 `continue`），
+是上游自己捏造了結果。已抽出 `parseBTVerdict` 只認明確的 A/B、其餘回 null，
+消費端跳過該場並計數，可用比較數不足一半時直接拋錯而非產出任意排名。
+測試 8 條（`tests/utils/bt-verdict.test.ts`）。
+
 **提示詞注入面（未修，屬設計取捨）**：`buildUserPrompt` 把學生自己寫的
 `item.content` 原封不動插進 prompt。無法完全防堵，但**輸出端有對照合法 ID 集合驗證**
 （現在含去重），且 AI 結果只是存成建議記錄廣播給教師，不會自動寫進分數。

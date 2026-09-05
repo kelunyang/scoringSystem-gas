@@ -330,6 +330,11 @@ async function processBTRanking(
   let totalResponseTokens = 0;
   let totalTokens = 0;
 
+  // Comparisons whose verdict could not be read. Tracked so a run where the
+  // model failed on most pairs does not present a confident-looking ranking
+  // built from almost no data.
+  let unreadableComparisons = 0;
+
   // Process each comparison
   for (let i = 0; i < comparisons.length; i++) {
     const comparison = comparisons[i];
@@ -367,8 +372,18 @@ async function processBTRanking(
       userPrompt
     );
 
-    // Record comparison result
-    comparison.winner = result.winner === 'A' ? comparison.itemA : comparison.itemB;
+    // Record comparison result. An unreadable answer leaves `winner` unset, so
+    // the pair is skipped by computeBTRanking rather than being counted as a
+    // win for whichever item happened to be in slot A.
+    if (result.winner === null) {
+      unreadableComparisons++;
+      console.warn(
+        `[AI Ranking Consumer] BT comparison ${i + 1}/${totalComparisons} unreadable, skipping:`,
+        `${comparison.itemA} vs ${comparison.itemB}`
+      );
+    } else {
+      comparison.winner = result.winner === 'A' ? comparison.itemA : comparison.itemB;
+    }
     comparison.reason = result.reason;
 
     // Accumulate tokens
@@ -382,6 +397,19 @@ async function processBTRanking(
     if (i < comparisons.length - 1) {
       await new Promise(resolve => setTimeout(resolve, 200));
     }
+  }
+
+  // Refuse to present a ranking built from almost nothing.
+  //
+  // Bradley-Terry happily returns a ranking from zero usable comparisons — the
+  // strengths just stay at their priors and the order comes out arbitrary. That
+  // is indistinguishable, to the teacher reading it, from a confident result.
+  const usableComparisons = comparisons.length - unreadableComparisons;
+  if (usableComparisons < Math.ceil(comparisons.length / 2)) {
+    throw new Error(
+      `AI 未能完成足夠的兩兩比較（${usableComparisons}/${comparisons.length} 可用），` +
+      `無法產生可信的排名。請檢查模型設定後重試。`
+    );
   }
 
   // Compute BT ranking
@@ -493,6 +521,44 @@ ID: ${itemB.id}${metaB ? `\n${metaB}` : ''}
 }
 
 /**
+ * Read a pairwise verdict out of whatever the model returned.
+ *
+ * Extracted so the parsing can be tested without a live model: this is where
+ * the damage happened. The previous version coerced anything it could not read
+ * to `'A'`, so a truncated, rate-limited or prompt-injected response silently
+ * awarded item A the win. Bradley-Terry already skips comparisons with no
+ * winner, so `null` is both honest and supported downstream.
+ *
+ * @param content - The raw `message.content` from the model
+ * @returns The verdict, or null when the answer is not a definite A or B
+ *
+ * @example
+ * parseBTVerdict('{"winner":"B","reason":"clearer"}')  // { winner: 'B', reason: 'clearer' }
+ * parseBTVerdict('I think A is better')                // { winner: null, ... }
+ */
+export function parseBTVerdict(content: string): { winner: 'A' | 'B' | null; reason: string } {
+  let parsed: { winner?: unknown; reason?: unknown };
+
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    // Fallback: the model wrapped its JSON in prose. Pull the verdict out if
+    // it is unambiguously there.
+    const winnerMatch = content.match(/"winner"\s*:\s*"([AB])"/);
+    parsed = winnerMatch
+      ? { winner: winnerMatch[1], reason: '從非 JSON 回應中擷取' }
+      : { winner: null, reason: '無法解析回應' };
+  }
+
+  const winner = parsed.winner === 'A' ? 'A' : parsed.winner === 'B' ? 'B' : null;
+
+  return {
+    winner,
+    reason: typeof parsed.reason === 'string' ? parsed.reason : ''
+  };
+}
+
+/**
  * Call AI for BT comparison
  */
 async function callBTComparison(
@@ -502,7 +568,8 @@ async function callBTComparison(
   systemPrompt: string,
   userPrompt: string
 ): Promise<{
-  winner: 'A' | 'B';
+  /** null when the model's answer could not be read as a definite A or B. */
+  winner: 'A' | 'B' | null;
   reason: string;
   usage?: {
     prompt_tokens?: number;
@@ -535,24 +602,9 @@ async function callBTComparison(
   const data = await response.json() as any;
   const content = data.choices?.[0]?.message?.content || '';
 
-  // Parse JSON response
-  let parsed: { winner: string; reason: string };
-  try {
-    parsed = JSON.parse(content);
-  } catch {
-    // Fallback: try to extract winner from text
-    const winnerMatch = content.match(/"winner"\s*:\s*"([AB])"/);
-    parsed = {
-      winner: winnerMatch?.[1] || 'A',
-      reason: '無法解析回應'
-    };
-  }
+  const { winner, reason } = parseBTVerdict(content);
 
-  return {
-    winner: parsed.winner === 'B' ? 'B' : 'A',
-    reason: parsed.reason || '',
-    usage: data.usage
-  };
+  return { winner, reason, usage: data.usage };
 }
 
 /**
