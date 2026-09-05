@@ -1,17 +1,17 @@
 /**
- * 專案群組的一列（`groups` 資料表）。
+ * Group Member Management Handlers
+ * Migrated from GAS scripts/groups_api.js
  */
-interface ActiveGroupRow {
-  groupId: string;
-  projectId: string;
-  groupName: string;
-  description: string | null;
-  createdBy: string;
-  createdTime: number;
-  status: string;
-  /** SQLite 存 0/1，不是 boolean。 */
-  allowChange: number;
-}
+
+import type { Env } from '@/types';
+import { successResponse, errorResponse } from '@utils/response';
+import { generateId } from '@utils/id-generator';
+import { hasGlobalPermission } from '@utils/permissions';
+import { checkProjectPermission } from '@middleware/permissions';
+import { logProjectOperation } from '@utils/logging';
+import { queueSingleNotification } from '../../queues/notification-producer';
+import { getConfigValue } from '@utils/config';
+import type { GroupRow } from '@db/rows';
 
 /**
  * 取得專案裡一個仍然 active 的群組。
@@ -23,25 +23,11 @@ async function getActiveGroup(
   env: Env,
   projectId: string,
   groupId: string
-): Promise<ActiveGroupRow | null> {
+): Promise<GroupRow | null> {
   return env.DB.prepare(`
     SELECT * FROM groups WHERE projectId = ? AND groupId = ? AND status = 'active'
-  `).bind(projectId, groupId).first<ActiveGroupRow>();
+  `).bind(projectId, groupId).first<GroupRow>();
 }
-
-/**
- * Group Member Management Handlers
- * Migrated from GAS scripts/groups_api.js
- */
-
-import type { Env} from '@/types';
-import { successResponse, errorResponse } from '@utils/response';
-import { generateId } from '@utils/id-generator';
-import { hasGlobalPermission } from '@utils/permissions';
-import { checkProjectPermission } from '@middleware/permissions';
-import { logProjectOperation } from '@utils/logging';
-import { queueSingleNotification } from '../../queues/notification-producer';
-import { getConfigValue } from '@utils/config';
 
 /**
  * Add user to group
@@ -396,7 +382,7 @@ export async function listProjectGroups(
       LEFT JOIN users u ON g.createdBy = u.userId
       WHERE g.projectId = ?${statusFilter}
       ORDER BY g.createdTime
-    `).bind(projectId).all<ActiveGroupRow & { creatorDisplayName: string | null }>();
+    `).bind(projectId).all<GroupRow & { creatorDisplayName: string | null }>();
 
     // Enrich groups with details
     const groupsWithDetails = await Promise.all(

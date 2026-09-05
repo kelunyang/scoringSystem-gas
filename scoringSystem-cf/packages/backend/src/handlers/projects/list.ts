@@ -9,6 +9,7 @@ import { parseJSON } from '../../utils/json';
 import { checkIsTeacherOrObserver } from '@utils/permissions';
 import { getEffectiveScoringConfig } from '../../utils/scoring-config';
 import type { SqlBindValue } from '../../types';
+import type { GroupRow, UserGroupRow } from '@db/rows';
 
 // extractParticipants function removed - no longer needed
 // participationProposal is now returned directly with masked percentages for non-group members
@@ -72,13 +73,52 @@ interface ProjectRow {
   creatorDisplayName: string | null;
 }
 
-interface UserGroupRow {
+/** usergroups JOIN groups 的一列——含 groupName，和資料表本身的 UserGroupRow 不同。 */
+interface UserGroupWithNameRow {
   projectId: string;
   groupId: string;
   groupName: string;
   role: 'leader' | 'member';
   userEmail: string;
   isActive: number;
+}
+
+/**
+ * batchGetGroupMembers 的一列：usergroups JOIN users 的顯示欄位。
+ * projectId 只用來分組（Map 的 key），不會進到回傳的成員物件裡。
+ */
+interface ProjectGroupMemberRow {
+  projectId: string;
+  groupId: string;
+  userEmail: string;
+  role: 'leader' | 'member';
+  displayName: string;
+  avatarSeed: string | null;
+  avatarStyle: string | null;
+  avatarOptions: string | null;
+}
+
+/** 回給前端的組員：就是上面那一列去掉 projectId。 */
+type ProjectGroupMember = Omit<ProjectGroupMemberRow, 'projectId'>;
+
+/** getProjectContent 的評論查詢回來的一列（欄位隨 SELECT 動態組出，只列會讀到的）。 */
+interface ProjectContentCommentRow {
+  commentId: string;
+  authorEmail: string;
+  authorDisplayName: string | null;
+  authorRole: string | null;
+  /** usergroups 的角色；非 null 代表作者是組員。 */
+  groupRole: string | null;
+  mentionedGroups: string | null;
+  mentionedUsers: string | null;
+  createdTime: number;
+}
+
+/** 上面那一列加上解析後的欄位，回給前端用。 */
+interface ProjectContentComment extends Omit<ProjectContentCommentRow, 'mentionedGroups' | 'mentionedUsers'> {
+  isGroupMember: boolean;
+  mentionedGroups: string[];
+  mentionedUsers: string[];
 }
 
 interface StageRow {
@@ -94,7 +134,11 @@ interface StageRow {
   commentRewardPool: number;
 }
 
-interface ProjectWithDetails {
+/** 分組資料，allowChange 已由 SQLite 的 0/1 轉成 boolean。 */
+type ProjectGroup = Omit<GroupRow, 'allowChange'> & { allowChange: boolean };
+
+/** 兩種專案清單共有的欄位。 */
+interface ProjectListItemBase {
   projectId: string;
   projectName: string;
   description: string;
@@ -102,13 +146,61 @@ interface ProjectWithDetails {
   createdBy: string;
   creatorDisplayName: string | null;
   createdTime: number;
-  updatedAt: number;
   lastModified: number;
-  viewerRole: 'teacher' | 'observer' | 'member' | null;
   userGroups: Array<{ userEmail: string; groupId: string; groupName: string; role: 'leader' | 'member'; isActive: number }>;
-  groups: Array<any>;  // Full groups with allowChange field
-  groupMembers: Array<{ groupId: string; userEmail: string; displayName: string; role: 'leader' | 'member'; avatarSeed?: string; avatarStyle?: string; avatarOptions?: string }>;
+  groups: ProjectGroup[];
+  groupMembers: ProjectGroupMember[];
   stages?: StageRow[] | null;
+}
+
+/** 一般使用者看到的專案清單項目。 */
+interface ProjectWithDetails extends ProjectListItemBase {
+  updatedAt: number;
+  viewerRole: 'teacher' | 'observer' | 'member' | null;
+}
+
+/**
+ * 系統管理員看到的專案清單項目。
+ *
+ * 和一般使用者那份**欄位不同**：多了 isCreator / isLeader / totalStages /
+ * currentStage 與計分設定，但沒有 viewerRole 和 updatedAt。
+ * 實務上無害——前端 useDetailedProjectPermissions 先檢查 hasGlobalAdmin
+ * 並提早返回，永遠走不到讀 viewerRole 的分支。
+ */
+interface AdminProjectListItem extends ProjectListItemBase {
+  totalStages: number;
+  currentStage: number;
+  isCreator: boolean;
+  isLeader: boolean;
+  scoreRangeMin: number;
+  scoreRangeMax: number;
+  maxCommentSelections: number | null;
+  studentRankingWeight: number | null;
+  teacherRankingWeight: number | null;
+  commentRewardPercentile: number | null;
+}
+
+/** listUserProjects 依呼叫者身分回傳其中一種。 */
+type ProjectListItem = ProjectWithDetails | AdminProjectListItem;
+
+/** 管理員清單查詢 `SELECT p.*, u.displayName` 回來的一列。 */
+interface AdminProjectRow {
+  projectId: string;
+  projectName: string;
+  description: string;
+  status: string;
+  totalStages: number;
+  currentStage: number;
+  createdBy: string;
+  createdTime: number;
+  lastModified: number;
+  creatorDisplayName: string | null;
+  scoreRangeMin: number | null;
+  scoreRangeMax: number | null;
+  maxCommentSelections: number | null;
+  studentRankingWeight: number | null;
+  teacherRankingWeight: number | null;
+  commentRewardPercentile: number | null;
 }
 
 /**
@@ -132,7 +224,7 @@ export async function listUserProjects(
     // Check if user is system admin
     const isAdmin = await checkSystemAdmin(env, userEmail);
 
-    let projects: any[];
+    let projects: ProjectListItem[];
     let totalCount: number;
 
     if (isAdmin) {
@@ -188,19 +280,19 @@ export async function getProjectCore(
     const viewerRoleResult = await env.DB.prepare(`
       SELECT role FROM projectviewers
       WHERE projectId = ? AND userEmail = ? AND isActive = 1
-    `).bind(projectId, userEmail).first();
+    `).bind(projectId, userEmail).first<{ role: string }>();
 
-    const viewerRole = viewerRoleResult ? (viewerRoleResult as any).role : null;
+    const viewerRole = viewerRoleResult?.role ?? null;
 
     // Get groups
     const groups = await env.DB.prepare(`
       SELECT * FROM groups WHERE projectId = ? AND status = 'active'
-    `).bind(projectId).all();
+    `).bind(projectId).all<GroupRow>();
 
     // Get user groups
     const userGroups = await env.DB.prepare(`
       SELECT * FROM usergroups WHERE projectId = ?
-    `).bind(projectId).all();
+    `).bind(projectId).all<UserGroupRow>();
 
     // Get stages with auto-calculated status (exclude archived)
     const stages = await env.DB.prepare(`
@@ -217,18 +309,18 @@ export async function getProjectCore(
 
     // Get ALL users involved in project (not just group members)
     // Include: group members, viewers, and project creator
-    const userEmailsFromGroups = userGroups.results.map((ug: any) => ug.userEmail);
+    const userEmailsFromGroups = userGroups.results.map(ug => ug.userEmail);
     const viewersResult = await env.DB.prepare(`
       SELECT userEmail FROM projectviewers
       WHERE projectId = ? AND isActive = 1
-    `).bind(projectId).all();
-    const userEmailsFromViewers = viewersResult.results.map((v: any) => v.userEmail);
+    `).bind(projectId).all<{ userEmail: string }>();
+    const userEmailsFromViewers = viewersResult.results.map(v => v.userEmail);
 
     // Combine and deduplicate: group members + viewers + creator
     const allUserEmails = [...new Set([
       ...userEmailsFromGroups,
       ...userEmailsFromViewers,
-      (project as any).createdBy  // Project creator
+      project.createdBy  // Project creator
     ])].filter(Boolean);  // Remove null/undefined
 
     // Fetch users (handle empty array case)
@@ -250,7 +342,7 @@ export async function getProjectCore(
         teacherRankingWeight: effectiveConfig.teacherRankingWeight,
         commentRewardPercentile: effectiveConfig.commentRewardPercentile,
       },
-      groups: groups.results.map((g: any) => ({
+      groups: groups.results.map(g => ({
         ...g,
         allowChange: Boolean(g.allowChange)  // Convert 0/1 to boolean
       })),
@@ -298,15 +390,15 @@ export async function getProjectContent(
     }
 
     let submissions: ProcessedSubmission[] = [];
-    let comments: any[] = [];
+    let comments: ProjectContentComment[] = [];
 
     // Query user's groups for permission checking
     const userGroupsResult = await env.DB.prepare(`
       SELECT groupId FROM usergroups
       WHERE userEmail = ? AND projectId = ? AND isActive = 1
-    `).bind(userEmail, projectId).all();
+    `).bind(userEmail, projectId).all<{ groupId: string }>();
 
-    const userGroupIds = new Set(userGroupsResult.results.map((ug: any) => ug.groupId));
+    const userGroupIds = new Set(userGroupsResult.results.map(ug => ug.groupId));
 
     // Check if user has elevated permissions (Teacher/Observer)
     const hasElevatedPermissions = await checkIsTeacherOrObserver(env.DB, userEmail, projectId);
@@ -495,9 +587,9 @@ export async function getProjectContent(
 
 
       try {
-        const commentsResult = await env.DB.prepare(commentsQuery).bind(...queryParams).all();
+        const commentsResult = await env.DB.prepare(commentsQuery).bind(...queryParams).all<ProjectContentCommentRow>();
 
-        const rawComments = commentsResult.results as any[];
+        const rawComments = commentsResult.results;
         console.log('📝 [getProjectContent] Raw comments loaded:', rawComments.length);
 
         // Process comments to add metadata
@@ -535,8 +627,8 @@ export async function getProjectContent(
 
         console.log('✅ [getProjectContent] Comments processed:', {
           total: comments.length,
-          withGroupMembership: comments.filter((c: any) => c.isGroupMember).length,
-          teacherComments: rawComments.filter((c: any) => c.authorRole === 'teacher').length,
+          withGroupMembership: comments.filter(c => c.isGroupMember).length,
+          teacherComments: rawComments.filter(c => c.authorRole === 'teacher').length,
           excludedTeachers: excludeTeachers
         });
       } catch (err) {
@@ -660,7 +752,7 @@ async function listProjectsForUser(
       WHERE ${whereClause}
       ORDER BY p.lastModified DESC
       ${limitClause}
-    `).bind(...params).all();
+    `).bind(...params).all<AdminProjectRow>();
 
     const [countResult, projectsResult] = await Promise.all([countQuery, projectsQuery]);
 
@@ -733,11 +825,10 @@ async function batchGetUserGroups(
     WHERE ug.projectId IN (${placeholders})
       AND ug.userEmail = ?
       AND ug.isActive = 1
-  `).bind(...projectIds, userEmail).all();
+  `).bind(...projectIds, userEmail).all<UserGroupWithNameRow>();
 
   const groupsMap = new Map<string, Array<{ userEmail: string; groupId: string; groupName: string; role: 'leader' | 'member'; isActive: number }>>();
-  for (const row of result.results) {
-    const ug = row as unknown as UserGroupRow;
+  for (const ug of result.results) {
     if (!groupsMap.has(ug.projectId)) {
       groupsMap.set(ug.projectId, []);
     }
@@ -759,7 +850,7 @@ async function batchGetUserGroups(
 async function batchGetGroupMembers(
   env: Env,
   projectIds: string[]
-): Promise<Map<string, Array<{ groupId: string; userEmail: string; displayName: string; role: 'leader' | 'member'; avatarSeed?: string; avatarStyle?: string; avatarOptions?: string }>>> {
+): Promise<Map<string, ProjectGroupMember[]>> {
   if (projectIds.length === 0) {
     return new Map();
   }
@@ -773,11 +864,10 @@ async function batchGetGroupMembers(
     WHERE ug.projectId IN (${placeholders})
       AND ug.isActive = 1
     ORDER BY ug.groupId, ug.role DESC, ug.joinTime ASC
-  `).bind(...projectIds).all();
+  `).bind(...projectIds).all<ProjectGroupMemberRow>();
 
-  const membersMap = new Map<string, Array<any>>();
-  for (const row of result.results) {
-    const member = row as any;
+  const membersMap = new Map<string, ProjectGroupMember[]>();
+  for (const member of result.results) {
     if (!membersMap.has(member.projectId)) {
       membersMap.set(member.projectId, []);
     }
@@ -802,7 +892,7 @@ async function batchGetGroupMembers(
 async function batchGetGroups(
   env: Env,
   projectIds: string[]
-): Promise<Map<string, Array<any>>> {
+): Promise<Map<string, ProjectGroup[]>> {
   if (projectIds.length === 0) {
     return new Map();
   }
@@ -812,11 +902,10 @@ async function batchGetGroups(
     SELECT * FROM groups
     WHERE projectId IN (${placeholders})
       AND status = 'active'
-  `).bind(...projectIds).all();
+  `).bind(...projectIds).all<GroupRow>();
 
-  const groupsMap = new Map<string, Array<any>>();
-  for (const row of result.results) {
-    const group = row as any;
+  const groupsMap = new Map<string, ProjectGroup[]>();
+  for (const group of result.results) {
     if (!groupsMap.has(group.projectId)) {
       groupsMap.set(group.projectId, []);
     }
@@ -873,7 +962,7 @@ async function listAllProjectsForAdmin(
   env: Env,
   userEmail: string,
   filters: { status?: string; createdBy?: string; tagId?: string; includeStages?: boolean; search?: string; limit?: number; offset?: number }
-): Promise<{ projects: any[]; totalCount: number }> {
+): Promise<{ projects: AdminProjectListItem[]; totalCount: number }> {
   try {
     // Get userId for createdBy comparison
     const userId = await getUserId(env, userEmail);
@@ -948,7 +1037,7 @@ async function listAllProjectsForAdmin(
       WHERE ${whereClause}
       ORDER BY p.lastModified DESC
       ${limitClause}
-    `).bind(...params).all();
+    `).bind(...params).all<AdminProjectRow>();
 
     const [countResult, allProjects] = await Promise.all([countQuery, projectsQuery]);
 
@@ -958,7 +1047,7 @@ async function listAllProjectsForAdmin(
       return { projects: [], totalCount };
     }
 
-    const projectIds = allProjects.results.map((p: any) => p.projectId);
+    const projectIds = allProjects.results.map(p => p.projectId);
 
     // Batch fetch user groups for admin
     const userGroupsMap = await batchGetUserGroups(env, userEmail, projectIds);
@@ -975,10 +1064,9 @@ async function listAllProjectsForAdmin(
       stagesMap = await batchGetStages(env, projectIds);
     }
 
-    const userProjects: any[] = allProjects.results.map((project: any) => {
-      const proj = project as any;
+    const userProjects: AdminProjectListItem[] = allProjects.results.map(proj => {
       const userGroups = userGroupsMap.get(proj.projectId) || [];
-      const isLeader = userGroups.some((ug: any) => ug.role === 'leader');
+      const isLeader = userGroups.some(ug => ug.role === 'leader');
       const isCreator = proj.createdBy === userId;
 
       return {
@@ -1085,20 +1173,4 @@ async function getUserId(env: Env, userEmail: string): Promise<string | null> {
   return user ? (user.userId as string) : null;
 }
 
-// DISABLED: Tags system has been disabled
-/*
-async function getProjectTags(env: Env, projectId: string): Promise<any[]> {
-  const result = await env.DB.prepare(`
-    SELECT t.tagId, t.tagName
-    FROM projecttags pt
-    JOIN globaltags t ON pt.tagId = t.tagId
-    WHERE pt.projectId = ? AND pt.isActive = 1 AND t.isActive = 1
-  `).bind(projectId).all();
-
-  return result.results.map((t: any) => ({
-    tagId: t.tagId,
-    tagName: t.tagName
-  }));
-}
-*/
 
