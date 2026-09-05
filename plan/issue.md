@@ -539,6 +539,10 @@ issue 原本的評估仍成立：前端算錯最多是按鈕多顯示或少顯�
   整批繳交紀錄印進 Workers log，含學生資料——一併移除。
   剩下的 344 處多是流程標記（`[Generate] Starting...`）而非資料傾印，
   優先度低，但長期仍該收進受 `ENVIRONMENT` 控制的 logger。
+- **`any` 收斂（1348 處）→ 有獨立計畫**：見
+  [typing-cleanup.md](typing-cleanup.md)。分四批按價值排序，
+  第一批是 `types/api.ts`（API 契約，修好會往下游傳播）。
+  該文件同時記錄了「動手前必讀」的三個陷阱。
 - **~~前端 77 個 lint error~~ → 已清為 0**。全部是 `no-unused-vars`：
   64 個未使用的 import，13 個未使用的區域宣告。清理過程中連鎖浮現
   （刪掉一個 interface 就讓它用到的 import 變成未使用），用迴圈跑到收斂。
