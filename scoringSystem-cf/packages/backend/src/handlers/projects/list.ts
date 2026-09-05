@@ -347,11 +347,6 @@ export async function getProjectContent(
         queryParts.userGroupParams = [userEmail, projectId];
       }
 
-      console.log('🔍 [getProjectContent] Query parameters:', {
-        base: queryParts.baseParams,
-        status: queryParts.statusParams,
-        userGroup: queryParts.userGroupParams
-      });
 
       // Use Window Function to get latest submission per group + LEFT JOIN for groupName and member names
       const submissionsQuery = env.DB.prepare(`
@@ -497,11 +492,6 @@ export async function getProjectContent(
 
       commentsQuery += ` ORDER BY c.createdTime ASC`;
 
-      console.log('🔍 [getProjectContent] Comments query:', {
-        hasStageId: !!stageId,
-        excludeTeachers,
-        queryParamsCount: queryParams.length
-      });
 
       try {
         const commentsResult = await env.DB.prepare(commentsQuery).bind(...queryParams).all();

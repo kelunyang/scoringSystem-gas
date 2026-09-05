@@ -111,12 +111,6 @@ export async function getAllStagesRankings(
     // Single permission check for all stages
     const permCheck = await checkUserPermissionAndGroups(env, userEmail, projectId);
 
-    console.log(`🔍 [getAllStagesRankings] Permission check:`, {
-      isGlobalPM: permCheck.isGlobalPM,
-      hasAccess: permCheck.hasAccess,
-      isTeacherOrObserver: permCheck.isTeacherOrObserver,
-      groupCount: permCheck.currentUserGroupIds.length
-    });
 
     if (!permCheck.isGlobalPM && !permCheck.hasAccess) {
       console.log(`❌ [getAllStagesRankings] Access denied for user ${userEmail}`);
@@ -143,7 +137,6 @@ export async function getAllStagesRankings(
     `).bind(projectId, ...stageIds).all();
 
     const teacherRankingsRaw = teacherRankingsResult.results || [];
-    console.log(`🔍 [getAllStagesRankings] Total teacher rankings: ${teacherRankingsRaw.length}`);
 
     // Batch query 2: Get user's group proposals for all stages (if user has groups)
     let proposalsRaw: any[] = [];
@@ -174,7 +167,6 @@ export async function getAllStagesRankings(
       // Filter to keep only the latest proposal per stage (rn = 1)
       proposalsRaw = (proposalsResult.results || []).filter((p: any) => p.rn === 1);
     }
-    console.log(`🔍 [getAllStagesRankings] User group proposals: ${proposalsRaw.length}`);
 
     // Batch query 3: Get proposal stats for teachers/observers
     let proposalStatsRaw: any[] = [];
@@ -211,7 +203,6 @@ export async function getAllStagesRankings(
 
       proposalStatsRaw = proposalStatsResult.results || [];
     }
-    console.log(`🔍 [getAllStagesRankings] Proposal stats: ${proposalStatsRaw.length}`);
 
     // Process results into stage-indexed structure
     const stageRankings: Record<string, Record<string, any>> = {};
@@ -372,13 +363,6 @@ export async function getStageRankings(
 
     const { isGlobalPM, viewerRole, hasAccess, isTeacherOrObserver, currentUserGroupIds } = permCheck;
 
-    console.log(`🔍 [getStageRankings] Permission check (combined):`, {
-      isGlobalPM,
-      viewerRole,
-      hasAccess,
-      isTeacherOrObserver,
-      groupCount: currentUserGroupIds.length
-    });
 
     // Check project access (if not Global PM)
     if (!isGlobalPM && !hasAccess) {
@@ -407,7 +391,6 @@ export async function getStageRankings(
     `).bind(stageId, projectId).all();
 
     const teacherRankingsRaw = teacherRankingsResult.results || [];
-    console.log(`🔍 [getStageRankings] Teacher rankings count: ${teacherRankingsRaw.length}`);
 
     // Aggregate: Keep only latest version per teacher
     const teacherLatestRankings = new Map<string, Map<string, { rank: number; metadata: any }>>();
@@ -500,7 +483,6 @@ export async function getStageRankings(
         .first();
 
       if (proposalsResult) {
-        console.log(`🔍 [getStageRankings] Found proposal: ${proposalsResult.proposalId}`);
 
         try {
           const rankingData = JSON.parse((proposalsResult.rankingData as string) || '[]');
@@ -545,7 +527,6 @@ export async function getStageRankings(
           console.error(`❌ [getStageRankings] Failed to parse ranking data:`, parseError);
         }
       } else {
-        console.log(`🔍 [getStageRankings] No proposals found for user groups`);
       }
     }
 

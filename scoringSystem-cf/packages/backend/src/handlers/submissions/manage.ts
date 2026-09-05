@@ -781,12 +781,6 @@ export async function getParticipationConfirmations(
   submissionId: string
 ): Promise<Response> {
   try {
-    console.log('🔍 [getParticipationConfirmations] Starting with params:', {
-      userEmail,
-      projectId,
-      stageId,
-      submissionId
-    });
 
     // Find the submission
     const submission = await env.DB.prepare(`

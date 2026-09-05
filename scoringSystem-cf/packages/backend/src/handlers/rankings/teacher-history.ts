@@ -43,7 +43,6 @@ export async function getTeacherVoteHistory(
     `).bind(userEmail).first();
 
     const displayName = userResult?.displayName || userEmail;
-    console.log(`🔍 [getTeacherVoteHistory] Display name: ${displayName}`);
 
     // Initialize response
     const response: TeacherVoteHistoryResponse = {

@@ -43,16 +43,6 @@ export async function logProjectOperation(
   const level = typeof options === 'string' ? options : (options?.level || 'info');
   const relatedEntities = typeof options === 'object' && options !== null ? options.relatedEntities : undefined;
 
-  console.log('🔍 [logProjectOperation] Entry:', {
-    userEmail,
-    projectId,
-    action,
-    entityType,
-    entityId,
-    metadata,
-    level,
-    relatedEntities
-  });
 
   try {
     // Generate log ID using centralized ID generator
@@ -64,11 +54,6 @@ export async function logProjectOperation(
     ).bind(userEmail).first();
     const userId = userResult?.userId || null;
 
-    console.log('🔍 [logProjectOperation] userId lookup result:', {
-      userEmail,
-      userResult,
-      userId
-    });
 
     // Construct message with projectId
     const message = `${action} for ${entityType} ${entityId} in project ${projectId}`;
@@ -76,19 +61,6 @@ export async function logProjectOperation(
     // Prepare relatedEntities JSON (if provided)
     const relatedEntitiesJson = relatedEntities ? stringifyJSON(relatedEntities) : null;
 
-    console.log('🔍 [logProjectOperation] Preparing to insert sys_logs:', {
-      logId,
-      level,
-      functionName: action,
-      userId,
-      action,
-      message,
-      context: metadata,
-      projectId,
-      entityType,
-      entityId,
-      relatedEntitiesJson
-    });
 
     // Insert log entry into sys_logs table
     const insertResult = await env.DB.prepare(`

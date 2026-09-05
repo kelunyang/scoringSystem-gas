@@ -181,8 +181,6 @@ export async function updateUserAvatar(
     const values = Object.values(allowedUpdates);
 
     const query = `UPDATE users SET ${setClause} WHERE userId = ?`;
-    console.log('🔍 SQL Query:', query);
-    console.log('🔍 SQL Values:', [...values, userId]);
 
     await env.DB.prepare(query).bind(...values, userId).run();
 

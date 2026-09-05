@@ -726,7 +726,6 @@ export async function getStageComments(
       ? await batchCalculateReplyUsers(env.DB, projectId, commentsForBatch)
       : new Map<string, any[]>();
 
-    console.log(`🔍 [getStageComments] Batch loaded reactionUsers for ${batchReactionUsersMap.size} comments, replyUsers for ${batchReplyUsersMap.size} comments`);
 
     // Organize comments into threads
     const commentMap: Record<string, any> = {};
@@ -1346,7 +1345,6 @@ export async function getAllStagesComments(
     const batchReactionUsersMap = await batchCalculateReactionUsers(env.DB, projectId, allCommentsForBatch);
     const batchReplyUsersMap = await batchCalculateReplyUsers(env.DB, projectId, allCommentsForBatch);
 
-    console.log(`🔍 [getAllStagesComments] Batch loaded reactionUsers for ${batchReactionUsersMap.size} comments, replyUsers for ${batchReplyUsersMap.size} comments`);
 
     // Process each stage's comments
     for (const stageId of stageIds) {

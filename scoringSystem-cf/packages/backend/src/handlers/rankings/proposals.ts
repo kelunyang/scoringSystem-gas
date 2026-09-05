@@ -30,7 +30,6 @@ export async function getStageRankingProposals(
     `).bind(projectId, userEmail).first();
 
     const isTeacher = !!teacherCheck;
-    console.log(`🔍 [getStageRankingProposals] User is teacher: ${isTeacher}`);
 
     let proposalsResult;
 
@@ -75,7 +74,6 @@ export async function getStageRankingProposals(
       }
 
       const userGroupId = userGroup.groupId;
-      console.log(`🔍 [getStageRankingProposals] User's groupId: ${userGroupId}`);
 
       // Get only proposals from user's group (use VIEW for correct status)
       proposalsResult = await env.DB.prepare(`
@@ -106,7 +104,6 @@ export async function getStageRankingProposals(
     }
 
     const proposals = proposalsResult.results || [];
-    console.log(`🔍 [getStageRankingProposals] Found ${proposals.length} proposals`);
 
     // Get user's group information (for vote reset feature)
     let userGroupInfo = null;
@@ -125,7 +122,6 @@ export async function getStageRankingProposals(
         isGroupLeader: userGroupData.role === 'leader',
         groupMemberCount: userGroupData.memberCount || 0
       };
-      console.log(`🔍 [getStageRankingProposals] User group info:`, userGroupInfo);
     }
 
     // Early return if no proposals
@@ -169,7 +165,6 @@ export async function getStageRankingProposals(
       }
       votesByProposal.get(pid)!.push(vote);
     }
-    console.log(`🔍 [getStageRankingProposals] Batch loaded ${allVotesResult.results?.length || 0} votes for ${proposalIds.length} proposals`);
 
     // Batch Query 2: Get current user's votes for ALL proposals
     const userVotesResult = await env.DB.prepare(`
@@ -193,7 +188,6 @@ export async function getStageRankingProposals(
     const approvedSubmissionIds = new Set(
       (approvedSubmissionsResult.results || []).map((s: any) => s.submissionId as string)
     );
-    console.log(`🔍 [getStageRankingProposals] Found ${approvedSubmissionIds.size} approved submissions for validation`);
 
     // ============ PROCESS PROPOSALS (No more individual DB queries!) ============
     const proposalsWithVotes = proposals.map((proposal: any, index: number) => {

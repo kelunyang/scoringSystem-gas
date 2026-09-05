@@ -109,20 +109,6 @@ export async function getProjectEventLogs(
       params.push(filters.offset);
     }
 
-    console.log('🔍 [DEBUG-SQL] Executing getProjectEventLogs query:', {
-      projectId,
-      filterApplied: {
-        userEmails: filters.userEmails || 'none',
-        userEmailsCount: filters.userEmails?.length || 0,
-        startTime: filters.startTime || 'none',
-        endTime: filters.endTime || 'none',
-        actions: filters.actions || 'none',
-        resourceTypes: filters.resourceTypes || 'none'
-      },
-      params: params,
-      paramsCount: params.length,
-      sqlQuery: query
-    });
 
     const result = await env.DB.prepare(query).bind(...params).all();
 
@@ -136,14 +122,6 @@ export async function getProjectEventLogs(
 
     const uniqueUserEmails = Array.from(new Set(result.results?.map((log: any) => log.userEmail) || []));
 
-    console.log('🔍 [DEBUG-SQL] Query results:', {
-      totalRows: result.results?.length || 0,
-      success: result.success,
-      uniqueUserEmails: uniqueUserEmails,
-      uniqueUserCount: uniqueUserEmails.length,
-      sampleLogs: sampleLogs,
-      expectedUserEmails: filters.userEmails || 'all users'
-    });
 
     // Enrich event logs with parsed details and display names
     const enrichedLogs = result.results?.map((log: any) => {
@@ -212,12 +190,6 @@ export async function getUserProjectEventLogs(
   filters: EventLogFilters = {}
 ): Promise<Response> {
   try {
-    console.log('🔍 [DEBUG-START] getUserProjectEventLogs called with:', {
-      userEmail,
-      projectId,
-      filters: JSON.stringify(filters),
-      timestamp: new Date().toISOString()
-    });
 
     // Get userId from userEmail
     const userResult = await env.DB.prepare(`
@@ -236,40 +208,21 @@ export async function getUserProjectEventLogs(
     const hasCreateProject = globalPermissions.includes('create_project');
     const hasGlobalAdmin = hasSystemAdmin || hasCreateProject;
 
-    console.log('🔍 [DEBUG-LEVEL1] Global permission check:', {
-      userId,
-      userEmail,
-      globalPermissions: globalPermissions,
-      hasSystemAdmin,
-      hasCreateProject,
-      hasGlobalAdmin,
-      decision: hasGlobalAdmin ? 'GRANT admin access' : 'Check project-level permissions'
-    });
 
     // Level 1: system_admin or create_project → See ALL logs
     if (hasGlobalAdmin) {
-      console.log('⚠️ [DEBUG-LEVEL1] User identified as ADMIN - will see ALL logs!', {
-        reason: hasSystemAdmin ? 'system_admin permission' : 'create_project permission',
-        userEmail
-      });
       const response = await getProjectEventLogs(env, projectId, filters);
       const responseData = await response.json() as any;
       const data = responseData.data || responseData;  // Handle nested structure
       data.userPermissionLevel = 'admin';
 
-      console.log('🔍 [DEBUG-LEVEL1] Returning admin logs:', {
-        totalLogs: data.total,
-        userPermissionLevel: 'admin'
-      });
 
       return successResponse(data);
     }
 
-    console.log('✅ [DEBUG-LEVEL1] User is NOT admin, checking project-level roles...');
 
     // Check project viewer role (Level 2)
     // SECURITY FIX: Check for multiple records to prevent privilege escalation
-    console.log('🔍 [DEBUG-LEVEL2] Checking projectviewers table...');
 
     const viewerRolesResult = await env.DB.prepare(`
       SELECT role FROM projectviewers
@@ -278,13 +231,6 @@ export async function getUserProjectEventLogs(
 
     const viewerRoles = viewerRolesResult.results || [];
 
-    console.log('🔍 [DEBUG-LEVEL2] projectviewers query result:', {
-      userEmail,
-      projectId,
-      totalRecords: viewerRoles.length,
-      roles: viewerRoles.map((r: any) => r.role),
-      rawResult: viewerRoles
-    });
 
     // Security check: If user has multiple roles, log warning and use most restrictive (member)
     let viewerRole: string | null = null;
@@ -302,38 +248,25 @@ export async function getUserProjectEventLogs(
       } else {
         viewerRole = 'teacher';
       }
-      console.log('🔍 [DEBUG-LEVEL2] Multiple roles detected, using most restrictive:', viewerRole);
     } else if (viewerRoles.length === 1) {
       viewerRole = (viewerRoles[0] as any).role;
-      console.log('🔍 [DEBUG-LEVEL2] Single role found:', viewerRole);
     } else {
-      console.log('🔍 [DEBUG-LEVEL2] No projectviewers role found, will check usergroups next');
     }
 
     // Level 2: teacher or observer → See all project logs
     if (viewerRole === 'teacher' || viewerRole === 'observer') {
-      console.log('⚠️ [DEBUG-LEVEL2] User identified as TEACHER/OBSERVER - will see ALL project logs!', {
-        viewerRole,
-        userEmail
-      });
       const response = await getProjectEventLogs(env, projectId, filters);
       const responseData = await response.json() as any;
       const data = responseData.data || responseData;  // Handle nested structure
       data.userPermissionLevel = viewerRole; // 'teacher' or 'observer'
 
-      console.log('🔍 [DEBUG-LEVEL2] Returning teacher/observer logs:', {
-        totalLogs: data.total,
-        userPermissionLevel: viewerRole
-      });
 
       return successResponse(data);
     }
 
-    console.log('✅ [DEBUG-LEVEL2] User is NOT teacher/observer, checking usergroups...');
 
     // Level 3 & 4: member role - check group membership
     if (viewerRole === 'member') {
-      console.log('🔍 [DEBUG-LEVEL3/4] User has member role, checking usergroups table...');
 
       // Check if user is in any group
       const userGroupsResult = await env.DB.prepare(`
@@ -344,17 +277,9 @@ export async function getUserProjectEventLogs(
 
       const userGroups = userGroupsResult.results || [];
 
-      console.log('🔍 [DEBUG-LEVEL3/4] usergroups query result:', {
-        userEmail,
-        projectId,
-        totalGroups: userGroups.length,
-        groups: userGroups.map((ug: any) => ({ groupId: ug.groupId, role: ug.role })),
-        rawResult: userGroups
-      });
 
       // If no group, deny access (Level 5)
       if (userGroups.length === 0) {
-        console.log('⚠️ [DEBUG-LEVEL5] User is member with NO GROUP - denying access');
         return successResponse({
           logs: [],
           total: 0,
@@ -368,11 +293,6 @@ export async function getUserProjectEventLogs(
         .filter((ug: any) => ug.role === 'leader')
         .map((ug: any) => ug.groupId);
 
-      console.log('🔍 [DEBUG-LEVEL3/4] Leader group analysis:', {
-        leaderGroupIds,
-        isLeader: leaderGroupIds.length > 0,
-        allUserGroups: userGroups.map((ug: any) => ({ groupId: ug.groupId, role: ug.role }))
-      });
 
       // Level 3: Group leader → See logs of all group members
       if (leaderGroupIds.length > 0) {
@@ -386,70 +306,35 @@ export async function getUserProjectEventLogs(
         const memberEmails = membersResult.results?.map((m: any) => m.userEmail) || [];
         const allowedUserEmails = Array.from(new Set([userEmail, ...memberEmails]));
 
-        console.log('🔍 [DEBUG-LEVEL3] User is GROUP LEADER - will see group member logs:', {
-          leaderEmail: userEmail,
-          leaderGroupIds,
-          memberCount: memberEmails.length,
-          allowedUserEmails
-        });
 
         const userFilters: EventLogFilters = {
           ...filters,
           userEmails: allowedUserEmails
         };
 
-        console.log('🔍 [DEBUG-LEVEL3] Calling getProjectEventLogs with filters:', {
-          userFilters,
-          userEmailsCount: userFilters.userEmails?.length || 0
-        });
 
         const response = await getProjectEventLogs(env, projectId, userFilters);
         const responseData = await response.json() as any;
         const data = responseData.data || responseData;  // Handle nested structure
         data.userPermissionLevel = 'group_leader';
 
-        console.log('✅ [DEBUG-LEVEL3] Group leader logs fetched:', {
-          totalLogs: data.total,
-          uniqueUsers: Array.from(new Set((data.logs || []).map((l: any) => l.userEmail))),
-          userPermissionLevel: 'group_leader',
-          expectedUsers: allowedUserEmails
-        });
 
         return successResponse(data);
       }
 
       // Level 4: Group member → See only own logs
-      console.log('🔍 [DEBUG-LEVEL4] User is GROUP MEMBER - will see ONLY own logs:', {
-        memberEmail: userEmail,
-        userGroups: userGroups.map((ug: any) => ({ groupId: ug.groupId, role: ug.role }))
-      });
 
       const userFilters: EventLogFilters = {
         ...filters,
         userEmails: [userEmail]
       };
 
-      console.log('🔍 [DEBUG-LEVEL4] Calling getProjectEventLogs with strict filter:', {
-        userFilters,
-        allowedUsers: [userEmail]
-      });
 
       const response = await getProjectEventLogs(env, projectId, userFilters);
       const responseData = await response.json() as any;
       const data = responseData.data || responseData;  // Handle nested structure
       data.userPermissionLevel = 'member_in_group';
 
-      console.log('✅ [DEBUG-LEVEL4] Group member logs fetched:', {
-        totalLogs: data.total,
-        userEmail,
-        uniqueUsers: Array.from(new Set((data.logs || []).map((l: any) => l.userEmail))),
-        userPermissionLevel: 'member_in_group',
-        logSample: (data.logs || []).slice(0, 3).map((l: any) => ({
-          eventType: l.eventType,
-          userEmail: l.userEmail,
-          timestamp: l.timestamp
-        }))
-      });
 
       return successResponse(data);
     }

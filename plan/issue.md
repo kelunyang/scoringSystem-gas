@@ -456,11 +456,12 @@ skip 只是沒人拿掉。解除後 4 條全過。
   需要 `admin/users.ts` 裡 30 個欄位重寫清單的原因。
   **不建議現在動**，但新增任何「指向人」的欄位都必須同步加進
   `EMAIL_REFERENCES`，否則會靜默漏改。
-- **396 處 `console.log`，其中 54 處是 `DEBUG-` / 🔍 除錯標記**。
-  集中在 `handlers/groups/members.ts`（51 處）、
-  `queues/email-consumer.ts`（27）、`handlers/eventlogs/query.ts`（26）。
-  Workers 的 log 是計費的，而且這些輸出包含 email 與權限判斷細節。
-  至少該清掉那 54 處除錯標記，或收進受 `ENVIRONMENT` 控制的 logger。
+- **~~396 處 `console.log`，54 處是除錯標記~~ → 已清除 54 處，剩 344**。
+  `DEBUG-` / 🔍 標記全數移除（`eventlogs/query.ts` 25 處最多）。
+  其中一處 `submissions/versions.ts` 把 `results: result.results`
+  整批繳交紀錄印進 Workers log，含學生資料——一併移除。
+  剩下的 344 處多是流程標記（`[Generate] Starting...`）而非資料傾印，
+  優先度低，但長期仍該收進受 `ENVIRONMENT` 控制的 logger。
 - **前端 77 個 lint error**（以 `no-unused-vars` 為主，另有 968 個 warning）。
   散在本輪未觸及的檔案，屬獨立的清理工作。
 

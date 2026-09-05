@@ -123,22 +123,8 @@ export async function getSubmissionVersions(
 
     query += ` ORDER BY s.groupId, s.submitTime ASC`;
 
-    // 🔍 DEBUG: Log SQL query before execution
-    console.log('🔍 [getSubmissionVersions] Executing SQL:', {
-      query,
-      bindings,
-      options
-    });
 
     const result = await env.DB.prepare(query).bind(...bindings).all();
-
-    // 🔍 DEBUG: Log query results
-    console.log('📊 [getSubmissionVersions] Query results:', {
-      success: result.success,
-      resultCount: result.results?.length || 0,
-      results: result.results,
-      meta: result.meta
-    });
 
     // Check if user is a member of the queried group (for privacy protection)
     let isGroupMember = false;

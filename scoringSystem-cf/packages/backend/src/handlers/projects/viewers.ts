@@ -628,16 +628,6 @@ export async function markUnassignedMembers(
     );
 
     // Debug log for API response
-    console.log('🔍 [DEBUG] Mark Unassigned Members API Response:', {
-      projectId,
-      requester: userEmail,
-      totalViewerMembers: viewerEmails.size,
-      totalGroupedMembers: groupedEmails.size,
-      ungroupedCount: unassigned.length,
-      ungroupedMemberEmails: unassigned,
-      viewerMembersSnapshot: Array.from(viewerEmails).slice(0, 5), // First 5 for debugging
-      groupedMembersSnapshot: Array.from(groupedEmails).slice(0, 5) // First 5 for debugging
-    });
 
     return successResponse(
       { ungroupedMemberEmails: unassigned },
