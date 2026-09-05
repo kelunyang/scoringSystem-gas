@@ -40,6 +40,7 @@ import {
   VerifyInvitationRequestSchema
 } from '@repo/shared/schemas/invitations';
 import { z } from 'zod';
+import { errorResponse } from '../utils/response';
 
 
 const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
@@ -82,11 +83,7 @@ app.post(
     const hasPermission = await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.GENERATE_INVITES) ||
                           await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.SYSTEM_ADMIN);
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to generate invitations',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to generate invitations');
     }
 
     const body = c.req.valid('json');
@@ -144,11 +141,7 @@ app.post(
     const hasPermission = await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.GENERATE_INVITES) ||
                           await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.SYSTEM_ADMIN);
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to generate invitations',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to generate invitations');
     }
 
     const body = c.req.valid('json');
@@ -200,11 +193,7 @@ app.post(
                           await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.SYSTEM_ADMIN) ||
                           await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.MANAGE_USERS);
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view invitations',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view invitations');
     }
 
     const response = await getUserInvitations(
@@ -230,11 +219,7 @@ app.post(
     const hasPermission = await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.GENERATE_INVITES) ||
                           await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.SYSTEM_ADMIN);
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to deactivate invitations',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to deactivate invitations');
     }
 
     const body = c.req.valid('json');
@@ -264,11 +249,7 @@ app.post(
     const hasPermission = await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.GENERATE_INVITES) ||
                           await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.SYSTEM_ADMIN);
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to reactivate invitations',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to reactivate invitations');
     }
 
     const body = c.req.valid('json');
@@ -298,11 +279,7 @@ app.post(
     const hasPermission = await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.GENERATE_INVITES) ||
                           await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.SYSTEM_ADMIN);
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to resend invitation emails',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to resend invitation emails');
     }
 
     const body = c.req.valid('json');

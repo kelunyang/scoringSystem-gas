@@ -223,11 +223,7 @@ app.use('*', async (c, next) => {
   const user = c.get('user');
 
   if (!user) {
-    return c.json({
-      success: false,
-      error: 'Authentication required',
-      errorCode: 'UNAUTHORIZED'
-    }, 401);
+    return errorResponse('UNAUTHORIZED', 'Authentication required');
   }
 
   // Check if user has system_admin permission (grants access to everything)
@@ -292,11 +288,7 @@ app.use('*', async (c, next) => {
   }
 
   // If no specific permission matched, deny access
-  return c.json({
-    success: false,
-    error: 'Insufficient permissions - requires system_admin or specific management permission',
-    errorCode: 'ACCESS_DENIED'
-  }, 403);
+  return errorResponse('ACCESS_DENIED', 'Insufficient permissions - requires system_admin or specific management permission');
 });
 
 /**
@@ -328,11 +320,7 @@ app.get('/users/list', async (c) => {
     return response;
   } catch (error) {
     console.error('Get all users error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to get users',
-      errorCode: 'SYSTEM_ERROR'
-    }, 500);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get users');
   }
 });
 
@@ -347,11 +335,7 @@ app.post(
       return response;
     } catch (error) {
       console.error('Get all users error:', error);
-      return c.json({
-        success: false,
-        error: 'Failed to get users',
-        errorCode: 'SYSTEM_ERROR'
-      }, 500);
+      return errorResponse('SYSTEM_ERROR', 'Failed to get users');
     }
   }
 );
@@ -656,11 +640,7 @@ app.get('/global-groups', async (c) => {
     return response;
   } catch (error) {
     console.error('Get global groups error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to get global groups',
-      errorCode: 'SYSTEM_ERROR'
-    }, 500);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get global groups');
   }
 });
 
@@ -671,11 +651,7 @@ app.get('/global-groups/list', async (c) => {
     return response;
   } catch (error) {
     console.error('Get global groups error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to get global groups',
-      errorCode: 'SYSTEM_ERROR'
-    }, 500);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get global groups');
   }
 });
 
@@ -686,11 +662,7 @@ app.post('/global-groups/list', async (c) => {
     return response;
   } catch (error) {
     console.error('Get global groups error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to get global groups',
-      errorCode: 'SYSTEM_ERROR'
-    }, 500);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get global groups');
   }
 });
 
@@ -710,11 +682,7 @@ app.post('/global-groups', async (c) => {
     return response;
   } catch (error) {
     console.error('Get global groups error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to get global groups',
-      errorCode: 'SYSTEM_ERROR'
-    }, 500);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get global groups');
   }
 });
 
@@ -1038,11 +1006,7 @@ app.get('/system/stats', async (c) => {
     return response;
   } catch (error) {
     console.error('Get system stats error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to get system statistics',
-      errorCode: 'SYSTEM_ERROR'
-    }, 500);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get system statistics');
   }
 });
 
@@ -1056,11 +1020,7 @@ app.post('/system/stats', async (c) => {
     return response;
   } catch (error) {
     console.error('Get system stats error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to get system statistics',
-      errorCode: 'SYSTEM_ERROR'
-    }, 500);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get system statistics');
   }
 });
 
@@ -1090,11 +1050,7 @@ app.get('/system/log-statistics', async (c) => {
     return response;
   } catch (error) {
     console.error('Get log statistics error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to get log statistics',
-      errorCode: 'SYSTEM_ERROR'
-    }, 500);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get log statistics');
   }
 });
 
@@ -1108,11 +1064,7 @@ app.post('/system/log-statistics', async (c) => {
     return response;
   } catch (error) {
     console.error('Get log statistics error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to get log statistics',
-      errorCode: 'SYSTEM_ERROR'
-    }, 500);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get log statistics');
   }
 });
 
@@ -1138,11 +1090,7 @@ app.post(
       console.log('[entity-details] Permission check result:', isSystemAdmin);
 
       if (!isSystemAdmin) {
-        return c.json({
-          success: false,
-          error: 'Insufficient permissions',
-          errorCode: 'FORBIDDEN'
-        }, 403);
+        return errorResponse('FORBIDDEN', 'Insufficient permissions');
       }
 
       const body = c.req.valid('json');
@@ -1158,12 +1106,9 @@ app.post(
       console.error('[entity-details] ERROR:', error);
       console.error('[entity-details] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
 
-      return c.json({
-        success: false,
-        error: 'Failed to get entity details',
-        errorCode: 'SYSTEM_ERROR',
+      return errorResponse('SYSTEM_ERROR', 'Failed to get entity details', {
         details: error instanceof Error ? error.message : String(error)
-      }, 500);
+      });
     }
   }
 );
@@ -1207,11 +1152,7 @@ app.post('/properties/get-all', async (c) => {
     });
   } catch (error) {
     console.error('Get all properties error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to get properties',
-      errorCode: 'SYSTEM_ERROR'
-    }, 500);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get properties');
   }
 });
 
@@ -1291,16 +1232,11 @@ app.post(
 
       // Validate: Reject if no actual changes
       if (actualChanges.length === 0) {
-        return c.json({
-          success: false,
-          error: '沒有可更新的欄位',
-          errorCode: 'NO_CHANGES',
-          details: {
-            message: '提交的欄位值與目前值相同，沒有需要更新的內容',
-            submittedFields: Object.keys(properties),
-            updatableFields: UPDATABLE_CONFIG_KEYS
-          }
-        }, 400);
+        return errorResponse('NO_CHANGES', '沒有可更新的欄位', {
+          message: '提交的欄位值與目前值相同，沒有需要更新的內容',
+          submittedFields: Object.keys(properties),
+          updatableFields: UPDATABLE_CONFIG_KEYS
+        });
       }
 
       // Log successful update with detailed change tracking (only actual changes)
@@ -1336,11 +1272,7 @@ app.post(
       });
     } catch (error) {
       console.error('Update properties error:', error);
-      return c.json({
-        success: false,
-        error: 'Failed to update properties',
-        errorCode: 'UPDATE_FAILED'
-      }, 500);
+      return errorResponse('UPDATE_FAILED', 'Failed to update properties');
     }
   }
 );
@@ -1427,11 +1359,7 @@ app.post('/properties/reset', async (c) => {
     });
   } catch (error) {
     console.error('Reset properties error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to reset properties',
-      errorCode: 'SYSTEM_ERROR'
-    }, 500);
+    return errorResponse('SYSTEM_ERROR', 'Failed to reset properties');
   }
 });
 
@@ -1679,11 +1607,7 @@ app.post('/robots/status', async (c) => {
     });
   } catch (error) {
     console.error('Get robot status error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to get robot status',
-      errorCode: 'SYSTEM_ERROR'
-    }, 500);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get robot status');
   }
 });
 
@@ -1721,11 +1645,7 @@ app.post('/robots/notification-patrol/config', async (c) => {
     });
   } catch (error) {
     console.error('Get notification patrol config error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to get notification patrol configuration',
-      errorCode: 'SYSTEM_ERROR'
-    }, 500);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get notification patrol configuration');
   }
 });
 
@@ -1779,11 +1699,7 @@ app.post('/robots/notification-patrol/pending', async (c) => {
     return result;
   } catch (error) {
     console.error('Get pending notifications error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to get pending notifications',
-      errorCode: 'SYSTEM_ERROR'
-    }, 500);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get pending notifications');
   }
 });
 
@@ -1798,11 +1714,7 @@ app.post('/robots/notification-patrol/statistics', async (c) => {
     return result;
   } catch (error) {
     console.error('Get notification patrol statistics error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to get patrol statistics',
-      errorCode: 'SYSTEM_ERROR'
-    }, 500);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get patrol statistics');
   }
 });
 
@@ -1832,11 +1744,7 @@ app.post('/security/suspicious-logins', async (c) => {
     return response;
   } catch (error) {
     console.error('Check suspicious logins error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to check suspicious logins',
-      errorCode: 'SYSTEM_ERROR'
-    }, 500);
+    return errorResponse('SYSTEM_ERROR', 'Failed to check suspicious logins');
   }
 });
 
@@ -1877,11 +1785,7 @@ app.post('/smtp/get-config', async (c) => {
     });
   } catch (error) {
     console.error('Get SMTP config error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to get SMTP configuration',
-      errorCode: 'SYSTEM_ERROR'
-    }, 500);
+    return errorResponse('SYSTEM_ERROR', 'Failed to get SMTP configuration');
   }
 });
 
@@ -1942,11 +1846,7 @@ app.post(
         // Test stored configuration using KV-first strategy
         const smtpConfig = await getSmtpConfig(c.env);
         if (!smtpConfig) {
-          return c.json({
-            success: false,
-            error: 'SMTP not configured',
-            errorCode: 'NOT_CONFIGURED'
-          }, 400);
+          return errorResponse('NOT_CONFIGURED', 'SMTP not configured');
         }
 
         const { WorkerMailer } = await import('worker-mailer');
@@ -1974,19 +1874,11 @@ app.post(
           message: 'SMTP connection test successful'
         });
       } else {
-        return c.json({
-          success: false,
-          error: 'SMTP connection test failed - please check your configuration',
-          errorCode: 'CONNECTION_FAILED'
-        }, 400);
+        return errorResponse('CONNECTION_FAILED', 'SMTP connection test failed - please check your configuration');
       }
     } catch (error) {
       console.error('SMTP test error:', error);
-      return c.json({
-        success: false,
-        error: 'SMTP connection test failed',
-        errorCode: 'CONNECTION_FAILED'
-      }, 400);
+      return errorResponse('CONNECTION_FAILED', 'SMTP connection test failed');
     }
   }
 );

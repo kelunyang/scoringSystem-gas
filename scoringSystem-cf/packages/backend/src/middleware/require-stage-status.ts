@@ -11,6 +11,7 @@
  */
 
 import { Context, Next } from 'hono';
+import { errorResponse } from '../utils/response';
 
 /**
  * Extract stageId from request (supports both body and query params)
@@ -79,11 +80,7 @@ export function requireStageStatus(allowedStatuses: string[]) {
       }
 
       if (!projectId) {
-        return c.json({
-          success: false,
-          error: 'Missing projectId',
-          errorCode: 'MISSING_PROJECT_ID'
-        }, 400);
+        return errorResponse('MISSING_PROJECT_ID', 'Missing projectId');
       }
 
       // Extract stageId from request (either directly or via submissionId)
@@ -121,11 +118,7 @@ export function requireStageStatus(allowedStatuses: string[]) {
       }
 
       if (!stageId) {
-        return c.json({
-          success: false,
-          error: 'Cannot determine stageId from request',
-          errorCode: 'MISSING_STAGE_ID'
-        }, 400);
+        return errorResponse('MISSING_STAGE_ID', 'Cannot determine stageId from request');
       }
 
       // Get current stage status from VIEW (auto-calculated)
@@ -135,11 +128,7 @@ export function requireStageStatus(allowedStatuses: string[]) {
       `).bind(stageId, projectId).first();
 
       if (!stage) {
-        return c.json({
-          success: false,
-          error: 'Stage not found',
-          errorCode: 'STAGE_NOT_FOUND'
-        }, 404);
+        return errorResponse('STAGE_NOT_FOUND', 'Stage not found');
       }
 
       // Check if current status is in allowed list
@@ -163,12 +152,9 @@ export function requireStageStatus(allowedStatuses: string[]) {
 
     } catch (error) {
       console.error('[requireStageStatus Middleware Error]', error);
-      return c.json({
-        success: false,
-        error: 'Failed to check stage status',
-        errorCode: 'STAGE_STATUS_CHECK_FAILED',
+      return errorResponse('STAGE_STATUS_CHECK_FAILED', 'Failed to check stage status', {
         details: error instanceof Error ? error.message : String(error)
-      }, 500);
+      });
     }
   };
 }

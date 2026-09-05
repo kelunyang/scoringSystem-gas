@@ -47,6 +47,7 @@ import {
   GetCommentVotingDataRequestSchema,
   ClearStageVotesRequestSchema
 } from '@repo/shared/schemas/scoring';
+import { errorResponse } from '../utils/response';
 
 
 const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
@@ -70,11 +71,7 @@ app.post(
     // Check permission: Only teachers/admins (Level 0-1) can validate settlement
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to validate settlement',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to validate settlement');
     }
 
     const validation = await validatePreSettlement(c.env, body.projectId, body.stageId);
@@ -100,11 +97,7 @@ app.post(
     // Check permission: Only teachers/admins (Level 0-1) can settle stages
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to settle stage',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to settle stage');
     }
 
     const response = await settleStage(

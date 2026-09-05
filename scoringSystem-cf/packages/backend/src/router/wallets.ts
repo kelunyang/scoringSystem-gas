@@ -38,6 +38,7 @@ import {
   ExportWalletSummaryRequestSchema,
   GetStageGrowthDataRequestSchema
 } from '@repo/shared/schemas/wallets';
+import { errorResponse } from '../utils/response';
 
 
 const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
@@ -105,11 +106,7 @@ app.post(
           targetUser: actualTargetEmail,
           projectId
         });
-        return c.json({
-          success: false,
-          error: '您沒有權限查看其他使用者的交易記錄',
-          errorCode: 'ACCESS_DENIED'
-        }, 403);
+        return errorResponse('ACCESS_DENIED', '您沒有權限查看其他使用者的交易記錄');
       }
     } else {
       // High-permission users viewing specific other user or all users
@@ -181,11 +178,7 @@ app.post(
     // Need manage permission to award points
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to award points',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to award points');
     }
 
     const response = await awardPoints(
@@ -220,11 +213,7 @@ app.post(
     // Need manage permission to reverse transactions
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to reverse transaction',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to reverse transaction');
     }
 
     const response = await reverseTransaction(
@@ -258,11 +247,7 @@ app.post(
     // Teachers see: all users with full data
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view wallet ladder',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view wallet ladder');
     }
 
     const response = await getProjectWalletLadder(
@@ -292,11 +277,7 @@ app.post(
     // Need manage permission to export
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to export wallet summary',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to export wallet summary');
     }
 
     const response = await exportProjectWalletSummary(
@@ -325,11 +306,7 @@ app.post(
     // Need at least view permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view stage growth data',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view stage growth data');
     }
 
     const response = await getStageGrowthData(

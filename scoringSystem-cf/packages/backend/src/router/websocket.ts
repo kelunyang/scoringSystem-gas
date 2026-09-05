@@ -6,6 +6,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { verifyToken } from '../handlers/auth/jwt';
+import { errorResponse } from '../utils/response';
 
 const router = new Hono<{ Bindings: Env }>();
 
@@ -20,11 +21,8 @@ router.get('/', async (c) => {
   // Check if this is a WebSocket upgrade request
   const upgradeHeader = c.req.header('Upgrade');
   if (upgradeHeader !== 'websocket') {
-    return c.json({
-      success: false,
-      error: 'Expected WebSocket upgrade request',
-      code: 'NOT_WEBSOCKET'
-    }, 426); // 426 Upgrade Required
+    // NOT_WEBSOCKET maps to 426 Upgrade Required
+    return errorResponse('NOT_WEBSOCKET', 'Expected WebSocket upgrade request');
   }
 
   // Extract JWT token from query parameter or Authorization header
@@ -37,11 +35,7 @@ router.get('/', async (c) => {
   }
 
   if (!token) {
-    return c.json({
-      success: false,
-      error: 'Missing authentication token',
-      code: 'NO_TOKEN'
-    }, 401);
+    return errorResponse('NO_TOKEN', 'Missing authentication token');
   }
 
   try {
@@ -49,11 +43,7 @@ router.get('/', async (c) => {
     const payload = await verifyToken(token, c.env.JWT_SECRET);
 
     if (!payload.userId) {
-      return c.json({
-        success: false,
-        error: 'Invalid token payload',
-        code: 'INVALID_TOKEN'
-      }, 401);
+      return errorResponse('INVALID_TOKEN', 'Invalid token payload');
     }
 
     // Get user's NotificationHub Durable Object
@@ -66,12 +56,9 @@ router.get('/', async (c) => {
 
   } catch (error) {
     console.error('WebSocket authentication error:', error);
-    return c.json({
-      success: false,
-      error: 'Authentication failed',
-      code: 'AUTH_FAILED',
+    return errorResponse('AUTH_FAILED', 'Authentication failed', {
       details: error instanceof Error ? error.message : 'Unknown error'
-    }, 401);
+    });
   }
 });
 

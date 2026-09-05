@@ -62,20 +62,20 @@ describe('GET /ws — the upgrade endpoint', () => {
   it('refuses a plain GET that is not an upgrade', async () => {
     const res = await app.request('/ws', {}, env)
     expect(res.status).toBe(426)
-    expect((await res.json() as any).code).toBe('NOT_WEBSOCKET')
+    expect((await res.json() as any).error.code).toBe('NOT_WEBSOCKET')
   })
 
   it('refuses an upgrade with no token', async () => {
     const res = await upgrade()
     expect(res.status).toBe(401)
-    expect((await res.json() as any).code).toBe('NO_TOKEN')
+    expect((await res.json() as any).error.code).toBe('NO_TOKEN')
   })
 
   it('refuses a token signed with a different secret', async () => {
     const foreign = await generateToken('usr_1', 'a@example.invalid', 'a-completely-different-secret')
     const res = await upgrade({}, `?token=${foreign}`)
     expect(res.status).toBe(401)
-    expect((await res.json() as any).code).toBe('AUTH_FAILED')
+    expect((await res.json() as any).error.code).toBe('AUTH_FAILED')
   })
 
   it('refuses a malformed token', async () => {
@@ -88,7 +88,7 @@ describe('GET /ws — the upgrade endpoint', () => {
     const expired = await generateToken('usr_1', 'a@example.invalid', SECRET, -60_000)
     const res = await upgrade({}, `?token=${expired}`)
     expect(res.status).toBe(401)
-    expect((await res.json() as any).code).toBe('AUTH_FAILED')
+    expect((await res.json() as any).error.code).toBe('AUTH_FAILED')
   })
 
   it('accepts a valid token from the query string', async () => {

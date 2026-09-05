@@ -33,6 +33,7 @@ import {
   getAIPromptConfig,
   updateAIPromptConfig
 } from '../handlers/system/aiProviders';
+import { errorResponse } from '../utils/response';
 
 const systemRouter = new Hono<{ Bindings: Env }>();
 
@@ -119,11 +120,7 @@ const requireViewSystemLogs = async (c: any, next: any) => {
   const user = c.get('user');
 
   if (!user) {
-    return c.json({
-      success: false,
-      error: 'Authentication required',
-      errorCode: 'UNAUTHORIZED'
-    }, 401);
+    return errorResponse('UNAUTHORIZED', 'Authentication required');
   }
 
   // Check if user has view_system_logs or system_admin permission
@@ -131,11 +128,7 @@ const requireViewSystemLogs = async (c: any, next: any) => {
                         await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.SYSTEM_ADMIN);
 
   if (!hasPermission) {
-    return c.json({
-      success: false,
-      error: 'Insufficient permissions - requires view_system_logs or system_admin',
-      errorCode: 'ACCESS_DENIED'
-    }, 403);
+    return errorResponse('ACCESS_DENIED', 'Insufficient permissions - requires view_system_logs or system_admin');
   }
 
   return next();
@@ -220,22 +213,14 @@ const requireAIProviderAdmin = async (c: any, next: any) => {
   const user = c.get('user');
 
   if (!user) {
-    return c.json({
-      success: false,
-      error: 'Authentication required',
-      errorCode: 'UNAUTHORIZED'
-    }, 401);
+    return errorResponse('UNAUTHORIZED', 'Authentication required');
   }
 
   // Check if user has system_admin permission
   const hasPermission = await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.SYSTEM_ADMIN);
 
   if (!hasPermission) {
-    return c.json({
-      success: false,
-      error: 'Insufficient permissions - requires system_admin',
-      errorCode: 'ACCESS_DENIED'
-    }, 403);
+    return errorResponse('ACCESS_DENIED', 'Insufficient permissions - requires system_admin');
   }
 
   return next();

@@ -62,6 +62,7 @@ import {
   GetCommentRankingHistoryRequestSchema,
   GetAllStagesCommentsRequestSchema
 } from '@repo/shared/schemas/comments';
+import { errorResponse } from '../utils/response';
 
 
 const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
@@ -85,11 +86,7 @@ app.post(
     // Level 2 (observer) cannot comment
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'comment');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to create comments. Observers cannot post comments.',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to create comments. Observers cannot post comments.');
     }
 
     // Role-based stage status check
@@ -105,20 +102,12 @@ app.post(
     `).bind(body.commentData.stageId, body.projectId).first();
 
     if (!stage) {
-      return c.json({
-        success: false,
-        error: 'Stage not found',
-        errorCode: 'STAGE_NOT_FOUND'
-      }, 404);
+      return errorResponse('STAGE_NOT_FOUND', 'Stage not found');
     }
 
     // Check if stage is paused
     if (stage.status === 'paused') {
-      return c.json({
-        success: false,
-        error: '階段已暫停，無法發表評論',
-        errorCode: 'STAGE_PAUSED'
-      }, 403);
+      return errorResponse('STAGE_PAUSED', '階段已暫停，無法發表評論');
     }
 
     const allowedStatuses = isTeacher ? ['active', 'voting'] : ['active'];
@@ -157,11 +146,7 @@ app.post(
     // Check permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view comment',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view comment');
     }
 
     const response = await getCommentDetails(
@@ -193,11 +178,7 @@ app.post(
     // Check permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view comments',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view comments');
     }
 
     const response = await getStageComments(
@@ -231,11 +212,7 @@ app.post(
     // Check permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view comments',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view comments');
     }
 
     const response = await getAllStagesComments(
@@ -314,11 +291,7 @@ app.post(
     // Check permission: need project access (users can remove their own reactions)
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to remove reaction',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to remove reaction');
     }
 
     const response = await removeReaction(
@@ -346,11 +319,7 @@ app.post(
     // Check permission: need view access
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view reactions',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view reactions');
     }
 
     const response = await getCommentReactions(
@@ -378,11 +347,7 @@ app.post(
     // Check permission: need project access
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions');
     }
 
     const response = await checkVotingEligibility(
@@ -420,11 +385,7 @@ app.post(
     // Check permission: need comment permission (Level 3 students)
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'comment');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to submit comment rankings',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to submit comment rankings');
     }
 
     const response = await submitCommentRanking(
@@ -453,11 +414,7 @@ app.post(
     // Check permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view rankings',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view rankings');
     }
 
     const response = await getCommentRankings(
@@ -486,11 +443,7 @@ app.post(
     // Check permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view rankings',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view rankings');
     }
 
     const response = await getStageCommentRankings(
@@ -518,11 +471,7 @@ app.post(
     // Check permission: need view access
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view settlement analysis',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view settlement analysis');
     }
 
     const response = await getCommentSettlementAnalysis(
@@ -549,11 +498,7 @@ app.post(
     // Check permission: need view access
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view ranking history',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view ranking history');
     }
 
     const response = await getCommentRankingHistory(

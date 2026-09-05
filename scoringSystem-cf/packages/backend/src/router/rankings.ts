@@ -59,6 +59,7 @@ import { getAIProvidersForRanking, submitAIRankingSuggestion, submitBTRankingSug
 import { getAIRankingHistory, getAIRankingDetail } from '../handlers/rankings/aiHistory';
 import { aiRateLimitMiddleware } from '../middleware/rate-limit';
 import { getEffectiveUser } from '../middleware/sudo';
+import { errorResponse } from '../utils/response';
 
 
 const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
@@ -81,11 +82,7 @@ app.post(
     // Check permission: Users with view access can see rankings
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view rankings',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view rankings');
     }
 
     // Use effectiveUser for SUDO mode support
@@ -119,11 +116,7 @@ app.post(
     // Check permission: Users with view access can see rankings
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view rankings',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view rankings');
     }
 
     // Use effectiveUser for SUDO mode support
@@ -155,11 +148,7 @@ app.post(
     // Check permission: Users with view access can see their own vote history
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view vote history',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view vote history');
     }
 
     const response = await getTeacherVoteHistory(
@@ -188,11 +177,7 @@ app.post(
     // Check permission: Users with view access can see proposals
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view proposals',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view proposals');
     }
 
     const response = await getStageRankingProposals(
@@ -444,21 +429,13 @@ app.post('/ai-providers', async (c) => {
   const { projectId } = body;
 
   if (!projectId) {
-    return c.json({
-      success: false,
-      error: 'Missing projectId',
-      errorCode: 'VALIDATION_ERROR'
-    }, 400);
+    return errorResponse('VALIDATION_ERROR', 'Missing projectId');
   }
 
   // Check permission: Must be teacher or above (Level 0-2)
   const isTeacherOrAbove = await checkIsTeacherOrAbove(c.env.DB, user.userEmail, projectId);
   if (!isTeacherOrAbove) {
-    return c.json({
-      success: false,
-      error: 'Only teachers can access AI providers',
-      errorCode: 'ACCESS_DENIED'
-    }, 403);
+    return errorResponse('ACCESS_DENIED', 'Only teachers can access AI providers');
   }
 
   return await getAIProvidersForRanking(c.env);

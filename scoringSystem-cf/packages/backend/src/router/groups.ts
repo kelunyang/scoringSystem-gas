@@ -57,6 +57,7 @@ import {
   UpdateMemberRoleRequestSchema,
   BatchUpdateRolesRequestSchema
 } from '@repo/shared/schemas/groups';
+import { errorResponse } from '../utils/response';
 
 
 const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
@@ -78,11 +79,7 @@ app.post(
     // Check permission: need 'manage' permission to create groups
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to create groups',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to create groups');
     }
 
     const response = await createGroup(
@@ -110,11 +107,7 @@ app.post(
     // Check permission: need 'manage' permission to create groups
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to create groups',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to create groups');
     }
 
     const response = await batchCreateGroups(
@@ -146,11 +139,7 @@ app.post(
     // Check permission: need at least 'view' permission to view groups
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view group',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view group');
     }
 
     const response = await getGroup(
@@ -203,11 +192,7 @@ app.post(
     // Check permission: need 'manage' permission to delete groups
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to delete group',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to delete group');
     }
 
     const response = await deleteGroup(
@@ -238,11 +223,7 @@ app.post(
     // Check permission: need 'manage' permission to deactivate groups
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to deactivate group',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to deactivate group');
     }
 
     // Use batch handler for single group
@@ -275,11 +256,7 @@ app.post(
     // Check permission: need 'manage' permission to activate groups
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to activate group',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to activate group');
     }
 
     // Use batch handler for single group
@@ -491,11 +468,7 @@ app.post(
     // Check permission: need at least 'view' permission to list groups
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view groups',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view groups');
     }
 
     const response = await listProjectGroups(
@@ -526,11 +499,7 @@ app.post(
     // Check permission: need at least 'view' permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view group data',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view group data');
     }
 
     const response = await getGroupMentionData(
@@ -558,11 +527,7 @@ app.post(
     // Check permission: need 'manage' permission for batch operations
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to manage groups',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to manage groups');
     }
 
     const response = await batchUpdateGroupStatus(
@@ -591,11 +556,7 @@ app.post(
     // Check permission: need 'manage' permission for batch operations
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to manage groups',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to manage groups');
     }
 
     const response = await batchUpdateGroupAllowChange(

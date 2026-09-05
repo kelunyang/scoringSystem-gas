@@ -24,6 +24,7 @@ import {
   GetUserProjectEventLogsRequestSchema,
   GetEventResourceDetailsRequestSchema
 } from '@repo/shared/schemas/eventlogs';
+import { errorResponse } from '../utils/response';
 
 
 const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
@@ -46,11 +47,7 @@ app.post(
     // Check permission: need at least 'view' permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view event logs',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view event logs');
     }
 
     const response = await getProjectEventLogs(
@@ -80,11 +77,7 @@ app.post(
     // Check permission: need at least 'view' permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view event logs',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view event logs');
     }
 
     const response = await getUserProjectEventLogs(
@@ -113,11 +106,7 @@ app.post(
     // Check permission: need at least 'view' permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view resource details',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view resource details');
     }
 
     const response = await getEventResourceDetails(

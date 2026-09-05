@@ -48,6 +48,7 @@ import {
   ConfirmParticipationRequestSchema,
   ForceWithdrawSubmissionRequestSchema
 } from '@repo/shared/schemas/submissions';
+import { errorResponse } from '../utils/response';
 
 
 const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
@@ -70,11 +71,7 @@ app.post(
     // Check basic project access - handler will verify group membership
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to submit',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to submit');
     }
 
     const response = await submitDeliverable(
@@ -103,11 +100,7 @@ app.post(
     // Check permission: need at least 'view' permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view submissions',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view submissions');
     }
 
     const response = await getStageSubmissions(
@@ -136,11 +129,7 @@ app.post(
     // Check permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view submission',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view submission');
     }
 
     const response = await getSubmissionDetails(
@@ -168,11 +157,7 @@ app.post(
 
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view consensus status',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view consensus status');
     }
 
     return await getStageConsensusStatus(c.env, body.projectId, body.stageId);
@@ -195,11 +180,7 @@ app.post(
     // Check basic project access - handler will verify group membership
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to delete submission',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to delete submission');
     }
 
     const response = await deleteSubmission(
@@ -227,11 +208,7 @@ app.post(
     // Check permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view submission versions',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view submission versions');
     }
 
     const response = await getSubmissionVersions(
@@ -298,11 +275,7 @@ app.post(
     //     - Level 3-4 (Students): ✅ Own group only, ❌ other groups masked
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions');
     }
 
     const response = await getParticipationConfirmations(
@@ -331,11 +304,7 @@ app.post(
     // Check basic project access - handler will verify group access
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions');
     }
 
     const response = await getGroupStageVotingHistory(
@@ -369,11 +338,7 @@ app.post(
     // Check basic project access - handler will verify group membership and voting eligibility
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions');
     }
 
     const response = await voteParticipationProposal(

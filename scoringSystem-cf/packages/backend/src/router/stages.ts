@@ -49,6 +49,7 @@ import {
   PauseStageRequestSchema,
   ResumeStageRequestSchema
 } from '@repo/shared/schemas/stages';
+import { errorResponse } from '../utils/response';
 
 
 const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
@@ -70,11 +71,7 @@ app.post(
     // Check permission: need 'manage' permission on project
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to create stages',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to create stages');
     }
 
     const response = await createStage(
@@ -102,11 +99,7 @@ app.post(
     // Check permission: need at least 'view' permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view stages',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view stages');
     }
 
     const response = await getStage(
@@ -134,11 +127,7 @@ app.post(
     // Check permission: need 'manage' permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to update stages',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to update stages');
     }
 
     const response = await updateStage(
@@ -167,11 +156,7 @@ app.post(
     // Check permission: need at least 'view' permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view stages',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view stages');
     }
 
     const response = await listProjectStages(
@@ -199,11 +184,7 @@ app.post(
     // Check permission: need 'manage' permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to clone stages',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to clone stages');
     }
 
     const response = await cloneStage(
@@ -236,11 +217,7 @@ app.post(
       c.env, user.userEmail, body.sourceProjectId, 'manage'
     );
     if (!hasSourcePermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions on source project',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions on source project');
     }
 
     // Check permission: need 'manage' permission on all target projects
@@ -295,11 +272,7 @@ app.post(
     // Check permission: need at least 'view' permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to check stage status',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to check stage status');
     }
 
     // Check if stage has ANY votes from VIEW (any votes lock time modifications)
@@ -335,11 +308,7 @@ app.post(
     // Check permission: need 'manage' permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to force stage transition',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to force stage transition');
     }
 
     // Get current stage with auto-calculated status
@@ -348,11 +317,7 @@ app.post(
     `).bind(body.stageId, body.projectId).first();
 
     if (!stage) {
-      return c.json({
-        success: false,
-        error: 'Stage not found',
-        errorCode: 'STAGE_NOT_FOUND'
-      }, 404);
+      return errorResponse('STAGE_NOT_FOUND', 'Stage not found');
     }
 
     const oldStatus = stage.status as string;
@@ -364,15 +329,10 @@ app.post(
     `).bind(body.stageId, body.projectId).first();
 
     if (voteStatus?.hasAnyVotes) {
-      return c.json({
-        success: false,
-        error: '本階段已有投票紀錄，無法強制進入投票狀態',
-        errorCode: 'VOTING_LOCKED',
-        data: {
-          currentStatus: oldStatus,
-          reason: 'Cannot force to voting when votes already exist'
-        }
-      }, 400);
+      return errorResponse('VOTING_LOCKED', '本階段已有投票紀錄，無法強制進入投票狀態', {
+        currentStatus: oldStatus,
+        reason: 'Cannot force to voting when votes already exist'
+      });
     }
 
     const updateTime = Date.now();
@@ -448,11 +408,7 @@ app.post(
     // Check permission: need at least 'view' permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view stage configuration',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view stage configuration');
     }
 
     const response = await getStageConfig(
@@ -480,11 +436,7 @@ app.post(
     // Check permission: need 'manage' permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to update stage configuration',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to update stage configuration');
     }
 
     const response = await updateStageConfig(
@@ -513,11 +465,7 @@ app.post(
     // Check permission: need 'manage' permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to reset stage configuration',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to reset stage configuration');
     }
 
     const response = await resetStageConfig(
@@ -546,11 +494,7 @@ app.post(
     // Check permission: need 'manage' permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to pause stage',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to pause stage');
     }
 
     const response = await pauseStage(
@@ -580,11 +524,7 @@ app.post(
     // Check permission: need 'manage' permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, body.projectId, 'manage');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to resume stage',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to resume stage');
     }
 
     const response = await resumeStage(

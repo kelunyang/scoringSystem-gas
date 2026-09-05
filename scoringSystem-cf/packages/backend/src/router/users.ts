@@ -42,6 +42,7 @@ import {
   SearchUsersRequestSchema,
   GetUserDisplayNamesRequestSchema
 } from '@repo/shared/schemas/users';
+import { errorResponse } from '../utils/response';
 
 
 const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
@@ -200,11 +201,7 @@ app.post(
     // Check permission: need at least 'view' permission
     const hasPermission = await checkProjectPermission(c.env, user.userEmail, projectId, 'view');
     if (!hasPermission) {
-      return c.json({
-        success: false,
-        error: 'Insufficient permissions to view user data',
-        errorCode: 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse('ACCESS_DENIED', 'Insufficient permissions to view user data');
     }
 
     const response = await getUserDisplayNames(
@@ -248,11 +245,7 @@ app.put('/settings/comment-page-size', async (c) => {
   const pageSize = body.pageSize;
 
   if (typeof pageSize !== 'number') {
-    return c.json({
-      success: false,
-      error: 'pageSize must be a number',
-      errorCode: 'INVALID_INPUT'
-    }, 400);
+    return errorResponse('INVALID_INPUT', 'pageSize must be a number');
   }
 
   return updateCommentPageSize(c.env, user.userEmail, pageSize);
