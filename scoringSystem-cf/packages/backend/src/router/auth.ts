@@ -333,6 +333,19 @@ authRouter.post(
   async (c) => {
     const body = c.req.valid('json');
 
+    // Bot protection. Turnstile is enabled in production and the login form
+    // already renders a widget and sends a real token — this endpoint simply
+    // discarded it. Runs before the database is touched so bots are rejected
+    // at the cheapest point.
+    const turnstileError = await verifyTurnstileMiddleware(
+      c.env,
+      body.turnstileToken,
+      c.req.header('CF-Connecting-IP')
+    );
+    if (turnstileError) {
+      return c.json(turnstileError, 403);
+    }
+
     // Get user by email
     const user = await c.env.DB
       .prepare('SELECT * FROM users WHERE userEmail = ?')
@@ -683,6 +696,19 @@ authRouter.post(
           message: '登入階段已逾時，請重新輸入密碼'
         }
       }, 401);
+    }
+
+    // Bot protection. Turnstile is enabled in production and the login form
+    // already renders a widget and sends a real token — this endpoint simply
+    // discarded it. Runs before the database is touched so bots are rejected
+    // at the cheapest point.
+    const turnstileError = await verifyTurnstileMiddleware(
+      c.env,
+      body.turnstileToken,
+      c.req.header('CF-Connecting-IP')
+    );
+    if (turnstileError) {
+      return c.json(turnstileError, 403);
     }
 
     // ─── Factor 2 verification, with an explicit verified flag ───
@@ -1084,6 +1110,19 @@ authRouter.post(
       }, 401);
     }
 
+    // Bot protection. Turnstile is enabled in production and the login form
+    // already renders a widget and sends a real token — this endpoint simply
+    // discarded it. Runs before the database is touched so bots are rejected
+    // at the cheapest point.
+    const turnstileError = await verifyTurnstileMiddleware(
+      c.env,
+      body.turnstileToken,
+      c.req.header('CF-Connecting-IP')
+    );
+    if (turnstileError) {
+      return c.json(turnstileError, 403);
+    }
+
     // Now that the caller has proven they know the password, charge the budget.
     // The per-recipient buckets are the `open` channel, kept separate from the
     // password-verified login path so flooding here cannot stop the real user
@@ -1211,6 +1250,19 @@ authRouter.post(
   async (c) => {
     const body = c.req.valid('json');
 
+    // Bot protection. This endpoint sends mail to an arbitrary address with no
+    // password, so without it anyone can trigger reset mail at any account for
+    // free. Runs before the email budget so bot traffic is not charged to the
+    // victim's quota.
+    const turnstileError = await verifyTurnstileMiddleware(
+      c.env,
+      body.turnstileToken,
+      c.req.header('CF-Connecting-IP')
+    );
+    if (turnstileError) {
+      return c.json(turnstileError, 403);
+    }
+
     // Get IP and country from Cloudflare request
     const ipAddress = c.req.header('CF-Connecting-IP') || 'unknown';
     const cf = c.req.raw.cf as any;
@@ -1253,6 +1305,17 @@ authRouter.post(
   zValidator('json', PasswordResetVerifyCodeRequestSchema),
   async (c) => {
     const body = c.req.valid('json');
+
+    // Bot protection: this is a 6-digit code check, so without it the endpoint
+    // is an unthrottled oracle for guessing reset codes.
+    const turnstileError = await verifyTurnstileMiddleware(
+      c.env,
+      body.turnstileToken,
+      c.req.header('CF-Connecting-IP')
+    );
+    if (turnstileError) {
+      return c.json(turnstileError, 403);
+    }
 
     const { verifyCodeAndGetProjects } = await import('../handlers/auth/password-reset');
     const result = await verifyCodeAndGetProjects(

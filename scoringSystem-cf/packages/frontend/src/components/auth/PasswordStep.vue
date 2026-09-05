@@ -94,7 +94,7 @@ const hasUppercase = computed(() => /[A-Z]/.test(email.value));
 const hasUppercasePassword = computed(() => /[A-Z]/.test(password.value));
 
 // Turnstile
-const { token: turnstileToken, onVerify, onError, onExpired } = useTurnstile();
+const { token: turnstileToken, onVerify, onError, onExpired, reset: resetTurnstile } = useTurnstile();
 
 // Proactively check Turnstile config on mount
 onMounted(async () => {
@@ -166,6 +166,11 @@ function handleSubmit() {
     },
     turnstileToken: turnstileToken.value!
   });
+
+  // Turnstile tokens are single-use. The server now redeems this one, so a
+  // wrong-password retry must carry a fresh token or it would fail on the
+  // captcha rather than on the password.
+  resetTurnstile();
 }
 </script>
 

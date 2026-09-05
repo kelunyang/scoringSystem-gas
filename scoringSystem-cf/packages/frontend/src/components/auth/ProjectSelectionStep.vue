@@ -79,7 +79,7 @@ const selectedProjectIds = ref<string[]>([]);
 const allParticipated = ref(false);
 
 // Turnstile
-const { token: turnstileToken, onVerify, onError, onExpired } = useTurnstile();
+const { token: turnstileToken, onVerify, onError, onExpired, reset: resetTurnstile } = useTurnstile();
 
 const canSubmit = computed(() => {
   return (allParticipated.value || selectedProjectIds.value.length > 0) && !props.loading;
@@ -112,6 +112,10 @@ function handleSubmit() {
     allParticipated: allParticipated.value,
     turnstileToken: turnstileToken.value
   });
+
+  // Turnstile tokens are single-use: the server redeems this one, so a retry
+  // after a failure needs a fresh token or it would fail on the captcha.
+  resetTurnstile();
 }
 </script>
 

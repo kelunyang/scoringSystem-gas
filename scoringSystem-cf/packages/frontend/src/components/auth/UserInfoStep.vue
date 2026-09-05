@@ -125,7 +125,7 @@ const emit = defineEmits<{
 const { getRandomSeed } = useAvatarGenerator();
 
 // Turnstile
-const { token: turnstileToken, onVerify, onError, onExpired } = useTurnstile();
+const { token: turnstileToken, onVerify, onError, onExpired, reset: resetTurnstile } = useTurnstile();
 
 function handleTurnstileSuccess(token: string) {
   onVerify(token);
@@ -253,6 +253,11 @@ function handleSubmit() {
     email: props.targetEmail || formData.value.email,
     turnstileToken: turnstileToken.value || ''
   } as RegisterData);
+
+  // Turnstile tokens are single-use and /auth/register redeems this one, so a
+  // failed registration (duplicate display name, weak password) could not be
+  // retried without a fresh token.
+  resetTurnstile();
 }
 
 /**

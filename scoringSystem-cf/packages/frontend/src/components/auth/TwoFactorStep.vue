@@ -388,6 +388,19 @@ const buttonStyle = computed(() => ({
   '--theme-color-rgb': hexToRgb(props.themeColor!)
 }));
 
+/**
+ * Drop the used Turnstile token and ask the widget for a fresh one.
+ *
+ * Turnstile tokens are single-use: once the server has redeemed one, replaying
+ * it fails verification. Without this, entering a wrong code once would leave
+ * the form permanently unable to submit — every retry would reuse the spent
+ * token. `handleResend` already did this; the submit paths did not, which only
+ * went unnoticed because the server was discarding the token entirely.
+ */
+function refreshTurnstile() {
+  resetTurnstile();
+}
+
 function handleSubmit() {
   if (!canSubmit.value) return;
 
@@ -398,6 +411,8 @@ function handleSubmit() {
     method: currentMethod.value === 'totp' ? 'totp' : 'email',
     turnstileToken: turnstileToken.value || ''
   });
+
+  refreshTurnstile();
 }
 
 function handleSubmitRecovery() {
@@ -409,14 +424,16 @@ function handleSubmitRecovery() {
     method: 'totp',
     turnstileToken: turnstileToken.value || ''
   });
+
+  refreshTurnstile();
 }
 
 function handleResend() {
   emit('resend', {
     turnstileToken: turnstileToken.value || ''
   });
-  // Reset turnstile for next use
-  resetTurnstile();
+
+  refreshTurnstile();
 }
 
 // Passkey authentication
@@ -429,6 +446,10 @@ async function handlePasskeyAuth() {
 
   // Step 2: Verify with server
   const success = await verifyAuthentication(props.userEmail, turnstileToken.value, props.preAuthToken);
+
+  // auth-verify redeems the token, so a second attempt needs a fresh one.
+  refreshTurnstile();
+
   if (success) {
     emit('passkeySuccess');
   }

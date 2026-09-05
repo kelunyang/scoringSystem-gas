@@ -4,6 +4,56 @@
 > 新坑往上加，讓最近的教訓最先被看到。
 
 ---
+## 2026-09-05 ｜ 登入頁的 Turnstile 是裝飾品：前端解了、後端丟掉
+
+**症狀**：無。CAPTCHA 元件正常顯示、使用者正常解題、登入正常運作——
+只是它擋不住任何東西。
+
+**根因**：兩層。
+
+1. **後端收下就丟。** 8 個 request schema 宣告了 `turnstileToken`，
+   但 `router/auth.ts` 裡 `verifyTurnstileMiddleware` 只出現 3 次
+   （`/register`、`/reset-password`、`/passkey/auth-verify`）。
+   **`/login-verify-password`——登入本身——的 handler 第一行就是取 body 然後查使用者**，
+   中間沒有任何檢查。前端 `PasswordStep.vue` 和 `TwoFactorStep.vue` 都掛了
+   真的 `TurnstileWidget` 並送出真 token，後端照收不誤，然後不用。
+2. **`TurnstileTokenSchema = z.string().optional()`**，所以連「有沒有給」都不驗。
+
+**這條 issue 之前被誤判過兩次，兩次都是同一個錯**：從 `wrangler.toml` 的
+`TURNSTILE_ENABLED = "false"` 推論「CAPTCHA 整套是關的，所以不急」。
+**那個值是後備值**——設定讀取是 KV 優先（`utils/config.ts` 的 `getConfigValue`），
+生產環境 KV 裡是 `"true"`。打一次公開端點
+`POST /api/system/turnstile-config` 就會看到 `{"enabled":true,...}`。
+
+**連帶發現：Turnstile token 是一次性的，但前端送出後不重置。**
+`TwoFactorStep` 只有 `handleResend` 會 `resetTurnstile()`，
+`handleSubmit`／`handleSubmitRecovery` 都沒有；`PasswordStep`、
+`UserInfoStep`、`EmailVerificationStep`、`ProjectSelectionStep` 也都沒解構 `reset`。
+其中 `UserInfoStep`（→`/register`）和 `ProjectSelectionStep`（→`/reset-password`）
+送去的端點**本來就有驗**，所以「註冊失敗後無法重試」「重設密碼失敗後無法重試」
+是既有的 bug，只是很少有人失敗兩次所以沒被回報。
+
+**修法**：
+- 5 條路由補上 `verifyTurnstileMiddleware`，位置在「免費檢查之後、
+  碰資料庫與計費之前」（見同日「認證檢查放在速率限制之後」條目的順序原則）。
+- 6 個前端元件在送出後一律 `resetTurnstile()`。
+- 新增 `tests/turnstile-coverage.test.ts`：讀 schema 原始碼找出帶
+  `TurnstileTokenSchema` 的 schema，再讀 router 原始碼確認對應路由有呼叫驗證，
+  兩者漂移就失敗。已用「暫時移除 `/register` 的驗證」驗證過這條測試會抓到。
+
+**教訓與防護**：
+
+1. **任何取決於設定的行為判斷，都要問「這個值執行時是從哪來的」。**
+   這個系統是 KV → 環境變數 → 預設值三層。看設定檔等於只看了第三層。
+   **能打端點問就打端點問**，不要從檔案推論。
+2. **「收了參數卻不使用」是無聲的洞。** 型別檢查、測試、code review 都不會抓——
+   從外面看，一支有驗和一支沒驗的路由回應完全一樣。
+   這類「宣告與實作可能漂移」的地方，值得寫一條讀原始碼的守衛測試。
+3. **一次性 token 的用完即棄，前端必須配合。** 補上伺服器端驗證之前，
+   先確認前端在每個送出點都會換發新 token，否則「失敗後無法重試」，
+   而且症狀會被誤認成 CAPTCHA 壞掉。
+
+---
 ## 2026-09-05 ｜ 把認證檢查放在速率限制之後，讓失敗的請求照樣扣配額
 
 **症狀**：使用者登入後太晚輸入 2FA 驗證碼，按「重新寄送」，**信一直沒來，

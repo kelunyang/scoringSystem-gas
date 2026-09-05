@@ -686,38 +686,6 @@ projects/viewers…）。通知面板與 WebSocket 廣播都正常運作。
 Vue template 內只出現在字串裡的元件名，可能被誤判為死碼——逐項確認過再刪。
 
 
-### #008 ｜ 四支 auth 路由宣告了 turnstileToken 卻從未驗證 ｜ 中
-
-**問題**：以下四支路由的 request schema 都有 `turnstileToken` 欄位，
-router 內卻**沒有呼叫 `verifyTurnstileMiddleware`**：
-
-| 路由 | 定義 | schema |
-|------|------|--------|
-| `/auth/login-verify-password` | `router/auth.ts:301` | `shared/src/schemas/auth.ts:50` |
-| `/auth/resend-2fa` | `router/auth.ts:919` | `auth.ts:198` |
-| `/auth/verify-email-for-reset` | `router/auth.ts:1011` | `auth.ts:210` |
-| `/auth/password-reset-verify-code` | `router/auth.ts:1033` | `auth.ts:221` |
-
-整個 auth router 只有 `/register`（`:67`）、`/reset-password`（`:1068`）和 `:1634`
-真的驗證。而且 `TurnstileTokenSchema = z.string().optional()`
-（`shared/src/schemas/common.ts:157`），所以連「有沒有給 token」都不驗——
-欄位在 JSDoc 註解裡被寫成必填，實際上是純裝飾。
-
-再加上 `wrangler.toml:135` 是 `TURNSTILE_ENABLED = "false"`，目前整套 CAPTCHA 是關的。
-
-**目前的緩解**：2026-09-03 已補上 D1 版速率限制（見 pitfalls.md 同日條目），
-這四支現在都有每信箱冷卻／時窗，免密碼的兩支另有每 IP 限制，
-全系統另有每日寄信預算。所以「無限催信」的洞已經堵住，Turnstile 是第二道防線。
-
-**待決**：要不要真的啟用？
-- 要啟用：把那四支的 `verifyTurnstileMiddleware` 補上，`TurnstileTokenSchema`
-  在需要的地方改成必填，並確認前端這四支都有送 token（目前 `useLogin.ts` 有送，
-  但沒驗證過其他路徑）
-- 不啟用：把 schema 裡的欄位與 JSDoc 拿掉，免得下一個人以為有保護
-  （**最糟的是現狀**：看起來有、實際沒有）
-
----
-
 ### #007 ｜ 邀請碼的 `targetEmail` 從未被比對 ｜ 中
 
 **問題**：`scoringSystem-cf/packages/backend/src/handlers/auth/register.ts:332`

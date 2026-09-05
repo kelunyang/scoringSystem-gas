@@ -65,7 +65,7 @@ const email = ref('');
 const hasUppercase = computed(() => /[A-Z]/.test(email.value));
 
 // Turnstile
-const { token: turnstileToken, onVerify, onError, onExpired } = useTurnstile();
+const { token: turnstileToken, onVerify, onError, onExpired, reset: resetTurnstile } = useTurnstile();
 
 function handleTurnstileSuccess(token: string) {
   onVerify(token);
@@ -89,6 +89,10 @@ function handleSubmit() {
     email: email.value,
     turnstileToken: turnstileToken.value || ''
   });
+
+  // Turnstile tokens are single-use: the server redeems this one, so a retry
+  // after a failure needs a fresh token or it would fail on the captcha.
+  resetTurnstile();
 }
 </script>
 
