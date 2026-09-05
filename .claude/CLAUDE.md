@@ -74,7 +74,7 @@
 
 **實現檔案**:
 - JWT: [packages/backend/src/handlers/auth/jwt.ts](scoringSystem-cf/packages/backend/src/handlers/auth/jwt.ts)
-- Password: [packages/shared/src/utils/password.ts](scoringSystem-cf/packages/shared/src/utils/password.ts) (PBKDF2-SHA256, 600,000 iterations)
+- Password: [packages/shared/src/utils/password.ts](scoringSystem-cf/packages/shared/src/utils/password.ts) (PBKDF2-SHA256, **100,000** iterations — Cloudflare Workers 的硬上限，超過會拋 `Pbkdf2 failed: iteration counts above 100000 are not supported`。OWASP 2023 建議 600,000，平台做不到)
 - Register: [packages/backend/src/handlers/auth/register.ts](scoringSystem-cf/packages/backend/src/handlers/auth/register.ts)
 
 ---

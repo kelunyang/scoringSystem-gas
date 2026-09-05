@@ -354,39 +354,58 @@ middleware 本來每個請求就會載入 users 那一列，所以**增量成本
 走真正的 `registerUser` 邊界而非私有函式——被邀請者可註冊、
 他人持同一碼被拒、大小寫與空白容忍、NULL target 不限制。
 
-#### 丙：Migrations 目錄是壞的，全新環境建不起來
+#### 己-4：長期跳過的測試（原 #004，已修）
 
-`packages/backend/migrations/` 有**兩套互相衝突的編號**，且其中一套沒進版控：
+兩件不同的事被混在一起了。
 
-| 檔案 | 版控狀態 |
-|------|----------|
-| `0001_add_aiservicecalls.sql` / `0002_add_announcements.sql` / `0003_add_totp_support.sql` / `0004_add_passkey_support.sql` / `0005_add_withdraw_reason.sql` / `0006_add_rate_limit_counters.sql` | **已追蹤** |
-| `0001_initial.sql` / `0003_init_schema.sql` / `0004_fix_invitation_unique_index.sql` / `0005_add_stage_pause.sql` / `0006_add_max_vote_reset_count.sql` / `0007_add_passkey_support.sql` | **未追蹤（untracked）** |
+**(1) `security-tests/test_websocket.py` 連錯路徑。**
+它連 `/ws/notifications`，而路由是 `app.route('/ws', websocketRouter)`
+搭配 `router.get('/')`——正確路徑是 `/ws`。8 處已修正。
 
-三個具體後果：
+**但修路徑不會帶來覆蓋**：這些測試每一次連線失敗都
+`pytest.skip(f"WebSocket connection failed: {e}")`，
+**永遠不會變紅**，而且多數函式體只有「這個測試需要…」的註解。
+所以另外寫了 `tests/router/websocket.test.ts`（10 條，in-process、不需伺服器、
+真的會失敗）涵蓋認證邊界：非 upgrade 請求回 426、無 token 回 401、
+他人金鑰簽的 token、畸形 token、過期 token 全部 401、
+query 與 Authorization 兩種帶法都可通過，
+以及**連線只會被導到 token 擁有者自己的 Durable Object**——
+加上 `?userId=別人` 也無效。
 
-1. **建表的那份沒進版控**：`0003_init_schema.sql`（36KB、34 張表）是 untracked。
-   從乾淨 checkout 跑 `pnpm migrate:local` 拿不到任何一張表。
-2. **順序本來就是錯的**：wrangler 按檔名排序執行，
-   `0001_add_aiservicecalls` 和 `0003_add_totp_support`（`ALTER TABLE users`）
-   排在 `0003_init_schema`（`CREATE TABLE users`）**之前**。全新資料庫必爆。
-3. **passkey 有兩份，跑第二份必爆**：`0004_add_passkey_support.sql:5` 和
-   `0007_add_passkey_support.sql:32` 都執行
-   `ALTER TABLE users ADD COLUMN passkeyEnabled` → duplicate column name。
-   兩份的 schema 還不一致（0007 有 FK 和 `idx_..._lastused` 索引，0004 沒有；
-   0004 的 `transports` 是 `NOT NULL`，0007 可為 null）。
-   **目前 production 到底是哪一份，要實際查 DB 才知道。**
+**(2) 前端 `useSystemStats.spec.ts` 的 `describe.skip`（4 條）。**
+它的註解說「`@/` 別名在 Vitest 解析不了」。**那個問題早就修好了**——
+根目錄 `vitest.config.ts` 的註解就記載著改掉
+`defineWorkspace(file-reference)` 的經過，別名設定在 `vitest.config.ts:30`。
+skip 只是沒人拿掉。解除後 4 條全過。
 
-另外 `0001_initial.sql` 的註解說 schema 由 `/auth/init-system` 端點建立，
-但 `index.ts:89` 也還在引導使用者呼叫它——等於「migrations」和「init 端點」
-兩套建庫機制並存，沒有單一事實來源。
+**教訓**：跳過的測試會在報告裡顯示為綠色。這輪之前
+`pnpm test` 的「4 skipped」看起來像是刻意保留，實際是兩個早已失效的理由。
 
-**修法**：先在 remote D1 跑 `PRAGMA table_info(users)` 和
-`SELECT name FROM sqlite_master` 確認**實際**狀態，再據此重寫成單一線性序列，
-全部進版控，刪掉 `/auth/init-system` 這條路。這件事沒做之前，
-**不要在乾淨環境重建資料庫**。
+#### 丙：Migrations ｜ 大部分已修，剩一項架構性待辦
 
----
+**原始問題**：兩套互相衝突的編號（0001/0003/0004/0005/0006 都撞號），
+建表的 `0003_init_schema.sql`（34 張表）沒進版控，
+`0004_add_passkey_support.sql` 與 `0007_add_passkey_support.sql`
+都執行 `ALTER TABLE users ADD COLUMN passkeyEnabled`——兩份都跑必然失敗。
+
+**已修**：
+- 先前 untracked 的 migration 全部納入版控。
+- 刪除重複的 `0007_add_passkey_support.sql`（遠端從未套用過它，
+  已用 `d1_migrations` 查證），其獨有的索引併入 `0008`。
+- **遠端補登 4 筆記錄**：`0003_init_schema`、`0004_fix_invitation_unique_index`、
+  `0005_add_stage_pause`、`0006_add_max_vote_reset_count` 的 schema 變更
+  早已手動套用，但沒有記帳。不補登的話下次 apply 會在
+  `ALTER TABLE stages ADD COLUMN pausedTime` 撞欄位而中斷，
+  排在後面的新 migration 永遠輪不到。
+- 本地 D1 同樣補登並套用完畢，順帶修好本地一直壞著的 passkey
+  （`users` 先前沒有 passkey 欄位，功能靜默失效）。
+- 遠端實測狀態與處理方式全部寫進 `migrations/README.md`。
+
+**仍待辦（架構性）**：`/auth/init-system` 這條平行的建庫路徑還在，
+所以「schema 從哪來」有兩個答案。在它廢掉之前，
+**不要在乾淨環境用 `migrations apply` 重建資料庫**——
+順序仍然是錯的（`0001_add_aiservicecalls` 和 `0003_add_totp_support`
+會在 `0003_init_schema` 建表之前執行 `ALTER TABLE users`）。
 
 #### 丁：測試與設定
 
@@ -416,25 +435,34 @@ middleware 本來每個請求就會載入 users 那一列，所以**增量成本
 
 ---
 
-#### 戊：效能與設計觀察（非 bug，但值得記）
+#### 戊：效能與設計觀察
 
-- **每個已認證請求都對 D1 寫一次**：`middleware/auth.ts:126` 用 `waitUntil`
-  更新 `users.lastActivityTime`。D1 的寫入有 rate limit 也要計費，
-  熱門時段（全班同時操作）這是純浪費。改成節流（例如只在距上次
-  超過 5 分鐘才寫）或改寫進 KV。
-- **每個請求都查兩次 DB 取權限**：`authMiddleware` 先查 users，
+**已修**：
+- **`lastActivityTime` 每個請求寫一次 D1** → 改為 5 分鐘節流。
+  該欄位只餵「最後上線」顯示，per-request 精度買不到任何東西，
+  卻讓它成為全系統最忙的寫入。
+- **`clearFailedAttempts` 會 `DELETE FROM sys_logs`** → 已移除。
+  稽核紀錄不該被業務邏輯刪掉。失敗計數改以
+  「最近一次 `login_success` 之後」界定範圍，串流重置的語意不變，
+  歷史保留。
+
+**未修**：
+- **每個請求查兩次 D1 取權限**：`authMiddleware` 先查 users，
   再 `getUserGlobalPermissions` 查 globalusergroups JOIN globalgroups。
   CLAUDE.md 寫「Cache JWT validation results in KV」，實際沒做。
-- **身分以 email 而非 userId 當外鍵**：schema 沒有任何指向 `users` 的
-  foreign key，22 處欄位直接存 email 字串。這就是為什麼改一個 email
-  需要 `admin/users.ts` 裡 30 個欄位的重寫清單。已經有完整的處理，
-  不建議現在動，但要知道新增任何「指向人」的欄位都必須同步加進
+  牽涉快取失效策略（改群組權限要能即時生效），值得單獨一輪。
+- **身分以 email 而非 userId 當外鍵**：schema 沒有任何指向 `users`
+  的 foreign key，22 處欄位直接存 email 字串。這就是改一個 email
+  需要 `admin/users.ts` 裡 30 個欄位重寫清單的原因。
+  **不建議現在動**，但新增任何「指向人」的欄位都必須同步加進
   `EMAIL_REFERENCES`，否則會靜默漏改。
-- **`clearFailedAttempts` 會刪 `sys_logs`**（`handlers/auth/login.ts:508`）：
-  登入成功就把該帳號的 `login_failed` 稽核記錄刪掉。稽核軌跡不該被業務邏輯刪除，
-  「已解決」應該用標記而不是 DELETE。
-
----
+- **396 處 `console.log`，其中 54 處是 `DEBUG-` / 🔍 除錯標記**。
+  集中在 `handlers/groups/members.ts`（51 處）、
+  `queues/email-consumer.ts`（27）、`handlers/eventlogs/query.ts`（26）。
+  Workers 的 log 是計費的，而且這些輸出包含 email 與權限判斷細節。
+  至少該清掉那 54 處除錯標記，或收進受 `ENVIRONMENT` 控制的 logger。
+- **前端 77 個 lint error**（以 `no-unused-vars` 為主，另有 968 個 warning）。
+  散在本輪未觸及的檔案，屬獨立的清理工作。
 
 ### #009 ｜ 死模組普查：重構殘骸清單 ｜ 已完成清理
 
@@ -831,30 +859,9 @@ Vue template 內只出現在字串裡的元件名，可能被誤判為死碼—�
 
 ---
 
-### #004 ｜ WebSocket 端點路徑不符，4 個測試長期跳過 ｜ 低
-
-**問題**：`packages/security-tests/tests/test_websocket.py` 連 `/ws/notifications`
-拿到 404「Endpoint not found」，4 個測試因此 skip。
-`index.ts:251` 掛的是 `app.route('/ws', websocketRouter)`，實際子路徑待確認。
-
-**後果**：WebSocket 的認證與授權從未被測試覆蓋。
-
----
 
 以下三項皆已讀原始碼確認，非推測。均為 2026-07-17 討論 JWT 認證機制時順帶挖出。
 
-### #003 ｜ 文件與實作不符：PBKDF2 迭代數 ｜ 低
-
-`.claude/CLAUDE.md` 寫 PBKDF2-SHA256 **600,000** iterations，
-但 `scoringSystem-cf/packages/shared/src/utils/password.ts:19` 實際是 **100,000**。
-
-**這是 Cloudflare Workers 的硬上限**，不是實作偷懶——原始碼註解已載明：
-「Pbkdf2 failed: iteration counts above 100000 are not supported」，
-且註記 OWASP 建議 600,000。
-
-**該修的是文件，不是程式。**
-
----
 
 ## B. 已裁決的疑問（封存，勿重啟）
 

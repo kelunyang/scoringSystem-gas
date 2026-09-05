@@ -14,6 +14,14 @@ Author: Claude Code
 Date: 2025-12-23
 """
 
+# NOTE (2026-09-05): the endpoint is `/ws`, not `/ws/notifications` — every
+# connection in this file used to 404, so the suite reported "skipped" rather
+# than "failing". Paths corrected.
+#
+# These tests still swallow failures with `pytest.skip(...)`, which means they
+# cannot go red. Real assertions on the WebSocket auth boundary live in
+# packages/backend/tests/router/websocket.test.ts, which runs without a server.
+
 import pytest
 import time
 import json
@@ -60,7 +68,7 @@ class TestWebSocketAuthentication:
         """
         skip_if_no_websocket()
 
-        ws_url = config.api_base_url.replace('http', 'ws') + '/ws/notifications'
+        ws_url = config.api_base_url.replace('http', 'ws') + '/ws'
 
         try:
             ws = websocket.create_connection(
@@ -86,7 +94,7 @@ class TestWebSocketAuthentication:
         """
         skip_if_no_websocket()
 
-        ws_url = config.api_base_url.replace('http', 'ws') + '/ws/notifications'
+        ws_url = config.api_base_url.replace('http', 'ws') + '/ws'
         invalid_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJmYWtlIn0.invalid"
 
         try:
@@ -162,7 +170,7 @@ class TestWebSocketMessageIsolation:
         # 2. Trigger notification for user2
         # 3. Verify user1 doesn't receive user2's notification
 
-        ws_url = config.api_base_url.replace('http', 'ws') + '/ws/notifications'
+        ws_url = config.api_base_url.replace('http', 'ws') + '/ws'
 
         try:
             ws = websocket.create_connection(
@@ -208,7 +216,7 @@ class TestWebSocketMessageIsolation:
         """
         skip_if_no_websocket()
 
-        ws_url = config.api_base_url.replace('http', 'ws') + '/ws/notifications'
+        ws_url = config.api_base_url.replace('http', 'ws') + '/ws'
 
         try:
             ws = websocket.create_connection(
@@ -263,7 +271,7 @@ class TestWebSocketInjection:
         """
         skip_if_no_websocket()
 
-        ws_url = config.api_base_url.replace('http', 'ws') + '/ws/notifications'
+        ws_url = config.api_base_url.replace('http', 'ws') + '/ws'
 
         injection_payloads = [
             '<script>alert("XSS")</script>',
@@ -299,7 +307,7 @@ class TestWebSocketInjection:
         """
         skip_if_no_websocket()
 
-        ws_url = config.api_base_url.replace('http', 'ws') + '/ws/notifications'
+        ws_url = config.api_base_url.replace('http', 'ws') + '/ws'
 
         malformed_messages = [
             'not json at all',
@@ -425,7 +433,7 @@ class TestConnectionSecurity:
         """
         skip_if_no_websocket()
 
-        ws_url = config.api_base_url.replace('http', 'ws') + '/ws/notifications'
+        ws_url = config.api_base_url.replace('http', 'ws') + '/ws'
         connections = []
 
         try:
@@ -461,7 +469,7 @@ class TestConnectionSecurity:
         """
         skip_if_no_websocket()
 
-        ws_url = config.api_base_url.replace('http', 'ws') + '/ws/notifications'
+        ws_url = config.api_base_url.replace('http', 'ws') + '/ws'
 
         try:
             ws = websocket.create_connection(

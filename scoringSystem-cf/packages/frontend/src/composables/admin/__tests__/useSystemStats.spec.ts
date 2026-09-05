@@ -1,18 +1,19 @@
 /**
  * @fileoverview Unit tests for useSystemStats composable
  *
- * Note: These tests are currently skipped due to module resolution issues
- * with path aliases in Vitest. The useSystemStats composable works correctly
- * at runtime. This test file structure is preserved for future improvements.
+ * These were skipped from the day they were written because `@/` aliases did
+ * not resolve under Vitest, so the composable could not be imported. That was
+ * fixed when the workspace config moved off the deprecated
+ * `defineWorkspace(file-reference)` form (see the note in the root
+ * vitest.config.ts) — the alias is configured at vitest.config.ts:30 and the
+ * skip was simply never lifted.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Note: Direct import of useSystemStats is blocked by path alias resolution
-// The composable imports '@/api/admin' which cannot be resolved during test
-// import { useSystemStats } from '../useSystemStats'
+import { useSystemStats } from '../useSystemStats'
 
-describe.skip('useSystemStats', () => {
+describe('useSystemStats', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
