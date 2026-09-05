@@ -10,7 +10,8 @@ import {
   getAIProviderById,
   buildSystemPrompt,
   buildUserPrompt,
-  callAIProvider
+  callAIProvider,
+  normalizeAIRanking
 } from '../utils/ai-provider';
 import {
   generateComparisons,
@@ -243,13 +244,11 @@ async function processDirectRanking(
     userPrompt
   );
 
-  // Validate and fix ranking
-  const itemIds = new Set(message.items.map(item => item.id));
-  const validRanking = aiResponse.ranking.filter(id => itemIds.has(id));
-  const missingIds = message.items
-    .map(item => item.id)
-    .filter(id => !validRanking.includes(id));
-  const finalRanking = [...validRanking, ...missingIds];
+  // Drop invented ids, collapse duplicates, back-fill omissions.
+  const finalRanking = normalizeAIRanking(
+    aiResponse.ranking,
+    message.items.map(item => item.id)
+  );
 
   // Calculate response time
   const responseTimeMs = Date.now() - startTime;
@@ -761,10 +760,9 @@ async function processMultiAgentRanking(
   for (const result of round1RawResults) {
     const providerResult = providerResults.find(p => p.providerId === result.providerId);
     if (result.success && 'ranking' in result && result.ranking) {
-      // Validate and fix ranking
-      const validRanking = result.ranking.filter(id => itemIds.includes(id));
-      const missingIds = itemIds.filter(id => !validRanking.includes(id));
-      const finalRanking = [...validRanking, ...missingIds];
+      // Feeds computeFreeMadRanking, which scores by list position — a
+      // duplicate here would score one item twice.
+      const finalRanking = normalizeAIRanking(result.ranking, itemIds);
       const reason = result.reason || '';
       const providerId = result.providerId || '';
       const providerName = result.providerName || '';
@@ -896,10 +894,7 @@ async function processMultiAgentRanking(
   for (const result of round2RawResults) {
     const providerResult = providerResults.find(p => p.providerId === result.providerId);
     if (result.success && 'result' in result && result.result && result.result.ranking) {
-      // Validate and fix ranking
-      const validRanking = result.result.ranking.filter(id => itemIds.includes(id));
-      const missingIds = itemIds.filter(id => !validRanking.includes(id));
-      const finalRanking = [...validRanking, ...missingIds];
+      const finalRanking = normalizeAIRanking(result.result.ranking, itemIds);
 
       const r2Result: MultiAgentRound2Result = {
         providerId: result.result.providerId || result.providerId || '',

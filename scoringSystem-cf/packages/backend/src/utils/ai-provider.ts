@@ -843,6 +843,53 @@ async function callAIProviderStreaming(
 }
 
 /**
+ * Turn a model's raw ranking into one that is safe to score.
+ *
+ * Three things have to happen, and the third was missing everywhere:
+ *
+ * 1. Drop ids the model invented. Submission and comment text goes into the
+ *    prompt verbatim, so a participant can write `ID: someone_else` into their
+ *    own work and try to steer the output.
+ * 2. Append items the model left out, so every item still gets a position.
+ * 3. **Deduplicate.** A model repeating an item is an ordinary failure mode,
+ *    and `computeFreeMadRanking` scores by list position
+ *    (`scores[id] += (n - i) * W_INITIAL`), so a duplicate scored that item
+ *    twice — roughly doubling its Borda total — and pushed everyone below it
+ *    down a place. The three copies of this logic in ai-ranking-consumer.ts
+ *    all filtered and back-filled but none deduplicated.
+ *
+ * @param ranking - Ids as returned by the model, in its preferred order
+ * @param itemIds - The ids actually sent to the model
+ * @returns Every id from `itemIds` exactly once: the model's order first, then
+ *   anything it omitted, in the order it was sent
+ *
+ * @example
+ * normalizeAIRanking(['a', 'a', 'ghost', 'b'], ['a', 'b', 'c'])
+ * // ['a', 'b', 'c']  — duplicate collapsed, invented id dropped, 'c' appended
+ */
+export function normalizeAIRanking(ranking: string[], itemIds: string[]): string[] {
+  const valid = new Set(itemIds);
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+
+  for (const id of ranking) {
+    if (valid.has(id) && !seen.has(id)) {
+      seen.add(id);
+      ordered.push(id);
+    }
+  }
+
+  for (const id of itemIds) {
+    if (!seen.has(id)) {
+      seen.add(id);
+      ordered.push(id);
+    }
+  }
+
+  return ordered;
+}
+
+/**
  * Call OpenAI-compatible API
  *
  * @param baseUrl - API base URL

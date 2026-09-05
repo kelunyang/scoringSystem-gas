@@ -261,6 +261,39 @@ await verifyPassword(password, dummyHash);  // 宣稱防時序攻擊
   正常讀取、sudo 讀取、sudo 寫入被擋、路人不能 sudo、
   不能 sudo 成另一個教師、以及 sudo 後正常寫入仍成功（連跑 5 輪）。
 
+#### 己：評論計分與 AI 排名（2026-09-05 追加驗證）
+
+先前 #010 只說這兩塊「確認不會爆，沒有逐行驗正確性」。已補驗。
+
+**評論 mention 計分：無漂移，通過。**
+`calculateReactionUsers` / `calculateReplyUsers` 各有一個為了避開 N+1 而寫的
+批次版。兩份實作同一規則正是最容易漂移的形狀。已寫差異測試
+（`tests/utils/comment-voting.test.ts`）：11 種情境同時餵給單筆版與批次版，
+斷言結果完全相同——**全部一致**。規則本身也都成立：作者不能對自己的留言反應、
+教師被排除（即使在被 mention 的群組裡）、停用的成員資格被排除、
+群組會展開成活躍學生、JSON 壞掉回空陣列而不是拋錯。
+
+**一個記下來的耦合**：`calculateReplyUsers` 收了 `projectId`，
+但查 `mentionedUsers` 那段沒有用到——直接查全站 `users` 表。
+mention 一個完全不在專案裡的人，會回傳他的顯示名稱與頭像。
+**目前無法觸發**：`createComment` 有呼叫 `validateMentionedUsers`
+（`handlers/comments/manage.ts:335`）要求被 mention 者在專案內有活躍群組資格，
+且留言沒有編輯功能，`mentionedUsers` 只在建立時寫入。
+測試已把這個「讀取路徑依賴寫入路徑把關」的耦合釘住，
+寫入端的驗證若被拿掉或放寬，讀取端不會擋，測試註解會指出該看哪裡。
+（群組那條有正確用 projectId 過濾，跨專案群組回空。）
+
+**AI 排名：找到一個真的計分污染，已修。**
+詳見 pitfalls.md 同日「AI 排名裡一個重複項，讓那個項目的 Borda 分數翻倍」。
+摘要：consumer 有三處複製貼上的排名清理邏輯，濾掉了幻覺 ID、補回了漏掉的項目，
+但都沒去重；而共識演算法按列表位置計 Borda 分，重複項因此被計分兩次。
+已抽出 `normalizeAIRanking` 三處共用，測試直接斷言 Borda 分數數值。
+
+**提示詞注入面（未修，屬設計取捨）**：`buildUserPrompt` 把學生自己寫的
+`item.content` 原封不動插進 prompt。無法完全防堵，但**輸出端有對照合法 ID 集合驗證**
+（現在含去重），且 AI 結果只是存成建議記錄廣播給教師，不會自動寫進分數。
+真正的防線是「教師最後決定」——這點要維持，不要之後加上自動套用。
+
 #### 丙：Migrations 目錄是壞的，全新環境建不起來
 
 `packages/backend/migrations/` 有**兩套互相衝突的編號**，且其中一套沒進版控：
