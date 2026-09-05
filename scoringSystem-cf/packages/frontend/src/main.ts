@@ -8,6 +8,7 @@ import './styles/_theme-generated.scss' // 自動生成的主題變量（必須�
 import './styles/_stage-gradients.scss' // Stage 糖果漸層配色（邊緣融合版）
 import './styles/_buttons.scss' // 全局按鈕樣式（語義化配色）
 import './styles/drawer-unified.scss' // 統一 Drawer 樣式
+import './styles/_countdown-button.scss' // CountdownButton 共用樣式
 import { VueQueryPlugin } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
 import { createPinia } from 'pinia'

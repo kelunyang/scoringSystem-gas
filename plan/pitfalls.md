@@ -483,6 +483,39 @@ isolate 層級共用物件且從未還原，所以會汙染同 isolate 的其他
 但理由改成「一次物件展開的成本，換掉對 runtime 細節的依賴」，
 而不是原本那個錯誤的「防止洩漏」。
 
+## 2026-09-05 ｜ CountdownButton 三個功能寫了但從來沒跑過（進度條、翻轉動畫、自動倒數）
+
+**症狀**：`ProjectDetail` 的重新整理按鈕，初次載入的進度填充從來沒出現過、
+「翻頁鐘」翻轉動畫從來沒播過、倒數也不會自己開始（要先手動點一次才會進循環）。
+程式碼裡三個功能都寫得好好的，看 code review 也看不出問題。
+
+**根因**：三個都是「條件互斥」造成的死路，全部發生在同一個元件裡。
+
+1. `externalProgress` 的用途是「計時器沒跑時用外部進度畫填充」，但畫填充的
+   `progressBarStyle` 第一行就是 `if (!isTimerActive) return {}`——要求計時器正在跑。
+   兩個條件互斥，外部進度永遠畫不出來。
+2. `shouldFlip` 要求 `props.disabled === true`，卻拿**內部**計時器的
+   `progressPercentage` 去比對 100。disabled 期間計時器沒跑、值恆為 0，
+   `flipAt='end'` 永遠對不上；反過來設 `flipAt='start'`（比對 0）則會恆為 true。
+3. `autoStart` 只在 `onMounted` 讀一次，而使用端傳的是 `!isInitialLoading`——
+   掛載當下必為 false，之後轉 true 沒有任何人再讀它。
+
+**修法**：進度只留一個來源 `displayProgress`（外部優先，其餘走計時器），
+填充、翻轉、slot 全部讀它；`autoStart` 改用 `watch(..., { immediate: true })`。
+
+**教訓與防護**：
+
+1. **「A 只在 B 的時候生效」的 prop，要檢查 B 成立時 A 的資料路徑是否也還活著。**
+   這類 bug 不會報錯、不會被 type-check 抓到，只會安靜地什麼都不做。
+2. **同一個語意不要留兩份 computed**（`progressPercentage` 與
+   `displayProgressPercentage`）。留兩份，遲早有人在某條分支引用到錯的那份。
+3. **prop 只在 `onMounted` 讀一次 = 它其實是初始值，不是 prop。**
+   使用端傳 computed 進來時就會失效，要嘛 `watch`，要嘛在命名上講清楚。
+4. 同場加映：scoped 樣式套不到 slot 內容（slot 是在**使用端**的 scope 編譯的），
+   所以 `ProjectDetail` 才會複製一份 `.blend-text` 與整套 `.countdown-btn`。
+   給 slot 用的樣式必須是全域的——已抽到 `styles/_countdown-button.scss`。
+
+---
 ## 2026-09-04 ｜ 元件測試裡 `el-tooltip` 包住的 DOM 全部消失，斷言抓到 0 個元素
 
 **症狀**：新寫的 `StagePointsShareChart` 元件測試，`wrapper.findAll('.share-seg')`

@@ -18,15 +18,15 @@
             <CountdownButton
               ref="refreshButtonRef"
               plain
+              flip
               size="small"
-              type="primary"
               :duration="refreshDuration"
               :loading="loading"
               :auto-start="!isInitialLoading"
               :full-width="false"
               :disabled="isInitialLoading"
-              :theme-color="'#000000'"
-              :flip-at="'end'"
+              :start-on-click="false"
+              theme-color="#000000"
               :external-progress="loadingProgress"
               @click="handleRefresh"
               @complete="handleRefresh"
@@ -65,7 +65,7 @@
 
             <el-tooltip content="專案事件檢視" placement="bottom" class="event-log-tooltip">
               <button
-                class="countdown-btn countdown-btn--primary countdown-btn--small plain project-event-log-button"
+                class="countdown-btn countdown-btn--small plain project-event-log-button"
                 @click="showEventLogDrawer = true"
               >
                 <i class="fa fa-history"></i><span class="event-log-text">專案事件檢視</span>
@@ -3857,15 +3857,6 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-/* ===== CountdownButton 智能文字混合模式 ===== */
-.blend-text {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: white;
-  mix-blend-mode: difference;
-}
-
 .dashboard {
   height: 100vh;
   display: flex;
@@ -4406,49 +4397,11 @@ onBeforeUnmount(() => {
   margin-left: 2px;
 }
 
-/* ===== CountdownButton 樣式複製（供專案事件按鈕使用）===== */
-/* 基礎樣式 */
-.countdown-btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  white-space: nowrap;
+/* 專案事件檢視按鈕：沿用 CountdownButton 的全域樣式，只換主題色 */
+.project-event-log-button {
+  --countdown-color: #000000;
 }
 
-/* Primary 類型 */
-.countdown-btn--primary {
-  background-color: #ffffff;
-  color: #000000;
-  border: 2px solid #000000;
-}
-
-.countdown-btn--primary:hover:not(:disabled) {
-  border-color: #333333;
-  color: #333333;
-  background-color: #f5f5f5;
-}
-
-/* Plain 樣式變體 */
-.countdown-btn.plain {
-  background-color: #ffffff;
-  border-width: 1px;
-}
-
-/* Small 尺寸 */
-.countdown-btn--small {
-  padding: 8px 16px;
-  font-size: 13px;
-}
-
-/* 專案事件按鈕圖標間距 */
 .project-event-log-button i {
   margin-right: 0;
 }

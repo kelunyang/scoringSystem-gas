@@ -935,6 +935,37 @@ Vue template 內只出現在字串裡的元件名，可能被誤判為死碼—�
 
 ## B. 已裁決的疑問（封存，勿重啟）
 
+### 2026-09-05 ｜ 進度條為什麼要用 `@property` 註冊 CSS 變數？→ 不註冊就不可能平滑，`transition: all` 是假的
+
+**結論**：`_countdown-button.scss` 開頭那段 `@property --countdown-progress { syntax: '<percentage>' }`
+不是裝飾，拿掉填充就會退回「每秒跳一格」。
+
+**理由**：
+1. CountdownButton 的填充是 `linear-gradient` 的色停位置。**背景漸層本身不可內插**——
+   規格上 gradient 之間可以動畫，但 Chrome 等瀏覽器實際上不支援 `background-image` 的
+   漸層過渡。舊版寫的 `transition: all 0.3s`（重構前 `CountdownButton.vue` 的 `.countdown-btn`）
+   從來沒有生效過，視覺上一直是跟著 1 秒 tick 跳格。
+2. 未註冊的 custom property 在 CSS 眼中只是字串，型別不明 → 不可內插 → 放進
+   `transition` 清單會被忽略。
+3. 用 `@property` 宣告成 `<percentage>` 之後，變數本身變成可動畫的型別，
+   `transition: --countdown-progress 1s linear` 才吃得到；瀏覽器會逐格重算所有
+   引用它的宣告（漸層色停、`color-mix` 的比例），填充就連續了。
+4. 時長取 1s linear 是為了對齊 1 秒一次的倒數 tick——動畫剛好在下一個 tick 抵達，
+   看起來像秒針連續走，而不是走走停停。
+
+**副作用（已知且接受）**：倒數歸零時進度由 100% 退回 0%，同樣吃這條 transition，
+會有 1 秒的「排空」動畫。`ProjectDetail` 因為 complete 後立刻重啟倒數所以看不到；
+`SystemAdmin`／`TwoFactorStep` 看得到，視覺上像歸位，不修。
+
+**降級**：不支援 `@property` 的舊瀏覽器，變數仍會以字串代入，填充照畫、只是不平滑；
+`transition` 清單裡那項被忽略，不會壞版面。
+
+**相關**：同一個檔案用 `color-mix()` 做「進度越高越接近 `--countdown-progress-color`」
+的漸變填充，靠的也是同一個變數；專案其他地方（`Dashboard`、`useCoordinatedDrawer`）
+早就在用 `color-mix`，相容性不是新引入的顧慮。
+
+---
+
 ### 2026-09-04 ｜ 管理員改帳號 Email 時，哪些表要跟著改、哪些不能改？→ 「現在的身分」全改，「當時發生的事」全留
 
 **疑問**：後台加了「變更 Email」功能。schema 對 `users` 沒有任何 foreign key，

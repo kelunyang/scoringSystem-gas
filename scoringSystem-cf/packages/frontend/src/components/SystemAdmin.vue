@@ -38,14 +38,12 @@
           ref="refreshButtonRef"
           plain
           size="small"
-          type="primary"
           :duration="refreshDuration"
           :loading="isLoading"
           :auto-start="false"
           :full-width="false"
           icon="fa-sync"
           label="重新整理"
-          enable-smart-text
           theme-color="#2c5aa0"
           @click="handleRefresh"
         />

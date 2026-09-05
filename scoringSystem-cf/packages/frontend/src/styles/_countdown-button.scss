@@ -1,0 +1,131 @@
+/**
+ * CountdownButton 共用樣式
+ *
+ * 由 CountdownButton.vue 使用，同時也給少數需要「同款外觀但不倒數」的靜態按鈕
+ * （例如 ProjectDetail 的專案事件檢視按鈕）直接套用，避免各處複製一份。
+ *
+ * 配色一律走 CSS 變數：
+ * - --countdown-color          主題色（進度 0% 時的邊框、文字、填充色）
+ * - --countdown-progress-color 進度 100% 時的填充色（預設同主題色 = 不變色）
+ * - --countdown-progress       進度百分比（0% ~ 100%）
+ *
+ * CountdownButton 會以 inline style 覆寫這些變數；靜態按鈕只要覆寫 --countdown-color。
+ */
+
+/*
+ * 把進度註冊成真正的 <percentage> 型別，瀏覽器才會逐格內插它。
+ * 沒註冊的話 custom property 只是字串，transition 吃不到，
+ * 填充就只能跟著每秒一次的 tick 跳格（背景漸層本身是不可內插的）。
+ */
+@property --countdown-progress {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 0%;
+}
+
+.countdown-btn {
+  --countdown-color: #800000;
+  --countdown-progress-color: var(--countdown-color);
+  --countdown-progress: 0%;
+
+  /* 目前的填充色：隨進度由主題色漸變到 --countdown-progress-color。
+     兩者相同時（預設）混出來就是主題色本身，等於沒有變色。 */
+  --countdown-fill: color-mix(
+    in srgb,
+    var(--countdown-progress-color) var(--countdown-progress),
+    var(--countdown-color)
+  );
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border: 2px solid var(--countdown-fill);
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  color: var(--countdown-fill);
+
+  /* 進度填充：左側為填充色，右側維持白底，讓 blend-text 兩邊都讀得到 */
+  background: linear-gradient(
+    to right,
+    var(--countdown-fill) 0%,
+    var(--countdown-fill) var(--countdown-progress),
+    #ffffff var(--countdown-progress),
+    #ffffff 100%
+  );
+
+  /* 1s linear 對齊 1s 的倒數 tick，填充才會像秒針一樣連續前進而不是跳格 */
+  transition: color 0.3s, border-color 0.3s, --countdown-progress 1s linear;
+
+  transform-style: preserve-3d;
+  backface-visibility: visible;
+}
+
+.countdown-btn:hover:not(:disabled) {
+  color: color-mix(in srgb, var(--countdown-fill) 75%, #000);
+  border-color: color-mix(in srgb, var(--countdown-fill) 75%, #000);
+}
+
+.countdown-btn:disabled {
+  cursor: not-allowed;
+}
+
+/* ===== 變體 ===== */
+
+.countdown-btn.full-width {
+  width: 100%;
+}
+
+.countdown-btn--small {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+/* 細邊框（類似 Element Plus plain button），不改變配色 */
+.countdown-btn.plain {
+  border-width: 1px;
+}
+
+/* ===== 文字與 Spinner ===== */
+
+/*
+ * 倒數中的文字用 mix-blend-mode 自動取得對比色：
+ * 白底處呈黑字、主題色填充處呈反相色，不必另外算 WCAG 對比。
+ * 這條必須是全域樣式——slot 內容是在使用端的 scope 編譯的，
+ * CountdownButton 的 scoped 樣式套不到。
+ */
+.blend-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ffffff;
+  mix-blend-mode: difference;
+}
+
+.countdown-btn .spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 0, 0, 0.15);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: countdown-spin 0.6s linear infinite;
+}
+
+@keyframes countdown-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ===== 翻轉動畫（翻頁鐘效果）===== */
+
+.countdown-btn.is-flipping {
+  animation: countdown-flip 1.4s ease-in-out;
+}
+
+@keyframes countdown-flip {
+  0%   { transform: rotateY(0deg); }
+  100% { transform: rotateY(720deg); }
+}
