@@ -77,10 +77,11 @@ export async function registerUser(
       };
     }
 
-    // Validate invitation code
+    // Validate invitation code — including that it was issued to this address
     const invitationValidation = await validateInvitationCode(
       db,
-      sanitized.invitationCode
+      sanitized.invitationCode,
+      sanitized.userEmail
     );
 
     if (!invitationValidation.valid) {
@@ -331,7 +332,8 @@ function validateRegistrationInput(data: RegistrationData): {
  */
 async function validateInvitationCode(
   db: D1Database,
-  code: string
+  code: string,
+  userEmail: string
 ): Promise<{ valid: boolean; error: string; /* DISABLED: defaultTags?: string[]; */ defaultGlobalGroups?: string[]; invitationId?: string }> {
   try {
 
@@ -345,6 +347,24 @@ async function validateInvitationCode(
 
     if (!invitation) {
       return { valid: false, error: 'Invalid or expired invitation code' };
+    }
+
+    // The code must have been issued to the address registering with it.
+    //
+    // This was never checked: `validateInvitationCode` did not even take an
+    // email, so possession alone was sufficient and a code issued to one person
+    // let anyone register with any address. Generation requires and normalises
+    // targetEmail, mails the code to it, and enforces one live invitation per
+    // address — the intent was always one code, one person.
+    //
+    // Compared case-insensitively because generation lowercases targetEmail
+    // while registration preserves whatever the user typed.
+    const targetEmail = (invitation.targetEmail as string | null)?.trim().toLowerCase();
+    if (targetEmail && targetEmail !== userEmail.trim().toLowerCase()) {
+      return {
+        valid: false,
+        error: 'This invitation code was issued to a different email address'
+      };
     }
 
     // Check if code is expired

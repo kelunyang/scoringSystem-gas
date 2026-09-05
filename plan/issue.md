@@ -327,6 +327,33 @@ middleware 本來每個請求就會載入 users 那一列，所以**增量成本
 登入 → 在裝置 A 改密碼 → **兩台的舊 token 都失效、裝置 A 的新 token 仍有效**；
 另模擬管理員重設，同一枚 token 由有效轉為失效。
 
+#### 己-3：邀請碼 targetEmail 未比對（原 #007，已修）
+
+**原本的待決**：這是刻意的「持有即有效」設計，還是漏檢？
+
+**用生產資料回答了**：187 個邀請碼、147 個已使用，
+其中 **146 個的 targetEmail 有對應帳號**；唯一的例外查得到 email 變更記錄。
+換句話說 **147/147 的實際使用都與指定信箱相符，零轉寄**。
+加上生成端 `targetEmail` 必填、驗證為 email、正規化小寫、
+還有每信箱唯一性檢查——設計意圖是「一碼一人」，這是漏檢。
+
+**為什麼一直沒被發現**：`/invitations/verify`（註冊表單的預檢端點）
+**本來就有比對 targetEmail**（`handlers/invitations/validate.ts`）。
+瀏覽器流程因此永遠相符，而真正的安全邊界 `/auth/register` 是開的——
+直接打它就繞過。**守衛裝在錯的那道門上。**
+
+**修法**：`register.ts` 的 `validateInvitationCode` 加上 `userEmail` 參數並比對
+（大小寫不敏感、去除前後空白）。同時刪掉 `validateInvitationCodeForEmail`——
+那支現成卻無人呼叫的比對函式，回傳形狀不同又直查資料表而非狀態 VIEW，
+留著只會變成第三份分歧的同規則實作。
+
+**`targetEmail` 為 NULL 時不施加限制**：舊資料可能早於「必填」的年代，
+一律拒絕會鎖住還持有舊碼的人。只有**不相符**才拒絕。
+
+**測試**（`tests/handlers/auth/invitation-target-email.test.ts`，5 條）：
+走真正的 `registerUser` 邊界而非私有函式——被邀請者可註冊、
+他人持同一碼被拒、大小寫與空白容忍、NULL target 不限制。
+
 #### 丙：Migrations 目錄是壞的，全新環境建不起來
 
 `packages/backend/migrations/` 有**兩套互相衝突的編號**，且其中一套沒進版控：
@@ -749,31 +776,6 @@ projects/viewers…）。通知面板與 WebSocket 廣播都正常運作。
 **已知誤判**：字串式呼叫、動態 `await import()` 後解構、
 Vue template 內只出現在字串裡的元件名，可能被誤判為死碼——逐項確認過再刪。
 
-
-### #007 ｜ 邀請碼的 `targetEmail` 從未被比對 ｜ 中
-
-**問題**：`scoringSystem-cf/packages/backend/src/handlers/auth/register.ts:332`
-的 `validateInvitationCode(db, code)` 只收 code，簽名裡根本沒有 email 參數。
-查詢是 `SELECT * FROM invitation_codes_with_status WHERE invitationCode = ? AND status = 'active'`
-（`:341`），**沒有任何一處比對 `targetEmail`**。
-
-但 `GenerateInvitationRequestSchema`（`packages/shared/src/schemas/invitations.ts:13`）
-把 `targetEmail` 設為必填。
-
-**後果**：發給 A 的邀請碼，B 只要拿到就能用，且能用任何信箱註冊。
-實際控制只有「持有」。此行為在寫多角色測試 fixture 時被利用（一個碼註冊任意帳號），
-確認可重現。
-
-**2026-09-03 補充**：死模組普查（#009 甲-2）發現
-`handlers/invitations/validate.ts:140` 早就有 `validateInvitationCodeForEmail(env, code, userEmail)`，
-只是**沒有任何地方呼叫**。它自己的 JSDoc 還寫著「This is called during user registration」。
-沒有人會刻意寫一支比對函式再刻意不用它，所以**這題偏向漏檢，不是刻意設計**。
-
-**待決**：這是刻意的「持有即有效」設計，還是漏檢？
-- 若是刻意的：`targetEmail` 應改為 optional，或改名為 `sentTo` 以免誤導
-- 若是漏檢：加上比對會影響「把碼轉寄給別人」的既有流程，需先確認實務用法
-
----
 
 ### #006 ｜ 前端有四套權限實作，其中兩套幾乎全死 ｜ 中
 
