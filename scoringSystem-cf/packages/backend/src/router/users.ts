@@ -1,4 +1,4 @@
-import type { Env } from '../types';
+import type { Env, HonoVariables } from '../types';
 /**
  * User Management Router
  * Migrated from GAS scripts/users_api.js
@@ -45,7 +45,7 @@ import {
 import { errorResponse } from '../utils/response';
 
 
-const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
 // Public routes (no authentication required)
 const publicApp = new Hono<{ Bindings: Env }>();

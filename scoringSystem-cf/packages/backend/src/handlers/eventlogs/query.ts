@@ -9,6 +9,7 @@ import { Env } from '../../types';
 import { successResponse, errorResponse } from '../../utils/response';
 import { parseJSON } from '../../utils/json';
 import { getUserGlobalPermissions } from '../../utils/permissions';
+import type { SqlBindValue } from '../../types';
 
 /**
  * Filters for event logs query
@@ -55,7 +56,7 @@ export async function getProjectEventLogs(
         AND u.userEmail IS NOT NULL
     `;
 
-    const params: any[] = [projectId];
+    const params: SqlBindValue[] = [projectId];
 
     // Apply user email filter
     if (filters.userEmails && filters.userEmails.length > 0) {

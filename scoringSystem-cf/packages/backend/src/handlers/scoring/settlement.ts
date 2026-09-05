@@ -384,7 +384,7 @@ export async function settleStage(
     let commentRankings: Record<string, number> = {};
     let commentScores: Record<string, number> = {};
     let commentWeightedScores: Record<string, number> = {};
-    let commentSettlementStmts: any[] = [];
+    let commentSettlementStmts: D1PreparedStatement[] = [];
 
     if (commentRewardPool > 0) {
       // Push progress: Distributing comment rewards (80%)
@@ -1235,7 +1235,7 @@ async function prepareSettlementStatements(
   studentScores: Record<string, number>,
   teacherScores: Record<string, number>,
   timestamp: number
-): Promise<{ statements: any[], groupMembers: Record<string, string[]>, participantsByGroup: Map<string, Array<{ userEmail: string; percentage: number; groupName: string }>> }> {
+): Promise<{ statements: D1PreparedStatement[], groupMembers: Record<string, string[]>, participantsByGroup: Map<string, Array<{ userEmail: string; percentage: number; groupName: string }>> }> {
   const groupIds = Object.keys(scores);
   if (groupIds.length === 0) return { statements: [], groupMembers: {}, participantsByGroup: new Map() };
 

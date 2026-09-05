@@ -11,6 +11,7 @@ import { logGlobalOperation, generateChanges } from '../../utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
 import { queueAccountUnlockedEmail, queuePasswordResetEmail } from '../../queues/email-producer';
 import { passwordChangeCutoff } from '../../utils/password-revocation';
+import type { SqlBindValue } from '../../types';
 
 /**
  * Get all users (for admin use)
@@ -31,7 +32,7 @@ export async function getAllUsers(
   try {
     // Build WHERE conditions
     const conditions: string[] = [];
-    const params: any[] = [];
+    const params: SqlBindValue[] = [];
 
     // Filter by status if provided
     if (options?.status) {
@@ -336,7 +337,7 @@ export async function updateUserProfile(
 
     // Prepare update object with allowed fields
     const updates: string[] = [];
-    const params: any[] = [];
+    const params: SqlBindValue[] = [];
     const actualUpdates: any = {};  // Track actual update values for change logging
 
     if (userData.displayName !== undefined) {
@@ -836,7 +837,7 @@ export async function unlockUser(
 
     // Prepare update query based on what needs to be unlocked
     let updateQuery = '';
-    const updateParams: any[] = [];
+    const updateParams: SqlBindValue[] = [];
 
     if (resetLockCount) {
       // Reset everything including lock count

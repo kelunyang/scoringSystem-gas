@@ -1035,7 +1035,7 @@ export async function batchUpdateMemberRoles(
     }
 
     // Prepare batch UPDATE statements (only for members whose role is actually changing)
-    const updateStatements: any[] = [];
+    const updateStatements: D1PreparedStatement[] = [];
     const updatedMembers: Array<{ userEmail: string; oldRole: string; newRole: string }> = [];
 
     for (const update of updates) {

@@ -156,6 +156,16 @@ export interface SudoTargetUser {
 }
 
 /**
+ * What D1 accepts as a bound parameter.
+ *
+ * Anything else — `undefined`, a plain object, a Date — throws
+ * `D1_TYPE_ERROR` at runtime, not at compile time, which is why the
+ * hand-built parameter arrays are typed with this rather than `any[]`.
+ * Optional values must be coerced (`?? null`) before they go in.
+ */
+export type SqlBindValue = string | number | boolean | null | ArrayBuffer;
+
+/**
  * Extended Hono context type variables
  */
 export interface HonoVariables {

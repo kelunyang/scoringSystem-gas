@@ -1,4 +1,4 @@
-import type { Env } from '../types';
+import type { Env, HonoVariables } from '../types';
 /**
  * Notifications Router
  * Migrated from GAS scripts/notifications_api.js & notification_admin_api.js
@@ -36,7 +36,7 @@ import {
 } from '@repo/shared/schemas/notifications';
 
 
-const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
 // Apply authentication middleware to all routes
 app.use('*', authMiddleware);

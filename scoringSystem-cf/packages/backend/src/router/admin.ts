@@ -79,7 +79,7 @@
 
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
-import type { Env } from '../types';
+import type { Env, HonoVariables } from '../types';
 import { authMiddleware } from '../middleware/auth';
 import { hasGlobalPermission, GLOBAL_PERMISSIONS } from '../utils/permissions';
 import { errorResponse } from '../utils/response';
@@ -212,7 +212,7 @@ import { logGlobalOperation } from '../utils/logging';
 // Configuration utility
 import { getAllConfigValues, getConfigValue, setConfigValue, deleteConfigValue, UPDATABLE_CONFIG_KEYS } from '../utils/config';
 
-const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
 // Apply authentication middleware to all routes
 app.use('*', authMiddleware);

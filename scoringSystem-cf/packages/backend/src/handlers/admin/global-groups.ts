@@ -9,6 +9,7 @@ import { stringifyJSON } from '../../utils/json';
 import { generateId } from '../../utils/id-generator';
 import { logGlobalOperation, generateChanges } from '../../utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
+import type { SqlBindValue } from '../../types';
 
 /**
  * Get all global groups (admin function)
@@ -26,7 +27,7 @@ export async function getGlobalGroups(
   try {
     // Build WHERE conditions
     const conditions: string[] = [];
-    const params: any[] = [];
+    const params: SqlBindValue[] = [];
 
     // Filter by status if provided (default: all)
     if (options?.status && options.status !== 'all') {
@@ -257,7 +258,7 @@ export async function updateGlobalGroup(
 
     // Prepare updates
     const updates: string[] = [];
-    const params: any[] = [];
+    const params: SqlBindValue[] = [];
     const actualUpdates: any = {};  // Track actual update values for change logging
 
     if (groupData.groupName !== undefined) {

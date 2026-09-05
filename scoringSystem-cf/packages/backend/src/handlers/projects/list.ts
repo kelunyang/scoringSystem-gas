@@ -8,6 +8,7 @@ import { successResponse, errorResponse } from '../../utils/response';
 import { parseJSON } from '../../utils/json';
 import { checkIsTeacherOrObserver } from '@utils/permissions';
 import { getEffectiveScoringConfig } from '../../utils/scoring-config';
+import type { SqlBindValue } from '../../types';
 
 // extractParticipants function removed - no longer needed
 // participationProposal is now returned directly with masked percentages for non-group members
@@ -578,7 +579,7 @@ async function listProjectsForUser(
       "p.status NOT IN ('deleted', 'archived')",
       'pv.id IS NOT NULL'
     ];
-    const params: any[] = [userEmail];
+    const params: SqlBindValue[] = [userEmail];
 
     // Filter by status if provided
     if (filters.status) {
@@ -879,7 +880,7 @@ async function listAllProjectsForAdmin(
 
     // Build WHERE conditions
     const conditions: string[] = ["p.status NOT IN ('deleted', 'archived')"];
-    const params: any[] = [];
+    const params: SqlBindValue[] = [];
 
     // Filter by status if provided
     if (filters.status) {

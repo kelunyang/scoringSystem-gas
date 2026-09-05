@@ -7,7 +7,7 @@
 
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
-import type { Env } from '../types';
+import type { Env, HonoVariables } from '../types';
 import { logoutUser, validateSession, changePassword, check2FAFailureAndLock } from '../handlers/auth/login';
 import { registerUser, checkEmailAvailability } from '../handlers/auth/register';
 import { authMiddleware } from '../middleware/auth';
@@ -44,7 +44,7 @@ import {
   PasskeyCredentialDeleteRequestSchema
 } from '@repo/shared/schemas/auth';
 
-const authRouter = new Hono<{ Bindings: Env }>();
+const authRouter = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
 /**
  * POST /auth/register
@@ -353,7 +353,9 @@ authRouter.post(
       .first();
 
     // Extract Cloudflare request context
-    const cf = c.req.raw.cf as any;
+    // workers-types 把 Request.cf 的泛型預設解析成 {}，讀任何欄位都是 {}。
+    // 執行時 Cloudflare 邊緣確實會附上這些地理欄位，所以在此指明實際型別。
+    const cf = c.req.raw.cf as IncomingRequestCfProperties | undefined;
     const requestContext = {
       ipAddress: c.req.header('CF-Connecting-IP') || 'unknown',
       country: cf?.country || c.req.header('CF-IPCountry') || 'unknown',
@@ -673,7 +675,9 @@ authRouter.post(
     const body = c.req.valid('json');
 
     // Extract Cloudflare request context
-    const cf = c.req.raw.cf as any;
+    // workers-types 把 Request.cf 的泛型預設解析成 {}，讀任何欄位都是 {}。
+    // 執行時 Cloudflare 邊緣確實會附上這些地理欄位，所以在此指明實際型別。
+    const cf = c.req.raw.cf as IncomingRequestCfProperties | undefined;
     const requestContext = {
       ipAddress: c.req.header('CF-Connecting-IP') || 'unknown',
       country: cf?.country || c.req.header('CF-IPCountry') || 'unknown',
@@ -1265,7 +1269,9 @@ authRouter.post(
 
     // Get IP and country from Cloudflare request
     const ipAddress = c.req.header('CF-Connecting-IP') || 'unknown';
-    const cf = c.req.raw.cf as any;
+    // workers-types 把 Request.cf 的泛型預設解析成 {}，讀任何欄位都是 {}。
+    // 執行時 Cloudflare 邊緣確實會附上這些地理欄位，所以在此指明實際型別。
+    const cf = c.req.raw.cf as IncomingRequestCfProperties | undefined;
     const country = cf?.country || 'unknown';
 
     // Sends mail with no password, so per-IP applies. verifyEmailForReset
@@ -1378,7 +1384,7 @@ authRouter.get(
   '/totp/status',
   authMiddleware,
   async (c) => {
-    const authUser = c.get('user') as any;
+    const authUser = c.get('user');
 
     const user = await c.env.DB
       .prepare('SELECT totpEnabled FROM users WHERE userId = ?')
@@ -1415,7 +1421,7 @@ authRouter.post(
   '/totp/setup-init',
   authMiddleware,
   async (c) => {
-    const authUser = c.get('user') as any;
+    const authUser = c.get('user');
 
     // Check if TOTP is already enabled
     const user = await c.env.DB
@@ -1473,7 +1479,7 @@ authRouter.post(
   authMiddleware,
   zValidator('json', TotpSetupVerifyRequestSchema),
   async (c) => {
-    const authUser = c.get('user') as any;
+    const authUser = c.get('user');
     const body = c.req.valid('json');
 
     // Retrieve pending secret from KV
@@ -1547,7 +1553,7 @@ authRouter.post(
   authMiddleware,
   zValidator('json', TotpDisableRequestSchema),
   async (c) => {
-    const authUser = c.get('user') as any;
+    const authUser = c.get('user');
     const body = c.req.valid('json');
 
     // Fetch user with password for verification
@@ -1611,7 +1617,7 @@ authRouter.post(
   authMiddleware,
   zValidator('json', TotpRegenerateCodesRequestSchema),
   async (c) => {
-    const authUser = c.get('user') as any;
+    const authUser = c.get('user');
     const body = c.req.valid('json');
 
     // Fetch user with password
@@ -1685,7 +1691,7 @@ authRouter.get(
   '/passkey/status',
   authMiddleware,
   async (c) => {
-    const authUser = c.get('user') as any;
+    const authUser = c.get('user');
 
     const { getPasskeyStatus } = await import('../handlers/auth/passkey');
     const status = await getPasskeyStatus(c.env, authUser.userId);
@@ -1705,7 +1711,7 @@ authRouter.post(
   '/passkey/register-init',
   authMiddleware,
   async (c) => {
-    const authUser = c.get('user') as any;
+    const authUser = c.get('user');
 
     // 可選 attachment：'platform'（綁這台電腦）/ 'cross-platform'（綁手機，跳 QR）
     const body = await c.req.json().catch(() => ({} as any));
@@ -1743,7 +1749,7 @@ authRouter.post(
   authMiddleware,
   zValidator('json', PasskeyRegisterVerifyRequestSchema),
   async (c) => {
-    const authUser = c.get('user') as any;
+    const authUser = c.get('user');
     const body = c.req.valid('json');
 
     try {
@@ -1777,7 +1783,7 @@ authRouter.get(
   '/passkey/credentials',
   authMiddleware,
   async (c) => {
-    const authUser = c.get('user') as any;
+    const authUser = c.get('user');
 
     const { getPasskeyStatus } = await import('../handlers/auth/passkey');
     const status = await getPasskeyStatus(c.env, authUser.userId);
@@ -1798,7 +1804,7 @@ authRouter.patch(
   authMiddleware,
   zValidator('json', PasskeyCredentialUpdateRequestSchema),
   async (c) => {
-    const authUser = c.get('user') as any;
+    const authUser = c.get('user');
     const credentialId = c.req.param('credentialId');
     const body = c.req.valid('json');
 
@@ -1828,7 +1834,7 @@ authRouter.delete(
   authMiddleware,
   zValidator('json', PasskeyCredentialDeleteRequestSchema),
   async (c) => {
-    const authUser = c.get('user') as any;
+    const authUser = c.get('user');
     const credentialId = c.req.param('credentialId');
     const body = c.req.valid('json');
 

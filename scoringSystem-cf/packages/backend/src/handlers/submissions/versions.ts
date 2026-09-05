@@ -3,7 +3,7 @@
  * Migrated from GAS scripts/submissions_api.js
  */
 
-import type { Env } from '@/types';
+import type { Env, SqlBindValue } from '@/types';
 import { successResponse, errorResponse } from '@utils/response';
 import { parseJSON } from '@utils/json';
 import { generateId } from '@utils/id-generator';
@@ -116,7 +116,7 @@ export async function getSubmissionVersions(
       WHERE s.projectId = ? AND s.stageId = ?
     `;
 
-    const bindings: any[] = [projectId, stageId];
+    const bindings: SqlBindValue[] = [projectId, stageId];
 
     if (options.groupId) {
       query += ` AND s.groupId = ?`;

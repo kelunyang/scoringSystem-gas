@@ -14,7 +14,7 @@
 
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
-import type { Env } from '../types';
+import type { Env, HonoVariables } from '../types';
 import { authMiddleware } from '../middleware/auth';
 import { hasGlobalPermission, GLOBAL_PERMISSIONS } from '../utils/permissions';
 import {
@@ -35,7 +35,7 @@ import {
   deleteAnnouncement
 } from '../handlers/announcements/admin';
 
-const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
 // ============================================================================
 // Public Routes (no auth required)
@@ -54,7 +54,7 @@ app.post('/active', async (c) => {
 // ============================================================================
 
 // Create a sub-router for admin routes with authentication
-const adminRouter = new Hono<{ Bindings: Env; Variables: { user: any } }>();
+const adminRouter = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
 // Apply auth middleware to all admin routes
 adminRouter.use('*', authMiddleware);

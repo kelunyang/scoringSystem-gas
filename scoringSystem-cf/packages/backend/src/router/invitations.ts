@@ -1,4 +1,4 @@
-import type { Env } from '../types';
+import type { Env, HonoVariables } from '../types';
 /**
  * Invitation Code Router
  * Migrated from GAS scripts/invitation.js and invitation_verification_api.js
@@ -43,7 +43,7 @@ import { z } from 'zod';
 import { errorResponse } from '../utils/response';
 
 
-const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
 /**
  * POST /invitations/verify

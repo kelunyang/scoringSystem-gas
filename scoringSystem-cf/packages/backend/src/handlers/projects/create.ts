@@ -190,11 +190,22 @@ export async function cloneProject(
     ).run();
 
     // Copy stages (exclude archived stages)
+    // 只列出複製時真的會讀到的欄位；SELECT * 拿回來的其餘欄位一律不碰
     const originalStages = await env.DB.prepare(`
       SELECT * FROM stages_with_status
       WHERE projectId = ? AND archivedTime IS NULL
       ORDER BY stageOrder
-    `).bind(projectId).all();
+    `).bind(projectId).all<{
+      stageName: string;
+      description: string | null;
+      stageOrder: number;
+      stageType: string | null;
+      startTime: number | null;
+      endTime: number | null;
+      reportRewardPool: number | null;
+      commentRewardPool: number | null;
+      config: string | null;
+    }>();
 
     let stageCount = 0;
 
@@ -210,15 +221,15 @@ export async function cloneProject(
       `).bind(
         newStageId,
         newProjectId,
-        (stage as any).stageName,
-        (stage as any).description || '',
-        (stage as any).stageOrder,
-        (stage as any).stageType || 'normal',
-        (stage as any).startTime,
-        (stage as any).endTime,
-        (stage as any).reportRewardPool || 0,
-        (stage as any).commentRewardPool || 0,
-        (stage as any).config || null,
+        stage.stageName,
+        stage.description || '',
+        stage.stageOrder,
+        stage.stageType || 'normal',
+        stage.startTime,
+        stage.endTime,
+        stage.reportRewardPool || 0,
+        stage.commentRewardPool || 0,
+        stage.config || null,
         'pending',
         timestamp,
         timestamp
@@ -243,23 +254,23 @@ export async function cloneProject(
         SELECT pv.userEmail, pv.role
         FROM projectviewers pv
         WHERE pv.projectId = ? AND pv.isActive = 1
-      `).bind(projectId).all();
+      `).bind(projectId).all<{ userEmail: string; role: string }>();
 
       if (originalViewers.results.length > 0) {
         // Check which viewer accounts still exist in the users table
-        const viewerEmails = originalViewers.results.map((v: any) => v.userEmail);
+        const viewerEmails = originalViewers.results.map(v => v.userEmail);
         const placeholders = viewerEmails.map(() => '?').join(',');
         const existingUsers = await env.DB.prepare(`
           SELECT userEmail FROM users WHERE userEmail IN (${placeholders})
-        `).bind(...viewerEmails).all();
+        `).bind(...viewerEmails).all<{ userEmail: string }>();
 
-        const existingEmailSet = new Set(existingUsers.results.map((u: any) => u.userEmail));
+        const existingEmailSet = new Set(existingUsers.results.map(u => u.userEmail));
         const skippedViewers: string[] = [];
         let copiedCount = 0;
 
         for (const viewer of originalViewers.results) {
-          const vEmail = (viewer as any).userEmail as string;
-          const vRole = (viewer as any).role as string;
+          const vEmail = viewer.userEmail;
+          const vRole = viewer.role;
 
           // Skip the cloner themselves (they are already the project creator)
           if (vEmail === userEmail) continue;

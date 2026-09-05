@@ -1,4 +1,4 @@
-import type { Env } from '../types';
+import type { Env, HonoVariables } from '../types';
 /**
  * Wallet Management Router - Pure Ledger Architecture
  * Migrated from GAS scripts/wallets_api.js
@@ -41,7 +41,7 @@ import {
 import { errorResponse } from '../utils/response';
 
 
-const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
 // Apply authentication middleware to all routes
 app.use('*', authMiddleware);

@@ -1,4 +1,4 @@
-import type { Env } from '../types';
+import type { Env, HonoVariables } from '../types';
 /**
  * Scoring Router
  * Migrated from GAS scripts/scoring_api.js
@@ -50,7 +50,7 @@ import {
 import { errorResponse } from '../utils/response';
 
 
-const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
 // Apply authentication middleware to all routes
 app.use('*', authMiddleware);

@@ -1,4 +1,4 @@
-import type { Env } from '../types';
+import type { Env, HonoVariables } from '../types';
 /**
  * Project Management Router
  * Migrated from GAS scripts/projects_api.js
@@ -61,7 +61,7 @@ import {
 } from '@repo/shared/schemas/projects';
 
 
-const app = new Hono<{ Bindings: Env; Variables: { user: any } }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
 // Apply authentication middleware to all routes
 app.use('*', authMiddleware);

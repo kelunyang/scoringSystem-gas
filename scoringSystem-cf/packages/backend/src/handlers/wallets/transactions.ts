@@ -16,7 +16,7 @@
  * - Auditability: Complete transaction history with running balance trail
  */
 
-import type { Env } from '@/types';
+import type { Env, SqlBindValue } from '@/types';
 import { successResponse, errorResponse } from '@utils/response';
 import { generateId } from '@utils/id-generator';
 import { logProjectOperation } from '@utils/logging';
@@ -60,7 +60,7 @@ export async function getUserTransactions(
     // All conditions are added via placeholders, never string concatenation
     interface QueryBuilder {
       conditions: string[];
-      params: any[];
+      params: SqlBindValue[];
     }
 
     const query: QueryBuilder = {

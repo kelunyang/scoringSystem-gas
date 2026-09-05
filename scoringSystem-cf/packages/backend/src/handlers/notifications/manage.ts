@@ -7,6 +7,7 @@ import { Env } from '../../types';
 import { successResponse, errorResponse } from '../../utils/response';
 import { parseJSON } from '../../utils/json';
 import { logProjectOperation } from '../../utils/logging';
+import type { SqlBindValue } from '../../types';
 
 /**
  * Get user's unread notification count
@@ -73,7 +74,7 @@ export async function getUserNotifications(
       WHERE n.targetUserEmail = ? AND n.isDeleted = 0
     `;
 
-    const params: any[] = [userEmail];
+    const params: SqlBindValue[] = [userEmail];
 
     // Filter by read status
     if (unreadOnly) {

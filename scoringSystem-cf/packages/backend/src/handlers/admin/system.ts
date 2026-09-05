@@ -6,6 +6,7 @@
 import { Env } from '../../types';
 import { successResponse, errorResponse } from '../../utils/response';
 import { logGlobalOperation } from '../../utils/logging';
+import type { SqlBindValue } from '../../types';
 
 /**
  * Get system statistics
@@ -133,7 +134,7 @@ export async function getSystemLogs(
       WHERE 1=1
     `;
 
-    const params: any[] = [];
+    const params: SqlBindValue[] = [];
 
     // Apply filters
     if (level) {

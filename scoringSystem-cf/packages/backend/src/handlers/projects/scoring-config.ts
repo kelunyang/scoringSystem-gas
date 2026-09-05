@@ -14,6 +14,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { HTTPException } from 'hono/http-exception'
 import type { Context } from 'hono'
+import type { SqlBindValue } from '@/types'
 import {
   getEffectiveScoringConfig,
   getSystemScoringDefaults,
@@ -146,7 +147,7 @@ scoringConfigRouter.put('/:projectId/scoring-config', async (c: Context<{ Bindin
 
     // Build dynamic UPDATE query
     const fields: string[] = []
-    const values: any[] = []
+    const values: SqlBindValue[] = []
 
     if (validated.maxCommentSelections !== undefined) {
       fields.push('maxCommentSelections = ?')

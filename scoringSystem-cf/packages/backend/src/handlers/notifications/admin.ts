@@ -3,7 +3,7 @@
  * Migrated from GAS scripts/notification_admin_api.js
  */
 
-import type { Env } from '../../types';
+import type { Env, SqlBindValue } from '../../types';
 import { successResponse, errorResponse } from '../../utils/response';
 import { formatNotificationEmail } from '../../utils/email';
 import { getTypedConfig } from '../../utils/config';
@@ -54,7 +54,7 @@ export async function listAllNotifications(
       LEFT JOIN projects p ON n.projectId = p.projectId
       WHERE n.isDeleted = 0
     `;
-    const params: any[] = [];
+    const params: SqlBindValue[] = [];
 
     if (filters.targetUserEmail) {
       query += ' AND n.targetUserEmail = ?';
@@ -88,7 +88,7 @@ export async function listAllNotifications(
 
     // Get total count
     let countQuery = 'SELECT COUNT(*) as total FROM notifications WHERE isDeleted = 0';
-    const countParams: any[] = [];
+    const countParams: SqlBindValue[] = [];
 
     if (filters.targetUserEmail) {
       countQuery += ' AND targetUserEmail = ?';
@@ -234,7 +234,7 @@ export async function sendBatchNotifications(
 
     // Build query to get notifications
     let query = 'SELECT * FROM notifications WHERE isDeleted = 0';
-    const params: any[] = [];
+    const params: SqlBindValue[] = [];
 
     if (filters.targetUserEmail) {
       query += ' AND targetUserEmail = ?';
@@ -433,7 +433,7 @@ export async function getPendingEmailNotifications(
         AND n.isDeleted = 0
     `;
 
-    const params: any[] = [];
+    const params: SqlBindValue[] = [];
 
     // Add filters
     if (filters.targetUserEmail) {
