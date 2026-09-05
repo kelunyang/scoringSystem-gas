@@ -101,11 +101,11 @@ backend：migrations／認證／權限／帳本／佇列／中介層。
 `assertAccountUsable` 的鎖定語意、pre-auth token 的綁定與不可替換性
 （含「session token 不能當 pre-auth 用」）、以及假雜湊的實際耗時。
 
-**戊 未做**：權限查詢的 KV 快取（`authMiddleware` 每個請求仍查兩次 D1）。
-這牽涉快取失效策略（改群組權限要能即時生效），不適合夾在安全修復裡做。
+**當時列為未做、後來在同一輪補上的**：前端 77 個 lint error（已清為 0）、
+54 處除錯日誌（已移除）、兩處失效的測試跳過（已解除）。詳見丁、戊兩節。
 
-**前端 lint 未處理**：`packages/frontend` 有 77 個既有的
-`no-unused-vars` error，散在我沒動到的檔案。屬於另一輪清理，這次不擴張範圍。
+**確定不在本輪範圍的**：權限查詢的 KV 快取（`authMiddleware` 每個請求
+仍查兩次 D1）。牽涉快取失效策略——改群組權限要能即時生效——值得單獨一輪。
 
 ---
 
