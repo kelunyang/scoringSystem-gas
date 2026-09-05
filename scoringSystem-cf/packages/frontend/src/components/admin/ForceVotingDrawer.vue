@@ -174,7 +174,7 @@ async function loadStageStats() {
     })
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       stageStats.value = {
         stageName: response.data.stageName || '未命名階段',
         submissionCount: response.data.statistics?.submissionCount || 0,
@@ -213,7 +213,7 @@ async function confirmForceVoting() {
       emit('confirmed')
       closeDrawer()
     } else {
-      ElMessage.error(`操作失敗: ${response.error || '未知錯誤'}`)
+      ElMessage.error(`操作失敗: ${response.error?.message || '未知錯誤'}`)
     }
   } catch (error) {
     console.error('Error forcing voting:', error)

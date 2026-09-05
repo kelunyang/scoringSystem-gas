@@ -139,7 +139,7 @@ async function confirmResume() {
       emit('confirmed')
       closeDrawer()
     } else {
-      ElMessage.error(`操作失敗: ${response.error || '未知錯誤'}`)
+      ElMessage.error(`操作失敗: ${response.error?.message || '未知錯誤'}`)
     }
   } catch (error) {
     console.error('Error resuming stage:', error)

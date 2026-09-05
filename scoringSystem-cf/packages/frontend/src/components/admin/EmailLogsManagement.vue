@@ -795,7 +795,7 @@ const loadEmailLogs = async (append: boolean = false, withFilters: boolean = fal
 
     const response = await adminApi.emailLogs.query({ filters: queryFilters })
 
-    if (response.success && response.data) {
+    if (response.success) {
       const logsList = response.data.logs || []
       const newLogs = logsList.map((l: any) => ({
         ...l,

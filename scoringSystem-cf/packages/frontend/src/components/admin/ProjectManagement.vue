@@ -1507,7 +1507,7 @@ const loadAllTags = async () => {
     // TODO: Tags system disabled - backend router not available
     // const response = await apiClient.callWithAuth('/tags/list', {})
 
-    if (response.success && response.data) {
+    if (response.success) {
       allTags.value = response.data
     } else {
       console.error('Failed to load tags:', response.error)
@@ -1529,7 +1529,7 @@ const loadProjectTags = async (projectId = null) => {
     //   projectId: targetProjectId
     // })
 
-    if (response.success && response.data) {
+    if (response.success) {
       currentProjectTags.value = response.data
 
       // Update the project's tags in the main list
@@ -1632,7 +1632,7 @@ const loadTagsForCreation = async () => {
     // TODO: Tags system disabled - backend router not available
     // const response = await apiClient.callWithAuth('/tags/list', {})
 
-    if (response.success && response.data) {
+    if (response.success) {
       availableTags.value = response.data.filter(tag => tag.isActive)
         .sort((a, b) => a.tagName.localeCompare(b.tagName))
       selectedTags.value = []

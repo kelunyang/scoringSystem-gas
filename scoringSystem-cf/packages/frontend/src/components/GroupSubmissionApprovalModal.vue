@@ -1352,12 +1352,12 @@ async function confirmDelete() {
       handleClose()
       emit('submission-deleted')
     } else {
-      const errorMsg = response.error?.message || response.error || '未知錯誤'
+      const errorMsg = response.error?.message || '未知錯誤'
       console.error('刪除報告失敗:', {
         projectId: props.projectId,
         submissionId: props.submissionId,
         error: response.error,
-        errorCode: response.errorCode
+        errorCode: response.error?.code
       })
       ElMessage.error('刪除報告失敗：' + errorMsg)
     }

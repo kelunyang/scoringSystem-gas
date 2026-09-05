@@ -630,7 +630,7 @@ const loadUngroupedMembers = async (projectId: string) => {
     })
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       ungroupedMembers.value = response.data.ungroupedMemberEmails || []
     }
   } catch (error) {
@@ -857,7 +857,7 @@ const handleRemoveMemberConfirm = async () => {
       const response = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error || '批次移除成員失敗')
+        throw new Error(response.error?.message || '批次移除成員失敗')
       }
 
       showSuccess(`成功移除 ${selectedMembersToRemove.value.length} 位成員`)

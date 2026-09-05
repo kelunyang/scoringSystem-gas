@@ -109,7 +109,7 @@ export function useRegister(): UseRegisterReturn {
 
       const response: InvitationVerificationResponse = await httpResponse.json();
 
-      if (response.success && response.data) {
+      if (response.success) {
         invitationVerified.value = true;
         targetEmail.value = response.data.targetEmail;
         verifiedInvitationCode.value = invitationCode.trim();

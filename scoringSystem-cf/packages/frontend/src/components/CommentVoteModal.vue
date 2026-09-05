@@ -605,7 +605,7 @@ async function checkVotingEligibility(): Promise<void> {
     })
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       votingEligibility.value = response.data
     } else {
       votingEligibility.value = {
@@ -639,7 +639,7 @@ async function loadStageComments(): Promise<void> {
 
     console.log('🔍 [CommentVoteModal Debug] Raw API Response:', response)
 
-    if (response.success && response.data) {
+    if (response.success) {
       const allCommentsData = response.data.comments
       console.log('📊 [CommentVoteModal Debug] Total comments received:', allCommentsData.length)
       console.log('📋 [CommentVoteModal Debug] First comment sample:', allCommentsData[0])
@@ -827,7 +827,7 @@ async function loadProposalVersions(): Promise<void> {
     })
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       proposalVersions.value = response.data.proposals || []
 
       // Select latest version by default and load into editor (preview mode)

@@ -32,7 +32,7 @@ export function useProjectViewers() {
       })
       const response = await httpResponse.json()
 
-      if (response.success && response.data) {
+      if (response.success) {
         projectViewers.value = response.data
       } else {
         console.error('Failed to load project viewers:', response.error)
@@ -82,7 +82,7 @@ export function useProjectViewers() {
           })
           const response = await httpResponse.json()
 
-          if (response.success && response.data) {
+          if (response.success) {
             allResults.push(...response.data)
           } else {
             errors.push(`搜尋「${query}」失敗: ${response.error?.message || '未知錯誤'}`)

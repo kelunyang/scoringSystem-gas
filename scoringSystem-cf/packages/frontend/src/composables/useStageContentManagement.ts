@@ -121,7 +121,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
         return { submissions: [], comments: [] }
       }
 
-      if (response.success && response.data) {
+      if (response.success) {
         console.log(`✅ 載入成功:`, response.data)
 
         // 詳細檢查submissions中的排名數據
@@ -233,7 +233,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
 
       console.log(`📥 [loadGroupVotingData] API 響應:`, response)
 
-      if (response.success && response.data) {
+      if (response.success) {
         groupData.votingData = response.data
         console.log(`✅ 群組 ${groupData.groupId} 投票數據載入成功:`, response.data)
         console.log(`🔍 [DEBUG] groupData 現在有 votingData:`, {
@@ -246,8 +246,8 @@ export function useStageContentManagement(projectData: any, userData: any) {
         // Enhanced error logging
         console.warn(`⚠️ 群組 ${groupData.groupId} 投票數據載入失敗:`, response.error)
         console.warn(`⚠️ [loadGroupVotingData] 錯誤詳情:`, {
-          errorCode: response.error?.code || response.errorCode,
-          errorMessage: response.error?.message || response.error,
+          errorCode: response.error?.code,
+          errorMessage: response.error?.message,
           fullError: response.error,
           fullResponse: response
         })
@@ -256,9 +256,9 @@ export function useStageContentManagement(projectData: any, userData: any) {
         groupData.votingData = null
 
         // Show user-friendly error message if it's a critical error
-        if (response.errorCode === 'SYSTEM_ERROR' || response.error?.code === 'SYSTEM_ERROR') {
+        if (response.error?.code === 'SYSTEM_ERROR') {
           handleError(
-            new Error(response.error?.message || response.error || 'Unknown error'),
+            new Error(response.error?.message || 'Unknown error'),
             {
               action: '載入投票數據',
               type: 'error'

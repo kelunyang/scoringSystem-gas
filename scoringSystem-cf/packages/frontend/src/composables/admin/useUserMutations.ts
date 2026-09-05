@@ -281,8 +281,8 @@ export function useUserEmailImpact(): UseMutationReturnType<UserEmailImpact, Err
         { method: 'POST', body: { userEmail } }
       )
 
-      if (!response.success || !response.data) {
-        throw new Error(response.error?.message || '掃描失敗')
+      if (!response.success) {
+        throw new Error(response.error.message || '掃描失敗')
       }
 
       return response.data
@@ -328,8 +328,8 @@ export function useChangeUserEmail(): UseMutationReturnType<ChangeUserEmailResul
         { method: 'POST', body: { userEmail, newEmail } }
       )
 
-      if (!response.success || !response.data) {
-        throw new Error(response.error?.message || 'Email 變更失敗')
+      if (!response.success) {
+        throw new Error(response.error.message || 'Email 變更失敗')
       }
 
       return response.data

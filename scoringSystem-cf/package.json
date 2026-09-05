@@ -16,7 +16,7 @@
     "build": "pnpm --filter @repo/shared build && pnpm --parallel --filter \"!@repo/shared\" build",
     "build:backend": "pnpm --filter @repo/backend build",
     "build:frontend": "pnpm --filter @repo/frontend build",
-    "type-check": "tsc --build",
+    "type-check": "tsc --build && pnpm --filter @repo/frontend type-check",
     "lint": "pnpm --recursive lint",
     "clean": "pnpm --recursive clean && rm -rf node_modules",
     "deploy:backend": "pnpm --filter @repo/shared build && pnpm --filter @repo/backend run deploy",

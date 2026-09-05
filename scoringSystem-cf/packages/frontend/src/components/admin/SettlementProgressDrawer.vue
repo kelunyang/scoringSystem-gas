@@ -739,7 +739,7 @@ async function handleSettlementGroupClick(groupData: GroupClickData): Promise<vo
     })
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       if (!response.data.transactions || response.data.transactions.length === 0) {
         ElMessage.info('此組尚無結算交易記錄')
         settlementGroupTransactions.value = []

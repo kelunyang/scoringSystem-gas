@@ -223,15 +223,24 @@ export interface BatchActivateGroupsRequest {
 // System Types
 // ============================================================================
 
+/**
+ * What `getSystemStats()` in backend/src/handlers/admin/system.ts actually
+ * returns. It previously listed totalSubmissions, totalVotes, systemUptime
+ * and databaseSize — none of which that handler has ever produced — while
+ * omitting the group and invitation counts it does produce and the admin
+ * dashboard does render.
+ */
 export interface SystemStats {
   totalUsers: number
   activeUsers: number
+  inactiveUsers: number
   totalProjects: number
   activeProjects: number
-  totalSubmissions: number
-  totalVotes: number
-  systemUptime: number
-  databaseSize: number
+  completedProjects: number
+  totalGroups: number
+  activeGroups: number
+  totalInvitations: number
+  activeInvitations: number
 }
 
 /**

@@ -248,7 +248,7 @@ async function confirmWithdraw() {
       emit('withdrawn')
       closeDrawer()
     } else {
-      handleError(result.error || '撤回失敗')
+      handleError(result.error?.message || '撤回失敗')
     }
   } catch (error) {
     handleError(error as Error)

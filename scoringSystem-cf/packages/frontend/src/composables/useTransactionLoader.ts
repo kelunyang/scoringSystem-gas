@@ -46,7 +46,7 @@ export function useTransactionLoader(projectId: string, userEmail = null) {
       })
       const response = await httpResponse.json()
 
-      if (response.success && response.data) {
+      if (response.success) {
         const rawTransactions = response.data.transactions || response.data || []
 
         if (!Array.isArray(rawTransactions)) {

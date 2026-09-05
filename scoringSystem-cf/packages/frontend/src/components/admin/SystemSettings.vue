@@ -222,7 +222,7 @@ const loadPropertiesConfig = async (): Promise<void> => {
   loadingProperties.value = true
   try {
     const response = await adminApi.properties.getAll()
-    if (response.success && response.data) {
+    if (response.success) {
       console.log('載入的配置資料:', response.data)
 
       // 後端 getAllConfigValues() 返回 Record<string, any> 物件格式

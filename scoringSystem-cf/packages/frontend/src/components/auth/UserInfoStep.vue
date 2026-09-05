@@ -274,7 +274,7 @@ async function handleAvatarRegenerate() {
     });
     const response = await httpResponse.json();
 
-    if (response.success && response.data) {
+    if (response.success) {
       // Update avatar data with backend-generated values
       avatarData.value = {
         avatarSeed: response.data.avatarSeed,

@@ -68,13 +68,12 @@ export async function fetchWithAuth<T = any>(
 }
 
 /**
- * Type-safe API response
+ * The one API response type. Defined in @repo/shared/types/api-responses,
+ * re-exported here because most callers already import fetchWithAuth from
+ * this module.
  */
-export interface ApiResponse<T = any> {
-  success: boolean
-  data?: T
-  error?: {
-    code?: string
-    message?: string
-  }
-}
+export type {
+  ApiSuccessResponse,
+  ApiErrorResponse,
+  ApiResponse
+} from '@repo/shared/types/api-responses'

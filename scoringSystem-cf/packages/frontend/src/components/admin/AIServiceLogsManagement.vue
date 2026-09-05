@@ -669,7 +669,7 @@ const searchWithBackendFilters = async () => {
   try {
     const response = await adminApi.aiServiceLogs.query({ filters: queryFilters })
 
-    if (response.success && response.data) {
+    if (response.success) {
       logs.value = response.data.logs || []
       totalCount.value = response.data.totalCount || logs.value.length
       currentOffset.value = logs.value.length
@@ -737,7 +737,7 @@ const loadAIServiceLogs = async (append: boolean = false): Promise<void> => {
 
     const response = await adminApi.aiServiceLogs.query({ filters: queryFilters })
 
-    if (response.success && response.data) {
+    if (response.success) {
       const logsList = response.data.logs || []
 
       if (append) {
@@ -769,7 +769,7 @@ const loadAIServiceLogs = async (append: boolean = false): Promise<void> => {
 const loadStatistics = async (): Promise<void> => {
   try {
     const response = await adminApi.aiServiceLogs.statistics()
-    if (response.success && response.data) {
+    if (response.success) {
       statistics.value = response.data
     }
   } catch (error) {

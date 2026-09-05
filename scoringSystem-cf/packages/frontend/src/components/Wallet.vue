@@ -873,7 +873,7 @@ async function loadProjectStages() {
     })
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       projectStagesForGrowth.value = response.data.stages || []
       if (import.meta.env.DEV) {
         console.log('✅ Project stages loaded for growth chart:', projectStagesForGrowth.value.length)

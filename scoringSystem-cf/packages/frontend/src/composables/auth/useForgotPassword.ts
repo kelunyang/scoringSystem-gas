@@ -148,7 +148,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
 
       const response: EmailVerificationResponse = await httpResponse.json();
 
-      if (response.success && response.data) {
+      if (response.success) {
         emailVerified.value = true;
         lastEmailSentAt.value = Date.now();
         userEmail.value = email;
@@ -190,7 +190,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
 
       const response = await httpResponse.json();
 
-      if (response.success && response.data) {
+      if (response.success) {
         codeVerified.value = true;
         projects.value = response.data.projects || [];
         return true;

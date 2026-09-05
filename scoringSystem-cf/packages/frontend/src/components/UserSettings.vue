@@ -686,7 +686,7 @@ async function handleCommentPageSizeChange(rawValue: number | number[]) {
         detail: { userId: props.user?.userId, commentPageSize: value }
       }))
     } else {
-      ElMessage.error('儲存設定失敗：' + (response.error || '未知錯誤'))
+      ElMessage.error('儲存設定失敗：' + (response.error?.message || '未知錯誤'))
       // Revert to previous value
       await loadCommentPageSizePreference()
     }
@@ -724,7 +724,7 @@ async function regenerateAvatar() {
     const httpResponse = await rpcClient.users.avatar.regenerate.$post()
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       ElMessage.success('頭像已重新生成！')
       emit('user-command', 'refresh-user-data')
     } else {

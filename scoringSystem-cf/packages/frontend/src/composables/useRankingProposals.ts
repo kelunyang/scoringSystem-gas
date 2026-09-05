@@ -218,7 +218,7 @@ export function useRankingProposals(
       const response = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error || '載入專案配置失敗')
+        throw new Error(response.error?.message || '載入專案配置失敗')
       }
 
       return response.data as ProjectScoringConfig

@@ -464,7 +464,7 @@ const loadProjectGroups = async () => {
     })
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       groups.value = response.data
     }
   } catch (error) {
@@ -706,7 +706,7 @@ const createBatchGroups = async (payload: { groupCount: number; allowChange: boo
       // 重新載入群組列表
       await loadProjectGroups()
     } else {
-      handleError(response.error || '建立分組失敗', { type: 'error' })
+      handleError(response.error?.message || '建立分組失敗', { type: 'error' })
     }
 
   } catch (error) {
@@ -799,7 +799,7 @@ const loadGlobalGroups = async () => {
     loading.value = true
     const response = await adminApi.globalGroups.list()
 
-    if (response.success && response.data) {
+    if (response.success) {
       // Handle new response format with groups array
       globalGroups.value = response.data.groups || response.data
     }
@@ -1157,7 +1157,7 @@ const loadProjectGroupMembersInline = async (groupId: string) => {
     })
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       // response.data contains full group details, extract members array
       projectGroupMembersMap.set(groupId, response.data.members || [])
     }
@@ -1173,7 +1173,7 @@ const loadGlobalGroupMembersInline = async (groupId: string) => {
   try {
     const response = await adminApi.globalGroups.members(groupId)
 
-    if (response.success && response.data) {
+    if (response.success) {
       globalGroupMembersMap.set(groupId, response.data.members as unknown as GroupMember[])
     }
   } catch (error) {
@@ -1230,7 +1230,7 @@ const loadUngroupedMembers = async () => {
     })
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       ungroupedMembers.value = response.data.ungroupedMemberEmails || []
     }
   } catch (error) {
@@ -1257,7 +1257,7 @@ const loadAllUsers = async () => {
     })
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       // 過濾出 role='member' 的使用者
       allUsers.value = response.data
         .filter((viewer: ProjectViewer) => viewer.role === 'member')
@@ -1280,7 +1280,7 @@ const loadAllUsersForGlobal = async () => {
   try {
     const response = await adminApi.users.list({})
 
-    if (response.success && response.data) {
+    if (response.success) {
       // Support both old format (array) and new format ({ users: [...] })
       const usersArray = Array.isArray(response.data)
         ? response.data
@@ -1646,7 +1646,7 @@ const loadProjectViewers = async (projectId: string) => {
     const response = await httpResponse.json()
     console.log('🔍 [loadProjectViewers] API response:', response)
 
-    if (response.success && response.data) {
+    if (response.success) {
       projectViewers.value = response.data
       console.log('✅ [loadProjectViewers] Loaded viewers:', projectViewers.value)
     } else {
@@ -1697,7 +1697,7 @@ const searchUsers = async (payload: { searchText: string; role: ViewerRole } | s
         })
         const response = await httpResponse.json()
 
-        if (response.success && response.data) {
+        if (response.success) {
           allResults.push(...response.data)
         } else {
           errors.push(`搜尋「${query}」失敗: ${response.error?.message || '未知錯誤'}`)
@@ -1988,7 +1988,7 @@ const loadProjects = async () => {
     })
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       // API returns { projects, totalCount, limit, offset }
       projects.value = response.data.projects || response.data
     }

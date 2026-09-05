@@ -101,7 +101,7 @@ export function useGroupMembers() {
       })
       const response = await httpResponse.json() as ApiResponse<ProjectViewer[]>
 
-      if (response.success && response.data) {
+      if (response.success) {
         // Filter users with role='member'
         allUsers.value = response.data
           .filter(viewer => viewer.role === 'member')
@@ -127,7 +127,7 @@ export function useGroupMembers() {
     try {
       const response = await adminApi.globalGroups.members(groupId)
 
-      if (response.success && response.data) {
+      if (response.success) {
         groupMembers.value = response.data.members || []
         ElMessage.success(`成員列表載入完成（${response.data.members.length} 人）`)
       } else {
@@ -150,7 +150,7 @@ export function useGroupMembers() {
     try {
       const response = await adminApi.globalGroups.members(groupId)
 
-      if (response.success && response.data) {
+      if (response.success) {
         globalGroupMembersMap.value.set(groupId, response.data.members || [])
       }
     } catch (error) {
@@ -177,7 +177,7 @@ export function useGroupMembers() {
       })
       const response = await httpResponse.json() as ApiResponse<ProjectGroupDetailsResponse>
 
-      if (response.success && response.data) {
+      if (response.success) {
         projectGroupMembersMap.value.set(groupId, response.data.members || [])
       }
     } catch (error) {
@@ -248,7 +248,7 @@ export function useGroupMembers() {
         userEmails: selectedUsersToAdd.value
       })
 
-      if (response.success && response.data) {
+      if (response.success) {
         const { successCount } = response.data
         ElMessage.success(`成功新增 ${successCount} 個成員`)
 
@@ -424,7 +424,7 @@ export function useGroupMembers() {
         userEmails
       })
 
-      if (response.success && response.data) {
+      if (response.success) {
         const { successCount } = response.data
         ElMessage.success(`成功移除 ${successCount} 人`)
 

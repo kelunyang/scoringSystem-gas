@@ -904,7 +904,7 @@ const loadInvitations = async (): Promise<void> => {
     })
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       invitations.value = response.data
     } else {
       ElMessage?.error('載入邀請碼失敗')
@@ -997,7 +997,7 @@ const handleGenerateInvite = async (): Promise<void> => {
         })
         const response = await httpResponse.json()
 
-        if (response.success && response.data) {
+        if (response.success) {
           return {
             success: true,
             batchIndex,

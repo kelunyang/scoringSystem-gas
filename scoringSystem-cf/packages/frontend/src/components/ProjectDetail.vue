@@ -2458,7 +2458,7 @@ async function refreshSingleStageSettings(stage: ExtendedStage) {
     })
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       const updatedStage = response.data
 
       // 更新當前 stage 對象的設定欄位
@@ -2500,7 +2500,7 @@ async function loadStageProposals(stage: ExtendedStage) {
     })
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       stage.proposals = response.data.proposals || []
     }
   } catch (error) {
@@ -3284,7 +3284,7 @@ async function loadAllStageCommentsFallback() {
         return httpResponse.json()
       })
 
-      if (response.success && response.data) {
+      if (response.success) {
         stage.comments = (response.data.comments || []).map((comment: any) => ({
           ...comment,
           mentionedUsers: typeof comment.mentionedUsers === 'string'
@@ -3372,7 +3372,7 @@ async function loadMentionData() {
         }
       })
       const response = await httpResponse.json()
-      if (response.success && response.data) {
+      if (response.success) {
         Object.assign(mapping, response.data.userEmailToDisplayName)
         console.log(`✅ 補充載入了 ${Object.keys(response.data.userEmailToDisplayName).length} 位用戶`)
       }
@@ -3400,7 +3400,7 @@ async function loadAllStageProposals() {
         }
       })
       const response = await httpResponse.json()
-      if (response.success && response.data) {
+      if (response.success) {
         stage.proposals = response.data.proposals || []
         console.log(`✅ 階段 ${stage.id} 載入 ${stage.proposals?.length ?? 0} 個 proposals`)
       } else {
@@ -3439,7 +3439,7 @@ async function loadGroupApprovalVotes(projectId: string, stageId: string, submis
     })
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       // <i class="fas fa-check-circle text-success"></i> reactive Map 不需要 .value
       // ✅ 修正：後端直接返回投票數據在 response.data，而非 response.data.votingData
       groupApprovalVotesCache.set(groupId, response.data)

@@ -969,7 +969,7 @@ const loadUsers = async (append: boolean = false) => {
 
     const response = await adminApi.users.list(queryParams)
 
-    if (response.success && response.data) {
+    if (response.success) {
       const data = response.data
       // shared 的 UserListResponse.users 型別（admin User）與後端實際回傳的
       // entities User 形狀不同步，這裡以實際 runtime 形狀為準
@@ -1089,7 +1089,7 @@ const loadUserGlobalGroups = async (userEmail: string) => {
     // 後端 zValidator 要求 { userEmail }；先前送 { targetEmail } 會被 400 打回
     const response = await adminApi.users.globalGroups({ userEmail })
 
-    if (response.success && response.data) {
+    if (response.success) {
       userGlobalGroups.value = response.data
     } else {
       userGlobalGroups.value = []
@@ -1273,8 +1273,8 @@ const editUser = async (user: ExtendedUser) => {
         limit: 1
       })
 
-      const usersList = (response.data?.users || []) as unknown as ExtendedUser[]
-      if (response.success && usersList.length > 0) {
+      const usersList = (response.success ? response.data.users || [] : []) as unknown as ExtendedUser[]
+      if (usersList.length > 0) {
         // Use fresh data from backend
         userData = usersList[0]
 
@@ -1495,10 +1495,10 @@ const loadGlobalGroups = async () => {
   try {
     const response = await adminApi.globalGroups.list()
     
-    if (response.success && response.data && response.data.groups) {
+    if (response.success && response.data.groups) {
       globalGroups.value = response.data.groups.filter((group) => group.isActive)
     } else {
-      console.error('Failed to load global groups:', response.error)
+      console.error('Failed to load global groups:', response.success ? '回應沒有 groups 欄位' : response.error)
       globalGroups.value = []
     }
   } catch (error) {
@@ -1561,7 +1561,7 @@ const loadUserProjectGroups = async (userEmail: string) => {
     // 後端 zValidator 要求 { userEmail }；先前送 { email } 會被 400 打回
     const response = await adminApi.users.projectGroups({ userEmail })
 
-    if (response.success && response.data) {
+    if (response.success) {
       userProjectGroups.value = response.data
     } else {
       console.error('Failed to load user project groups:', response.error)

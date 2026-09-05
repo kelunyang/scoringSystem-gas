@@ -640,7 +640,7 @@ const loadNotifications = async (): Promise<void> => {
   try {
     const response = await adminApi.notifications.list({})
 
-    if (response.success && response.data) {
+    if (response.success) {
       const notificationList = response.data.notifications || response.data || []
       const notificationArray = Array.isArray(notificationList) ? notificationList : []
       // projectName is now returned directly from API via LEFT JOIN

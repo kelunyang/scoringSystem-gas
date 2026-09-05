@@ -724,7 +724,7 @@ async function loadCommentRankings() {
 
     console.log('投票排名 API 響應:', response)
 
-    if (response.success && response.data) {
+    if (response.success) {
       console.log('收到投票排名數據:', response.data)
       commentRankings.value = response.data
 
@@ -885,7 +885,7 @@ async function addReaction(comment: ProcessedComment, reactionType: string) {
       }
       ElMessage.success(reactionType === 'helpful' ? '已標記為有幫助' : '已標記為不實用')
     } else {
-      ElMessage.error(response.error || '操作失敗：後端未返回 reaction 統計數據')
+      ElMessage.error(response.error?.message || '操作失敗：後端未返回 reaction 統計數據')
     }
   } catch (error) {
     console.error('添加 reaction 失敗:', error)
@@ -914,7 +914,7 @@ async function removeReaction(comment: ProcessedComment) {
       }
       ElMessage.success('已取消標記')
     } else {
-      ElMessage.error(response.error || '操作失敗：後端未返回 reaction 統計數據')
+      ElMessage.error(response.error?.message || '操作失敗：後端未返回 reaction 統計數據')
     }
   } catch (error) {
     console.error('移除 reaction 失敗:', error)

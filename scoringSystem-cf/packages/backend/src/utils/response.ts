@@ -4,31 +4,26 @@
  */
 
 /**
- * Standard success response format
+ * The response contract lives in @repo/shared so the frontend reads back
+ * exactly what these helpers write. Re-exported here because every handler
+ * already imports from this module.
  */
-export interface SuccessResponse<T = any> {
-  success: true;
-  data: T;
-  message?: string;  // Optional message for success responses
-}
+export type {
+  ApiSuccessResponse,
+  ApiErrorResponse,
+  ApiResponse
+} from '@repo/shared/types/api-responses';
 
-/**
- * Standard error response format
- */
-export interface ErrorResponse {
-  success: false;
-  error: {
-    code: string;
-    message: string;
-    context?: any;
-    attemptsLeft?: number;  // For 2FA verification attempts
-  };
-}
+import type {
+  ApiSuccessResponse,
+  ApiErrorResponse,
+  ApiResponse
+} from '@repo/shared/types/api-responses';
 
-/**
- * Combined response type
- */
-export type ApiResponse<T = any> = SuccessResponse<T> | ErrorResponse;
+/** @deprecated Use ApiSuccessResponse. */
+export type SuccessResponse<T = unknown> = ApiSuccessResponse<T>;
+/** @deprecated Use ApiErrorResponse. */
+export type ErrorResponse = ApiErrorResponse;
 
 /**
  * Create a success response
@@ -75,7 +70,7 @@ export function errorResponse(
   message: string,
   context?: any
 ): Response {
-  const errorBody: ErrorResponse = {
+  const errorBody: ApiErrorResponse = {
     success: false,
     error: {
       code,

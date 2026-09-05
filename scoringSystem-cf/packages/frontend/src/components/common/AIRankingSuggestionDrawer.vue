@@ -661,14 +661,14 @@ async function queryAI(): Promise<void> {
     const httpResponse = await rpcClient.api.rankings[endpoint].$post({ json: payload })
     const response = await httpResponse.json() as any
 
-    if (response.success && response.data) {
+    if (response.success) {
       currentTaskId.value = response.data.taskId
       currentCallId.value = response.data.callId
       progressMessage.value = response.data.message || '任務已加入佇列...'
 
       ElMessage.info('AI 排名請求已送出，請等待處理...')
     } else {
-      const errorMsg = response.error || 'AI 查詢失敗'
+      const errorMsg = response.error?.message || 'AI 查詢失敗'
       ElMessage.error(errorMsg)
       showAlertError(errorMsg, 'AI 查詢錯誤')
       isProcessing.value = false

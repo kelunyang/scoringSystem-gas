@@ -3,32 +3,16 @@
  * 用於 SystemSettings 和相關的統計數據管理
  */
 
-import type { LogStatistics } from '@repo/shared/types/admin'
+import type { LogStatistics, SystemStats as SystemStatsData } from '@repo/shared/types/admin'
 
 /**
  * 系統統計數據
+ *
+ * 欄位本體以 @repo/shared 的 SystemStats 為準（＝後端 getSystemStats()
+ * 實際回傳的內容），這裡只多一個由 composable 補上的 lastUpdate。
+ * 舊版在這裡另外抄了一份，和 shared 那份互相矛盾，兩份都不等於後端回的東西。
  */
-export interface SystemStats {
-  /** 總用戶數 */
-  totalUsers: number
-  /** 活躍用戶數 */
-  activeUsers: number
-  /** 停用用戶數 */
-  inactiveUsers: number
-  /** 總專案數 */
-  totalProjects: number
-  /** 進行中的專案數 */
-  activeProjects: number
-  /** 已完成的專案數 */
-  completedProjects: number
-  /** 總群組數 */
-  totalGroups: number
-  /** 活躍群組數 */
-  activeGroups: number
-  /** 系統運行時間 */
-  uptime?: string
-  /** 資料庫狀態 */
-  dbStatus?: string
+export interface SystemStats extends SystemStatsData {
   /** 最後更新時間（由 composable 設定，總是有值）*/
   lastUpdate: number
 }

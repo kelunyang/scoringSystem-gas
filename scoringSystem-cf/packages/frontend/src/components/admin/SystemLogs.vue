@@ -1025,23 +1025,25 @@ const loadSystemLogs = async () => {
 
     const response = await adminApi.system.logs(params, searchAbortController.value.signal)
 
+    if (!response.success) {
+      console.log('📊 SystemLogs: API response', { success: false, error: response.error })
+      allLogs.value = []
+      ElMessage.error(response.error.message || '加载系统日志失败')
+      return
+    }
+
     console.log('📊 SystemLogs: API response', {
-      success: response.success,
-      logsCount: response.data?.logs?.length,
-      total: response.data?.total
+      success: true,
+      logsCount: response.data.logs?.length,
+      total: response.data.total
     })
 
-    if (response.success) {
-      allLogs.value = response.data?.logs || []
-      console.log('🔍 [Debug] After setting allLogs:', {
-        allLogsLength: allLogs.value.length,
-        firstLog: allLogs.value[0]
-      })
-      // Filter options 自動更新 (computed properties)
-    } else {
-      allLogs.value = []
-      ElMessage.error(response.error?.message || '加载系统日志失败')
-    }
+    allLogs.value = response.data.logs || []
+    console.log('🔍 [Debug] After setting allLogs:', {
+      allLogsLength: allLogs.value.length,
+      firstLog: allLogs.value[0]
+    })
+    // Filter options 自動更新 (computed properties)
   } catch (error: unknown) {
     // Ignore abort errors
     if (error instanceof Error && error.name === 'AbortError') {
@@ -1125,22 +1127,24 @@ const searchSystemLogsBackend = async () => {
 
     const response = await adminApi.system.logs(params, searchAbortController.value.signal)
 
-    console.log('🔍 [Backend Search] System logs API response:', {
-      success: response.success,
-      logsCount: response.data?.logs?.length,
-      total: response.data?.total
-    })
-
-    if (response.success) {
-      allLogs.value = response.data?.logs || []
-      totalCount.value = response.data?.total || allLogs.value.length
-
-      ElMessage.success(`后端搜索完成：找到 ${totalCount.value} 条匹配记录`)
-    } else {
+    if (!response.success) {
+      console.log('🔍 [Backend Search] System logs API response:', { success: false, error: response.error })
       allLogs.value = []
       totalCount.value = 0
-      ElMessage.error(response.error?.message || '后端搜索失败')
+      ElMessage.error(response.error.message || '后端搜索失败')
+      return
     }
+
+    console.log('🔍 [Backend Search] System logs API response:', {
+      success: true,
+      logsCount: response.data.logs?.length,
+      total: response.data.total
+    })
+
+    allLogs.value = response.data.logs || []
+    totalCount.value = response.data.total || allLogs.value.length
+
+    ElMessage.success(`后端搜索完成：找到 ${totalCount.value} 条匹配记录`)
   } catch (error: unknown) {
     // Ignore abort errors
     if (error instanceof Error && error.name === 'AbortError') {
@@ -1176,12 +1180,11 @@ const loadLoginLogs = async () => {
 
     const response = await adminApi.system.logs(params)
 
-    console.log('🔐 SystemLogs: Login logs API response', {
-      success: response.success,
-      logsCount: response.data?.logs?.length
-    })
-
     if (response.success) {
+      console.log('🔐 SystemLogs: Login logs API response', {
+        success: true,
+        logsCount: response.data.logs?.length
+      })
       allLoginLogs.value = response.data?.logs || []
 
       // 🔍 调试：显示后端返回的数据样本
@@ -1257,13 +1260,12 @@ const searchLoginLogsBackend = async () => {
 
     const response = await adminApi.system.logs(params)
 
-    console.log('🔍 [Backend Search] Login logs API response:', {
-      success: response.success,
-      logsCount: response.data?.logs?.length,
-      total: response.data?.total
-    })
-
     if (response.success) {
+      console.log('🔍 [Backend Search] Login logs API response:', {
+        success: true,
+        logsCount: response.data.logs?.length,
+        total: response.data.total
+      })
       allLoginLogs.value = response.data?.logs || []
 
       // 标记可疑登录记录
@@ -1357,12 +1359,11 @@ const loadEmailLogs = async () => {
       }
     })
 
-    console.log('📧 SystemLogs: Email logs API response', {
-      success: response.success,
-      logsCount: response.data?.logs?.length
-    })
-
     if (response.success) {
+      console.log('📧 SystemLogs: Email logs API response', {
+        success: true,
+        logsCount: response.data.logs?.length
+      })
       allEmailLogs.value = response.data?.logs || []
     } else {
       allEmailLogs.value = []
@@ -1403,13 +1404,12 @@ const searchEmailLogsBackend = async () => {
       }
     })
 
-    console.log('🔍 [Backend Search] Email logs API response:', {
-      success: response.success,
-      logsCount: response.data?.logs?.length,
-      totalCount: response.data?.totalCount
-    })
-
     if (response.success) {
+      console.log('🔍 [Backend Search] Email logs API response:', {
+        success: true,
+        logsCount: response.data.logs?.length,
+        totalCount: response.data.totalCount
+      })
       allEmailLogs.value = response.data?.logs || []
       totalEmailLogsCount.value = response.data?.totalCount || allEmailLogs.value.length
 

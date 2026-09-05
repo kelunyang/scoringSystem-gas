@@ -3,6 +3,8 @@
  * Provides type safety for login, registration, and password reset flows
  */
 
+import type { ApiResponse } from '@repo/shared/types/api-responses';
+
 /**
  * Login credentials for email/password authentication
  */
@@ -71,59 +73,23 @@ export interface AvatarOptions {
 /**
  * API response for email verification (forgot password)
  */
-export interface EmailVerificationResponse {
-  success: boolean;
-  data?: {
-    verified: boolean;
-    projects: Project[];
-  };
-  error?: {
-    code: string;
-    message: string;
-  };
+export interface EmailVerificationData {
+  verified: boolean;
+  projects: Project[];
 }
+
+export type EmailVerificationResponse = ApiResponse<EmailVerificationData>;
 
 /**
  * API response for invitation code verification
  */
-export interface InvitationVerificationResponse {
-  success: boolean;
-  data?: {
-    valid: boolean;
-    targetEmail?: string;
-    availableTags?: string[];
-  };
-  error?: {
-    code: string;
-    message: string;
-  };
+export interface InvitationVerificationData {
+  valid: boolean;
+  targetEmail?: string;
+  availableTags?: string[];
 }
 
-/**
- * Standard API success response
- */
-export interface ApiSuccessResponse<T = any> {
-  success: true;
-  data: T;
-  message?: string;
-}
-
-/**
- * Standard API error response
- */
-export interface ApiErrorResponse {
-  success: false;
-  error: {
-    code: string;
-    message: string;
-    context?: any;
-  };
-}
-
-/**
- * Combined API response type
- */
-export type ApiResponse<T = any> = ApiSuccessResponse<T> | ApiErrorResponse;
+export type InvitationVerificationResponse = ApiResponse<InvitationVerificationData>;
 
 /**
  * Turnstile verification callback

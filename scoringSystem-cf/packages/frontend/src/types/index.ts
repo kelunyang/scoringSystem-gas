@@ -29,33 +29,12 @@ export type {
   Proposal
 } from './models'
 
-// 导出 API 类型
+// 导出 API 类型（唯一來源：@repo/shared/types/api-responses）
 export type {
   ApiSuccessResponse,
   ApiErrorResponse,
   ApiResponse,
-  PaginationParams,
-  PaginatedResponse,
-  LoginRequest,
-  LoginResponse,
-  RegisterRequest,
-  CreateProjectRequest,
-  UpdateProjectRequest,
-  CreateStageRequest,
-  UpdateStageRequest,
-  CreateSubmissionRequest,
-  UpdateSubmissionRequest,
-  CreateCommentRequest,
-  AwardPointsRequest,
-  CreateGroupRequest,
-  CreateInvitationRequest,
-  ScoreSubmissionRequest,
-  UpdateProfileRequest,
-  ChangePasswordRequest,
-  ForgotPasswordRequest,
-  ResetPasswordRequest,
-  FileUploadResponse,
-  StatsResponse
+  PaginatedResponse
 } from './api'
 
 // 导出 Composables 类型

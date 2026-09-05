@@ -365,7 +365,7 @@ async function loadSystemDefaults(): Promise<void> {
     const httpResponse = await rpcClient.projects.system['scoring-defaults'].$get()
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       editForm.value.maxCommentSelections = response.data.maxCommentSelections
       editForm.value.studentRankingWeight = response.data.studentRankingWeight
       editForm.value.teacherRankingWeight = response.data.teacherRankingWeight
@@ -390,7 +390,7 @@ async function loadProjectScoringConfig(projectId: string): Promise<void> {
     })
     const response = await httpResponse.json()
 
-    if (response.success && response.data) {
+    if (response.success) {
       editForm.value.maxCommentSelections = response.data.maxCommentSelections
       editForm.value.studentRankingWeight = response.data.studentRankingWeight
       editForm.value.teacherRankingWeight = response.data.teacherRankingWeight
