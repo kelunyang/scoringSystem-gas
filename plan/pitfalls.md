@@ -4,6 +4,78 @@
 > 新坑往上加，讓最近的教訓最先被看到。
 
 ---
+## 2026-09-06 ｜ 量測工具沒接上，於是所有數字都是假的
+
+**症狀**：無。`pnpm lint`、`pnpm type-check` 都通過，看起來很健康。
+
+**根因**：三個工具各自有一段「寫了但沒接上」：
+
+| 工具 | 沒接上的地方 | 揭露後的真實數字 |
+|------|-------------|----------------|
+| backend lint | `eslint src/**/*.ts` 沒加引號，glob 被 shell 展開只掃單層 | 118 → 460 |
+| shared lint | `package.json` 根本沒有 `lint` script，而根指令是 `pnpm --recursive lint` | 0 → 22 |
+| 根 type-check | 根 script 是 `tsc --build`，而 `vue-tsc` 只掛在 frontend 自己的 script 上，沒人呼叫 | **從未檢查過任何 `.vue` 檔**；接上後立刻 18 個錯誤 |
+
+前兩者在 2026-09-05／09-06 修掉，第三個是這次發現的。
+`.vue` 那個最嚴重：整個前端的元件邏輯——也就是絕大多數程式碼——
+從來沒有進過型別檢查。
+
+**教訓與防護**：
+
+1. **看到一個「意外地低」的數字，先懷疑量測本身。**
+   計畫文件裡「shared: 0 any」被當成事實寫進表格，
+   其實只是沒人去看。乾淨和沒被檢查，在報表上長得一模一樣。
+2. **每個 package 都要有 lint / type-check script，否則 `--recursive` 會靜靜跳過它。**
+   `pnpm --recursive <script>` 對沒有該 script 的 package 不會報錯。
+3. **驗證「工具真的有在跑」的方法是：故意弄壞一個檔案，看它會不會叫。**
+   單看指令是否 exit 0 分不出「通過」和「沒跑」。
+
+---
+## 2026-09-06 ｜ 同一個 API 吐兩種 error 形狀，前端沒有一種寫法能同時對
+
+**症狀**：使用者偶爾看到「操作失敗: [object Object]」；
+另一些時候權限被拒，卻只顯示「未知錯誤」，看不到真正的原因。
+
+**根因**：後端有兩條產生錯誤回應的路徑，形狀不同：
+
+```
+handler，透過 errorResponse()   { success: false, error: { code, message } }
+router 的權限守衛，手寫 c.json   { success: false, error: '訊息', errorCode: 'CODE' }
+```
+
+router 層 112 處用第二種。於是前端：
+
+- 寫 `response.error?.message` 的，碰到守衛拒絕時拿到 `undefined` → 顯示「未知錯誤」，**403 的真正理由被吞掉**
+- 寫 `'失敗：' + response.error` 的，碰到 handler 拒絕時拿到物件 → **`[object Object]`**（10 處面向使用者）
+
+而前端有 **八份** `ApiResponse` 定義（frontend 4、backend 2、shared 2）、
+三種不同的 error 形狀，沒有一份被兩個地方共用——
+所以型別檢查對這件事完全沉默。
+
+**同時發現**：`getHttpStatus()` 的對照表只有 52 個錯誤碼，
+但實際被 `errorResponse()` 使用的有 167 個。沒進表的 115 個走 fallback
+一律回 **500**——`PERMISSION_DENIED`、`TEACHER_ONLY`、`COMMENT_NOT_FOUND`、
+`ALREADY_VOTED` 全都被報成 Internal Server Error。
+
+**守門測試**（`backend/tests/error-response-shape.test.ts`）：
+手寫 `error: '字串'` 的回應、或錯誤碼漏進對照表，兩者都會讓測試失敗。
+
+**教訓與防護**：
+
+1. **「有人已經寫了防禦程式碼繞過去」是根因還沒被修的訊號。**
+   `useStageContentManagement.ts` 早就寫成
+   `response.error?.code || response.errorCode`，同時相容兩種形狀。
+   有人踩到過、繞開了，但沒有回頭統一契約——於是其他 10 個地方繼續壞著。
+   看到這種「兩邊都試一下」的寫法，要問的是為什麼會有兩種。
+2. **同一個概念有 N 份型別定義時，型別檢查保護不了你。**
+   八份 `ApiResponse` 各自自洽，合起來互相矛盾。
+   契約型別必須只有一份，而且產生方與消費方都用它。
+3. **狀態碼對照表用 fallback 是危險的預設。**
+   `?? 500` 讓「忘記加進表」和「這真的是伺服器錯誤」外觀相同。
+   守門測試改成檢查「碼有沒有在表上」，而不是「回傳的狀態是不是 500」——
+   後者分不出這兩件事。
+
+---
 ## 2026-09-05 ｜ 停用一個全域群組，其實沒有停用它的權限
 
 **症狀**：無。管理員把某個全域群組設為停用，介面顯示停用，
