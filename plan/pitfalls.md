@@ -4,6 +4,49 @@
 > 新坑往上加，讓最近的教訓最先被看到。
 
 ---
+## 2026-09-06 ｜ 讀一個 SELECT 沒回傳的欄位，於是功能安靜地半殘
+
+**症狀**：階段評論頁重新整理後，自己按過的 reaction 不會顯示為已選取；
+而且再按一次同一個 reaction 不是取消，是**重複新增**。
+使用者得先按別的、再按回來才能取消。沒有任何錯誤訊息。
+
+**根因**：`getStageComments` 用自己的 SELECT 沒有回傳的欄位找當前使用者。
+
+```sql
+SELECT lr.commentId, lr.reactionType, lr.userEmail, u.displayName
+```
+```ts
+commentReactions.find(r => r.userId === currentUser.userId)   // 沒有 userId
+```
+
+`r.userId` 永遠是 `undefined`，比對永不成立，`userReaction` 對所有人、
+所有時候都是 `null`。前端 `handleReaction()` 只有在
+「目前的 reaction 等於點下去的那個」時才走取消路徑，於是取消永遠不觸發。
+
+`getAllStagesComments` 有一份幾乎逐字相同的聚合程式碼，**而且是對的**
+（比對 `r.userEmail === userEmail`）。兩份複製貼上的程式碼，只有一份被修過。
+
+**教訓與防護**：
+
+1. **`any` 讓「不存在的欄位」讀起來和真欄位一模一樣。**
+   `(row: any).userId` 不會有型別錯誤、不會有執行期錯誤，
+   只會安靜地給你 `undefined`，然後整條判斷永遠走同一邊。
+   這是本次型別清理唯一挖到的功能性 bug，而它正好是這一類。
+2. **同一段邏輯出現兩份時，先比對它們有沒有分歧。**
+   修好的那份沒有回頭修另一份，是這個 bug 存活的唯一原因。
+   新的測試特地加了一項「兩個端點給出相同答案」，把它們釘在一起。
+3. **靜態掃描找這一類 bug 的命中率很低，別高估它。**
+   我先寫了分析程式比對每個查詢的 SELECT 欄位與 callback 讀的屬性，
+   32 個命中**全部是誤報**（CTE 的內層 SELECT、跨查詢的同名變數、
+   被視窗掃進來的物件字面值）。真正的那個反而漏掉，因為它讀的是
+   `allReactionsResults`——一個用 `push(...)` 拼出來的陣列，不是
+   `.results` 本身。**最後是靠逐檔定型時肉眼看到的。**
+4. **`SELECT userId FROM users WHERE userEmail = ?` 這種查詢，
+   先問自己拿它做什麼。** 兩處都只是為了取一個 id 去比對，
+   而比對其實可以直接用手上已有的 userEmail。修掉 bug 的同時
+   也少了兩次 D1 往返。
+
+---
 ## 2026-09-06 ｜ 量測工具沒接上，於是所有數字都是假的
 
 **症狀**：無。`pnpm lint`、`pnpm type-check` 都通過，看起來很健康。
