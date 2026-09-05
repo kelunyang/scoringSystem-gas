@@ -70,6 +70,14 @@ const FLOAT_TOLERANCE = 0.01;  // 浮點數比較容差，用於分數平手判�
  * @param message User-friendly message
  * @param details Optional additional details
  */
+/** convertArrayToObject 接受的陣列項目：識別欄位隨排名種類而異。 */
+interface RankingArrayItem {
+  groupId?: string;
+  commentId?: string;
+  targetId?: string;
+  rank: number;
+}
+
 async function pushProgress(
   env: Env,
   userEmail: string,
@@ -364,7 +372,7 @@ export async function settleStage(
     const timestamp = Date.now();
     settlementId = generateId('settle_');
 
-    const totalRewardDistributed = Object.values(scores).reduce((sum: number, val: any) => sum + val, 0);
+    const totalRewardDistributed = Object.values(scores).reduce((sum, val) => sum + val, 0);
     const participantCount = Object.keys(scores).length;
 
     // Final validation: distribution doesn't exceed pool
@@ -497,7 +505,7 @@ export async function settleStage(
       const commentStudentScores = commentResults.studentScores;
       const commentTeacherScores = commentResults.teacherScores;
 
-      const totalCommentRewardDistributed = Object.values(commentScores).reduce((sum: number, val: any) => sum + val, 0);
+      const totalCommentRewardDistributed = Object.values(commentScores).reduce((sum, val) => sum + val, 0);
 
       // Validate comment reward distribution
       if (totalCommentRewardDistributed > commentRewardPool + FLOAT_TOLERANCE) {
@@ -657,9 +665,9 @@ export async function settleStage(
           const commentsResult = await env.DB.prepare(`
             SELECT commentId, authorEmail FROM comments
             WHERE commentId IN (${commentPlaceholders})
-          `).bind(...commentIds).all();
+          `).bind(...commentIds).all<{ commentId: string; authorEmail: string }>();
 
-          commentsResult.results?.forEach((comment: any) => {
+          commentsResult.results?.forEach(comment => {
             const commentId = comment.commentId;
             const points = Math.ceil(commentScores[commentId] || 0);
             const rank = commentRankings[commentId];
@@ -709,7 +717,7 @@ export async function settleStage(
         SELECT groupId, groupName
         FROM groups
         WHERE projectId = ? AND groupId IN (${groupPlaceholders})
-      `).bind(projectId, ...groupIds).all();
+      `).bind(projectId, ...groupIds).all<{ groupId: string; groupName: string }>();
 
       console.log('[Settlement] SQL query result:', {
         success: groupsResult.success,
@@ -717,7 +725,7 @@ export async function settleStage(
         results: groupsResult.results
       });
 
-      groupsResult.results?.forEach((group: any) => {
+      groupsResult.results?.forEach(group => {
         groupNames[group.groupId] = group.groupName || group.groupId || '未命名組';
       });
 
@@ -749,7 +757,7 @@ export async function settleStage(
         SELECT commentId, authorEmail
         FROM comments
         WHERE commentId IN (${commentPlaceholders})
-      `).bind(...commentIds).all();
+      `).bind(...commentIds).all<{ commentId: string; authorEmail: string }>();
 
       console.log('[Settlement] Comments query result:', {
         commentIds,
@@ -759,7 +767,7 @@ export async function settleStage(
 
       // Build commentId -> authorEmail mapping
       const commentToEmail: Record<string, string> = {};
-      commentsResult.results?.forEach((comment: any) => {
+      commentsResult.results?.forEach(comment => {
         commentToEmail[comment.commentId] = comment.authorEmail;
       });
 
@@ -772,7 +780,7 @@ export async function settleStage(
           SELECT userEmail, displayName
           FROM users
           WHERE userEmail IN (${userPlaceholders})
-        `).bind(...authorEmails).all();
+        `).bind(...authorEmails).all<{ userEmail: string; displayName: string | null }>();
 
         console.log('[Settlement] Users query result:', {
           authorEmails,
@@ -782,7 +790,7 @@ export async function settleStage(
 
         // Build email -> displayName mapping
         const emailToDisplayName: Record<string, string> = {};
-        usersResult.results?.forEach((user: any) => {
+        usersResult.results?.forEach(user => {
           emailToDisplayName[user.userEmail] = user.displayName || user.userEmail;
         });
 
@@ -1262,13 +1270,13 @@ async function prepareSettlementStatements(
     SELECT groupId, submissionId, participationProposal, groupName
     FROM LatestApprovedSubmissions
     WHERE rn = 1
-  `).bind(stageId, ...groupIds).all();
+  `).bind(stageId, ...groupIds).all<{ groupId: string; submissionId: string; participationProposal: string | null; groupName: string }>();
 
   // Organize participants by group (from participationProposal JSON)
   const participantsByGroup = new Map<string, Array<{ userEmail: string; percentage: number; groupName: string }>>();
   const submissionIdByGroup = new Map<string, string>();
 
-  submissionsResult.results?.forEach((submission: any) => {
+  submissionsResult.results?.forEach(submission => {
     const proposal = parseJSON(submission.participationProposal as string, {}) || {};
     const participants: Array<{ userEmail: string; percentage: number; groupName: string }> = [];
 
@@ -1396,7 +1404,7 @@ async function prepareCommentSettlementStatements(
   studentScores: Record<string, number>,
   teacherScores: Record<string, number>,
   timestamp: number
-): Promise<any[]> {
+): Promise<D1PreparedStatement[]> {
   const commentIds = Object.keys(scores).filter(commentId => scores[commentId] > 0);
   if (commentIds.length === 0) return [];
 
@@ -1406,10 +1414,10 @@ async function prepareCommentSettlementStatements(
     SELECT commentId, authorEmail, content
     FROM comments
     WHERE commentId IN (${commentPlaceholders})
-  `).bind(...commentIds).all();
+  `).bind(...commentIds).all<{ commentId: string; authorEmail: string; content: string }>();
 
   const commentMap = new Map<string, { authorEmail: string; content: string }>();
-  commentsResult.results?.forEach((comment: any) => {
+  commentsResult.results?.forEach(comment => {
     commentMap.set(comment.commentId, {
       authorEmail: comment.authorEmail as string,
       content: comment.content as string
@@ -1582,7 +1590,11 @@ function aggregateTeacherCommentRankings(
  * @returns 对象格式 {targetId: rank, ...}
  */
 function convertArrayToObject(
-  rankingArray: any
+  /**
+   * 陣列格式 `[{groupId|commentId|targetId, rank}, …]`，
+   * 或是已經轉好的物件格式（舊資料兩種都有，所以兩種都接）。
+   */
+  rankingArray: RankingArrayItem[] | Record<string, number> | null | undefined
 ): Record<string, number> {
   // 如果为空或null，返回空对象
   if (!rankingArray) {
@@ -1596,7 +1608,7 @@ function convertArrayToObject(
 
   // 将数组转换为对象
   const result: Record<string, number> = {};
-  rankingArray.forEach((item: any, index: number) => {
+  rankingArray.forEach((item, index) => {
     // CRITICAL: For report rankings, ONLY accept groupId (not submissionId)
     // submissionId is just metadata, groupId is the primary key
     const id = item.groupId || item.commentId || item.targetId;

@@ -95,6 +95,81 @@ async function checkUserPermissionAndGroups(
  * @param stageIds - Array of stage IDs to fetch rankings for
  * @returns Rankings for all requested stages
  */
+/** 排名提案查詢回來的一列（含分頁用的 rn）。 */
+interface StageProposalRow {
+  stageId: string;
+  proposalId: string;
+  groupId: string;
+  /** RankingDataItem[] 的 JSON 字串。 */
+  rankingData: string;
+  status: string;
+  votingResult: string | null;
+  createdTime: number;
+  proposerEmail: string;
+  proposerDisplayName: string | null;
+  rn: number;
+}
+
+/** 每個階段每一組的提案統計。 */
+interface ProposalStatsRow {
+  stageId: string;
+  groupId: string;
+  versionCount: number;
+  latestStatus: string | null;
+  latestVotingResult: string | null;
+}
+
+/** rankingData 解析後的一項。成果排名用 groupId，欄位隨排名種類而異。 */
+interface RankingDataItem {
+  groupId?: string;
+  submissionId?: string;
+  commentId?: string;
+  rank: number;
+}
+
+/**
+ * teachersubmissionrankings JOIN users 的一列。
+ * 單一階段的查詢不 SELECT stageId（呼叫端已經知道是哪一階段），
+ * 所以那裡用 `Omit<TeacherRankingRow, 'stageId'>`。
+ */
+interface TeacherRankingRow {
+  stageId: string;
+  groupId: string;
+  rank: number;
+  createdTime: number;
+  teacherEmail: string;
+  teacherRankingId: string;
+  teacherDisplayName: string | null;
+}
+
+/** 一筆教師排名的來源資訊，用來在多位教師之間挑出最新的一筆。 */
+interface TeacherRankingMeta {
+  createdTime: number;
+  teacherEmail: string;
+  teacherDisplayName: string;
+  teacherRankingId: string;
+}
+
+/** 一項排名：名次加上提案來源的中繼資料（形狀依排名種類而異）。 */
+type RankingEntryWithMeta = { rank: number } & Record<string, unknown>;
+
+/** 一組在某階段的提案統計，只有 teacher/observer 看得到。 */
+interface GroupProposalStats {
+  versionCount: number;
+  latestStatus: string | null;
+  latestVotingResult: string | null;
+}
+
+/**
+ * 一組在某階段的所有排名資訊。
+ * key 多數是排名種類（voteRank / teacherRank / settlementRank…），
+ * 但 proposalStats 是例外——它裝的是統計而不是名次。
+ */
+interface GroupRankings {
+  proposalStats?: GroupProposalStats;
+  [rankingType: string]: RankingEntryWithMeta | GroupProposalStats | undefined;
+}
+
 export async function getAllStagesRankings(
   env: Env,
   userEmail: string,
@@ -134,12 +209,12 @@ export async function getAllStagesRankings(
       LEFT JOIN users u ON tsr.teacherEmail = u.userEmail
       WHERE tsr.projectId = ? AND tsr.stageId IN (${stagePlaceholders})
       ORDER BY tsr.stageId, tsr.teacherEmail ASC, tsr.createdTime DESC
-    `).bind(projectId, ...stageIds).all();
+    `).bind(projectId, ...stageIds).all<TeacherRankingRow>();
 
     const teacherRankingsRaw = teacherRankingsResult.results || [];
 
     // Batch query 2: Get user's group proposals for all stages (if user has groups)
-    let proposalsRaw: any[] = [];
+    let proposalsRaw: StageProposalRow[] = [];
     if (permCheck.currentUserGroupIds.length > 0) {
       const groupPlaceholders = permCheck.currentUserGroupIds.map(() => '?').join(',');
       const proposalsResult = await env.DB.prepare(`
@@ -162,14 +237,14 @@ export async function getAllStagesRankings(
           AND rp.status IN ('pending', 'approved')
           AND ug.groupId IN (${groupPlaceholders})
           AND ug.isActive = 1
-      `).bind(projectId, ...stageIds, ...permCheck.currentUserGroupIds).all();
+      `).bind(projectId, ...stageIds, ...permCheck.currentUserGroupIds).all<StageProposalRow>();
 
       // Filter to keep only the latest proposal per stage (rn = 1)
-      proposalsRaw = (proposalsResult.results || []).filter((p: any) => p.rn === 1);
+      proposalsRaw = (proposalsResult.results || []).filter(p => p.rn === 1);
     }
 
     // Batch query 3: Get proposal stats for teachers/observers
-    let proposalStatsRaw: any[] = [];
+    let proposalStatsRaw: ProposalStatsRow[] = [];
     if (permCheck.isTeacherOrObserver) {
       const proposalStatsResult = await env.DB.prepare(`
         WITH ProposalCounts AS (
@@ -199,13 +274,13 @@ export async function getAllStagesRankings(
           lp.votingResult as latestVotingResult
         FROM ProposalCounts pc
         LEFT JOIN LatestProposals lp ON pc.stageId = lp.stageId AND pc.groupId = lp.groupId AND lp.rn = 1
-      `).bind(projectId, ...stageIds, projectId, ...stageIds).all();
+      `).bind(projectId, ...stageIds, projectId, ...stageIds).all<ProposalStatsRow>();
 
       proposalStatsRaw = proposalStatsResult.results || [];
     }
 
     // Process results into stage-indexed structure
-    const stageRankings: Record<string, Record<string, any>> = {};
+    const stageRankings: Record<string, Record<string, GroupRankings>> = {};
 
     // Initialize empty rankings for each stage
     for (const stageId of stageIds) {
@@ -214,7 +289,7 @@ export async function getAllStagesRankings(
 
     // Process teacher rankings
     // Group by stageId -> teacherEmail -> groupId
-    const teacherByStage = new Map<string, Map<string, Map<string, { rank: number; metadata: any }>>>();
+    const teacherByStage = new Map<string, Map<string, Map<string, { rank: number; metadata: TeacherRankingMeta }>>>();
     const teacherLatestTimeByStage = new Map<string, Map<string, number>>();
 
     for (const tsr of teacherRankingsRaw) {
@@ -252,7 +327,7 @@ export async function getAllStagesRankings(
 
     // Aggregate teacher rankings per stage
     for (const [stageId, teacherMap] of teacherByStage) {
-      const groupRankSums = new Map<string, { sum: number; count: number; latestMetadata: any }>();
+      const groupRankSums = new Map<string, { sum: number; count: number; latestMetadata: TeacherRankingMeta }>();
 
       for (const [, groupRankings] of teacherMap) {
         for (const [groupId, data] of groupRankings) {
@@ -294,7 +369,7 @@ export async function getAllStagesRankings(
         };
 
         if (Array.isArray(rankingData)) {
-          rankingData.forEach((item: any) => {
+          rankingData.forEach((item: RankingDataItem) => {
             if (item.groupId && item.rank) {
               if (!stageRankings[stageId][item.groupId]) {
                 stageRankings[stageId][item.groupId] = {};
@@ -372,7 +447,7 @@ export async function getStageRankings(
 
     console.log(`✅ [getStageRankings] Permission check passed, user groups:`, currentUserGroupIds);
 
-    const rankings: Record<string, any> = {};
+    const rankings: Record<string, GroupRankings> = {};
 
     // 1. Get teacher rankings (from TeacherSubmissionRankings) with metadata
     // Each teacher may have multiple versions; we only keep the latest per teacher
@@ -388,12 +463,12 @@ export async function getStageRankings(
       LEFT JOIN users u ON tsr.teacherEmail = u.userEmail
       WHERE tsr.stageId = ? AND tsr.projectId = ?
       ORDER BY tsr.teacherEmail ASC, tsr.createdTime DESC
-    `).bind(stageId, projectId).all();
+    `).bind(stageId, projectId).all<Omit<TeacherRankingRow, 'stageId'>>();
 
     const teacherRankingsRaw = teacherRankingsResult.results || [];
 
     // Aggregate: Keep only latest version per teacher
-    const teacherLatestRankings = new Map<string, Map<string, { rank: number; metadata: any }>>();
+    const teacherLatestRankings = new Map<string, Map<string, { rank: number; metadata: TeacherRankingMeta }>>();
     const teacherLatestTime = new Map<string, number>();
 
     for (const tsr of teacherRankingsRaw) {
@@ -423,7 +498,7 @@ export async function getStageRankings(
     }
 
     // Aggregate all teachers' rankings to average
-    const groupRankSums = new Map<string, { sum: number; count: number; latestMetadata: any }>();
+    const groupRankSums = new Map<string, { sum: number; count: number; latestMetadata: TeacherRankingMeta }>();
 
     for (const [, groupRankings] of teacherLatestRankings) {
       for (const [groupId, data] of groupRankings) {
@@ -499,7 +574,7 @@ export async function getStageRankings(
 
           // Handle array format: [{rank: 1, groupId: "grp_xxx"}]
           if (Array.isArray(rankingData)) {
-            rankingData.forEach((item: any) => {
+            rankingData.forEach((item: RankingDataItem) => {
               if (item.groupId && item.rank) {
                 if (!rankings[item.groupId]) {
                   rankings[item.groupId] = {};
