@@ -12,14 +12,13 @@
  */
 
 import type { Ref, ComputedRef } from 'vue'
-import { useQuery, useQueries, useInfiniteQuery } from '@tanstack/vue-query'
+import { useQuery, useInfiniteQuery } from '@tanstack/vue-query'
 import type { UseQueryReturnType } from '@tanstack/vue-query'
 import { computed, unref } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { useCurrentUser } from './useAuth'
 import { useProjectsWithStages } from './useProjects'
 import type { Stage, User, Project } from '@/types'
-import type { Transaction } from '@repo/shared' // Use shared Transaction type for consistency
 import { debugLog } from '@/utils/debug'
 
 /**
@@ -78,16 +77,6 @@ export interface WalletLadderData {
   currentUserEmail: string
   scoreRangeMin: number
   scoreRangeMax: number
-}
-
-/**
- * Global wallet balance by project
- */
-interface ProjectWalletData {
-  projectId: string
-  projectName: string
-  balance: number
-  transactions: NormalizedTransaction[]
 }
 
 /**

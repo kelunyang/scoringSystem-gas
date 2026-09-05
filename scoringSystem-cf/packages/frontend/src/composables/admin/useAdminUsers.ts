@@ -9,13 +9,11 @@
  * and waits for authentication to complete before fetching data.
  */
 
-import type { UseInfiniteQueryReturnType, UseQueryReturnType } from '@tanstack/vue-query'
-import { useInfiniteQuery, useQuery } from '@tanstack/vue-query'
+import type { UseInfiniteQueryReturnType } from '@tanstack/vue-query'
+import { useInfiniteQuery } from '@tanstack/vue-query'
 import { computed, type Ref, type ComputedRef } from 'vue'
 import { fetchWithAuth, type ApiResponse } from '@/utils/api-helpers'
-import { adminApi } from '@/api/admin'
 import { useCurrentUser } from '@/composables/useAuth'
-import type { GlobalGroup } from '@repo/shared'
 
 // ============================================================================
 // Types
@@ -213,10 +211,6 @@ export function useAdminUsers(
 // ============================================================================
 // useGlobalGroupsList - Query for Global Groups
 // ============================================================================
-
-interface GlobalGroupsListResult {
-  groups: GlobalGroup[]
-}
 
 // ============================================================================
 // useAdminUsersStats - Query for User Statistics

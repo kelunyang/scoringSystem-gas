@@ -8,10 +8,6 @@
  * - useSettlementDetails() - Get settlement details
  */
 
-import { useQuery } from '@tanstack/vue-query'
-import { computed } from 'vue'
-import { rpcClient } from '@/utils/rpc-client'
-import { useCurrentUser } from './useAuth'
 import type { Group, Member } from '@/types'
 
 // ===== Type Definitions =====
@@ -42,49 +38,6 @@ import type { Group, Member } from '@/types'
  */
 
 // ===== Utility Functions =====
-
-/**
- * Normalize a value that might be a ref or a plain value
- *
- * This utility ensures proper reactivity tracking for TanStack Query's queryKey.
- * It wraps any value (ref or plain) in a computed that returns the unwrapped value.
- *
- * @template T
- * @param {import('vue').Ref<T>|T} value - Value to normalize (can be ref or plain value)
- * @returns {import('vue').ComputedRef<T>} Computed ref that unwraps the value
- *
- * @example
- * const normalizedId = normalizeRef(projectId) // works with both ref and string
- * console.log(normalizedId.value) // always safe to access .value
- */
-function normalizeRef(value: any) {
-  return computed(() =>
-    typeof value === 'object' && value !== null && 'value' in value
-      ? value.value
-      : value
-  )
-}
-
-/**
- * Handle API error responses with contextual error messages
- *
- * @param {Object} response - API response object
- * @param {string} defaultMessage - Default error message if no specific code matches
- * @throws {Error} Always throws an error with appropriate message
- */
-function handleApiError(response: any, defaultMessage: any) {
-  const errorCode = response.error?.code
-  const errorMessage = response.error?.message || defaultMessage
-
-  // Provide better error messages based on error code
-  if (errorCode === 'SETTLEMENT_NOT_FOUND') {
-    throw new Error('此階段尚未結算，請稍後再試')
-  } else if (errorCode === 'PERMISSION_DENIED') {
-    throw new Error('您沒有權限查看此階段的結算結果')
-  } else {
-    throw new Error(errorMessage)
-  }
-}
 
 // ===== Composables =====
 

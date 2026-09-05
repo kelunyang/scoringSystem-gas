@@ -1,7 +1,3 @@
-import { ref, type Ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { rpcClient } from '@/utils/rpc-client'
-import type { Stage, ApiResponse } from '@/types'
 
 /**
  * Stage form data

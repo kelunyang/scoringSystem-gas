@@ -9,8 +9,8 @@
  * This composable is for the admin AIServiceLogsManagement component.
  */
 
-import type { UseInfiniteQueryReturnType, UseQueryReturnType, UseMutationReturnType } from '@tanstack/vue-query'
-import { useInfiniteQuery, useQuery, useMutation } from '@tanstack/vue-query'
+import type { UseInfiniteQueryReturnType, UseMutationReturnType } from '@tanstack/vue-query'
+import { useInfiniteQuery, useMutation } from '@tanstack/vue-query'
 import { computed, type Ref, type ComputedRef } from 'vue'
 import { adminApi } from '@/api/admin'
 import { useCurrentUser } from '@/composables/useAuth'

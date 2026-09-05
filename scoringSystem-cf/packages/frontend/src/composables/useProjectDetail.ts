@@ -12,13 +12,13 @@
  */
 
 import type { Ref } from 'vue'
-import { useQuery, useMutation, useQueryClient, useQueries, useInfiniteQuery } from '@tanstack/vue-query'
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/vue-query'
 import type { UseQueryReturnType, UseMutationReturnType } from '@tanstack/vue-query'
 import { computed, unref } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { useCurrentUser } from './useAuth'
 import { ElMessage } from 'element-plus'
-import type { Stage, Submission, Comment, User, Group } from '@/types'
+import type { Stage, Comment, User, Group } from '@/types'
 
 /**
  * Project core data structure
@@ -39,14 +39,6 @@ export interface ProjectCoreData {
   stages: Stage[]
   userGroups?: Group[] // User's groups in this project
   viewerRole?: 'teacher' | 'observer' | 'member' | null // User's role in project_viewers
-}
-
-/**
- * Project content data structure
- */
-interface ProjectContentData {
-  submissions?: Submission[]
-  comments?: Comment[]
 }
 
 /**
@@ -73,15 +65,6 @@ interface StageUpdateData {
   endTime?: number
   status?: 'draft' | 'active' | 'closed'
   settings?: string
-}
-
-/**
- * Submission data
- */
-interface SubmissionCreateData {
-  title: string
-  content: string
-  metadata?: string
 }
 
 /**
@@ -167,24 +150,6 @@ export function useStages(projectId: Ref<string> | string): UseQueryReturnType<S
     refetchOnWindowFocus: false,      // 關閉視窗聚焦時自動重新載入
     retry: 2                          // 失敗時重試 2 次
   })
-}
-
-/**
- * Stage content result
- */
-interface StageContentResult {
-  stageId: string
-  data: ProjectContentData
-}
-
-/**
- * Combined queries result
- */
-interface CombinedQueriesResult {
-  readonly data: (StageContentResult | undefined)[]
-  readonly isLoading: boolean
-  readonly isError: boolean
-  readonly errors: (Error | null)[]
 }
 
 /**
@@ -281,25 +246,6 @@ export function useUpdateStage(): UseMutationReturnType<Stage, Error, UpdateStag
       ElMessage.error(error.message || '更新階段失敗')
     }
   })
-}
-
-/**
- * Submit report mutation variables
- */
-interface SubmitReportVariables {
-  projectId: string
-  stageId: string
-  submissionData: SubmissionCreateData
-}
-
-/**
- * Create comment mutation variables
- */
-interface CreateCommentVariables {
-  projectId: string
-  stageId: string
-  content: string
-  parentCommentId?: string | null
 }
 
 /**

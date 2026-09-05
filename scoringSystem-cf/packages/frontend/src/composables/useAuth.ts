@@ -15,7 +15,6 @@ import { rpcClient } from '@/utils/rpc-client'
 import { isTokenExpired } from '@/utils/jwt'
 import { ElMessage } from 'element-plus'
 import type { AuthUser } from '@/types/models'
-import { getErrorMessage } from '@/utils/errorHandler'
 import { apiClient } from '@/utils/api'
 import { authEventBus } from '@/utils/authEventBus'
 import { useSudoStore } from '@/stores/sudo'
@@ -44,14 +43,6 @@ if (typeof window !== 'undefined') {
   authEventBus.onSessionExpired(() => {
     tokenRef.value = null
   })
-}
-
-/**
- * 修改密码参数
- */
-interface ChangePasswordParams {
-  oldPassword: string
-  newPassword: string
 }
 
 /**

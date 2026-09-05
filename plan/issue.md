@@ -500,8 +500,14 @@ issue 原本的評估仍成立：前端算錯最多是按鈕多顯示或少顯�
   整批繳交紀錄印進 Workers log，含學生資料——一併移除。
   剩下的 344 處多是流程標記（`[Generate] Starting...`）而非資料傾印，
   優先度低，但長期仍該收進受 `ENVIRONMENT` 控制的 logger。
-- **前端 77 個 lint error**（以 `no-unused-vars` 為主，另有 968 個 warning）。
-  散在本輪未觸及的檔案，屬獨立的清理工作。
+- **~~前端 77 個 lint error~~ → 已清為 0**。全部是 `no-unused-vars`：
+  64 個未使用的 import，13 個未使用的區域宣告。清理過程中連鎖浮現
+  （刪掉一個 interface 就讓它用到的 import 變成未使用），用迴圈跑到收斂。
+  順帶刪掉三個**完全沒有 export、零引用**的殘骸檔案：
+  `utils/logger.ts`（25 行，功能由 `utils/debug.ts` 承擔）、
+  `utils/tagColor.ts`（7 行，只剩一行 import，tags 系統已停用）、
+  `composables/useAIRankingHistory.ts`（103 行，localStorage 持久化寫好沒接上）。
+  仍有 965 個 warning（多為 `no-explicit-any`），屬另一輪工作。
 
 ### #009 ｜ 死模組普查：重構殘骸清單 ｜ 已完成清理
 

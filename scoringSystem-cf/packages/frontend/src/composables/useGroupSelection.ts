@@ -7,7 +7,7 @@
  * DRY principle: Replaces duplicate selection code in ProjectGroups and GlobalGroups
  */
 
-import { ref, computed, type Ref, type ComputedRef } from 'vue'
+import { type Ref, type ComputedRef } from 'vue'
 
 export interface UseGroupSelectionReturn {
   selectedIds: Ref<Set<string>>

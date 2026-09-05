@@ -10,8 +10,8 @@
  * This composable is for the admin NotificationManagement component.
  */
 
-import type { UseInfiniteQueryReturnType, UseQueryReturnType, UseMutationReturnType } from '@tanstack/vue-query'
-import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
+import type { UseInfiniteQueryReturnType, UseMutationReturnType } from '@tanstack/vue-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { computed, type Ref, type ComputedRef } from 'vue'
 import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'

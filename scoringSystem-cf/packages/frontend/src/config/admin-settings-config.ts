@@ -5,7 +5,7 @@
  * 這個檔案定義了所有系統設定欄位的配置，用於自動生成表單 UI
  */
 
-import type { ConfigCategory, ConfigField } from '@/types/config-panel'
+import type { ConfigCategory } from '@/types/config-panel'
 import { transforms } from './transforms'
 import { scoringSystemConfigCategories } from './scoring-system-config'
 

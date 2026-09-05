@@ -72,14 +72,6 @@ export interface GroupUpdateData {
   description?: string
 }
 
-/**
- * Mutation response types
- */
-interface AddMemberResponse {
-  success: boolean
-  message?: string
-}
-
 interface BatchAddMembersResponse {
   successCount: number
   addedMembers: GroupMember[]

@@ -1,7 +1,3 @@
-import { ref, type Ref } from 'vue'
-import { rpcClient, getSessionToken } from '@/utils/rpc-client'
-import { ElMessage } from 'element-plus'
-import type { Project, ApiResponse } from '@/types'
 
 /**
  * Project form data

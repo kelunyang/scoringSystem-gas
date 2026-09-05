@@ -11,7 +11,7 @@
  */
 
 import { computed, type Ref } from 'vue'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
+import { useQuery } from '@tanstack/vue-query'
 import { rpcClient } from '@/utils/rpc-client'
 import { useCurrentUser } from './useAuth'
 import { usePermissions } from './usePermissions'
