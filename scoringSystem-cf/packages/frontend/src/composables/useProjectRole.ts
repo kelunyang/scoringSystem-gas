@@ -16,6 +16,7 @@ import { rpcClient } from '@/utils/rpc-client'
 import { useCurrentUser } from './useAuth'
 import { usePermissions } from './usePermissions'
 import type { ProjectCoreData } from './useProjectDetail'
+import { hasProjectAdminRole } from './useProjectAdminRole'
 
 /**
  * Get project viewers (teachers and observers) for a project
@@ -120,14 +121,35 @@ export function useProjectRole(projectId: string | Ref<string | null>) {
    */
   const isMember = computed(() => !!role.value)
 
+
+  /**
+   * Level 0 for this project, matching the server's `checkProjectPermission`.
+   *
+   * Was `hasAnyPermission(['system_admin', 'create_project'])`, which granted
+   * administrative access over *every* project to anyone allowed to create one,
+   * and gave the project's own creator nothing. Returns null while the
+   * permission list is still loading, so callers can keep distinguishing
+   * "loading" from "no".
+   */
+  const isProjectAdmin = computed<boolean | null>(() => {
+    const hasSystemAdmin = hasAnyPermission(['system_admin'])
+    if (hasSystemAdmin === null) return null
+    if (hasSystemAdmin === true) return true
+
+    return hasProjectAdminRole(
+      [],
+      userQuery.data.value?.userId,
+      projectCoreQuery.data.value as { createdBy?: string | null } | undefined
+    )
+  })
+
   /**
    * Check if user can manage this project
-   * system_admin or create_project can manage all projects
-   * Teachers can manage their assigned projects
+   * Level 0 (system_admin or creator) manages any project they hold it on;
+   * teachers manage their assigned projects
    */
   const canManageProject = computed(() => {
-    const hasGlobalPerms = hasAnyPermission(['system_admin', 'create_project'])
-    if (hasGlobalPerms === true) return true
+    if (isProjectAdmin.value === true) return true
     return isTeacher.value
   })
 
@@ -136,8 +158,7 @@ export function useProjectRole(projectId: string | Ref<string | null>) {
    * Any viewer role or member grants view access
    */
   const canViewProject = computed(() => {
-    const hasGlobalPerms = hasAnyPermission(['system_admin', 'create_project'])
-    if (hasGlobalPerms === true) return true
+    if (isProjectAdmin.value === true) return true
     return isMember.value
   })
 
@@ -153,13 +174,13 @@ export function useProjectRole(projectId: string | Ref<string | null>) {
    */
   const permissionLevel = computed<0 | 1 | 2 | 3 | null>(() => {
     // Handle loading state
-    const hasGlobalPerms = hasAnyPermission(['system_admin', 'create_project'])
-    if (hasGlobalPerms === null) {
+    const admin = isProjectAdmin.value
+    if (admin === null) {
       return null // Still loading global permissions
     }
 
-    // Level 0: Global admin
-    if (hasGlobalPerms === true) {
+    // Level 0: system_admin or the project's creator
+    if (admin === true) {
       return 0
     }
 

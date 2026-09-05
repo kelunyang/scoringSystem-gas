@@ -22,6 +22,7 @@
 import { computed, type Ref } from 'vue'
 import { usePermissions } from './usePermissions'
 import type { Group, Project, AuthUser } from '@/types'
+import { hasProjectAdminRole } from './useProjectAdminRole'
 
 /**
  * Calculate detailed project permissions for a user
@@ -61,9 +62,15 @@ export function useDetailedProjectPermissions({ userData, project }: { userData:
     const globalPermissions = userData.value.permissions || []
     const projectData = project.value
 
-    // Level 0: Admin (system_admin or create_project)
-    const hasGlobalAdmin = globalPermissions.includes('system_admin') ||
-                          globalPermissions.includes('create_project')
+    // Level 0 uses the shared rule so it matches the server. The JSDoc at the
+    // top of this file already said "system_admin or project creator" — the
+    // code said `create_project` instead, in both the too-permissive and the
+    // too-restrictive direction.
+    const hasGlobalAdmin = hasProjectAdminRole(
+      globalPermissions,
+      userData.value?.userId,
+      projectData as { createdBy?: string | null }
+    )
 
     if (hasGlobalAdmin) {
       return {
@@ -200,11 +207,18 @@ export function useDetailedProjectPermissions({ userData, project }: { userData:
  * Calculate permissions for a single project object
  * (Standalone version without reactivity, for use in array mapping)
  *
- * @param {Object} project - Project data with viewerRole and userGroups
+ * @param {Object} project - Project data with viewerRole, userGroups and createdBy
  * @param {Array} globalPermissions - User's global permissions array
+ * @param {string} currentUserId - The acting user's id, compared against
+ *   `project.createdBy`. Without it a creator who lacks system_admin sees no
+ *   administrative controls on their own project.
  * @returns {Object} Permissions object
  */
-export function calculateProjectPermissions(project: Project, globalPermissions: string[] = []) {
+export function calculateProjectPermissions(
+  project: Project,
+  globalPermissions: string[] = [],
+  currentUserId?: string | null
+) {
   // Default: no access
   const defaultPermissions = {
     canEnter: false,
@@ -224,9 +238,12 @@ export function calculateProjectPermissions(project: Project, globalPermissions:
     return defaultPermissions
   }
 
-  // Level 0: Admin (system_admin or create_project)
-  const hasGlobalAdmin = globalPermissions.includes('system_admin') ||
-                        globalPermissions.includes('create_project')
+  // Level 0 via the shared rule — see useProjectAdminRole.ts
+  const hasGlobalAdmin = hasProjectAdminRole(
+    globalPermissions,
+    currentUserId,
+    project as { createdBy?: string | null }
+  )
 
   if (hasGlobalAdmin) {
     return {

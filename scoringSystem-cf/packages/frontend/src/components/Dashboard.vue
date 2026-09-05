@@ -529,7 +529,7 @@ const projectsWithPermissions = computed(() => {
 
       if (!cachedProject) {
         // Calculate permissions and create extended project object
-        const permissions = calculateProjectPermissions(project, globalPermissions) as PermissionFlags
+        const permissions = calculateProjectPermissions(project, globalPermissions, currentUserId.value) as PermissionFlags
         cachedProject = { ...project, permissions } as ProjectWithPermissions
 
         // Add to new cache

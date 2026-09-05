@@ -17,6 +17,7 @@
 import { computed, unref, type Ref, type ComputedRef } from 'vue'
 import type { Project, AuthUser } from '@/types'
 import { useSudoStore } from '@/stores/sudo'
+import { hasProjectAdminRole } from './useProjectAdminRole'
 
 /**
  * Permission level type
@@ -37,6 +38,18 @@ export interface UserGroup {
 export interface NormalizedProject {
   viewerRole?: 'admin' | 'teacher' | 'observer' | 'member'
   userGroups: UserGroup[]
+  /**
+   * The project creator's userId. The backend grants Level 0 to the creator
+   * (`checkProjectPermission`), and `viewerRole` never carries `'admin'`, so
+   * without this the frontend has no way to reach the same answer.
+   */
+  createdBy?: string | null
+  /**
+   * The acting user's id, compared against `createdBy`. Empty in sudo mode so
+   * a teacher viewing their own project as a student does not get their
+   * administrative controls back.
+   */
+  currentUserId?: string | null
 }
 
 /**
@@ -144,6 +157,11 @@ export function useProjectPermissions(
     // Normalize project data for permission calculation
     const normalizedProject: NormalizedProject = {
       viewerRole: effectiveViewerRole,
+      // Creator status is an identity, so sudo must drop it along with the
+      // global permissions above — otherwise a teacher impersonating a student
+      // on a project they created would see the admin view.
+      createdBy: isSudoActive ? null : ((project as any).project?.createdBy ?? (project as any).createdBy ?? null),
+      currentUserId: isSudoActive ? null : (user.userId ?? null),
       userGroups: normalizeUserGroups(
         project.userGroups || [],
         project.groups || [],
@@ -321,9 +339,15 @@ function calculatePermissionsByRole(
  * This is the core permission calculation logic
  */
 function calculateProjectPermissions(project: NormalizedProject, globalPermissions: string[] = []): PermissionFlags {
-  // Level 0: Admin (system_admin or create_project)
-  const hasGlobalAdmin = globalPermissions.includes('system_admin') ||
-                        globalPermissions.includes('create_project')
+  // Level 0 uses the shared rule so it matches the server: system_admin, or the
+  // project's creator. `create_project` is the permission to create *new*
+  // projects and used to be treated as admin over every existing one — see
+  // useProjectAdminRole.ts.
+  const hasGlobalAdmin = hasProjectAdminRole(
+    globalPermissions,
+    project.currentUserId,
+    { createdBy: project.createdBy }
+  )
 
   if (hasGlobalAdmin) {
     return {

@@ -2,6 +2,7 @@ import { computed, watch, unref, type Ref, type ComputedRef } from 'vue'
 import type { Group } from '@/types'
 import type { PermissionLevel } from './useProjectPermissions'
 import { useRoleSelectionStore } from '@/stores/roleSelection'
+import { hasProjectAdminRole } from './useProjectAdminRole'
 
 type MaybeRef<T> = T | Ref<T> | ComputedRef<T>
 
@@ -61,24 +62,13 @@ function detectUserRoles(projectData: any, userData: any) {
   const roles = []
   const userEmail = userData.userEmail || userData.email
 
-  // 检查全局管理员权限
+  // Level 0 via the shared rule: system_admin, or this project's creator.
+  // This file already checked the creator (by looking their userId up in the
+  // users list to get an email), but also treated `create_project` as admin
+  // over every project — the over-grant issue #006 describes.
   const globalPermissions = userData.permissions || []
-  const hasGlobalAdmin = globalPermissions.includes('system_admin') ||
-                         globalPermissions.includes('create_project')
-
-  if (hasGlobalAdmin) {
+  if (hasProjectAdminRole(globalPermissions, userData.userId, projectData.project)) {
     roles.push('admin')
-  }
-
-  // 检查项目创建者
-  // Note: createdBy stores userId, not email, so we need to look up the creator's email
-  const creatorUser = projectData.users?.find(
-    (u: any) => u.userId === projectData.project?.createdBy
-  )
-  if (creatorUser && creatorUser.userEmail === userEmail) {
-    if (!roles.includes('admin')) {
-      roles.push('admin')
-    }
   }
 
   // 检查 projectViewers 角色

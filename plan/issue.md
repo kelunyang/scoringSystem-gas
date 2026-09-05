@@ -381,6 +381,44 @@ skip 只是沒人拿掉。解除後 4 條全過。
 **教訓**：跳過的測試會在報告裡顯示為綠色。這輪之前
 `pnpm test` 的「4 skipped」看起來像是刻意保留，實際是兩個早已失效的理由。
 
+#### 己-5：前端權限實作分歧（原 #006，核心已修）
+
+**原判的分歧比記錄的更嚴重——是雙向的**：
+
+| 持有者 | 後端 `checkProjectPermission` | 前端（五處） |
+|--------|------------------------------|-------------|
+| `system_admin` | ✅ Level 0 | ✅ |
+| **專案建立者** | ✅ Level 0 | ❌ 沒判 |
+| **`create_project`** | ❌ 不算 | ✅ 當成 Level 0 |
+
+過寬那邊：有 `create_project` 的人在**所有**專案看到管理介面，按下去全 403。
+過嚴那邊：建立者若失去 `create_project` 就看不到自己專案的管理介面。
+兩者目前都沒爆，是因為唯一那個帳號兩個條件都滿足——正是 issue 預測的情況。
+
+**還有一個文件與實作分歧**：`useDetailedProjectPermissions.ts` 的檔頭 JSDoc
+寫的是「Level 0: Admin (system_admin or **project creator**)」——
+**文件跟後端一致，程式碼不一致**。
+
+**修法**：新增 `composables/useProjectAdminRole.ts`，用一個
+`hasProjectAdminRole(globalPermissions, userId, project)` 表達後端的規則。
+五處全部改用它（實際比 issue 記的四處多一處，`useRoleSwitch.ts` 也有）。
+
+**與 sudo 的交互作用（差點漏掉）**：`useProjectPermissions` 在 sudo 模式會
+清空全域權限並強制 `viewerRole = 'member'`。若建立者判定直接比對
+`project.createdBy === userId`，教師 sudo 成學生看**自己建立的專案**時
+會變回管理員，把 sudo 整個破壞掉。因此 sudo 模式下
+`createdBy` 與 `currentUserId` 一併傳 null——建立者身分和全域權限一樣要被剝除。
+
+**還沒做**：四套 composable 本身沒有合併（`useProjectPermissions`、
+`useDetailedProjectPermissions`、`useProjectRole`、`useRoleSwitch` 仍各自存在，
+各有各的旗標集合），以及「後端回傳算好的 permissions、前端不要自己算」
+那個方向。本次只統一了**會產生錯誤結果的那個判定**。
+issue 原本的評估仍成立：前端算錯最多是按鈕多顯示或少顯示，後端會擋。
+
+**測試**：`useProjectAdminRole.spec.ts` 7 條——system_admin 通過、
+建立者通過、`create_project` 在他人專案被拒、
+建立者在失去 `create_project` 後仍通過、載入中的 null 安全。
+
 #### 丙：Migrations ｜ 大部分已修，剩一項架構性待辦
 
 **原始問題**：兩套互相衝突的編號（0001/0003/0004/0005/0006 都撞號），
@@ -806,34 +844,6 @@ projects/viewers…）。通知面板與 WebSocket 廣播都正常運作。
 Vue template 內只出現在字串裡的元件名，可能被誤判為死碼——逐項確認過再刪。
 
 
-### #006 ｜ 前端有四套權限實作，其中兩套幾乎全死 ｜ 中
-
-**問題**：`packages/frontend/src/composables/` 底下有四個各自計算權限的地方：
-
-| 檔案 | 被誰用 | 實際被讀的部分 |
-|------|--------|----------------|
-| `useProjectPermissions.ts` | ProjectDetail.vue | 5 個旗標（`ProjectDetail.vue:1530-1534`） |
-| `useDetailedProjectPermissions.ts` | Dashboard.vue → `project.permissions` | ProjectCard 讀 3 個 |
-| `useProjectRole.ts` | Wallet.vue | **只有 `permissionLevel`**，其餘 9 個旗標無人讀 |
-| `usePermissionConfig.ts` | 1 處 | 另一套機制 |
-
-且**不是拿後端算好的答案**——`Dashboard.vue:532` 的 `calculateProjectPermissions(project, globalPermissions)`
-是前端自己從 `viewerRole` + `userGroups` 重算一遍。
-
-**已確認的死旗標**：
-- `canManageMembers`：全前端只剩 `ProjectCard.vue:667` 的一行註解說它被移除了
-- `canViewAll`：composable 算了但沒人讀
-
-**已確認的分歧**：`useDetailedProjectPermissions.ts:65-66` 把
-`create_project` 也算成 Level 0 管理員，後端的 `checkProjectPermission` 只認 `system_admin`。
-目前無人觸發（唯一的 Global PM 兩個權限都有），但一旦開出「能開課、非系統管理員」的
-帳號就會炸：按鈕全在，按下去全部 403。
-
-**建議方向**：後端回專案資料時一併回傳 `permissions` 物件，前端直接用，不要自己算。
-四套變兩套（一套判斷、一套顯示）。**優先度低於補測試**——前端算錯最多是按鈕多顯示或
-少顯示，按下去後端還是會擋。
-
----
 
 ### #005 ｜ 71 段權限判斷的原始 SQL 尚未收斂 ｜ 中
 
