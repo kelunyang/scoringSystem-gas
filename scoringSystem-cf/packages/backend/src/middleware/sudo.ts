@@ -124,8 +124,8 @@ export async function processSudoHeaders(c: Context<{ Bindings: Env; Variables: 
     // 4. Log sudo activity (non-blocking)
     //
     // Capture the writable DB now. By the time this waitUntil body runs, the
-    // auth middleware has replaced `c.env` with a copy whose DB is the
-    // read-only sudo proxy, and the audit log is a write.
+    // auth middleware has replaced `c.env` for this request with a copy whose
+    // DB is the read-only sudo proxy, and the audit log is a write.
     const originalDB = c.env.DB;
     c.executionCtx.waitUntil(
       (async () => {

@@ -230,38 +230,36 @@ await verifyPassword(password, dummyHash);  // 宣稱防時序攻擊
 
 ---
 
-#### 乙：sudo 唯讀模式會污染整個 isolate
+#### 乙：sudo ｜ **原判有一半是錯的**（2026-09-05 實測更正）
 
-`middleware/auth.ts:229`：
+**原判**：`middleware/auth.ts:229` 的 `(c.env as any).DB = createSudoSafeDB(c.env.DB)`
+會汙染整個 isolate，因為 Workers 的 `env` 是跨請求共用物件。
 
-```ts
-(c.env as any).DB = createSudoSafeDB(c.env.DB);
-```
+**實測結果：這部分是錯的。** `env` 是每次 invocation 的新物件。
+證據見 pitfalls.md 2026-09-05「我以為 `c.env` 跨請求共用」條目
+（功能測試 + `/__env-probe` 探針，`envIsShared` 恆為 false）。
+原本的 in-place 寫法沒有洩漏。
 
-**`c.env` 在 Cloudflare Workers 不是 request-scoped**——它是 isolate 層級的物件，
-同一個 isolate 內所有請求拿到的是同一個參照。這裡把 `DB` 換成唯讀 Proxy 之後
-**從來沒有還原**（全域 grep 只有這一處賦值）。後果：
+**真正成立的部分**：`createSudoSafeStatement` 只擋 `.run()`，
+但 D1 的 `.first()` / `.all()` / `.raw()` 一樣能執行寫入。這是真的洞。
 
-1. **併發污染（必然發生）**：一個 sudo 請求進行中，同 isolate 內任何其他
-   同時在跑的請求，`c.env.DB` 都會變成唯讀 Proxy，所有寫入丟
-   `SudoWriteBlockedError` → 被 `app.onError`（`index.ts:275`）翻譯成
-   403「SUDO 模式為唯讀」。使用者會看到一個跟自己操作毫無關係的錯誤。
-2. **持久污染**：由於沒有還原，isolate 被回收前，**之後每一個請求**都繼承
-   唯讀 DB。而且每次 sudo 都再包一層，Proxy 會不斷疊加。
+**已做的修復**：
+- proxy 改為攔截四個執行方法，並在 `prepare(sql)` 時就捕獲 SQL、
+  由 `bind()` 傳遞下去——**不再探測 runtime 內部屬性**。
+  第一版用 `stmt.statement ?? stmt.sql` 探測、讀不到就放行，
+  那是我自己在 guard 裡種的 fail-open，已移除。
+- 判定改為「開頭是讀取關鍵字」**且**「全文不含變更關鍵字」，
+  擋掉 SQLite 允許的 `WITH ... DELETE`。
+- `(c as any).env = { ...c.env, DB: ... }` 的寫法保留，
+  理由改為「不依賴 runtime 細節」，而非原本錯誤的「防洩漏」。
 
-`middleware/sudo.ts:127` 的註解其實已經察覺這個 mutation 逃逸了
-（「by which time `c.env.DB` is wrapped」），只是解讀成「waitUntil 時序問題」，
-用「先存一份 originalDB」繞過，沒往上追到 env 是共享物件。
-
-**修法**：不要動 `c.env`。改成 `c.set('db', sudoSafeDB)`，handler 一律從
-context 取 DB；或維持現行的路徑白名單（`middleware/auth.ts:145-215`）當唯一防線，
-把 Proxy 這層拿掉。前者較正確但要改所有 handler，後者一行就能止血。
-
-**乙-2（次要）**：`createSudoSafeStatement` 只擋 `.run()`，
-但 D1 的 `.first()` / `.all()` 一樣能執行 INSERT/UPDATE/DELETE。
-目前靠路徑白名單兜住，但 Proxy 本身不是完整防線。
-
----
+**測試覆蓋**（本次補上，先前完全沒有）：
+- `tests/utils/sudo-db-proxy.test.ts`：13 條，對真實 SQLite 驗證
+  阻擋後「資料真的沒被改動」，含 `WITH ... DELETE`、
+  連續 `bind()`、以及「proxy 不會污染原始 binding」。
+- 整合測試（本地 wrangler dev + 虛構教師／學生／路人 fixture）：
+  正常讀取、sudo 讀取、sudo 寫入被擋、路人不能 sudo、
+  不能 sudo 成另一個教師、以及 sudo 後正常寫入仍成功（連跑 5 輪）。
 
 #### 丙：Migrations 目錄是壞的，全新環境建不起來
 

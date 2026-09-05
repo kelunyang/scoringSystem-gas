@@ -1,23 +1,30 @@
 /**
- * @fileoverview D1 Database Proxy for Sudo Mode
+ * @fileoverview D1 Database proxy for sudo (impersonation) mode.
  *
- * Creates a Proxy wrapper around D1Database that blocks all write operations
- * when in sudo mode. This provides a unified write-blocking layer that
- * doesn't require modifying individual handlers.
+ * Wraps a D1Database so that, while an Observer or Teacher is viewing the app
+ * as a student, nothing can write. This is the safety net behind the path
+ * whitelist in middleware/auth.ts — the whitelist decides which endpoints may
+ * run at all, this makes sure a stray write inside an allowed endpoint still
+ * cannot land.
  *
- * Blocked operations:
- * - D1PreparedStatement.run()/.first()/.all()/.raw() carrying a write statement
- * - D1Database.batch() - Batch operations
- * - D1Database.exec() - Raw SQL execution
+ * Two things this deliberately does NOT do:
  *
- * Allowed operations:
- * - D1PreparedStatement.first()/.all()/.raw() carrying a SELECT/WITH/PRAGMA
- * - D1Database.prepare() - Prepare statements (allowed, but run() blocked)
- * - D1Database.dump() - Database dump (read-only)
+ * - It does not guess at the statement's SQL by reading undocumented runtime
+ *   properties. The SQL is handed to `prepare()`, so it is captured there and
+ *   threaded through `bind()`. An earlier version probed `stmt.statement ??
+ *   stmt.sql` and *allowed the call* when neither was a string, which made the
+ *   guard silently fail open on any D1 version that named the field
+ *   differently.
+ * - It does not block only `.run()`. D1 executes whatever statement it holds
+ *   through `.first()`, `.all()` and `.raw()` just as happily, so blocking one
+ *   method left the wrapper looking like a guarantee while being bypassable by
+ *   a one-word change at the call site.
  */
 
 /**
- * Error thrown when a write operation is attempted in sudo mode
+ * Error thrown when a write is attempted in sudo mode.
+ *
+ * `index.ts` maps this to a 403 with code SUDO_NO_WRITE.
  */
 export class SudoWriteBlockedError extends Error {
   constructor(operation: string) {
@@ -27,118 +34,120 @@ export class SudoWriteBlockedError extends Error {
 }
 
 /**
- * SQL that only reads. Anything else is refused in sudo mode.
+ * Statement prefixes that only read.
  *
- * Deliberately a whitelist: an unrecognised statement is treated as a write.
+ * A whitelist, so anything unrecognised counts as a write. `WITH` is included
+ * because common table expressions are the usual shape of the reporting
+ * queries this app runs — note that SQLite also allows `WITH ... DELETE`, which
+ * is why {@link isReadOnlySql} additionally rejects any statement containing a
+ * mutating keyword.
  */
-const READ_ONLY_PREFIXES = ['select', 'with', 'pragma table_info', 'explain'];
+const READ_ONLY_PREFIXES = ['select', 'with', 'explain', 'pragma'];
+
+/** Keywords that mutate, matched anywhere in the statement as whole words. */
+const MUTATING_KEYWORDS = /\b(insert|update|delete|replace|drop|alter|create|truncate|attach|detach|vacuum|reindex)\b/i;
 
 /**
- * Best-effort read of the SQL a prepared statement carries.
+ * Whether a statement is safe to execute in sudo mode.
  *
- * D1PreparedStatement does not expose its SQL in the public type, but the
- * runtime object carries it. When it cannot be read we return null and the
- * caller falls back to allowing the call — the path whitelist in
- * middleware/auth.ts is the primary defence; this proxy is the safety net.
- */
-function readStatementSql(stmt: D1PreparedStatement): string | null {
-  const raw = (stmt as unknown as { statement?: unknown; sql?: unknown });
-  const candidate = raw.statement ?? raw.sql;
-  return typeof candidate === 'string' ? candidate : null;
-}
-
-/**
- * Whether a statement only reads.
+ * Both conditions must hold: it starts with a reading keyword, and it contains
+ * no mutating keyword anywhere. The second check is what stops
+ * `WITH x AS (...) DELETE FROM ...` and any `SELECT` with a mutating CTE.
  *
- * @param sql - The statement text
- * @returns true when the statement is safe to run in sudo mode
+ * @param sql - The statement text as passed to `prepare()`
+ * @returns true when the statement only reads
+ *
+ * @example
+ * isReadOnlySql('SELECT 1')                       // true
+ * isReadOnlySql('WITH t AS (SELECT 1) SELECT * FROM t')  // true
+ * isReadOnlySql('WITH t AS (SELECT 1) DELETE FROM users') // false
+ * isReadOnlySql('UPDATE users SET x = 1')         // false
  */
-function isReadOnlySql(sql: string): boolean {
+export function isReadOnlySql(sql: string): boolean {
   const normalised = sql.trim().toLowerCase();
-  return READ_ONLY_PREFIXES.some(prefix => normalised.startsWith(prefix));
+  if (!READ_ONLY_PREFIXES.some(prefix => normalised.startsWith(prefix))) {
+    return false;
+  }
+  return !MUTATING_KEYWORDS.test(normalised);
 }
 
 /**
- * Create a sudo-safe D1PreparedStatement proxy
- * Blocks any execution of a non-read statement.
+ * Wrap a prepared statement so that executing it is refused unless its SQL only reads.
+ *
+ * @param stmt - The statement returned by `prepare()` or `bind()`
+ * @param sql - The SQL that produced it, captured at `prepare()` time
  */
-function createSudoSafeStatement(stmt: D1PreparedStatement): D1PreparedStatement {
+function createSudoSafeStatement(stmt: D1PreparedStatement, sql: string): D1PreparedStatement {
+  const readOnly = isReadOnlySql(sql);
+
   return new Proxy(stmt, {
     get(target, prop: keyof D1PreparedStatement) {
       const value = target[prop];
 
-      // Block every method that can execute the statement, not just .run().
-      // D1 happily runs an INSERT/UPDATE/DELETE through .first(), .all() or
-      // .raw() as well — blocking only .run() left the wrapper looking like a
-      // guarantee while being bypassable by a one-word change at the call site.
+      // Every method that can execute the statement.
       if (prop === 'run' || prop === 'first' || prop === 'all' || prop === 'raw') {
         const method = prop;
         return (...args: unknown[]) => {
-          const sql = readStatementSql(target);
-          if (sql !== null && !isReadOnlySql(sql)) {
-            throw new SudoWriteBlockedError(`D1PreparedStatement.${method}() on a write statement`);
+          if (!readOnly) {
+            throw new SudoWriteBlockedError(`D1PreparedStatement.${method}()`);
           }
           return (target[method] as (...a: unknown[]) => unknown).apply(target, args);
         };
       }
 
-      // .bind() returns a new statement, so we need to wrap that too
+      // bind() returns a fresh statement; carry the SQL through so the copy is
+      // judged by the same rule rather than falling back to "unknown".
       if (prop === 'bind') {
         return (...args: unknown[]) => {
-          const boundStmt = (target.bind as (...args: unknown[]) => D1PreparedStatement)(...args);
-          return createSudoSafeStatement(boundStmt);
+          const bound = (target.bind as (...a: unknown[]) => D1PreparedStatement)(...args);
+          return createSudoSafeStatement(bound, sql);
         };
       }
 
-      // Allow all other operations (.first, .all, .raw)
       if (typeof value === 'function') {
-        return value.bind(target);
+        return (value as (...a: unknown[]) => unknown).bind(target);
       }
-
       return value;
     }
   });
 }
 
 /**
- * Create a sudo-safe D1Database proxy
- * Blocks write operations while allowing reads
+ * Wrap a D1Database so writes are refused.
  *
- * @param db - The original D1Database instance
- * @returns A proxied D1Database that blocks writes
+ * IMPORTANT for callers: assign the result to a per-request copy of the
+ * environment (`(c as any).env = { ...c.env, DB: createSudoSafeDB(c.env.DB) }`),
+ * never to `c.env.DB`. In Workers the `env` object is shared by every request
+ * an isolate handles, so mutating a binding on it leaks into concurrent and
+ * subsequent requests.
+ *
+ * @param db - The real D1 binding
+ * @returns A proxy that reads normally and throws {@link SudoWriteBlockedError} on writes
+ *
+ * @example
+ * (c as any).env = { ...c.env, DB: createSudoSafeDB(c.env.DB) };
  */
 export function createSudoSafeDB(db: D1Database): D1Database {
   return new Proxy(db, {
     get(target, prop: keyof D1Database) {
       const value = target[prop];
 
-      // .prepare() - wrap the returned statement
       if (prop === 'prepare') {
-        return (sql: string) => {
-          const stmt = target.prepare(sql);
-          return createSudoSafeStatement(stmt);
-        };
+        return (sql: string) => createSudoSafeStatement(target.prepare(sql), sql);
       }
 
-      // .batch() - block completely (used for transactions)
+      // batch() is how transactions are written here, and exec() runs raw SQL.
+      // Neither is worth allowing read-only variants of in an impersonation view.
       if (prop === 'batch') {
-        return () => {
-          throw new SudoWriteBlockedError('D1Database.batch()');
-        };
+        return () => { throw new SudoWriteBlockedError('D1Database.batch()'); };
       }
-
-      // .exec() - block completely (raw SQL execution)
       if (prop === 'exec') {
-        return () => {
-          throw new SudoWriteBlockedError('D1Database.exec()');
-        };
+        return () => { throw new SudoWriteBlockedError('D1Database.exec()'); };
       }
 
-      // Allow .dump() (read-only)
       if (typeof value === 'function') {
-        return value.bind(target);
+        return (value as (...a: unknown[]) => unknown).bind(target);
       }
-
       return value;
     }
   });

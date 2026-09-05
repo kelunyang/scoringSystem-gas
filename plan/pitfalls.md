@@ -176,54 +176,61 @@ if (!await verifyPreAuthToken(...)) return 401;     // ← 才驗證
    不要看到有實作就以為有防護。
 
 ---
-## 2026-09-05 ｜ 不要 mutate `c.env`：它是 isolate 共用的，會汙染別的請求
+## 2026-09-05 ｜ 我以為 `c.env` 跨請求共用——**錯的**，但 sudo proxy 只擋 `.run()` 是真的
 
-**症狀**：無回報，但屬於會產生「幽靈錯誤」的那種——
-使用者在完全正常的操作中收到 403「SUDO 模式為唯讀」。
+**這條原本寫反了，2026-09-05 當日實測後全文改寫。** 保留下來是因為
+「錯誤推論的過程」本身就是教訓。
 
-**根因**：sudo 唯讀模式在 `middleware/auth.ts` 這樣實作：
+**原本的主張**：sudo 唯讀模式在 `middleware/auth.ts` 做
+`(c.env as any).DB = createSudoSafeDB(c.env.DB)`，而 Workers 的 `env` 是
+isolate 層級共用物件且從未還原，所以會汙染同 isolate 的其他請求。
 
-```ts
-(c.env as any).DB = createSudoSafeDB(c.env.DB);
-```
+**實測結果：錯的。** 兩個獨立證據：
 
-Cloudflare Workers 的 `env` **不是 request-scoped**，
-是 isolate 層級的物件，同一個 isolate 內所有請求拿到同一個參照。
-而這行改完**從來沒有還原**。後果有兩層：
+1. **功能測試**：把程式碼還原成 `(c.env as any).DB = ...`，
+   發一個 sudo 請求，緊接著發一個正常寫入請求——**成功**，連發兩次都成功。
+2. **直接探針**：臨時加一支端點
+   ```ts
+   app.get('/__env-probe', (c) => {
+     const e = c.env as any;
+     const seenBefore = e.__probeMark === true;
+     e.__probeMark = true;
+     return c.json({ envIsShared: seenBefore });
+   });
+   ```
+   連續呼叫三次，每次都回 `{"envIsShared":false}`。
+   **`env` 是每次 invocation 的新物件，寫它不會外洩。**
 
-1. **併發汙染**：sudo 請求進行中，同 isolate 內其他同時在跑的請求
-   全部拿到唯讀 DB，寫入丟 `SudoWriteBlockedError`，
-   被 `app.onError` 翻成 403。錯誤訊息跟使用者的操作毫無關係。
-2. **持久汙染**：沒有還原，isolate 回收前**每一個後續請求**都繼承唯讀 DB，
-   而且每次 sudo 再包一層 Proxy。
+**同一條目裡真正成立的部分**：`createSudoSafeStatement` 原本只擋 `.run()`，
+但 D1 的 `.first()` / `.all()` / `.raw()` 一樣會執行 INSERT/UPDATE/DELETE。
+這個是真的洞，已修，並補上 13 條對真實 SQLite 的單元測試
+（`tests/utils/sudo-db-proxy.test.ts`）驗證「寫入真的沒有落地」。
 
-`middleware/sudo.ts` 的註解其實已經撞到這個現象
-（「by which time `c.env.DB` is wrapped」），但解讀成 waitUntil 的時序問題，
-用「先存一份 originalDB」繞過，沒往上追到 env 是共享物件。
-
-**修法**：改成替換整個 `c.env`（`c` 才是 per-request 的）：
-
-```ts
-(c as any).env = { ...c.env, DB: createSudoSafeDB(c.env.DB) };
-```
-
-**順帶修掉的第二個洞**：`createSudoSafeStatement` 只擋 `.run()`，
-但 D1 的 `.first()` / `.all()` / `.raw()` 一樣能執行 INSERT/UPDATE/DELETE。
-現在四個方法都會先檢查 SQL 是不是唯讀（白名單：select / with / pragma / explain），
-不是就擋。
+**修 proxy 時發現的第二個問題（我自己種的）**：我第一版用
+`stmt.statement ?? stmt.sql` 去探測 runtime 內部屬性取得 SQL，
+**讀不到就 fallback 成放行**。等於在一個安全防護裡放了一個 fail-open。
+正解是 SQL 在 `prepare(sql)` 時就在手上，顯式帶下去、並讓 `bind()` 傳遞它，
+完全不需要猜。順帶加上「開頭是讀取關鍵字」**且**「全文不含變更關鍵字」雙重判定，
+擋掉 SQLite 允許的 `WITH ... DELETE`。
 
 **教訓與防護**：
 
-1. **Workers 裡 `env` 是共享的，永遠不要寫它。** 需要 per-request 的
-   binding 覆寫，就替換 `c.env` 整包（淺拷貝），或改用 `c.set()`。
-2. **「繞過一個奇怪現象」之前先解釋它。** 那句註解已經觀察到正確的事實，
-   但停在「加個變數就好了」。如果當時多問一句「為什麼 waitUntil 裡
-   `c.env.DB` 還是包過的？」，就會追到 env 是共享物件。
-   **繞過去的成本是 5 分鐘，弄懂的成本也是 5 分鐘，但後者順便修掉一個 bug。**
-3. **安全的 wrapper 只擋一個方法，等於沒擋。** 列舉「所有能達成該效果的路徑」，
-   不是「最常見的那一條」。
+1. **「這個 runtime 的語義是什麼」不能用推論回答，要用探針回答。**
+   我連續三次犯同一類錯（`getSmtpConfig` 的 fail-open 條件、
+   Turnstile 是否啟用、`env` 是否共用），全部是「讀了程式碼／設定檔就下結論」。
+   寫一支 5 行的探針端點花不到十分鐘，而錯誤的結論會變成文件、
+   變成別人的行動依據。
+2. **安全防護裡不可以有 fail-open 的 fallback。** 「讀不到就放行」在任何
+   guard 裡都是錯的。如果資訊拿不到，正確做法是拒絕，或者
+   **換一個一定拿得到那個資訊的設計**——後者通常存在，只是要多想五分鐘。
+3. **不確定的結論要標記為不確定。** 我當時寫「`c.env` 是 isolate 共用」
+   時心裡是「應該是」，但落筆變成斷言，還寫進了 commit message 和 pitfalls。
+   下次該寫的是「疑似，待驗證」，然後去驗證。
 
----
+**現況**：`(c as any).env = { ...c.env, DB: ... }` 的寫法保留，
+但理由改成「一次物件展開的成本，換掉對 runtime 細節的依賴」，
+而不是原本那個錯誤的「防止洩漏」。
+
 ## 2026-09-04 ｜ 元件測試裡 `el-tooltip` 包住的 DOM 全部消失，斷言抓到 0 個元素
 
 **症狀**：新寫的 `StagePointsShareChart` 元件測試，`wrapper.findAll('.share-seg')`

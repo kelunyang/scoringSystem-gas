@@ -246,15 +246,18 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: HonoV
           }
         }, 403);
       }
-      // Wrap DB for reads (as a safety net for any writes that slip through).
+      // Wrap DB for reads, as a safety net behind the path whitelist above.
       //
-      // This MUST replace `c.env` wholesale rather than assign `c.env.DB`.
-      // In Workers the `env` object is shared across every request an isolate
-      // handles, so mutating a binding on it leaks: concurrent requests would
-      // suddenly see a read-only DB and fail with SUDO_NO_WRITE, and since
-      // nothing ever restored it, every later request in that isolate inherited
-      // the read-only wrapper (re-wrapped once more on each sudo request).
-      // A shallow copy is per-request because `c` is per-request.
+      // Replaces `c.env` with a per-request copy rather than assigning
+      // `c.env.DB`. Measured on workerd (2026-09-05): `env` is a fresh object
+      // per invocation — a probe endpoint that set a marker on `c.env` read it
+      // back as absent on the next request, and the previous in-place version
+      // did not break writes on subsequent requests. So the in-place assignment
+      // was NOT leaking, contrary to what an earlier note here claimed.
+      //
+      // The copy is kept anyway because it costs one object spread and does not
+      // depend on that runtime detail staying true. Do not "simplify" it back
+      // to mutating the binding.
       (c as any).env = { ...c.env, DB: createSudoSafeDB(c.env.DB) };
     }
 
