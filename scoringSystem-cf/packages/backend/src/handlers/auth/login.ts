@@ -337,7 +337,7 @@ export async function changePassword(
     // current session dies on its next request — the user would be logged out
     // by their own password change, which is not what "change my password"
     // should do. Every *other* session still dies, which is the point.
-    const sessionTimeout = parseInt(await getConfigValue(env, 'SESSION_TIMEOUT'));
+    const sessionTimeout = await getConfigValue(env, 'SESSION_TIMEOUT', { parseAsInt: true });
     const newSessionId = await generateToken(
       userId,
       user.userEmail as string,

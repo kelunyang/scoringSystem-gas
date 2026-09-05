@@ -78,7 +78,7 @@ authRouter.post(
       return c.json(turnstileError, 403);
     }
 
-    const sessionTimeout = parseInt(await getConfigValue(c.env, 'SESSION_TIMEOUT'));
+    const sessionTimeout = await getConfigValue(c.env, 'SESSION_TIMEOUT', { parseAsInt: true });
 
     const result = await registerUser(
       c.env,
@@ -266,7 +266,7 @@ authRouter.post('/current-user', async (c) => {
         payload.userId,
         payload.userEmail,
         c.env.JWT_SECRET,
-        parseInt(sessionTimeout)
+        Number(sessionTimeout)
       );
 
       // Parse the validation response to add newToken field
@@ -301,7 +301,7 @@ authRouter.post('/refresh-token', authMiddleware, async (c) => {
   const user = c.get('user');
 
   // Generate new token with same payload
-  const sessionTimeout = parseInt(await getConfigValue(c.env, 'SESSION_TIMEOUT'));
+  const sessionTimeout = await getConfigValue(c.env, 'SESSION_TIMEOUT', { parseAsInt: true });
   const { generateToken } = await import('../handlers/auth/jwt');
 
   const newToken = await generateToken(
@@ -979,7 +979,7 @@ authRouter.post(
     const smtpConfigured = smtpConfig !== null;
 
     // Generate JWT token
-    const sessionTimeout = parseInt(await getConfigValue(c.env, 'SESSION_TIMEOUT'));
+    const sessionTimeout = await getConfigValue(c.env, 'SESSION_TIMEOUT', { parseAsInt: true });
     const token = await generateToken(
       user.userId as string,
       user.userEmail as string,
@@ -1975,7 +1975,7 @@ authRouter.post(
       }
 
       // Generate JWT token
-      const sessionTimeout = parseInt(await getConfigValue(c.env, 'SESSION_TIMEOUT'));
+      const sessionTimeout = await getConfigValue(c.env, 'SESSION_TIMEOUT', { parseAsInt: true });
       const sessionId = await generateToken(
         result.userId,
         body.userEmail,

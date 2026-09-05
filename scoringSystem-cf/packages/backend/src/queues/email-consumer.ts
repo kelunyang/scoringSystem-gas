@@ -179,7 +179,7 @@ export default {
               code,
               validDays,
               createdBy,
-              await getConfigValue(env, 'WEB_APP_URL'),
+              String(await getConfigValue(env, 'WEB_APP_URL')),
               systemTitle
             );
 
@@ -225,7 +225,7 @@ export default {
               ip,
               country,
               systemTitle,
-              await getConfigValue(env, 'WEB_APP_URL')
+              String(await getConfigValue(env, 'WEB_APP_URL'))
             );
 
             // Send email
@@ -269,7 +269,7 @@ export default {
               displayName,
               newPassword,
               systemTitle,
-              await getConfigValue(env, 'WEB_APP_URL')
+              String(await getConfigValue(env, 'WEB_APP_URL'))
             );
 
             // Send email
@@ -310,7 +310,7 @@ export default {
               userEmail,
               code,
               systemTitle,
-              await getConfigValue(env, 'WEB_APP_URL')
+              String(await getConfigValue(env, 'WEB_APP_URL'))
             );
 
             // Send email
@@ -396,7 +396,7 @@ export default {
               displayName,
               unlockedBy,
               systemTitle,
-              await getConfigValue(env, 'WEB_APP_URL')
+              String(await getConfigValue(env, 'WEB_APP_URL'))
             );
 
             const result = await sendEmail(env, {
@@ -440,7 +440,7 @@ export default {
               periodStart,
               periodEnd,
               systemTitle,
-              await getConfigValue(env, 'WEB_APP_URL')
+              String(await getConfigValue(env, 'WEB_APP_URL'))
             );
 
             const result = await sendEmail(env, {

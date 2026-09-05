@@ -46,8 +46,8 @@ const systemRouter = new Hono<{ Bindings: Env }>();
  */
 systemRouter.post('/turnstile-config', async (c) => {
   // Use KV-first configuration strategy
-  const enabled = await getConfigValue(c.env, 'TURNSTILE_ENABLED');
-  const siteKey = await getConfigValue(c.env, 'TURNSTILE_SITE_KEY');
+  const enabled = String(await getConfigValue(c.env, 'TURNSTILE_ENABLED'));
+  const siteKey = String(await getConfigValue(c.env, 'TURNSTILE_SITE_KEY'));
 
   const data: z.infer<typeof TurnstileConfigSchema> = {
     enabled: enabled === 'true',
@@ -66,7 +66,7 @@ systemRouter.post('/turnstile-config', async (c) => {
  */
 systemRouter.get('/info', async (c) => {
   const systemTitle = await getSystemTitle(c.env);
-  const brandingIcon = await getConfigValue(c.env, 'BRANDING_ICON') || 'fa-star';
+  const brandingIcon = String(await getConfigValue(c.env, 'BRANDING_ICON') || 'fa-star');
 
   const data: z.infer<typeof SystemInfoSchema> = {
     name: 'Scoring System API',
@@ -90,7 +90,7 @@ systemRouter.get('/info', async (c) => {
  */
 systemRouter.post('/info', async (c) => {
   const systemTitle = await getSystemTitle(c.env);
-  const brandingIcon = await getConfigValue(c.env, 'BRANDING_ICON') || 'fa-star';
+  const brandingIcon = String(await getConfigValue(c.env, 'BRANDING_ICON') || 'fa-star');
 
   const data: z.infer<typeof SystemInfoSchema> = {
     name: 'Scoring System API',

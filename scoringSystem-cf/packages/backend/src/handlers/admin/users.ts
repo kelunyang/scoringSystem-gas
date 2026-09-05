@@ -17,6 +17,30 @@ import type { SqlBindValue } from '../../types';
  * Get all users (for admin use)
  * Supports server-side filtering, searching, and sorting
  */
+/** 使用者所屬的全域群組，附在管理後台的使用者清單上。 */
+interface UserGlobalGroup {
+  groupId: string;
+  groupName: string;
+  description: string | null;
+  globalPermissions: string[];
+}
+
+/** 管理後台使用者清單查詢回來的一列。 */
+interface AdminUserRow {
+  userId: string;
+  userEmail: string;
+  displayName: string;
+  status: string;
+  registrationTime: number | null;
+  lastActivityTime: number | null;
+  avatarSeed: string | null;
+  avatarStyle: string | null;
+  avatarOptions: string | null;
+  lockUntil: number | null;
+  lockReason: string | null;
+  lockCount: number;
+}
+
 export async function getAllUsers(
   env: Env,
   options?: {
@@ -82,14 +106,16 @@ export async function getAllUsers(
     const sortOrder = options?.sortOrder || 'desc';
 
     // Strict validation to prevent SQL injection - only allow whitelisted values
-    const validSortColumns = ['registrationTime', 'email', 'displayName', 'lastActivityTime'] as const;
-    const validSortOrders = ['asc', 'desc'] as const;
+    // readonly string[] 而不是 tuple：includes() 才收得下任意字串，
+    // 這正是這裡要做的事——驗證外部傳進來的值。
+    const validSortColumns: readonly string[] = ['registrationTime', 'email', 'displayName', 'lastActivityTime'];
+    const validSortOrders: readonly string[] = ['asc', 'desc'];
 
-    if (!validSortColumns.includes(sortBy as any)) {
+    if (!validSortColumns.includes(sortBy)) {
       return errorResponse('INVALID_INPUT', `Invalid sortBy value: ${sortBy}`);
     }
 
-    if (!validSortOrders.includes(sortOrder as any)) {
+    if (!validSortOrders.includes(sortOrder)) {
       return errorResponse('INVALID_INPUT', `Invalid sortOrder value: ${sortOrder}`);
     }
 
@@ -150,7 +176,7 @@ export async function getAllUsers(
       ${whereClause}
       ${orderClause}
       ${limitClause}
-    `).bind(...params).all();
+    `).bind(...params).all<AdminUserRow>();
 
     // Execute both queries in parallel
     const [countResult, usersResult] = await Promise.all([countQuery, usersQuery]);
@@ -158,15 +184,6 @@ export async function getAllUsers(
     const totalCount = countResult?.total || 0;
     const users = usersResult.results || [];
 
-    // DISABLED: Batch fetch all user tags - tags system has been disabled
-    /*
-    const allUserTags = await env.DB.prepare(`
-      SELECT ut.userEmail, t.tagId, t.tagName
-      FROM usertags ut
-      JOIN globaltags t ON ut.tagId = t.tagId
-      WHERE ut.isActive = 1 AND t.isActive = 1
-    `).all();
-    */
 
     // Batch fetch all user global groups in one query
     const allUserGroups = await env.DB.prepare(`
@@ -174,25 +191,18 @@ export async function getAllUsers(
       FROM globalusergroups gug
       JOIN globalgroups gg ON gug.globalGroupId = gg.globalGroupId
       WHERE gug.isActive = 1 AND gg.isActive = 1
-    `).all();
+    `).all<{
+      userEmail: string;
+      globalGroupId: string;
+      groupName: string;
+      description: string | null;
+      globalPermissions: string | null;
+    }>();
 
-    // DISABLED: Organize tags by user email - tags system has been disabled
-    /*
-    const tagsByUser = new Map<string, any[]>();
-    allUserTags.results?.forEach((tag: any) => {
-      if (!tagsByUser.has(tag.userEmail)) {
-        tagsByUser.set(tag.userEmail, []);
-      }
-      tagsByUser.get(tag.userEmail)!.push({
-        tagId: tag.tagId,
-        tagName: tag.tagName
-      });
-    });
-    */
 
     // Organize groups by user email using Map for O(1) lookup
-    const groupsByUser = new Map<string, any[]>();
-    allUserGroups.results?.forEach((group: any) => {
+    const groupsByUser = new Map<string, UserGlobalGroup[]>();
+    allUserGroups.results?.forEach(group => {
       if (!groupsByUser.has(group.userEmail)) {
         groupsByUser.set(group.userEmail, []);
       }
@@ -205,7 +215,7 @@ export async function getAllUsers(
     });
 
     // Combine data without additional database queries
-    const enrichedUsers = users.map((user: any) => ({
+    const enrichedUsers = users.map(user => ({
       ...user,
       // DISABLED: tags: tagsByUser.get(user.userEmail) || [],
       globalGroups: groupsByUser.get(user.userEmail) || []
@@ -531,7 +541,7 @@ export async function batchUpdateUserStatus(
     `).bind(...userEmails).all();
 
     const existingUsers = existingUsersResult.results || [];
-    const existingUserEmails = new Set(existingUsers.map((u: any) => u.userEmail));
+    const existingUserEmails = new Set(existingUsers.map(u => u.userEmail));
 
     // Build results array
     const results: Array<{
@@ -555,7 +565,7 @@ export async function batchUpdateUserStatus(
       }
 
       // Check if status is already the same
-      const user = existingUsers.find((u: any) => u.userEmail === userEmail);
+      const user = existingUsers.find(u => u.userEmail === userEmail);
       if (user?.status === status) {
         results.push({
           userEmail,
@@ -717,9 +727,15 @@ export async function getUserGlobalGroups(
       FROM globalusergroups gug
       JOIN globalgroups gg ON gug.globalGroupId = gg.globalGroupId
       WHERE gug.userEmail = ? AND gug.isActive = 1
-    `).bind(userEmail).all();
+    `).bind(userEmail).all<{
+      globalGroupId: string;
+      groupName: string;
+      globalPermissions: string | null;
+      groupIsActive: number;
+      joinedAt: number;
+    }>();
 
-    const userGroupDetails = result.results?.map((g: any) => ({
+    const userGroupDetails = result.results?.map(g => ({
       groupId: g.globalGroupId,
       groupName: g.groupName,
       globalPermissions: parseJSON(g.globalPermissions, []),
@@ -768,9 +784,17 @@ export async function getUserProjectGroups(
         AND p.status NOT IN ('archived', 'deleted')
         AND g.status = 'active'
       ORDER BY p.projectName, g.groupName
-    `).bind(userEmail).all();
+    `).bind(userEmail).all<{
+      projectId: string;
+      projectName: string;
+      groupId: string;
+      groupName: string;
+      role: string;
+      allowChange: number;
+      joinTime: number;
+    }>();
 
-    const userProjectGroups = result.results?.map((row: any) => ({
+    const userProjectGroups = result.results?.map(row => ({
       projectId: row.projectId,
       projectName: row.projectName,
       groupId: row.groupId,

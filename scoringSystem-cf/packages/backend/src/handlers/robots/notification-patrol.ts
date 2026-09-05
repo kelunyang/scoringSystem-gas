@@ -12,6 +12,17 @@ import { queueNotificationDigestEmail } from '@/queues/email-producer';
  * Notification patrol robot configuration
  * Time window: notifications created within the last N hours
  */
+/** 尚未寄出摘要信的通知。巡邏機器人只讀這幾個欄位。 */
+interface PendingNotificationRow {
+  notificationId: string;
+  targetUserEmail: string;
+  type: string;
+  title: string;
+  content: string;
+  projectId: string | null;
+  createdTime: number;
+}
+
 const NOTIFICATION_TIME_WINDOW_HOURS = 12; // Default: last 12 hours
 const EMAIL_BATCH_SIZE = 5; // Send 5 emails concurrently at a time
 const MAX_NOTIFICATIONS_PER_BATCH = 100; // Process notifications in batches to avoid memory issues
@@ -118,7 +129,8 @@ async function logToSysLogs(
   functionName: string,
   action: string,
   message: string,
-  context?: any
+  /** 會併進 logGlobalOperation 的 metadata 一起序列化，所以必須是物件。 */
+  context?: Record<string, unknown>
 ): Promise<void> {
   await logGlobalOperation(
     env,
@@ -137,7 +149,7 @@ async function logToSysLogs(
 async function processUserNotifications(
   env: Env,
   userEmail: string,
-  userNotifications: any[],
+  userNotifications: PendingNotificationRow[],
   dryRun: boolean,
   websocket?: WebSocket
 ): Promise<{ success: boolean; emailsSent: number; emailsFailed: number; notificationsProcessed: number; error?: string; notificationIds?: string[] }> {
@@ -147,21 +159,21 @@ async function processUserNotifications(
       SELECT displayName
       FROM users
       WHERE userEmail = ?
-    `).bind(userEmail).first();
+    `).bind(userEmail).first<{ displayName: string }>();
 
-    const displayName = user ? (user as any).displayName : userEmail;
+    const displayName = user?.displayName ?? userEmail;
 
     if (!dryRun) {
       // Queue notification digest email
-      const notifications = userNotifications.map((notif: any) => ({
+      const notifications = userNotifications.map(notif => ({
         title: notif.title,
         content: notif.content,
         createdAt: notif.createdTime,
         type: notif.type
       }));
 
-      const periodStart = Math.min(...userNotifications.map((n: any) => n.createdTime));
-      const periodEnd = Math.max(...userNotifications.map((n: any) => n.createdTime));
+      const periodStart = Math.min(...userNotifications.map(n => n.createdTime));
+      const periodEnd = Math.max(...userNotifications.map(n => n.createdTime));
 
       try {
         await queueNotificationDigestEmail(
@@ -175,7 +187,7 @@ async function processUserNotifications(
         );
 
         // Mark all notifications as emailSent
-        const notificationIds = userNotifications.map((n: any) => n.notificationId);
+        const notificationIds = userNotifications.map(n => n.notificationId);
         const emailSentTime = Date.now();
         await markNotificationsAsEmailSent(env, notificationIds);
 
@@ -302,7 +314,7 @@ export async function executeNotificationPatrol(
     let offset = 0;
     let hasMore = true;
     let totalNotificationsChecked = 0;
-    const notificationsByUser = new Map<string, any[]>();
+    const notificationsByUser = new Map<string, PendingNotificationRow[]>();
 
     console.log('[NotificationPatrol] Starting pagination query (batch size: ', MAX_NOTIFICATIONS_PER_BATCH, ')');
 
@@ -324,7 +336,7 @@ export async function executeNotificationPatrol(
           AND createdTime >= ?
         ORDER BY targetUserEmail, createdTime DESC
         LIMIT ? OFFSET ?
-      `).bind(timeWindowStart, MAX_NOTIFICATIONS_PER_BATCH, offset).all();
+      `).bind(timeWindowStart, MAX_NOTIFICATIONS_PER_BATCH, offset).all<PendingNotificationRow>();
 
       if (!notifications.results || notifications.results.length === 0) {
         hasMore = false;
@@ -337,7 +349,7 @@ export async function executeNotificationPatrol(
 
       // Group notifications by user email
       for (const notification of notifications.results) {
-        const email = (notification as any).targetUserEmail;
+        const email = notification.targetUserEmail;
         if (!notificationsByUser.has(email)) {
           notificationsByUser.set(email, []);
         }

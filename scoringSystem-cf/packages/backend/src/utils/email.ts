@@ -26,7 +26,7 @@ export interface EmailSendResult {
  */
 export async function getSystemTitle(env: Env): Promise<string> {
   try {
-    return await getConfigValue(env, 'SYSTEM_TITLE') || '評分系統';
+    return String(await getConfigValue(env, 'SYSTEM_TITLE') || '評分系統');
   } catch (error) {
     console.error('Error getting system title:', error);
     return '評分系統';
@@ -48,12 +48,12 @@ export async function getSmtpConfig(env: Env): Promise<{
 } | null> {
   try {
     // Use getConfigValue for KV-first config reading
-    const host = await getConfigValue(env, 'SMTP_HOST');
+    const host = String(await getConfigValue(env, 'SMTP_HOST'));
     const port = await getConfigValue(env, 'SMTP_PORT', { parseAsInt: true });
-    const username = await getConfigValue(env, 'SMTP_USERNAME');
-    const password = await getConfigValue(env, 'SMTP_PASSWORD');
-    const fromName = await getConfigValue(env, 'SMTP_FROM_NAME');
-    const fromEmail = await getConfigValue(env, 'SMTP_FROM_EMAIL') || username || 'noreply@example.com';
+    const username = String(await getConfigValue(env, 'SMTP_USERNAME'));
+    const password = String(await getConfigValue(env, 'SMTP_PASSWORD'));
+    const fromName = String(await getConfigValue(env, 'SMTP_FROM_NAME'));
+    const fromEmail = String(await getConfigValue(env, 'SMTP_FROM_EMAIL')) || username || 'noreply@example.com';
 
     if (!host || !username || !password) {
       console.warn('SMTP configuration incomplete (missing host, username, or password)');
@@ -224,14 +224,14 @@ export async function sendEmail(
   }
 ): Promise<EmailSendResult> {
   // Get email configuration from KV (new keys) with fallback to SMTP keys
-  const fromEmail = await getConfigValue(env, 'EMAIL_FROM_EMAIL')
-    || await getConfigValue(env, 'SMTP_FROM_EMAIL')
-    || await getConfigValue(env, 'SMTP_USERNAME')
+  const fromEmail = String(await getConfigValue(env, 'EMAIL_FROM_EMAIL'))
+    || String(await getConfigValue(env, 'SMTP_FROM_EMAIL'))
+    || String(await getConfigValue(env, 'SMTP_USERNAME'))
     || 'noreply@example.com';
-  const fromName = await getConfigValue(env, 'EMAIL_FROM_NAME')
-    || await getConfigValue(env, 'SMTP_FROM_NAME')
+  const fromName = String(await getConfigValue(env, 'EMAIL_FROM_NAME'))
+    || String(await getConfigValue(env, 'SMTP_FROM_NAME'))
     || '評分系統';
-  const replyTo = await getConfigValue(env, 'EMAIL_REPLY_TO');
+  const replyTo = String(await getConfigValue(env, 'EMAIL_REPLY_TO'));
 
   // =========================================================================
   // Cloudflare Email Service - DISABLED (Beta limitations)
@@ -335,9 +335,9 @@ export async function testCloudflareEmailService(
   testEmail: string
 ): Promise<EmailSendResult> {
   // Get email configuration from KV
-  const fromEmail = await getConfigValue(env, 'EMAIL_FROM_EMAIL');
-  const fromName = await getConfigValue(env, 'EMAIL_FROM_NAME') || '評分系統';
-  const replyTo = await getConfigValue(env, 'EMAIL_REPLY_TO');
+  const fromEmail = String(await getConfigValue(env, 'EMAIL_FROM_EMAIL'));
+  const fromName = String(await getConfigValue(env, 'EMAIL_FROM_NAME')) || '評分系統';
+  const replyTo = String(await getConfigValue(env, 'EMAIL_REPLY_TO'));
 
   if (!fromEmail) {
     return {

@@ -136,7 +136,7 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: HonoV
         payload.userId,
         payload.userEmail,
         c.env.JWT_SECRET,
-        parseInt(sessionTimeout)
+        Number(sessionTimeout)
       );
     }
 

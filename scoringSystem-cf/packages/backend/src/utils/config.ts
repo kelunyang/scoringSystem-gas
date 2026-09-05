@@ -80,7 +80,10 @@ const EMAIL_RATE_LIMIT_INT_KEYS = [
 /**
  * Default values for configuration parameters
  */
-const DEFAULT_VALUES: Record<string, any> = {
+/** 設定值在 KV 裡一律是字串，讀出來依 parseAs* 旗標轉型。 */
+export type ConfigValue = string | number | boolean;
+
+const DEFAULT_VALUES: Record<string, ConfigValue> = {
   SYSTEM_TITLE: '評分系統',
   BRANDING_ICON: 'fa-star',
   SESSION_TIMEOUT: '86400000', // 24 hours in milliseconds
@@ -148,11 +151,26 @@ const DEFAULT_VALUES: Record<string, any> = {
 export async function getConfigValue(
   env: Env,
   key: string,
+  options: { parseAsInt: true; parseAsBool?: false }
+): Promise<number>;
+export async function getConfigValue(
+  env: Env,
+  key: string,
+  options: { parseAsBool: true; parseAsInt?: false }
+): Promise<boolean>;
+export async function getConfigValue(
+  env: Env,
+  key: string,
+  options?: { parseAsInt?: boolean; parseAsBool?: boolean }
+): Promise<ConfigValue>;
+export async function getConfigValue(
+  env: Env,
+  key: string,
   options?: {
     parseAsInt?: boolean;
     parseAsBool?: boolean;
   }
-): Promise<any> {
+): Promise<ConfigValue> {
   try {
     // Try to get from KV first
     if (env.CONFIG && CONFIG_KEY_MAP[key]) {
@@ -170,10 +188,12 @@ export async function getConfigValue(
     }
 
     // Fallback to environment variable
-    const envValue = (env as any)[key];
+    // Env 是 binding 的介面，設定名不在它的 key 集合裡，
+    // 但 wrangler 會把同名的環境變數放上來，所以以字串索引查一次。
+    const envValue = (env as unknown as Record<string, ConfigValue | undefined>)[key];
     if (envValue !== undefined && envValue !== null) {
       if (options?.parseAsInt) {
-        return parseInt(envValue, 10);
+        return parseInt(String(envValue), 10);
       }
       if (options?.parseAsBool) {
         return envValue === 'true' || envValue === true;
@@ -205,8 +225,8 @@ export async function getConfigValue(
  * @param env - Environment bindings
  * @returns Object containing all configuration values
  */
-export async function getAllConfigValues(env: Env): Promise<Record<string, any>> {
-  const config: Record<string, any> = {};
+export async function getAllConfigValues(env: Env): Promise<Record<string, ConfigValue>> {
+  const config: Record<string, ConfigValue> = {};
 
   // Get all defined configuration keys
   const keys = Object.keys(CONFIG_KEY_MAP);
@@ -236,7 +256,7 @@ export async function getAllConfigValues(env: Env): Promise<Record<string, any>>
       config[key] = await getConfigValue(env, key, { parseAsInt: true });
     } else if (floatKeys.has(key)) {
       const value = await getConfigValue(env, key);
-      config[key] = parseFloat(value) || DEFAULT_VALUES[key];
+      config[key] = parseFloat(String(value)) || DEFAULT_VALUES[key];
     } else if (key === 'TURNSTILE_ENABLED' || key === 'LOG_CONSOLE') {
       // Keep as string for compatibility
       config[key] = await getConfigValue(env, key);
@@ -259,7 +279,7 @@ export async function getAllConfigValues(env: Env): Promise<Record<string, any>>
 export async function setConfigValue(
   env: Env,
   key: string,
-  value: any
+  value: ConfigValue
 ): Promise<boolean> {
   try {
     if (!env.CONFIG) {
@@ -334,7 +354,7 @@ export type ConfigKey = keyof typeof CONFIG_KEY_MAP;
 export async function getTypedConfig<K extends ConfigKey>(
   env: Env,
   key: K
-): Promise<number | string> {
+): Promise<ConfigValue> {
   // Determine if the key should be parsed as int
   const intKeys = new Set([
     'PASSWORD_SALT_ROUNDS',
@@ -366,12 +386,12 @@ export async function getTypedConfig<K extends ConfigKey>(
 
   if (floatKeys.has(key)) {
     const value = await getConfigValue(env, key);
-    return parseFloat(value) || DEFAULT_VALUES[key];
+    return parseFloat(String(value)) || Number(DEFAULT_VALUES[key]);
   }
 
-  const shouldParseInt = intKeys.has(key);
+  if (intKeys.has(key)) {
+    return getConfigValue(env, key, { parseAsInt: true });
+  }
 
-  return getConfigValue(env, key, {
-    parseAsInt: shouldParseInt
-  });
+  return getConfigValue(env, key);
 }

@@ -35,7 +35,8 @@ export async function logProjectOperation(
   action: string,
   entityType: string,
   entityId: string,
-  metadata?: any,
+  /** 只會被 JSON 序列化寫進 details 欄位，這裡不讀它的內容。 */
+  metadata?: unknown,
   options?: {
     level?: 'info' | 'warning' | 'error' | 'critical';
     relatedEntities?: Record<string, string>;
@@ -159,7 +160,8 @@ export async function logGlobalOperation(
   action: string,
   entityType: string,
   entityId: string,
-  metadata?: any,
+  /** 只會被 JSON 序列化寫進 details 欄位，這裡不讀它的內容。 */
+  metadata?: unknown,
   options?: {
     level?: 'info' | 'warning' | 'error' | 'critical';
     relatedEntities?: Record<string, string>;
@@ -279,7 +281,8 @@ export async function logApiAction(
     entityType?: string;       // Primary entity type
     entityId?: string;         // Primary entity ID
     message: string;           // REQUIRED: Human-readable message
-    context?: any;             // Additional context data
+    /** 會和 dedupKey 合併後序列化，所以必須是物件。 */
+    context?: Record<string, unknown>;
     level?: 'info' | 'warning' | 'error' | 'critical'; // Log level
     relatedEntities?: Record<string, string>; // Secondary entities
   }
@@ -370,12 +373,12 @@ export async function logApiAction(
  * // Result: { name: { oldValue: 'Old Name', newValue: 'New Name' },
  * //           status: { oldValue: 'active', newValue: 'completed' } }
  */
-export function generateChanges<T extends Record<string, any>>(
+export function generateChanges<T extends Record<string, unknown>>(
   oldData: T,
   newData: Partial<T>,
   excludeFields: string[] = []
-): Record<string, { oldValue: any; newValue: any }> {
-  const changes: Record<string, { oldValue: any; newValue: any }> = {};
+): Record<string, { oldValue: unknown; newValue: unknown }> {
+  const changes: Record<string, { oldValue: unknown; newValue: unknown }> = {};
 
   for (const [key, newValue] of Object.entries(newData)) {
     // Skip excluded fields

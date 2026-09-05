@@ -164,7 +164,7 @@ export async function verifyTurnstileMiddleware(
   }
 
   // Get secret key (KV-first)
-  const secretKey = await getConfigValue(env, 'TURNSTILE_SECRET_KEY');
+  const secretKey = String(await getConfigValue(env, 'TURNSTILE_SECRET_KEY'));
 
   // Verify token
   const result = await verifyTurnstileToken(
