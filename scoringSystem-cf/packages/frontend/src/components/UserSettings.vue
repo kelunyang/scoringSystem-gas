@@ -363,6 +363,7 @@ import TotpSetup from './settings/TotpSetup.vue'
 import PasskeySetup from './settings/PasskeySetup.vue'
 import { useBreadcrumb } from '@/composables/useBreadcrumb'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiClient } from '@/utils/api'
 import { getUserPreferences, setUserPreference } from '@/utils/userPreferences'
 
 /** 設定頁需要的使用者欄位（父層傳入 AuthUser，此處取結構子集） */
@@ -858,7 +859,16 @@ async function savePassword() {
     const response = await httpResponse.json()
 
     if (response.success) {
-      ElMessage.success('密碼已更新！')
+      // The server revokes every token issued before the change (including the
+      // one this request used) and returns a replacement. Swap it in or the
+      // next request logs the user out of the session they just secured.
+      if (response.data?.sessionId) {
+        // Via saveToken, not sessionStorage directly, so the token-renewal
+        // event fires and reactive consumers (useAuth().token) stay in sync.
+        apiClient.saveToken(response.data.sessionId)
+      }
+
+      ElMessage.success('密碼已更新！其他裝置的登入已失效')
       editingPassword.value = false
       passwordForm.value = {
         oldPassword: '',

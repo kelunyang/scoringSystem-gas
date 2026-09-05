@@ -83,9 +83,7 @@ backend：migrations／認證／權限／帳本／佇列／中介層。
 `lockUntil` 只在死掉的 `authenticateUser()` 裡被檢查——本次甲-2 即是它的修復，
 已依規則移出 A 區。教訓見 pitfalls.md 2026-09-05「登入其實是單一因子」條目末段。
 
-**#002（改密碼無法撤銷既有 JWT）本次未修**，維持開放。甲-5 只是重述了它，
-沒有動手：那需要 `users.password_changed_at` 或 token version 欄位，
-屬於獨立的一輪工作，不適合夾在這批修復裡。
+**#002（改密碼無法撤銷既有 JWT）已於同日稍後修掉**，見下方己-2。
 
 **review 過程中額外發現、一併修掉**
 
@@ -300,6 +298,34 @@ mention 一個完全不在專案裡的人，會回傳他的顯示名稱與頭像
 `item.content` 原封不動插進 prompt。無法完全防堵，但**輸出端有對照合法 ID 集合驗證**
 （現在含去重），且 AI 結果只是存成建議記錄廣播給教師，不會自動寫進分數。
 真正的防線是「教師最後決定」——這點要維持，不要之後加上自動套用。
+
+#### 己-2：改密碼撤銷既有 JWT（原 #002，已修）
+
+**問題**：JWT 是 bearer token，簽發後在 `exp` 前恆有效。改密碼、重設密碼、
+管理員重設都不會讓既有 token 失效。更糟的是 `middleware/auth.ts` 的 sliding
+expiration（壽命過半即重簽）會讓被竊 token **無限續期**——只要每 12 小時
+用一次就永不過期。`password-reset.ts` 自己的 TODO 就寫著這個解法。
+
+**修法**：migration `0009` 為 users 加 `passwordChangedAt`，
+三處寫密碼的地方（`changePassword`、`handlePasswordReset`、
+`resetUserPassword`）都寫入，`authMiddleware` 比對 token 的 `iat`。
+middleware 本來每個請求就會載入 users 那一列，所以**增量成本是零**。
+
+**最容易寫錯的地方（已用測試釘住）**：JWT 的 `iat` 只有**秒**解析度，
+而這個 schema 的時間戳全是毫秒。天真的 `iat * 1000 < Date.now()` 會把
+「為了取代舊 session 而剛簽發的那枚 token」也判為過期——使用者會被自己的
+改密碼動作登出。因此 `passwordChangeCutoff()` 把時間**截斷到整秒**，
+同一秒內簽發的替代 token 才不會低於門檻。
+
+**`changePassword` 現在回傳新 token**，前端經 `apiClient.saveToken()` 換上
+（不是直接寫 sessionStorage，那樣不會發 `token-renewal` 事件）。
+效果是「當前裝置留著，其他裝置全部登出」——這才是使用者對「改密碼」的預期。
+
+**`iat` 缺失或非有限數時 fail closed**：無法證明晚於門檻的 token 一律拒絕。
+
+**驗證**：單元測試 7 條（含同一秒邊界）。端對端實測：同一帳號在兩台「裝置」
+登入 → 在裝置 A 改密碼 → **兩台的舊 token 都失效、裝置 A 的新 token 仍有效**；
+另模擬管理員重設，同一枚 token 由有效轉為失效。
 
 #### 丙：Migrations 目錄是壞的，全新環境建不起來
 
@@ -814,25 +840,6 @@ Vue template 內只出現在字串裡的元件名，可能被誤判為死碼—�
 ---
 
 以下三項皆已讀原始碼確認，非推測。均為 2026-07-17 討論 JWT 認證機制時順帶挖出。
-
-### #002 ｜ 改密碼／重設密碼無法撤銷既有 JWT ｜ 中
-
-**問題**：JWT 是 bearer token，簽發後在 exp 前恆有效。改密碼不會讓舊 token 失效。
-`scoringSystem-cf/packages/backend/src/handlers/auth/password-reset.ts:580-593`
-已有 TODO 承認此事並列出兩個選項。
-
-**後果**：舊 token 最長可用滿 24 小時（`SESSION_TIMEOUT = 86400000`）。
-更糟的是 sliding expiration（`middleware/auth.ts:97-116`，token 壽命過半即重簽）
-會讓被竊 token **無限續期**——只要每 12 小時用一次就永不過期。
-
-**建議解法（不必放棄 JWT）**：加 `users.password_changed_at` 欄位或 token version，
-在 `middleware/auth.ts` **既有的** D1 查詢裡一併比對。
-該 middleware 每個 request 本來就查 D1 兩次（`users.status` + 全域權限），
-所以增量成本趨近於零——stateless JWT 省 DB 查詢的好處我們早就沒在享受了。
-
-**不要**因為這個問題而改用 server-side session，理由見 B 區。
-
----
 
 ### #003 ｜ 文件與實作不符：PBKDF2 迭代數 ｜ 低
 

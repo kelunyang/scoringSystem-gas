@@ -22,6 +22,7 @@ import { simpleHash } from '../../utils/hash';
 import { shuffleArray, getRandomElements } from '../../utils/array';
 import { validateEmail } from '../../utils/validation';
 import { generateVerificationCode, storeVerificationCode, verifyTwoFactorCode } from './two-factor';
+import { passwordChangeCutoff } from '../../utils/password-revocation';
 import type { Env } from '../../types';
 import { queuePasswordReset2FAEmail, queuePasswordResetEmail } from '../../queues/email-producer';
 
@@ -539,11 +540,14 @@ export async function handlePasswordReset(
 
     // Update user's password
     const now = new Date().toISOString();
+    // passwordChangedAt revokes every token issued before this reset — the
+    // whole point of a reset when an account may be compromised. Replaces the
+    // TODO that used to sit further down this function.
     await env.DB.prepare(`
       UPDATE users
-      SET password = ?, updatedAt = ?
+      SET password = ?, updatedAt = ?, passwordChangedAt = ?
       WHERE userId = ?
-    `).bind(hashedPassword, now, userResult.userId).run();
+    `).bind(hashedPassword, now, passwordChangeCutoff(), userResult.userId).run();
 
     // Queue password reset email
     try {
@@ -579,22 +583,6 @@ export async function handlePasswordReset(
       console.error('[handlePasswordReset] Password reset event logging failed:', logError);
       // Continue anyway
     }
-
-    // TODO: Invalidate user's active sessions after password reset
-    // Since we use JWT, we can't directly invalidate tokens, but we can:
-    // Option 1: Add password_changed_at timestamp and check it when validating JWT
-    // Option 2: Maintain a JWT blacklist in KV storage
-    // Option 3: Use shorter JWT expiration times
-    //
-    // Recommended implementation:
-    // await env.DB.prepare(`
-    //   UPDATE users
-    //   SET password_changed_at = ?
-    //   WHERE userId = ?
-    // `).bind(now, userResult.userId).run();
-    //
-    // Then in JWT validation, check:
-    // if (tokenIssuedAt < user.password_changed_at) { reject }
 
     // Return success message (same as failure case)
     return {

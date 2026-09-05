@@ -10,6 +10,7 @@ import { errorResponse, ERROR_CODES } from '../utils/response';
 import { processSudoHeaders } from './sudo';
 import { createSudoSafeDB } from '../utils/sudo-db-proxy';
 import { assertAccountUsable } from '../handlers/auth/account-guard';
+import { isTokenRevokedByPasswordChange } from '../utils/password-revocation';
 
 /**
  * How stale `users.lastActivityTime` may get before it is rewritten.
@@ -84,13 +85,23 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: HonoV
 
     // 3. Check user status in database (real-time disabling)
     const user = await c.env.DB.prepare(
-      'SELECT userId, userEmail, status, displayName, avatarSeed, avatarStyle, avatarOptions, lastActivityTime, lockUntil, lockReason FROM users WHERE userId = ?'
+      'SELECT userId, userEmail, status, displayName, avatarSeed, avatarStyle, avatarOptions, lastActivityTime, lockUntil, lockReason, passwordChangedAt FROM users WHERE userId = ?'
     )
       .bind(payload.userId)
       .first();
 
     if (!user) {
       return errorResponse(ERROR_CODES.USER_NOT_FOUND, 'User not found');
+    }
+
+    // Refuse tokens minted before the account's last password change.
+    //
+    // JWTs cannot be recalled, so changing a password used to leave every
+    // existing session working — and the sliding expiration below meant a
+    // stolen token used once every 12 hours never expired at all. The user row
+    // is already loaded here, so this costs no extra query.
+    if (isTokenRevokedByPasswordChange(payload.iat, user.passwordChangedAt as number | null)) {
+      return errorResponse(ERROR_CODES.INVALID_SESSION, '密碼已變更，請重新登入');
     }
 
     // Disabled *and* temporarily locked accounts lose their existing sessions.

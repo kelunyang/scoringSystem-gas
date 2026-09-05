@@ -10,6 +10,7 @@ import { hashPassword, generateRandomPassword } from '../auth/password';
 import { logGlobalOperation, generateChanges } from '../../utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
 import { queueAccountUnlockedEmail, queuePasswordResetEmail } from '../../queues/email-producer';
+import { passwordChangeCutoff } from '../../utils/password-revocation';
 
 /**
  * Get all users (for admin use)
@@ -454,9 +455,9 @@ export async function resetUserPassword(
     // Update password
     await env.DB.prepare(`
       UPDATE users
-      SET password = ?, lastActivityTime = ?
+      SET password = ?, lastActivityTime = ?, passwordChangedAt = ?
       WHERE userEmail = ?
-    `).bind(hashedPassword, Date.now(), userEmail).run();
+    `).bind(hashedPassword, Date.now(), passwordChangeCutoff(), userEmail).run();
 
     // Log the action using centralized logging
     await logGlobalOperation(

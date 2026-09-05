@@ -9,6 +9,9 @@
  */
 
 import { verifyPassword } from './password';
+import { passwordChangeCutoff } from '../../utils/password-revocation';
+import { generateToken } from './jwt';
+import { getConfigValue } from '../../utils/config';
 import { errorResponse, successResponse, ERROR_CODES } from '../../utils/response';
 import type { ApiResponse } from '../../utils/response';
 import { parseJSON } from '../../utils/json';
@@ -280,11 +283,15 @@ export async function changePassword(
     console.log('[changePassword] Hashing new password...');
     const hashedPassword = await hashPassword(newPassword);
 
-    // Update password
+    // Update password and stamp the revocation cutoff, so tokens issued before
+    // this moment stop working. The caller is expected to swap in the fresh
+    // token returned below, which keeps the current session alive while every
+    // other one dies.
     console.log('[changePassword] Updating password in database...');
+    const cutoff = passwordChangeCutoff();
     await db
-      .prepare('UPDATE users SET password = ? WHERE userId = ?')
-      .bind(hashedPassword, userId)
+      .prepare('UPDATE users SET password = ?, passwordChangedAt = ? WHERE userId = ?')
+      .bind(hashedPassword, cutoff, userId)
       .run();
 
     // Log password change event to sys_logs
@@ -326,10 +333,25 @@ export async function changePassword(
       // Don't block main operation if notification fails
     }
 
+    // Hand back a token minted after the cutoff. Without it the caller's
+    // current session dies on its next request — the user would be logged out
+    // by their own password change, which is not what "change my password"
+    // should do. Every *other* session still dies, which is the point.
+    const sessionTimeout = parseInt(await getConfigValue(env, 'SESSION_TIMEOUT'));
+    const newSessionId = await generateToken(
+      userId,
+      user.userEmail as string,
+      env.JWT_SECRET,
+      sessionTimeout
+    );
+
     console.log('[changePassword] Password changed successfully');
     return {
       success: true,
-      data: { message: 'Password changed successfully' }
+      data: {
+        message: 'Password changed successfully',
+        sessionId: newSessionId
+      }
     };
   } catch (error) {
     console.error('[changePassword] Error occurred:', error);
