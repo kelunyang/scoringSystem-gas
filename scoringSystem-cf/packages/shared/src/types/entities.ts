@@ -80,7 +80,7 @@ export interface ProjectSettings {
     initialBalance?: number;
     currency?: string;
   };
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -188,7 +188,12 @@ export interface Stage {
   groups?: Group[]; // Groups associated with this stage
   submissions?: Submission[]; // Submissions in this stage
   comments?: Comment[]; // Comments in this stage
-  proposals?: Proposal[]; // Proposals in this stage
+  /**
+   * 這個階段的排名提案。裝的是 rankings/proposals 端點回的東西
+   * （proposalId / rankingData / votingResult / votes…），
+   * 舊版標成一個叫 Proposal 的介面，欄位對不上，而且沒有任何地方真的用它當型別。
+   */
+  proposals?: RankingProposal[];
   title?: string; // Stage title (alternative to stageName)
   settledTime?: number; // Settlement timestamp
   updatedAt?: number; // Last update timestamp
@@ -207,7 +212,7 @@ export interface StageSettings {
   allowLateSubmission?: boolean;
   requireApproval?: boolean;
   maxSubmissions?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -271,7 +276,7 @@ export interface SubmissionMetadata {
     size: number;
   }>;
   tags?: string[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -454,7 +459,7 @@ export interface UserPreferences {
     email?: boolean;
     push?: boolean;
   };
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -470,27 +475,17 @@ export interface AvatarOptions {
   texture?: string;
   _retry?: number; // Retry counter for avatar generation
   _t?: number; // Timestamp for cache busting
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
- * Proposal entity (for group voting, etc.)
+ * 排名提案裡的一列：哪一個對象、排第幾。
+ * 成果排名用 submissionId，評論排名用 commentId
+ * （handlers/comments/voting.ts 的 rankingData 參數即此形狀）。
  */
-export interface Proposal {
-  proposalId: string;
-  id?: string; // Alias for proposalId
-  projectId: string;
-  stageId?: string;
-  groupId?: string;
-  title: string;
-  content: string;
-  proposerId: string;
-  createdTime: number;
-  status: 'pending' | 'approved' | 'rejected' | 'expired';
-  votes?: any[];
-  metadata?: string;
-  [key: string]: any;
-}
+export type RankingEntry =
+  | { submissionId: string; rank: number }
+  | { commentId: string; rank: number };
 
 /**
  * Ranking Proposal entity
@@ -507,7 +502,12 @@ export interface RankingProposal {
   groupId: string;
   proposerEmail: string;
   proposerDisplayName?: string; // Proposer's display name (from JOIN)
-  rankingData: any; // JSON array or string (parsed on frontend)
+  /**
+   * 排名內容。D1 存的是 JSON 字串，部分 handler 會先解析再回傳
+   * （handlers/rankings/proposals.ts 就是為此才 `typeof === 'string'` 分流），
+   * 所以兩種形態都會真的出現在這個欄位上。
+   */
+  rankingData: string | RankingEntry[];
   createdTime: number;
   // Calculated fields (from rankingproposals_with_status VIEW)
   status: 'settled' | 'withdrawn' | 'reset' | 'pending';

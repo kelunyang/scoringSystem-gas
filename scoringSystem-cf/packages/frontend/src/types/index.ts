@@ -25,8 +25,7 @@ export type {
   Notification,
   Ranking,
   UserPreferences,
-  AvatarOptions,
-  Proposal
+  AvatarOptions
 } from './models'
 
 // 导出 API 类型（唯一來源：@repo/shared/types/api-responses）

@@ -25,6 +25,5 @@ export type {
   Notification,
   Ranking,
   UserPreferences,
-  AvatarOptions,
-  Proposal
+  AvatarOptions
 } from '@repo/shared';
