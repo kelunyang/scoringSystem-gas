@@ -696,12 +696,17 @@ export async function getUserGlobalGroups(
   userEmail: string
 ): Promise<Response> {
   try {
-    // Get user's global group memberships
+    // Admin-facing listing, not an authorization check: a deactivated group is
+    // worth showing (it explains why a permission stopped applying), so it is
+    // surfaced with a flag rather than filtered out. `groupIsActive` is what
+    // keeps this query out of the "reads globalPermissions to decide access"
+    // class that tests/permission-sql-audit.test.ts guards.
     const result = await env.DB.prepare(`
       SELECT
         gug.globalGroupId,
         gg.groupName,
         gg.globalPermissions,
+        gg.isActive AS groupIsActive,
         gug.joinedAt
       FROM globalusergroups gug
       JOIN globalgroups gg ON gug.globalGroupId = gg.globalGroupId
@@ -712,6 +717,9 @@ export async function getUserGlobalGroups(
       groupId: g.globalGroupId,
       groupName: g.groupName,
       globalPermissions: parseJSON(g.globalPermissions, []),
+      // false means the group is deactivated: the permissions above are listed
+      // for context but confer nothing.
+      groupIsActive: g.groupIsActive === 1,
       joinedAt: g.joinedAt
     })) || [];
 

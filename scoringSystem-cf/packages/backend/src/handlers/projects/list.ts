@@ -1023,11 +1023,17 @@ async function listAllProjectsForAdmin(
  * Users with system_admin or create_project can see all projects
  */
 async function checkSystemAdmin(env: Env, userEmail: string): Promise<boolean> {
+  // Both isActive flags matter and this query used to have neither: a
+  // deactivated membership, or a membership in a deactivated group, still
+  // granted "can see every project". utils/permissions.ts has always filtered
+  // on both — this was a second, divergent copy of the same query.
   const result = await env.DB.prepare(`
     SELECT gg.globalPermissions
     FROM globalusergroups gug
     JOIN globalgroups gg ON gug.globalGroupId = gg.globalGroupId
     WHERE gug.userEmail = ?
+      AND gug.isActive = 1
+      AND gg.isActive = 1
   `).bind(userEmail).all();
 
   for (const row of result.results) {

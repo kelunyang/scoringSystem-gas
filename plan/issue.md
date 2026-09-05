@@ -851,30 +851,40 @@ Vue template 內只出現在字串裡的元件名，可能被誤判為死碼—�
 
 
 
-### #005 ｜ 71 段權限判斷的原始 SQL 尚未收斂 ｜ 中
+### #005 ｜ 權限 SQL 收斂 ｜ **已稽核並修掉錯誤，機械式收斂未做**
 
-**問題**：全庫仍有 16 個檔案直接對權限表寫 SQL 做授權判斷，重複的只有三件事：
+原本的擔憂是「沒有逐一讀過全部 153 段，剩下的錯誤比例不明」。已逐一稽核。
 
-```
-自己查「是不是 system_admin」        30 次
-自己查「是不是 teacher/observer」    24 次
-自己查「是不是建立者」              17 次
-```
+**找到並修掉 4 個真的錯誤**（全部關於 `isActive`）：
 
-2026-08-31 那一輪已修掉其中 6 段寫錯的（`u.userId = gu.userEmail`、
-`global_user_groups` 表名、`createdBy === userEmail` ×2、缺 `isActive` ×4），
-但**沒有逐一讀過全部 71 段**，剩下的錯誤比例不明。
+| 位置 | 問題 |
+|------|------|
+| `projects/list.ts` `checkSystemAdmin` | 查 `globalPermissions` 決定「能否看見所有專案」，**兩個 isActive 都沒有** |
+| `users/search.ts` 權限徽章 | 同樣兩個都沒有——已停用的群組仍顯示管理員徽章 |
+| `submissions/manage.ts:1012` | 有 `gug.isActive` 缺 `gg.isActive`，且**用 `.first()` 只看第一個群組** |
+| `submissions/versions.ts:58` | 同上 |
 
-**目標形狀**：除了一個模組，其他地方不准對權限表寫 SQL。
-加一條 grep 守門（CI 或 pre-commit）：`handlers/` 與 `router/` 底下出現
-`FROM globalusergroups` 就擋。
+後兩者除了 `isActive` 還有第二個 bug：使用者可能屬於多個全域群組，
+`.first()` 只取第一列，權限若在第二個群組就會被漏判（拒絕本該通過的人）。
+已改為 `.all()` + `some()`。
 
-**前置條件**：多角色測試已在 2026-08-31 補上
-（`packages/security-tests/tests/test_permission_matrix.py`，22 項），
-但目前只覆蓋 canEnter／canSubmit／canManageStages／canTeacherVote／分組管理。
-收斂前應先把斷言補到覆蓋這三類判斷的主要呼叫點。
+**確認不是錯誤的**：`admin/global-groups.ts` 那四處只查單表沒有 JOIN，
+一個 `isActive` 就正確；`admin/users.ts:700` 是管理員查看用的**顯示**清單，
+列出停用的群組其實合理——改為多回一個 `groupIsActive` 旗標標示，而非過濾掉。
+
+**守門測試**（`tests/permission-sql-audit.test.ts`）：
+掃描全部原始碼，任何「JOIN 兩張表且讀取 `globalPermissions`」的查詢
+都必須同時過濾兩個 `isActive`。用「別名綁定到哪張表」判定而非別名拼法——
+這個 codebase 至少有三種寫法（`gug`/`gg`、`gu`/`g`、`ug`/`gg`），
+我第一版寫死別名就誤報了 12 處**寫得比較嚴格**的查詢。
+
+**未做**：把 153 段收斂進單一模組的機械式重構，以及
+「`handlers/`、`router/` 底下禁止出現 `FROM globalusergroups`」那條 grep 守門。
+稽核之後判斷收益不如預期——**錯誤集中在「讀 globalPermissions 做授權」這一類**，
+守門測試已經涵蓋；其餘多數是群組成員的增刪查，收斂它們是純粹的整潔工作。
 
 ---
+
 
 
 以下三項皆已讀原始碼確認，非推測。均為 2026-07-17 討論 JWT 認證機制時順帶挖出。

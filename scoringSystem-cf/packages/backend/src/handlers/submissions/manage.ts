@@ -1009,13 +1009,20 @@ export async function getGroupStageVotingHistory(
       `).bind(projectId, userEmail).first();
       const isTeacherOrObserver = projectViewer && (projectViewer.role === 'teacher' || projectViewer.role === 'observer');
 
-      const hasGlobalPM = await env.DB.prepare(`
+      // Reads a global permission, so both isActive flags matter: a membership
+      // in a deactivated group must not grant anything. `.all()` rather than
+      // `.first()` because a user can belong to several global groups and the
+      // permission may sit in any of them — taking only the first row silently
+      // denied access to anyone whose PM group was not the first returned.
+      const globalGroups = await env.DB.prepare(`
         SELECT gg.globalPermissions
         FROM globalusergroups gug
         JOIN globalgroups gg ON gug.globalGroupId = gg.globalGroupId
-        WHERE gug.userEmail = ? AND gug.isActive = 1
-      `).bind(userEmail).first();
-      const hasAdminAccess = hasGlobalPM && JSON.parse(hasGlobalPM.globalPermissions as string).includes('create_project');
+        WHERE gug.userEmail = ? AND gug.isActive = 1 AND gg.isActive = 1
+      `).bind(userEmail).all();
+      const hasAdminAccess = (globalGroups.results || []).some(row =>
+        JSON.parse((row.globalPermissions as string) || '[]').includes('create_project')
+      );
 
       if (!isCreator && !isTeacherOrObserver && !hasAdminAccess) {
         return errorResponse('ACCESS_DENIED', 'Cannot access other group\'s data');

@@ -54,14 +54,20 @@ export async function getSubmissionVersions(
     `).bind(projectId, userEmail).first();
     const isTeacherOrObserver = projectViewer && (projectViewer.role === 'teacher' || projectViewer.role === 'observer');
 
-    // Check if user has global PM permissions
-    const hasGlobalPM = await env.DB.prepare(`
+    // Reads a global permission, so both isActive flags matter: a membership
+    // in a deactivated group must not grant anything. `.all()` rather than
+    // `.first()` because a user can belong to several global groups and the
+    // permission may sit in any of them — taking only the first row silently
+    // denied access to anyone whose PM group was not the first returned.
+    const globalGroups = await env.DB.prepare(`
       SELECT gg.globalPermissions
       FROM globalusergroups gug
       JOIN globalgroups gg ON gug.globalGroupId = gg.globalGroupId
-      WHERE gug.userEmail = ? AND gug.isActive = 1
-    `).bind(userEmail).first();
-    const hasAdminAccess = hasGlobalPM && JSON.parse(hasGlobalPM.globalPermissions as string).includes('create_project');
+      WHERE gug.userEmail = ? AND gug.isActive = 1 AND gg.isActive = 1
+    `).bind(userEmail).all();
+    const hasAdminAccess = (globalGroups.results || []).some(row =>
+      JSON.parse((row.globalPermissions as string) || '[]').includes('create_project')
+    );
 
     const hasElevatedPermissions = isCreator || isTeacherOrObserver || hasAdminAccess;
 

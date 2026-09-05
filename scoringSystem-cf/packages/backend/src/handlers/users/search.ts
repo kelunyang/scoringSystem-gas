@@ -134,6 +134,8 @@ async function getBatchUserBadges(
       JOIN globalgroups gg ON gug.globalGroupId = gg.globalGroupId
       JOIN users u ON gug.userEmail = u.userEmail
       WHERE u.userEmail IN (${placeholders})
+        AND gug.isActive = 1
+        AND gg.isActive = 1
     `).bind(...userEmails).all();
 
     // Process permissions - track which badges each user already has to avoid duplicates
