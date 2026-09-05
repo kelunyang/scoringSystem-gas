@@ -15,10 +15,41 @@ import { getGroupMemberEmails } from '@utils/notifications';
 import { isSudoWriteBlocked } from '@utils/sudo-db-proxy';
 
 /**
+ * 組內貢獻度分配：email → 百分比。
+ * 資料庫存的是這個物件序列化後的 JSON 字串。
+ */
+type ParticipationProposal = Record<string, number>;
+
+/** submissions_with_status 的一列，用於版本歷程。 */
+interface GroupSubmissionRow {
+  submissionId: string;
+  status: string;
+  submitTime: number;
+  submitterEmail: string;
+  /** ParticipationProposal 的 JSON 字串。 */
+  participationProposal: string | null;
+  /** VIEW 由 withdrawnTime 推導狀態；查版本歷程時會讀它。 */
+  withdrawnTime?: number | null;
+}
+
+/** submissionapprovalvotes JOIN users 的一列。 */
+interface ApprovalVoteRow {
+  voteId: string;
+  submissionId: string;
+  voterEmail: string;
+  agree: number;
+  createdTime: number;
+  voterDisplayName: string | null;
+  voterAvatarSeed: string | null;
+  voterAvatarStyle: string | null;
+  voterAvatarOptions: string | null;
+}
+
+/**
  * Extract unique participant emails from participationProposal
  * Returns only emails (no percentages) to protect group internal work distribution privacy
  */
-function extractParticipants(participationProposal: any): string[] {
+function extractParticipants(participationProposal: ParticipationProposal | null | undefined): string[] {
   if (!participationProposal || typeof participationProposal !== 'object') {
     return [];
   }
@@ -36,7 +67,7 @@ export async function submitDeliverable(
   submissionData: {
     content: string;
     authors?: string[];
-    participationProposal?: any;
+    participationProposal?: ParticipationProposal;
   }
 ): Promise<Response> {
   try {
@@ -149,7 +180,7 @@ export async function submitDeliverable(
         WHERE groupId = ? AND projectId = ? AND isActive = 1
       `).bind(userGroup.groupId, projectId).all();
 
-      const validEmails = new Set(groupMembers.results.map((m: any) => m.userEmail));
+      const validEmails = new Set(groupMembers.results.map(m => m.userEmail));
       const proposalEmails = Object.keys(submissionData.participationProposal);
 
       // Check for invalid emails
@@ -228,7 +259,7 @@ export async function submitDeliverable(
       const otherMembers = groupMembers.filter(email => email !== userEmail);
 
       if (otherMembers.length > 0) {
-        const stageName = (stage as any).stageName || '未命名階段';
+        const stageName = stage?.stageName || '未命名階段';
         await queueBatchNotifications(env, otherMembers.map(email => ({
           targetUserEmail: email,
           type: 'submission_created',
@@ -323,8 +354,8 @@ export async function getStageSubmissions(
     // Count unique groups with active submissions (not withdrawn)
     const activeGroupsWithSubmissions = new Set(
       result.results
-        .filter((sub: any) => !sub.withdrawnTime)
-        .map((sub: any) => sub.groupId)
+        .filter(sub => !sub.withdrawnTime)
+        .map(sub => sub.groupId)
     ).size;
 
     return successResponse({
@@ -368,13 +399,18 @@ export async function getStageConsensusStatus(
       JOIN groups g ON l.groupId = g.groupId
       WHERE l.rn = 1
       ORDER BY g.groupName
-    `).bind(projectId, stageId).all();
+    `).bind(projectId, stageId).all<{
+      groupId: string;
+      groupName: string | null;
+      isApproved: number;
+      status: string;
+    }>();
 
-    const groups = (result.results || []).map((row: any) => ({
-      groupId: row.groupId as string,
-      groupName: (row.groupName as string) || `組別 ${row.groupId}`,
+    const groups = (result.results || []).map(row => ({
+      groupId: row.groupId,
+      groupName: row.groupName || `組別 ${row.groupId}`,
       approved: Number(row.isApproved) === 1,
-      status: row.status as string
+      status: row.status
     }));
 
     const pendingGroups = groups.filter(g => !g.approved);
@@ -466,7 +502,7 @@ export async function updateSubmission(
   updates: {
     content?: string;
     authors?: string[];
-    participationProposal?: any;
+    participationProposal?: ParticipationProposal;
   }
 ): Promise<Response> {
   try {
@@ -496,7 +532,8 @@ export async function updateSubmission(
       return errorResponse('SUBMISSION_WITHDRAWN', 'Cannot update withdrawn submission');
     }
 
-    const allowedUpdates: any = {};
+    // 動態組出 UPDATE 的欄位，值都會直接進 bind()
+    const allowedUpdates: Record<string, SqlBindValue> = {};
 
     if (updates.content !== undefined) {
       allowedUpdates.content = updates.content;
@@ -704,9 +741,9 @@ export async function withdrawSubmission(
         // Get stage name for better notification message
         const stage = await env.DB.prepare(`
           SELECT stageName FROM stages WHERE stageId = ? AND projectId = ?
-        `).bind(submission.stageId, projectId).first();
+        `).bind(submission.stageId, projectId).first<{ stageName: string }>();
 
-        const stageName = (stage as any)?.stageName || '未命名階段';
+        const stageName = stage?.stageName || '未命名階段';
 
         await queueBatchNotifications(env, otherMembers.map(email => ({
           targetUserEmail: email,
@@ -903,9 +940,9 @@ export async function getParticipationConfirmations(
       console.log('🔓 [getParticipationConfirmations] Teacher/Observer viewing cross-group - percentages visible');
     }
 
-    const agreeVotes = votes.results.filter((v: any) => v.agree).length;
+    const agreeVotes = votes.results.filter(v => v.agree).length;
     const totalVotes = votes.results.length;
-    const userVote = votes.results.find((v: any) => v.voterEmail === userEmail) as any;
+    const userVote = votes.results.find(v => v.voterEmail === userEmail);
     const hasUserVoted = !!userVote;
 
     // ========== CONSENSUS THRESHOLD FIX ==========
@@ -1037,13 +1074,13 @@ export async function getGroupStageVotingHistory(
       FROM submissions_with_status
       WHERE projectId = ? AND stageId = ? AND groupId = ?
       ORDER BY submitTime ASC
-    `).bind(projectId, stageId, targetGroupId).all();
+    `).bind(projectId, stageId, targetGroupId).all<GroupSubmissionRow>();
 
     // Get submission IDs
-    const submissionIds = groupSubmissions.results.map((s: any) => s.submissionId);
+    const submissionIds = groupSubmissions.results.map(s => s.submissionId);
 
     // Get all votes for these submissions
-    let allVotes: any[] = [];
+    let allVotes: ApprovalVoteRow[] = [];
     if (submissionIds.length > 0) {
       // D1 doesn't support IN with array binding, so we need to build the query
       const placeholders = submissionIds.map(() => '?').join(',');
@@ -1058,15 +1095,15 @@ export async function getGroupStageVotingHistory(
         LEFT JOIN users u ON v.voterEmail = u.userEmail
         WHERE v.projectId = ? AND v.submissionId IN (${placeholders})
         ORDER BY v.createdTime ASC
-      `).bind(projectId, ...submissionIds).all();
-      allVotes = votesResult.results as any[];
+      `).bind(projectId, ...submissionIds).all<ApprovalVoteRow>();
+      allVotes = votesResult.results;
     }
 
     // ========== CONSENSUS THRESHOLD FIX ==========
     // Calculate totalMembers per submission from participationProposal
     // NOT from usergroups table (all group members)
     // Build response with all submission data and their votes
-    const versionsWithVotes = groupSubmissions.results.map((submission: any) => {
+    const versionsWithVotes = groupSubmissions.results.map(submission => {
       const submissionVotes = allVotes.filter(v => v.submissionId === submission.submissionId);
 
       // Calculate totalMembers from this submission's participationProposal
@@ -1107,7 +1144,7 @@ export async function getGroupStageVotingHistory(
     });
     // ========== END CONSENSUS THRESHOLD FIX ==========
 
-    const currentActive = groupSubmissions.results.find((s: any) => !s.withdrawnTime);
+    const currentActive = groupSubmissions.results.find(s => !s.withdrawnTime);
 
     // Get totalMembers from current active version (for backward compatibility)
     // Each version now has its own totalMembers field
@@ -1119,7 +1156,7 @@ export async function getGroupStageVotingHistory(
       stageId,
       totalMembers: globalTotalMembers, // For backward compatibility, use current active version's totalMembers
       versions: versionsWithVotes, // Each version has its own totalMembers field
-      currentActiveVersion: currentActive ? (currentActive as any).submissionId : null
+      currentActiveVersion: currentActive?.submissionId ?? null
     });
 
   } catch (error) {
@@ -1244,7 +1281,7 @@ export async function voteParticipationProposal(
         WHERE projectId = ? AND submissionId = ?
       `).bind(projectId, submissionId).all();
 
-      const agreeCount = existingVotes.results.filter((v: any) => v.agree).length;
+      const agreeCount = existingVotes.results.filter(v => v.agree).length;
       const totalVotesCount = existingVotes.results.length;
       const isApproved = agreeCount >= totalMembers && agreeCount > 0;
 
@@ -1343,7 +1380,7 @@ export async function voteParticipationProposal(
       WHERE projectId = ? AND submissionId = ?
     `).bind(projectId, submissionId).all();
 
-    const agreeVotes = allVotes.results.filter((v: any) => v.agree).length;
+    const agreeVotes = allVotes.results.filter(v => v.agree).length;
     const totalVotes = allVotes.results.length;
 
     // Check if approval happened
@@ -1386,7 +1423,7 @@ export async function voteParticipationProposal(
         agreeVotes,
         approvalTime: Date.now(),
         approvalType: 'unanimous',
-        allVoters: allVotes.results.map((v: any) => v.voterEmail),
+        allVoters: allVotes.results.map(v => v.voterEmail),
         participantsList: Object.keys(proposedParticipation),
         groupId: submission.groupId,
         stageId
@@ -1404,8 +1441,8 @@ export async function voteParticipationProposal(
         // Fetch stage name for notification
         const stage = await env.DB.prepare(`
           SELECT stageName FROM stages WHERE stageId = ? AND projectId = ?
-        `).bind(stageId, projectId).first();
-        const stageName = (stage as any)?.stageName || '未命名階段';
+        `).bind(stageId, projectId).first<{ stageName: string }>();
+        const stageName = stage?.stageName || '未命名階段';
 
         await queueBatchNotifications(env, groupMembers.map(email => ({
           targetUserEmail: email,

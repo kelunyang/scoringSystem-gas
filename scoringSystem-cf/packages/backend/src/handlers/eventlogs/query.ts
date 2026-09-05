@@ -31,6 +31,80 @@ export interface EventLogFilters {
  * @param projectId - Project ID
  * @param filters - Optional filters
  */
+/** eventlogs 查詢回來的一列（含 JOIN 進來的顯示欄位）。 */
+interface EventLogRow {
+  logId: string;
+  projectId: string;
+  userId: string | null;
+  userEmail: string;
+  displayName: string | null;
+  eventType: string;
+  entityType: string | null;
+  entityId: string | null;
+  /** JSON 字串或已經是物件——舊資料兩種都有，讀的時候要判斷。 */
+  details: string | Record<string, unknown> | null;
+  timestamp: number;
+  /** entityType 為 stage 時由 JOIN 帶進來。 */
+  stageName?: string | null;
+  stageOrder?: number | null;
+}
+
+/**
+ * 回給前端的事件記錄。
+ * 多數欄位是 EventLogRow 的別名（action/resourceType/resourceId），
+ * 為了相容舊版前端而保留。
+ */
+interface EnrichedEventLog {
+  logId: string;
+  projectId: string;
+  userId: string | null;
+  userEmail: string;
+  displayName: string;
+  eventType: string;
+  /** eventType 的別名，向後相容。 */
+  action: string;
+  entityType: string | null;
+  /** entityType 的別名，向後相容。 */
+  resourceType: string | null;
+  entityId: string | null;
+  /** entityId 的別名，向後相容。 */
+  resourceId: string | null;
+  details: Record<string, unknown> | null;
+  timestamp: number;
+  stageId?: string | null;
+  stageName?: string | null;
+  stageOrder?: number | null;
+}
+
+/** getEventResourceDetails 回傳的資源內容，依 resourceType 而異。 */
+type EventResource =
+  | {
+      type: 'submission';
+      content: string | null;
+      submitTime: number;
+      submitterEmail: string;
+      submitterName: string | null;
+      status: string;
+    }
+  | {
+      type: 'comment';
+      content: string;
+      createdTime: number;
+      authorEmail: string;
+      authorName: string | null;
+    };
+
+/** getUserProjectEventLogs 的內容：權限層級與該使用者看得到的記錄。 */
+interface EventLogPermissionPayload {
+  userPermissionLevel?: string;
+  logs?: Array<{ userEmail: string }>;
+}
+
+/** 上面那份內容包在 successResponse 的 body 裡。 */
+interface EventLogPermissionData extends EventLogPermissionPayload {
+  data?: EventLogPermissionPayload;
+}
+
 export async function getProjectEventLogs(
   env: Env,
   projectId: string,
@@ -111,18 +185,16 @@ export async function getProjectEventLogs(
     }
 
 
-    const result = await env.DB.prepare(query).bind(...params).all();
+    const result = await env.DB.prepare(query).bind(...params).all<EventLogRow>();
 
 
     // Enrich event logs with parsed details and display names
-    const enrichedLogs = result.results?.map((log: any) => {
+    const enrichedLogs = result.results?.map(log => {
       // Parse details if it's a JSON string
-      let parsedDetails = log.details;
-      if (typeof log.details === 'string') {
-        parsedDetails = parseJSON(log.details, {});
-      }
+      const parsedDetails: Record<string, unknown> | null =
+        typeof log.details === 'string' ? parseJSON(log.details, {}) : log.details;
 
-      const enrichedLog: any = {
+      const enrichedLog: EnrichedEventLog = {
         logId: log.logId,
         projectId: log.projectId,
         userId: log.userId,
@@ -203,7 +275,7 @@ export async function getUserProjectEventLogs(
     // Level 1: system_admin or create_project → See ALL logs
     if (hasGlobalAdmin) {
       const response = await getProjectEventLogs(env, projectId, filters);
-      const responseData = await response.json() as any;
+      const responseData = await response.json() as EventLogPermissionData;
       const data = responseData.data || responseData;  // Handle nested structure
       data.userPermissionLevel = 'admin';
 
@@ -229,12 +301,12 @@ export async function getUserProjectEventLogs(
       console.warn('⚠️ [SECURITY] User has multiple projectviewers roles!', {
         userEmail,
         projectId,
-        roles: viewerRoles.map((r: any) => r.role)
+        roles: viewerRoles.map(r => r.role)
       });
       // Use most restrictive role (member > observer > teacher)
-      if (viewerRoles.some((r: any) => r.role === 'member')) {
+      if (viewerRoles.some(r => r.role === 'member')) {
         viewerRole = 'member';
-      } else if (viewerRoles.some((r: any) => r.role === 'observer')) {
+      } else if (viewerRoles.some(r => r.role === 'observer')) {
         viewerRole = 'observer';
       } else {
         viewerRole = 'teacher';
@@ -248,7 +320,7 @@ export async function getUserProjectEventLogs(
     // Level 2: teacher or observer → See all project logs
     if (viewerRole === 'teacher' || viewerRole === 'observer') {
       const response = await getProjectEventLogs(env, projectId, filters);
-      const responseData = await response.json() as any;
+      const responseData = await response.json() as EventLogPermissionData;
       const data = responseData.data || responseData;  // Handle nested structure
       data.userPermissionLevel = viewerRole; // 'teacher' or 'observer'
 
@@ -282,8 +354,8 @@ export async function getUserProjectEventLogs(
 
       // Check if user is a group leader
       const leaderGroupIds = userGroups
-        .filter((ug: any) => ug.role === 'leader')
-        .map((ug: any) => ug.groupId);
+        .filter(ug => ug.role === 'leader')
+        .map(ug => ug.groupId);
 
 
       // Level 3: Group leader → See logs of all group members
@@ -293,9 +365,9 @@ export async function getUserProjectEventLogs(
           SELECT DISTINCT userEmail
           FROM usergroups
           WHERE projectId = ? AND groupId IN (${placeholders}) AND isActive = 1
-        `).bind(projectId, ...leaderGroupIds).all();
+        `).bind(projectId, ...leaderGroupIds).all<{ userEmail: string }>();
 
-        const memberEmails = membersResult.results?.map((m: any) => m.userEmail) || [];
+        const memberEmails = membersResult.results?.map(m => m.userEmail) || [];
         const allowedUserEmails = Array.from(new Set([userEmail, ...memberEmails]));
 
 
@@ -306,7 +378,7 @@ export async function getUserProjectEventLogs(
 
 
         const response = await getProjectEventLogs(env, projectId, userFilters);
-        const responseData = await response.json() as any;
+        const responseData = await response.json() as EventLogPermissionData;
         const data = responseData.data || responseData;  // Handle nested structure
         data.userPermissionLevel = 'group_leader';
 
@@ -323,7 +395,7 @@ export async function getUserProjectEventLogs(
 
 
       const response = await getProjectEventLogs(env, projectId, userFilters);
-      const responseData = await response.json() as any;
+      const responseData = await response.json() as EventLogPermissionData;
       const data = responseData.data || responseData;  // Handle nested structure
       data.userPermissionLevel = 'member_in_group';
 
@@ -370,16 +442,18 @@ export async function getEventResourceDetails(
       const submissionOwner = await env.DB.prepare(`
         SELECT submitterEmail FROM submissions_with_status
         WHERE submissionId = ? AND projectId = ?
-      `).bind(resourceId, projectId).first();
-      resourceOwnerEmail = submissionOwner?.submitterEmail as string | null;
+      `).bind(resourceId, projectId).first<{ submitterEmail: string }>();
+      resourceOwnerEmail = submissionOwner?.submitterEmail ?? null;
     } else if (resourceType === 'comment') {
+      // comments 存的是 authorEmail；沒有 authorId 這個欄位。
+      // 舊版 JOIN 在 c.authorId 上，SQLite 直接報 no such column，
+      // 於是 resourceType='comment' 這條路徑必定回 SYSTEM_ERROR。
       const commentOwner = await env.DB.prepare(`
-        SELECT u.userEmail
-        FROM comments c
-        LEFT JOIN users u ON c.authorId = u.userId
-        WHERE c.commentId = ? AND c.projectId = ?
-      `).bind(resourceId, projectId).first();
-      resourceOwnerEmail = commentOwner?.userEmail as string | null;
+        SELECT authorEmail
+        FROM comments
+        WHERE commentId = ? AND projectId = ?
+      `).bind(resourceId, projectId).first<{ authorEmail: string }>();
+      resourceOwnerEmail = commentOwner?.authorEmail ?? null;
     }
 
     if (!resourceOwnerEmail) {
@@ -404,7 +478,11 @@ export async function getEventResourceDetails(
 
     // Get user's permission level by calling getUserProjectEventLogs with empty filters
     const permissionCheckResponse = await getUserProjectEventLogs(env, userEmail, projectId, {});
-    const permissionData = await permissionCheckResponse.json() as any;
+    // getUserProjectEventLogs 回的是 successResponse(data)，所以權限層級
+    // 在 body.data 底下。舊版讀最外層，永遠是 undefined，下面兩個收窄分支
+    // 因此從來沒有執行過——路由層只擋專案層級的 view，等於沒有收窄。
+    const permissionBody = await permissionCheckResponse.json() as EventLogPermissionData;
+    const permissionData = permissionBody.data ?? permissionBody;
     const userPermissionLevel = permissionData.userPermissionLevel;
 
     // Validate access based on permission level
@@ -417,7 +495,7 @@ export async function getEventResourceDetails(
       // Group leaders can view resources from their group members
       // Get allowed emails from the permission check
       const allowedEmails = new Set(
-        permissionData.logs.map((log: any) => log.userEmail)
+        (permissionData.logs ?? []).map(log => log.userEmail)
       );
       if (!allowedEmails.has(resourceOwnerEmail)) {
         return errorResponse('PERMISSION_DENIED', 'You do not have permission to view this resource');
@@ -426,7 +504,7 @@ export async function getEventResourceDetails(
     // admin, teacher, observer can view all resources (no additional check needed)
 
     // Now fetch the actual resource details
-    let resource: any = null;
+    let resource: EventResource | null = null;
 
     if (resourceType === 'submission') {
       const submission = await env.DB.prepare(`
@@ -440,7 +518,14 @@ export async function getEventResourceDetails(
         FROM submissions_with_status s
         LEFT JOIN users u ON s.submitterEmail = u.userEmail
         WHERE s.submissionId = ? AND s.projectId = ?
-      `).bind(resourceId, projectId).first();
+      `).bind(resourceId, projectId).first<{
+        submissionId: string;
+        contentMarkdown: string | null;
+        submitTime: number;
+        submitterEmail: string;
+        status: string;
+        submitterName: string | null;
+      }>();
 
       if (submission) {
         resource = {
@@ -454,18 +539,24 @@ export async function getEventResourceDetails(
       }
 
     } else if (resourceType === 'comment') {
+      // 同上：comments 以 authorEmail 關聯 users，沒有 authorId。
       const comment = await env.DB.prepare(`
         SELECT
           c.commentId,
           c.content,
           c.createdTime,
-          c.authorId,
-          u.userEmail as authorEmail,
+          c.authorEmail,
           u.displayName as authorName
         FROM comments c
-        LEFT JOIN users u ON c.authorId = u.userId
+        LEFT JOIN users u ON c.authorEmail = u.userEmail
         WHERE c.commentId = ? AND c.projectId = ?
-      `).bind(resourceId, projectId).first();
+      `).bind(resourceId, projectId).first<{
+        commentId: string;
+        content: string;
+        createdTime: number;
+        authorEmail: string;
+        authorName: string | null;
+      }>();
 
       if (comment) {
         resource = {
