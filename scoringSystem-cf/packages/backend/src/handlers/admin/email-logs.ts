@@ -165,7 +165,7 @@ function buildEmailLogsQuery(
 /**
  * Normalize filters with defaults and validation
  */
-function normalizeFilters(filters: any = {}): EmailLogFilters {
+function normalizeFilters(filters: Partial<EmailLogFilters> = {}): EmailLogFilters {
   return {
     trigger: filters.trigger,
     recipient: filters.recipient,

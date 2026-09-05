@@ -310,13 +310,18 @@ export async function updateUserStatus(
 export async function updateUserProfile(
   env: Env,
   adminEmail: string,
+  /**
+   * userEmail 標成選填是誠實的：呼叫端的 schema
+   * （UpdateUserProfileAdminRequestSchema）讓所有頂層欄位都可省略，
+   * 所以 `{}` 是合法的請求。函式一開頭就會擋掉沒有 userEmail 的情況。
+   */
   userData: {
-    userEmail: string;
+    userEmail?: string;
     displayName?: string;
     status?: string;
     avatarSeed?: string;
     avatarStyle?: string;
-    avatarOptions?: any;
+    avatarOptions?: Record<string, string>;
   }
 ): Promise<Response> {
   try {
@@ -338,7 +343,7 @@ export async function updateUserProfile(
     // Prepare update object with allowed fields
     const updates: string[] = [];
     const params: SqlBindValue[] = [];
-    const actualUpdates: any = {};  // Track actual update values for change logging
+    const actualUpdates: Record<string, SqlBindValue> = {};  // Track actual update values for change logging
 
     if (userData.displayName !== undefined) {
       const value = userData.displayName.substring(0, 100);

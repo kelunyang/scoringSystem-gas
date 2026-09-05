@@ -3,7 +3,7 @@
  * Migrated from GAS scripts/stages_api.js
  */
 
-import type { Env } from '@/types';
+import type { Env, SqlBindValue } from '@/types';
 import { successResponse, errorResponse } from '@utils/response';
 import { parseJSON, stringifyJSON } from '@utils/json';
 import { generateStageId } from '@utils/id-generator';
@@ -15,6 +15,23 @@ import { getConfigValue } from '@utils/config';
 /**
  * Create a new stage in a project
  */
+/**
+ * updateStage 讀到的階段欄位。
+ * 索引簽章是給「逐欄比對改了什麼」的變更記錄用的——
+ * 它用 allowedUpdates 的 key 去取舊值，key 在編譯期是不確定的。
+ */
+interface StageUpdateRow {
+  stageName: string;
+  description: string | null;
+  stageOrder: number;
+  startTime: number;
+  endTime: number;
+  status: string;
+  reportRewardPool: number;
+  commentRewardPool: number;
+  [column: string]: unknown;
+}
+
 export async function createStage(
   env: Env,
   userEmail: string,
@@ -216,13 +233,13 @@ export async function updateStage(
     // Get current stage with auto-calculated status
     const stage = await env.DB.prepare(`
       SELECT *, status FROM stages_with_status WHERE stageId = ? AND projectId = ?
-    `).bind(stageId, projectId).first();
+    `).bind(stageId, projectId).first<StageUpdateRow>();
 
     if (!stage) {
       return errorResponse('STAGE_NOT_FOUND', 'Stage not found');
     }
 
-    const allowedUpdates: any = {};
+    const allowedUpdates: Record<string, SqlBindValue> = {};
 
     // Validate and process updates - only add to allowedUpdates if value actually changed
     if (updates.stageName !== undefined) {
@@ -281,8 +298,8 @@ export async function updateStage(
     }
 
     // Validate date consistency
-    const newStartDate = allowedUpdates.startTime || stage.startTime;
-    const newEndDate = allowedUpdates.endTime || stage.endTime;
+    const newStartDate = Number(allowedUpdates.startTime ?? stage.startTime);
+    const newEndDate = Number(allowedUpdates.endTime ?? stage.endTime);
 
     if (newEndDate <= newStartDate) {
       return errorResponse('INVALID_INPUT', 'End date must be after start date');
@@ -485,11 +502,10 @@ export async function updateStage(
     }
 
     // Log general update with full change tracking
-    const changes: Record<string, { oldValue: any; newValue: any }> = {};
+    const changes: Record<string, { oldValue: unknown; newValue: SqlBindValue }> = {};
     for (const [key, newValue] of Object.entries(allowedUpdates)) {
       if (key !== 'updatedAt') {
-        const oldValue = stage[key];
-        changes[key] = { oldValue, newValue };
+        changes[key] = { oldValue: stage[key], newValue };
       }
     }
 

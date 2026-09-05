@@ -15,6 +15,19 @@ import type { SqlBindValue } from '../../types';
  * Get all global groups (admin function)
  * Supports server-side filtering, searching, and pagination
  */
+/** 全域群組清單查詢回來的一列（含子查詢算出的成員數）。 */
+interface GlobalGroupListRow {
+  globalGroupId: string;
+  groupName: string;
+  description: string | null;
+  /** JSON 字串，直接回給前端解析。 */
+  globalPermissions: string | null;
+  isActive: number;
+  createdAt: number;
+  updatedAt: number;
+  memberCount: number | null;
+}
+
 export async function getGlobalGroups(
   env: Env,
   options?: {
@@ -92,14 +105,14 @@ export async function getGlobalGroups(
       GROUP BY gg.globalGroupId
       ORDER BY gg.createdAt DESC
       ${limitClause}
-    `).bind(...params).all();
+    `).bind(...params).all<GlobalGroupListRow>();
 
     // Execute both queries in parallel
     const [countResult, groupsResult] = await Promise.all([countQuery, groupsQuery]);
 
     const totalCount = countResult?.total || 0;
 
-    const groups = groupsResult.results?.map((g: any) => ({
+    const groups = groupsResult.results?.map(g => ({
       groupId: g.globalGroupId,  // Use globalGroupId as groupId for frontend consistency
       globalGroupId: g.globalGroupId,  // Also include for backward compatibility
       groupName: g.groupName,
@@ -259,7 +272,7 @@ export async function updateGlobalGroup(
     // Prepare updates
     const updates: string[] = [];
     const params: SqlBindValue[] = [];
-    const actualUpdates: any = {};  // Track actual update values for change logging
+    const actualUpdates: Record<string, SqlBindValue> = {};  // Track actual update values for change logging
 
     if (groupData.groupName !== undefined) {
       const newName = groupData.groupName.substring(0, 50);
@@ -504,9 +517,15 @@ export async function getGlobalGroupMembers(
       JOIN users u ON gug.userEmail = u.userEmail
       WHERE gug.globalGroupId = ? AND gug.isActive = 1
       ORDER BY gug.joinedAt DESC
-    `).bind(groupId).all();
+    `).bind(groupId).all<{
+      globalUserGroupId: string;
+      userEmail: string;
+      displayName: string | null;
+      joinedAt: number;
+      isActive: number;
+    }>();
 
-    const members = result.results?.map((m: any) => ({
+    const members = result.results?.map(m => ({
       membershipId: m.globalUserGroupId,
       userEmail: m.userEmail,
       displayName: m.displayName || m.userEmail,
@@ -737,17 +756,17 @@ export async function batchAddUsersToGlobalGroup(
     const validUsersResult = await env.DB.prepare(`
       SELECT userEmail FROM users
       WHERE userEmail IN (${emailPlaceholders}) AND status = 'active'
-    `).bind(...userEmails).all();
+    `).bind(...userEmails).all<{ userEmail: string }>();
 
-    const validUserEmails = new Set(validUsersResult.results?.map((u: any) => u.userEmail) || []);
+    const validUserEmails = new Set(validUsersResult.results?.map(u => u.userEmail) || []);
 
     // Batch check existing memberships in one query
     const existingMembershipsResult = await env.DB.prepare(`
       SELECT userEmail FROM globalusergroups
       WHERE globalGroupId = ? AND userEmail IN (${emailPlaceholders}) AND isActive = 1
-    `).bind(groupId, ...userEmails).all();
+    `).bind(groupId, ...userEmails).all<{ userEmail: string }>();
 
-    const existingEmails = new Set(existingMembershipsResult.results?.map((m: any) => m.userEmail) || []);
+    const existingEmails = new Set(existingMembershipsResult.results?.map(m => m.userEmail) || []);
 
     // Prepare batch insert statements
     const insertStatements = [];
@@ -841,10 +860,10 @@ export async function batchRemoveUsersFromGlobalGroup(
     const membershipsResult = await env.DB.prepare(`
       SELECT globalUserGroupId, userEmail FROM globalusergroups
       WHERE globalGroupId = ? AND userEmail IN (${emailPlaceholders}) AND isActive = 1
-    `).bind(groupId, ...userEmails).all();
+    `).bind(groupId, ...userEmails).all<{ globalUserGroupId: string; userEmail: string }>();
 
     const membershipsByEmail = new Map<string, string>();
-    membershipsResult.results?.forEach((m: any) => {
+    membershipsResult.results?.forEach(m => {
       membershipsByEmail.set(m.userEmail, m.globalUserGroupId);
     });
 
@@ -930,10 +949,10 @@ export async function batchDeactivateGlobalGroups(
     const placeholders = groupIds.map(() => '?').join(',');
     const allGroupsResult = await env.DB.prepare(`
       SELECT globalGroupId, groupName FROM globalgroups WHERE globalGroupId IN (${placeholders})
-    `).bind(...groupIds).all();
+    `).bind(...groupIds).all<{ globalGroupId: string; groupName: string }>();
 
     const existingGroups = allGroupsResult.results || [];
-    const groupMap = new Map(existingGroups.map((g: any) => [g.globalGroupId, g]));
+    const groupMap = new Map(existingGroups.map(g => [g.globalGroupId, g]));
 
     // Process each group
     const updateStatements = [];
@@ -1040,10 +1059,10 @@ export async function batchActivateGlobalGroups(
     const placeholders = groupIds.map(() => '?').join(',');
     const allGroupsResult = await env.DB.prepare(`
       SELECT globalGroupId, groupName FROM globalgroups WHERE globalGroupId IN (${placeholders})
-    `).bind(...groupIds).all();
+    `).bind(...groupIds).all<{ globalGroupId: string; groupName: string }>();
 
     const existingGroups = allGroupsResult.results || [];
-    const groupMap = new Map(existingGroups.map((g: any) => [g.globalGroupId, g]));
+    const groupMap = new Map(existingGroups.map(g => [g.globalGroupId, g]));
 
     // Process each group
     const updateStatements = [];

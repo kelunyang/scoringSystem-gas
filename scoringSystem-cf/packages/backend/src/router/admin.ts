@@ -375,24 +375,24 @@ app.post(
     const user = c.get('user');
     const body = c.req.valid('json');
 
-    // Support both formats temporarily for cache transition
+    // 這個端點同時接受三種格式（schema 三種都定義了）：
+    // 巢狀的 userData、扁平的欄位、以及舊版前端快取送來的 avatarData。
     let userData = body.userData || body;
 
-    // Handle avatarData format (from cached frontend)
-    if ((body as any).avatarData && !body.userData) {
+    if (body.avatarData && !body.userData) {
       userData = {
         ...userData,
-        avatarSeed: (body as any).avatarData.avatarSeed,
-        avatarStyle: (body as any).avatarData.avatarStyle,
-        avatarOptions: (body as any).avatarData.avatarOptions
+        avatarSeed: body.avatarData.avatarSeed,
+        avatarStyle: body.avatarData.avatarStyle,
+        avatarOptions: body.avatarData.avatarOptions
       };
-      delete (userData as any).avatarData;
+      delete (userData as { avatarData?: unknown }).avatarData;
     }
 
     const response = await updateUserProfile(
       c.env,
       user.userEmail,
-      userData as any
+      userData
     );
 
     return response;
@@ -1934,7 +1934,7 @@ app.post(
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: result.error.issues.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')
+          message: result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
         }
       }, 400);
     }
@@ -1968,7 +1968,7 @@ app.post(
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: result.error.issues.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')
+          message: result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
         }
       }, 400);
     }
@@ -1999,7 +1999,7 @@ app.post(
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: result.error.issues.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')
+          message: result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
         }
       }, 400);
     }
@@ -2040,7 +2040,7 @@ app.post(
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: result.error.issues.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')
+          message: result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
         }
       }, 400);
     }

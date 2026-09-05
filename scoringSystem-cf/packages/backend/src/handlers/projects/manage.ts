@@ -3,7 +3,7 @@
  * Migrated from GAS scripts/projects_api.js
  */
 
-import type { Env } from '@/types';
+import type { Env, SqlBindValue } from '@/types';
 import { successResponse, errorResponse } from '@utils/response';
 import { parseJSON } from '@utils/json';
 import { logGlobalOperation, generateChanges } from '@utils/logging';
@@ -86,7 +86,7 @@ export async function updateProject(
     // Get project
     const project = await env.DB.prepare(`
       SELECT * FROM projects WHERE projectId = ?
-    `).bind(projectId).first();
+    `).bind(projectId).first<{ createdBy: string; projectName: string; scoreRangeMin: number; scoreRangeMax: number }>();
 
     if (!project) {
       return errorResponse('PROJECT_NOT_FOUND', 'Project not found');
@@ -102,7 +102,7 @@ export async function updateProject(
     }
 
     // Validate and sanitize updates
-    const allowedUpdates: any = {};
+    const allowedUpdates: Record<string, SqlBindValue> = {};
 
     if (updates.projectName !== undefined) {
       allowedUpdates.projectName = sanitizePlainText(updates.projectName).substring(0, 100);
@@ -131,8 +131,8 @@ export async function updateProject(
     }
 
     // Validate score range
-    const minScore = allowedUpdates.scoreRangeMin !== undefined ? allowedUpdates.scoreRangeMin : project.scoreRangeMin;
-    const maxScore = allowedUpdates.scoreRangeMax !== undefined ? allowedUpdates.scoreRangeMax : project.scoreRangeMax;
+    const minScore = Number(allowedUpdates.scoreRangeMin ?? project.scoreRangeMin);
+    const maxScore = Number(allowedUpdates.scoreRangeMax ?? project.scoreRangeMax);
 
     if (minScore >= maxScore) {
       return errorResponse('INVALID_INPUT', 'Minimum score must be less than maximum score');

@@ -38,6 +38,7 @@ import announcementsRouter from './router/announcements';
 import emailQueue from './queues/email-consumer';
 import notificationQueue from './queues/notification-consumer';
 import loginEventsQueue from './queues/login-events-consumer';
+import type { LoginEvent } from './queues/login-events-producer';
 import aiRankingQueue from './queues/ai-ranking-consumer';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -328,16 +329,18 @@ export default {
     try {
       switch (queueName) {
         case 'email-queue':
-          await emailQueue.queue(batch as any, env);
+          await emailQueue.queue(batch, env);
           break;
         case 'notification-queue':
-          await notificationQueue.queue(batch as any, env);
+          await notificationQueue.queue(batch, env);
           break;
         case 'login-events-queue':
-          await loginEventsQueue.queue(batch as any, env);
+          // 只有這個 consumer 宣告了具體的訊息型別（MessageBatch<LoginEvent>）。
+          // 佇列名稱已經在上面的 switch 判斷過，所以這裡的收窄是安全的。
+          await loginEventsQueue.queue(batch as MessageBatch<LoginEvent>, env);
           break;
         case 'ai-ranking-queue':
-          await aiRankingQueue.queue(batch as any, env);
+          await aiRankingQueue.queue(batch, env);
           break;
         default:
           console.error(`[Queue Router] ❌ Unknown queue: ${queueName}`);

@@ -219,7 +219,7 @@ function buildAIServiceLogsQuery(
 /**
  * Normalize filters with defaults and validation
  */
-function normalizeFilters(filters: any = {}): AIServiceLogFilters {
+function normalizeFilters(filters: Partial<AIServiceLogFilters> = {}): AIServiceLogFilters {
   return {
     search: filters.search,
     serviceType: filters.serviceType,

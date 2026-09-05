@@ -3,7 +3,7 @@
  * Migrated from GAS scripts/groups_api.js
  */
 
-import type { Env } from '@/types';
+import type { Env, SqlBindValue } from '@/types';
 import { successResponse, errorResponse } from '@utils/response';
 import { generateId } from '@utils/id-generator';
 import { hasGlobalPermission } from '@utils/permissions';
@@ -358,7 +358,7 @@ export async function updateGroup(
     const oldGroupName = (group as any).groupName;
 
     // Validate updates
-    const allowedUpdates: any = {};
+    const allowedUpdates: Record<string, SqlBindValue> = {};
 
     if (updates.groupName !== undefined) {
       const newName = updates.groupName.substring(0, 50);

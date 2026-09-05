@@ -52,7 +52,12 @@ export interface Env {
   DB: D1Database;
 
   // Durable Objects
-  NOTIFICATION_HUB: any; // DurableObjectNamespace type not available in current workers-types
+  /**
+   * 每位使用者一個實例，用來推 WebSocket 通知。
+   * （舊註解寫「workers-types 沒有 DurableObjectNamespace」已經過時，
+   * 現在的版本有這個型別。）
+   */
+  NOTIFICATION_HUB: DurableObjectNamespace;
 
   // Cloudflare Queues
   EMAIL_QUEUE: Queue<unknown>;

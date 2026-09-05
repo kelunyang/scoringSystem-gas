@@ -3,7 +3,7 @@
  * Migrated from GAS scripts/users_api.js
  */
 
-import type { Env } from '@/types';
+import type { Env, SqlBindValue } from '@/types';
 import { successResponse, errorResponse } from '@utils/response';
 import { parseJSON, stringifyJSON } from '@utils/json';
 import { logGlobalOperation, generateChanges } from '@utils/logging';
@@ -87,7 +87,7 @@ export async function updateUserProfile(
     }
 
     // Validate and sanitize updates
-    const allowedUpdates: any = {};
+    const allowedUpdates: Record<string, SqlBindValue> = {};
 
     if (updates.displayName !== undefined) {
       // Sanitize display name (max 100 chars)
@@ -151,7 +151,7 @@ export async function updateUserAvatar(
       return errorResponse('USER_NOT_FOUND', 'User not found');
     }
 
-    const allowedUpdates: any = {};
+    const allowedUpdates: Record<string, SqlBindValue> = {};
 
     if (avatarData.avatarSeed !== undefined) {
       allowedUpdates.avatarSeed = avatarData.avatarSeed.substring(0, 50);
