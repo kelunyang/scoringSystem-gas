@@ -1,107 +1,98 @@
-# D1 Migrations — 實際狀態說明
+# D1 Migrations
 
-**動手改這個目錄之前先讀完。** 這裡的編號是壞的，而且修復需要先確認遠端實際狀態。
+**這些 migration 現在可以從零建出完整資料庫。** 這在 2026-09-05 之前不成立，
+以下記錄它為什麼壞掉、怎麼修的，以及新增 migration 時要注意什麼。
 
-## 為什麼會亂
+## 現在怎麼用
 
-兩件事疊在一起：
+```bash
+cd scoringSystem-cf/packages/backend
 
-1. **schema 不是 migration 建的。** `0001_initial.sql` 只建了一張佔位表，
-   註解說 schema 由 `POST /auth/init-system` 端點建立。實際的 34 張表定義在
-   `0003_init_schema.sql`（36KB），但它從未被 `wrangler d1 migrations apply` 套用過。
-2. **`.gitignore` 的 `*.sql` 規則曾經吃掉整個目錄**（已於 commit 21a57f6 修正為
-   `!packages/backend/migrations/*.sql`），但當時只補 `git add` 了一部分檔案，
-   另一半留在 untracked 狀態直到 2026-09-05。
-
-結果是兩套並行的編號序列，撞號在 0001/0003/0004/0005/0006。
-
-## 本地 D1 的實測結果（2026-09-05）
-
-```
-d1_migrations 表內容：
-  0001_initial.sql          2025-12-18
-  0001_add_aiservicecalls.sql   2026-01-13
-  0002_add_announcements.sql    2026-01-13
-  0003_add_totp_support.sql     2026-04-14
-
-實際表數：38
-users 欄位：無 passkeyEnabled / passkeyEnabledAt
+pnpm db:migrate            # 本地：套用所有未套用的 migration
+pnpm db:migrate:remote     # 遠端：同上
+pnpm init:local            # 建立第一個管理員帳號（只寫資料，不建表）
 ```
 
-也就是說：**只有 4 個 migration 被記錄套用，schema 卻是完整的**（init 端點建的），
-而 passkey 相關的 migration 一個都沒套用——本地環境的 passkey 功能其實是壞的
-（`user.passkeyEnabled` 讀到 undefined，永遠是 false）。
+`db:rebuild` = 重設本地 DB → 套用 migrations → 建管理員。
 
-## 已經做的處理
+**沒有 `/auth/init-system` 這個端點。** `index.ts` 曾經有訊息指向它，
+但它從未被實作過——建庫一直是 CLI 的工作。那些訊息已於 2026-09-05 修正。
 
-- 把先前 untracked 的 migration 全部納入版控。
-- **刪除重複的 `0007_add_passkey_support.sql`**。它和 `0004_add_passkey_support.sql`
-  都執行 `ALTER TABLE users ADD COLUMN passkeyEnabled`，兩份都跑必然
-  `duplicate column name` 失敗。保留 git 已追蹤的 0004 為準。
-  0007 獨有的 `idx_passkey_credentials_lastused` 索引已併入 `0008_2fa_binding.sql`。
-  （0007 另有 FK 與可為 null 的 `transports`，SQLite 無法用 ALTER 補 FK，
-  差異就此接受。）
+## 曾經壞在哪（2026-09-05 修復）
 
-## 遠端實測結果（2026-09-05）
+### 1. 兩套編號並行，順序是錯的
+
+`.gitignore` 的 `*.sql` 規則曾經吃掉整個目錄，補救時只 `git add` 了一半，
+於是長出兩套各自從 0001 開始的序列，在 0001／0003／0004／0005／0006 撞號。
+
+`wrangler d1 migrations apply` **依檔名排序**執行，所以
+`0001_add_aiservicecalls` 和 `0003_add_totp_support`（兩者都
+`ALTER TABLE users`）排在建立 users 表的 `0003_init_schema` **之前**。
+從零套用會在第一個 ALTER 就中止。
+
+沒人發現，是因為實際跑的資料庫都是手動建起來的。
+
+**修法**：重新編號成正確的相依順序，並同步更新本地與遠端
+`d1_migrations` 表裡記錄的檔名（否則 wrangler 會認為它們沒套用過而重跑）。
+
+| 現在 | 原本 |
+|------|------|
+| `0001_init_schema.sql` | `0003_init_schema.sql` |
+| `0002_add_aiservicecalls.sql` | `0001_add_aiservicecalls.sql` |
+| `0003_add_announcements.sql` | `0002_add_announcements.sql` |
+| `0004_add_totp_support.sql` | `0003_add_totp_support.sql` |
+| `0005_add_passkey_support.sql` | `0004_add_passkey_support.sql` |
+| `0006_fix_invitation_unique_index.sql` | `0004_fix_invitation_unique_index.sql` |
+| `0007_add_stage_pause.sql` | `0005_add_stage_pause.sql` |
+| `0008_add_withdraw_reason.sql` | `0005_add_withdraw_reason.sql` |
+| `0009_add_max_vote_reset_count.sql` | `0006_add_max_vote_reset_count.sql` |
+| `0010_add_rate_limit_counters.sql` | `0006_add_rate_limit_counters.sql` |
+| `0011_2fa_binding.sql` | `0008_2fa_binding.sql` |
+| `0012_password_changed_at.sql` | `0009_password_changed_at.sql` |
+
+`0001_initial.sql` 已刪除——它只建一張沒人用的 `_migrations` 佔位表，
+註解還說 schema 由某個不存在的端點建立。
+
+### 2. `db:sync-schema` 會用更舊的檔案覆蓋 migration
 
 ```
-d1_migrations（7 筆，全部是 git 已追蹤的那一系列）：
-  0001_initial.sql
-  0001_add_aiservicecalls.sql
-  0002_add_announcements.sql
-  0003_add_totp_support.sql
-  0004_add_passkey_support.sql
-  0005_add_withdraw_reason.sql
-  0006_add_rate_limit_counters.sql
-
-schema 抽查：
-  stages.pausedTime                 存在
-  projects.maxVoteResetCount        存在
-  two_factor_codes.context          不存在
-  idx_invitation_active_email       不存在（已被刪過）
-  stages_with_status 含 paused 分支  是
-  users.passkeyEnabled/-At          存在
+"db:sync-schema": "cp ../../../database/schema.sql ./migrations/0003_init_schema.sql"
 ```
 
-**結論**：遠端從未套用過先前 untracked 的那一系列，但它們的 schema 變更
-**早就以手動方式套用了**。也就是說資料庫狀態是對的，只有記帳是錯的。
+而 `database/schema.sql` **比生產環境少三張表**
+（`passkey_credentials`、`rate_limit_counters`、`totp_recovery_codes`）。
+`db:reset:*` 和 `db:nuke` 都會先跑它，等於「重設資料庫」會順手把
+migration 退回舊版。指令已移除。
 
-`0007_add_passkey_support.sql` 從未上過遠端，所以刪除它是安全的；
-`0004_add_passkey_support.sql` 有記錄且欄位存在，不會撞 duplicate column。
+`database/schema.sql` 本身留著沒動，但**它不再是任何流程的輸入**。
+schema 的唯一來源是這個目錄。
 
-### 這造成的地雷
+### 3. 重複的 passkey migration
 
-wrangler 讀目錄、不讀 git，所以它會認為以下五個檔案「還沒套用」：
+`0004_add_passkey_support.sql` 與 `0007_add_passkey_support.sql` 都執行
+`ALTER TABLE users ADD COLUMN passkeyEnabled`，兩份都跑必然
+`duplicate column name`。遠端 `d1_migrations` 顯示只套用過前者，
+後者已刪除，其獨有的 `idx_passkey_credentials_lastused` 索引併入 `0011`。
 
-| 順序 | 檔案 | 重跑安全嗎 |
-|------|------|------------|
-| 1 | `0003_init_schema.sql` | ✅ 全部 `IF NOT EXISTS`（含 5 個 VIEW），no-op |
-| 2 | `0004_fix_invitation_unique_index.sql` | ✅ `DROP INDEX IF EXISTS`，冪等 |
-| 3 | `0005_add_stage_pause.sql` | ❌ **`ALTER TABLE stages ADD COLUMN pausedTime` 會失敗** |
-| 4 | `0006_add_max_vote_reset_count.sql` | ❌ **同樣是 ADD COLUMN，會失敗** |
-| 5 | `0008_2fa_binding.sql` | ✅ 但排在第 3 個失敗之後，永遠輪不到 |
+## 新增 migration 時
 
-SQLite 的 `ALTER TABLE ADD COLUMN` 沒有 `IF NOT EXISTS`，無法改寫成冪等。
+1. `pnpm db:create <描述>` 或手動建檔，**編號接續目前最大值 + 1**。
+2. `tests/migrations-build-clean.test.ts` 會驗證：
+   - 編號**不重複、不跳號**
+   - 全部依序套用到全新的 SQLite 能成功
+   - 建出的表、view、關鍵欄位齊全
+3. SQLite 的 `ALTER TABLE ADD COLUMN` **沒有 `IF NOT EXISTS`**，
+   所以同一個欄位不能在兩個 migration 裡加。加欄位前先確認它還不存在。
+4. 對 `users` 之類的核心表做 ALTER，一定要排在 `0001_init_schema` 之後
+   ——現在的編號保證了這點，但改名或插號時要重新確認。
 
-### 修法：補登記錄，不要改檔案
+## 驗證遠端狀態
 
-```sql
-INSERT OR IGNORE INTO d1_migrations (name) VALUES
-  ('0003_init_schema.sql'),
-  ('0004_fix_invitation_unique_index.sql'),
-  ('0005_add_stage_pause.sql'),
-  ('0006_add_max_vote_reset_count.sql');
+```bash
+npx wrangler d1 execute scoring-system-db --remote \
+  --command "SELECT id, name FROM d1_migrations ORDER BY id"
+npx wrangler d1 migrations list scoring-system-db --remote
 ```
 
-只動記帳表，不碰業務資料。跑完之後 `migrate:remote` 只會套用 `0008`。
-
-**為什麼不是刪掉 0005／0006**：`0003_init_schema.sql` 的 `stages` 表沒有
-`pausedTime`、`projects` 表沒有 `maxVoteResetCount`，全新環境仍然需要這兩步。
-刪掉它們會讓乾淨環境少兩個欄位。
-
-## 長期該做的事
-
-`/auth/init-system` 這條建庫路徑應該廢掉，讓 migrations 成為唯一事實來源。
-在那之前，**不要在乾淨環境用 `migrations apply` 重建資料庫**——
-順序是錯的（`0001_add_aiservicecalls` 和 `0003_add_totp_support` 都會在
-`0003_init_schema` 建表之前執行 `ALTER TABLE users`）。
+第二個指令應該回報 `No migrations to apply!`。若它列出已經套用過的檔案，
+代表記錄的檔名與目錄裡的不符——**不要直接 apply**，先比對兩邊的名稱。

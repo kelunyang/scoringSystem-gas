@@ -20,7 +20,7 @@ import {
 } from '../../src/utils/rate-limiter';
 import type { Env } from '../../src/types';
 
-const MIGRATION = resolve(__dirname, '../../migrations/0006_add_rate_limit_counters.sql');
+const MIGRATION = resolve(__dirname, '../../migrations/0010_add_rate_limit_counters.sql');
 const HOUR = 60 * 60 * 1000;
 
 let env: Env;

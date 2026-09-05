@@ -419,31 +419,48 @@ issue 原本的評估仍成立：前端算錯最多是按鈕多顯示或少顯�
 建立者通過、`create_project` 在他人專案被拒、
 建立者在失去 `create_project` 後仍通過、載入中的 null 安全。
 
-#### 丙：Migrations ｜ 大部分已修，剩一項架構性待辦
+#### 丙：Migrations ｜ 已可從零建置（2026-09-05 第二輪）
 
-**原始問題**：兩套互相衝突的編號（0001/0003/0004/0005/0006 都撞號），
-建表的 `0003_init_schema.sql`（34 張表）沒進版控，
-`0004_add_passkey_support.sql` 與 `0007_add_passkey_support.sql`
-都執行 `ALTER TABLE users ADD COLUMN passkeyEnabled`——兩份都跑必然失敗。
+**第一輪修的**：納入版控、刪除重複的 passkey migration、遠端補登 4 筆記錄。
+但當時留了一句「不要在乾淨環境重建資料庫，順序仍是錯的」。第二輪把它修掉了。
 
-**已修**：
-- 先前 untracked 的 migration 全部納入版控。
-- 刪除重複的 `0007_add_passkey_support.sql`（遠端從未套用過它，
-  已用 `d1_migrations` 查證），其獨有的索引併入 `0008`。
-- **遠端補登 4 筆記錄**：`0003_init_schema`、`0004_fix_invitation_unique_index`、
-  `0005_add_stage_pause`、`0006_add_max_vote_reset_count` 的 schema 變更
-  早已手動套用，但沒有記帳。不補登的話下次 apply 會在
-  `ALTER TABLE stages ADD COLUMN pausedTime` 撞欄位而中斷，
-  排在後面的新 migration 永遠輪不到。
-- 本地 D1 同樣補登並套用完畢，順帶修好本地一直壞著的 passkey
-  （`users` 先前沒有 passkey 欄位，功能靜默失效）。
-- 遠端實測狀態與處理方式全部寫進 `migrations/README.md`。
+**真正的根因有三層**：
 
-**仍待辦（架構性）**：`/auth/init-system` 這條平行的建庫路徑還在，
-所以「schema 從哪來」有兩個答案。在它廢掉之前，
-**不要在乾淨環境用 `migrations apply` 重建資料庫**——
-順序仍然是錯的（`0001_add_aiservicecalls` 和 `0003_add_totp_support`
-會在 `0003_init_schema` 建表之前執行 `ALTER TABLE users`）。
+1. **兩套編號並行**（`.gitignore` 吃掉一半檔案造成），撞號在
+   0001／0003／0004／0005／0006。wrangler 依檔名排序執行，
+   於是 `0001_add_aiservicecalls` 和 `0003_add_totp_support`
+   （都 `ALTER TABLE users`）排在建 users 表的 `0003_init_schema` 之前。
+2. **`db:sync-schema` 會把 migration 覆蓋成更舊的版本**：
+   `cp ../../../database/schema.sql ./migrations/0003_init_schema.sql`，
+   而那個檔案**比生產環境少三張表**（passkey_credentials、
+   rate_limit_counters、totp_recovery_codes）。`db:reset:*` 和 `db:nuke`
+   都會先跑它——「重設資料庫」會順手把 schema 退回舊版。
+3. **`/auth/init-system` 這個端點根本不存在**。只有 `index.ts` 三行訊息
+   指向它。我第一輪寫「平行的建庫路徑」是從那些訊息推論的，**推論錯了**——
+   真正的平行路徑是 `init:schema` 直接 `d1 execute --file` 那一份 SQL，
+   繞過記帳。
+
+**修法**：
+- 重新編號成正確的相依順序（12 個檔案），對照表見 `migrations/README.md`。
+- 同步更新 `d1_migrations` 記錄的檔名。**本地已改，遠端待執行**（見下）。
+- 移除 `db:sync-schema`；`init:schema` 改為 `migrations apply`；
+  `db:rebuild` 補上 `db:migrate`（原本 reset 之後直接 seed，根本沒建表）。
+- 刪除 `0001_initial.sql`（只建一張沒人用的 `_migrations` 佔位表）。
+- 修正 `index.ts` 指向不存在端點的訊息。
+
+**驗證**：新順序在全新的 in-memory SQLite 上跑完 12 個檔案成功，
+建出 37 表 5 view，與生產環境**完全一致**（差的 3 張是
+`_cf_KV`、`d1_migrations`、`_migrations` 系統表）。
+
+**守門測試** `tests/migrations-build-clean.test.ts`：編號不重複不跳號、
+依序套用到全新 SQLite 成功、關鍵表／view／欄位齊全。
+新增 migration 若破壞順序或相依，這條會紅。
+
+**⚠️ 遠端記帳尚未更新**：遠端 `d1_migrations` 仍記著舊檔名，
+所以 `wrangler d1 migrations list --remote` 目前會列出全部 12 個為「待套用」。
+**在執行下面那段 UPDATE 之前，不要跑 `migrate:remote`**——會在
+`ALTER TABLE stages ADD COLUMN pausedTime` 撞欄位失敗。
+指令見 `migrations/README.md`。
 
 #### 丁：測試與設定
 

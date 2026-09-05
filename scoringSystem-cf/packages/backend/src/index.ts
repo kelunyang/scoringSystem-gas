@@ -86,12 +86,9 @@ app.get('/', async (c) => {
       response.setup = {
         message: '⚠  Database not initialized',
         instructions: [
-          '1. Call POST /auth/init-system to initialize database',
-          '2. Optional: Provide custom admin credentials in request body',
-          '3. Default admin: email=admin@system.local, password=admin123456'
-        ],
-        endpoint: '/auth/init-system',
-        exampleCurl: 'curl -X POST http://localhost:8787/auth/init-system -H "Content-Type: application/json"'
+          '1. pnpm --filter @repo/backend db:migrate      # create the schema',
+          '2. pnpm --filter @repo/backend init:local      # create the first admin'
+        ]
       };
     }
 
@@ -126,8 +123,7 @@ app.get('/health', async (c) => {
       return c.json({
         status: 'healthy',
         database: 'not_initialized',
-        message: '⚠  Database not initialized. Please call POST /auth/init-system to initialize.',
-        initEndpoint: '/auth/init-system',
+        message: '⚠  Database not initialized. Run `db:migrate` then `init:local`.',
         timestamp: Date.now()
       });
     }
