@@ -34,6 +34,24 @@ export class SudoWriteBlockedError extends Error {
 }
 
 /**
+ * Is this the sudo read-only rejection?
+ *
+ * Handlers catch broadly, notice this one, and re-throw it so `index.ts` can
+ * turn it into a 403 rather than swallowing it as a generic failure. Fifteen
+ * of them had hand-written the same three-way check, each with its own
+ * optional-chaining habits; this is that check.
+ *
+ * `instanceof` alone is not enough: the error crosses module boundaries
+ * (and a Durable Object boundary) where the class identity can differ, which
+ * is why the name and the message prefix are also accepted.
+ */
+export function isSudoWriteBlocked(error: unknown): boolean {
+  if (error instanceof SudoWriteBlockedError) return true;
+  if (error instanceof Error && error.name === 'SudoWriteBlockedError') return true;
+  return error instanceof Error && error.message.includes('SUDO_NO_WRITE');
+}
+
+/**
  * Statement prefixes that only read.
  *
  * A whitelist, so anything unrecognised counts as a write. `WITH` is included

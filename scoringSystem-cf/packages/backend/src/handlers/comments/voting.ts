@@ -130,6 +130,7 @@ export async function checkVotingEligibility(
  */
 import { validateCommentEligibility, validateRankingData } from '../../utils/commentVotingUtils';
 import { logProjectOperation } from '../../utils/logging';
+import { isSudoWriteBlocked } from '../../utils/sudo-db-proxy';
 
 export async function submitCommentRanking(
   env: Env,
@@ -250,11 +251,11 @@ export async function submitCommentRanking(
       rankingCount: rankingData.length
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Submit comment ranking error:', error);
 
     // Handle SUDO mode write blocked error (check both name and message for robustness)
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
     }
 

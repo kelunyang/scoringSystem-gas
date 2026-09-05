@@ -158,7 +158,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
         errorMessage.value = response.error?.message || 'Email 驗證失敗';
         return false;
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Email verification error:', error);
       errorMessage.value = '網路錯誤，請重試';
       return false;
@@ -207,7 +207,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
 
         return false;
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('2FA verification error:', error);
       errorMessage.value = '網路錯誤，請重試';
       return false;
@@ -242,7 +242,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
         errorMessage.value = response.error?.message || '重新發送失敗';
         return false;
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Resend code error:', error);
       errorMessage.value = '網路錯誤，請重試';
       return false;
@@ -282,7 +282,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
       }, 3000) as unknown as number;
 
       return true;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Password reset error:', error);
 
       // Still show success message (security feature)

@@ -8,6 +8,7 @@ import { useQueryClient } from '@tanstack/vue-query';
 import { rpcClient } from '@/utils/rpc-client';
 import { apiClient } from '@/utils/api';
 import type { Ref, ComputedRef } from 'vue';
+import { getErrorMessage } from '@/utils/errorHandler'
 
 // ─── Types ───
 
@@ -136,8 +137,8 @@ export function usePasskey(): UsePasskeyReturn {
       } else {
         errorMessage.value = response.error?.message || '無法取得 Passkey 狀態';
       }
-    } catch (error: any) {
-      errorMessage.value = error.message || '取得狀態時發生錯誤';
+    } catch (error) {
+      errorMessage.value = getErrorMessage(error) || '取得狀態時發生錯誤';
     } finally {
       loading.value = false;
     }
@@ -230,12 +231,12 @@ export function usePasskey(): UsePasskeyReturn {
         errorMessage.value = verifyResult.error?.message || '驗證失敗';
         return false;
       }
-    } catch (error: any) {
+    } catch (error) {
       // Handle user cancellation
-      if (error.name === 'NotAllowedError') {
+      if (error instanceof Error && error.name === 'NotAllowedError') {
         errorMessage.value = '操作已取消';
       } else {
-        errorMessage.value = error.message || '註冊時發生錯誤';
+        errorMessage.value = getErrorMessage(error) || '註冊時發生錯誤';
       }
       return false;
     } finally {
@@ -265,8 +266,8 @@ export function usePasskey(): UsePasskeyReturn {
         errorMessage.value = response.error?.message || '重新命名失敗';
         return false;
       }
-    } catch (error: any) {
-      errorMessage.value = error.message || '重新命名時發生錯誤';
+    } catch (error) {
+      errorMessage.value = getErrorMessage(error) || '重新命名時發生錯誤';
       return false;
     } finally {
       loading.value = false;
@@ -295,8 +296,8 @@ export function usePasskey(): UsePasskeyReturn {
         errorMessage.value = response.error?.message || '刪除失敗';
         return false;
       }
-    } catch (error: any) {
-      errorMessage.value = error.message || '刪除時發生錯誤';
+    } catch (error) {
+      errorMessage.value = getErrorMessage(error) || '刪除時發生錯誤';
       return false;
     } finally {
       loading.value = false;
@@ -364,11 +365,11 @@ export function usePasskey(): UsePasskeyReturn {
       pendingCredential = credential;
 
       return credential;
-    } catch (error: any) {
-      if (error.name === 'NotAllowedError') {
+    } catch (error) {
+      if (error instanceof Error && error.name === 'NotAllowedError') {
         errorMessage.value = '操作已取消';
       } else {
-        errorMessage.value = error.message || '認證時發生錯誤';
+        errorMessage.value = getErrorMessage(error) || '認證時發生錯誤';
       }
       return null;
     } finally {
@@ -437,8 +438,8 @@ export function usePasskey(): UsePasskeyReturn {
         errorMessage.value = response.error?.message || '驗證失敗';
         return false;
       }
-    } catch (error: any) {
-      errorMessage.value = error.message || '驗證時發生錯誤';
+    } catch (error) {
+      errorMessage.value = getErrorMessage(error) || '驗證時發生錯誤';
       return false;
     } finally {
       loading.value = false;

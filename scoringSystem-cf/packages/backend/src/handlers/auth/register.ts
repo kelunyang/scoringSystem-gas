@@ -6,7 +6,7 @@ import type { Env } from '../../types';
 import { hashPassword, validatePasswordStrength } from './password';
 import { generateToken } from './jwt';
 import { generateUserId } from '../../utils/id-generator';
-import { ERROR_CODES } from '../../utils/response';
+import { ERROR_CODES, isUniqueConstraintViolation } from '../../utils/response';
 import type { ApiResponse } from '../../utils/response';
 import { safeJsonStringify } from '../../utils/json';
 import { logGlobalOperation } from '../../utils/logging';
@@ -165,10 +165,9 @@ export async function registerUser(
           userRecord.updatedAt
         )
         .run();
-    } catch (insertError: any) {
+    } catch (insertError) {
       // Handle UNIQUE constraint violation (race condition)
-      if (insertError.message?.includes('UNIQUE constraint failed') &&
-          insertError.message?.includes('userEmail')) {
+      if (isUniqueConstraintViolation(insertError, 'userEmail')) {
         return {
           success: false,
           error: {

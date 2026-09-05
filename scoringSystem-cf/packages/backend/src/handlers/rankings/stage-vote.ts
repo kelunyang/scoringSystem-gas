@@ -8,6 +8,7 @@ import { successResponse, errorResponse } from '../../utils/response';
 import { generateId } from '../../utils/id-generator';
 import { logApiAction } from '../../utils/logging';
 import { validateWeakOrder } from '@repo/shared';
+import { isSudoWriteBlocked } from '../../utils/sudo-db-proxy';
 
 /**
  * Submit individual stage ranking vote
@@ -182,11 +183,11 @@ export async function submitStageRankingVote(
       action: wasUpdate ? 'updated' : 'created'
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Submit stage ranking vote error:', error);
 
     // Handle SUDO mode write blocked error (check both name and message for robustness)
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
     }
 

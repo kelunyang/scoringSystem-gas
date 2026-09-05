@@ -11,6 +11,7 @@ import { validateCommentEligibility, validateRankingData } from '../../utils/com
 import { generateId } from '../../utils/id-generator';
 import { logProjectOperation, logApiAction } from '../../utils/logging';
 import { getEffectiveScoringConfig } from '../../utils/scoring-config';
+import { isSudoWriteBlocked } from '../../utils/sudo-db-proxy';
 
 interface RankingItem {
   type: 'submission' | 'comment';
@@ -305,11 +306,11 @@ export async function submitTeacherComprehensiveVote(
       timestamp: now
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ [submitTeacherComprehensiveVote] Error:', error);
 
     // Handle SUDO mode write blocked error (check both name and message for robustness)
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
     }
 

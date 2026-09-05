@@ -488,6 +488,7 @@ import type {
   AIServiceStatisticsResponse
 } from '@repo/shared/types/admin'
 
+import { getErrorMessage } from '@/utils/errorHandler'
 // ================== TanStack Query ==================
 const aiServiceLogDetailMutation = useAIServiceLogDetail()
 
@@ -756,9 +757,9 @@ const loadAIServiceLogs = async (append: boolean = false): Promise<void> => {
       const errorMessage = response.error?.message || '無法載入 AI 紀錄'
       ElMessage.error(errorMessage)
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error loading AI service logs:', error)
-    const errorMessage = error?.response?.error?.message || error?.message || '載入 AI 紀錄失敗'
+    const errorMessage = getErrorMessage(error) || '載入 AI 紀錄失敗'
     ElMessage.error(errorMessage)
   } finally {
     loading.value = false

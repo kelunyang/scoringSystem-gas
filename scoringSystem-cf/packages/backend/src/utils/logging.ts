@@ -11,6 +11,8 @@
 import type { Env } from '@/types';
 import { generateId } from '@utils/id-generator';
 import { stringifyJSON } from '@utils/json';
+import { isSudoWriteBlocked } from '@utils/sudo-db-proxy';
+import { isUniqueConstraintViolation } from '@utils/response';
 
 /**
  * Log an operation scoped to a specific project
@@ -323,16 +325,16 @@ export async function logApiAction(
     console.log(`[API_DEDUP] ✓ New action logged: ${details.action}, dedupKey: ${details.dedupKey}`);
     return true; // Successfully inserted = new action
 
-  } catch (error: any) {
+  } catch (error) {
     // UNIQUE constraint violation = duplicate action (expected behavior, not an error)
-    if (error?.message?.includes('UNIQUE constraint failed')) {
+    if (isUniqueConstraintViolation(error)) {
       console.log(`[API_DEDUP] ✗ Duplicate action blocked: ${details.dedupKey}`);
       return false; // Duplicate prevented
     }
 
     // SUDO mode - skip logging but allow operation to proceed
     // This prevents the logging INSERT from blocking the actual operation
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       console.log(`[API_DEDUP] ⏭️ Skipping log in SUDO mode: ${details.action}`);
       return true; // Allow operation to proceed without logging
     }

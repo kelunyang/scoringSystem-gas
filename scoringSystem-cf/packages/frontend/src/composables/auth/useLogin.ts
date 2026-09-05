@@ -9,6 +9,7 @@ import { rpcClient } from '@/utils/rpc-client';
 import { apiClient } from '@/utils/api';
 import type { Ref, ComputedRef } from 'vue';
 import type { LoginCredentials, TwoFactorData, TwoFactorMethod } from '../../types/auth';
+import { getErrorMessage } from '@/utils/errorHandler'
 
 /** Server default; a 429 replaces it with the actual remaining wait. */
 const DEFAULT_RESEND_COOLDOWN_SECONDS = 60;
@@ -163,8 +164,8 @@ export function useLogin(): UseLoginReturn {
         errorMessage.value = response.error?.message || '密碼驗證失敗';
         return false;
       }
-    } catch (error: any) {
-      errorMessage.value = error.message || '驗證過程發生錯誤';
+    } catch (error) {
+      errorMessage.value = getErrorMessage(error) || '驗證過程發生錯誤';
       return false;
     } finally {
       loading.value = false;
@@ -235,8 +236,8 @@ export function useLogin(): UseLoginReturn {
 
       errorMessage.value = response.error?.message || '驗證碼錯誤';
       return false;
-    } catch (error: any) {
-      errorMessage.value = error.message || '驗證過程發生錯誤';
+    } catch (error) {
+      errorMessage.value = getErrorMessage(error) || '驗證過程發生錯誤';
       return false;
     } finally {
       loading.value = false;

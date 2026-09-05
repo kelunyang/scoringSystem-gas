@@ -8,6 +8,7 @@ import { rpcClient } from '@/utils/rpc-client';
 import { apiClient } from '@/utils/api';
 import type { Ref, ComputedRef } from 'vue';
 import type { RegisterData, InvitationVerificationResponse } from '../../types/auth';
+import { getErrorMessage } from '@/utils/errorHandler'
 
 export interface UseRegisterReturn {
   loading: Ref<boolean>;
@@ -119,9 +120,9 @@ export function useRegister(): UseRegisterReturn {
         errorMessage.value = response.error?.message || '邀請碼驗證失敗';
         return false;
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Invitation verification error:', error);
-      errorMessage.value = error.message || '驗證過程發生錯誤';
+      errorMessage.value = getErrorMessage(error) || '驗證過程發生錯誤';
       return false;
     } finally {
       loading.value = false;
@@ -239,9 +240,9 @@ export function useRegister(): UseRegisterReturn {
         errorMessage.value = response.error?.message || '註冊失敗';
         return false;
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Registration error:', error);
-      errorMessage.value = error.message || '註冊過程發生錯誤';
+      errorMessage.value = getErrorMessage(error) || '註冊過程發生錯誤';
       return false;
     } finally {
       loading.value = false;

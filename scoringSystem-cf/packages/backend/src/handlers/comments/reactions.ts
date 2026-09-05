@@ -8,6 +8,7 @@ import { successResponse, errorResponse } from '@utils/response';
 import { generateId } from '@utils/id-generator';
 import { logProjectOperation } from '@utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
+import { isSudoWriteBlocked } from '@utils/sudo-db-proxy';
 
 /**
  * Add reaction to comment
@@ -123,11 +124,11 @@ export async function addReaction(
       canBeVoted: stats.canBeVoted
     }, 'Reaction added successfully');
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Add reaction error:', error);
 
     // Handle SUDO mode write blocked error (check both name and message for robustness)
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
     }
 
@@ -300,11 +301,11 @@ export async function removeReaction(
       canBeVoted: stats.canBeVoted
     }, 'Reaction removed successfully');
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Remove reaction error:', error);
 
     // Handle SUDO mode write blocked error (check both name and message for robustness)
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
     }
 

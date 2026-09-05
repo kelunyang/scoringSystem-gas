@@ -7,6 +7,7 @@ import type { Env } from '../types';
 import { queueSecurityAlertEmail } from '../queues/email-producer';
 import { ALERT_SEVERITY, LOCK_TYPE } from '../config/security';
 import { generateId, ID_PREFIXES } from './id-generator';
+import { isUniqueConstraintViolation } from '../utils/response';
 
 /**
  * Notification details for admin alerts
@@ -78,9 +79,9 @@ export async function logSecurityAction(
 
     console.log(`[SECURITY] Logged action: ${details.action} for ${details.userEmail}`);
     return true;
-  } catch (error: any) {
+  } catch (error) {
     // UNIQUE constraint violation = duplicate action (expected, not an error)
-    if (error?.message?.includes('UNIQUE constraint failed')) {
+    if (isUniqueConstraintViolation(error)) {
       console.log(`[SECURITY] Duplicate action blocked: ${details.dedupKey}`);
       return false;
     }

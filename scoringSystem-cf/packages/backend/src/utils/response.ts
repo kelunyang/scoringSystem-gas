@@ -447,6 +447,24 @@ export function getErrorMessage(error: unknown): string {
 }
 
 /**
+ * Did this D1 error come from a UNIQUE constraint?
+ *
+ * The handlers use it to turn a lost insert race into a meaningful message
+ * ("this email is already registered") instead of a 500. Pass `column` to
+ * narrow to one constraint — D1 puts the column name in the message.
+ *
+ * @example
+ * if (isUniqueConstraintViolation(error, 'userEmail')) {
+ *   return errorResponse('EMAIL_TAKEN', '這個信箱已經註冊過了');
+ * }
+ */
+export function isUniqueConstraintViolation(error: unknown, column?: string): boolean {
+  const message = getErrorMessage(error);
+  if (!message.includes('UNIQUE constraint failed')) return false;
+  return column ? message.includes(column) : true;
+}
+
+/**
  * Handle caught errors and convert to error response
  *
  * @param error - The caught error

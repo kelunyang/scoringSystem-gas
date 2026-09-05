@@ -72,6 +72,7 @@ import { rpcClient } from '@/utils/rpc-client'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 
+import { getErrorMessage } from '@/utils/errorHandler'
 // Drawer Breadcrumb
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 
@@ -180,9 +181,9 @@ async function submitReply() {
       })
       throw new Error(response.error?.message || '回覆失敗')
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('提交回覆失敗:', error)
-    ElMessage.error(`回覆失敗: ${error.message}`)
+    ElMessage.error(`回覆失敗: ${getErrorMessage(error)}`)
   } finally {
     submitting.value = false
   }

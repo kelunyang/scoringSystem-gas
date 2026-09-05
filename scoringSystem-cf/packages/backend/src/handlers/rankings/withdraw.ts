@@ -6,6 +6,7 @@
 import type { Env } from '../../types';
 import { successResponse, errorResponse } from '../../utils/response';
 import { logApiAction, logProjectOperation } from '../../utils/logging';
+import { isSudoWriteBlocked } from '../../utils/sudo-db-proxy';
 
 /**
  * Withdraw a ranking proposal
@@ -151,11 +152,11 @@ export async function withdrawRankingProposal(
       status: 'withdrawn'
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Withdraw ranking proposal error:', error);
 
     // Handle SUDO mode write blocked error (check both name and message for robustness)
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
     }
 

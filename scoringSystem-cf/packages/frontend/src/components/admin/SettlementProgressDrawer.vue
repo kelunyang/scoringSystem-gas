@@ -324,6 +324,7 @@ const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 import { rpcClient } from '@/utils/rpc-client'
 import type { GroupClickData } from '@/types/components'
 
+import { getErrorMessage } from '@/utils/errorHandler'
 // ========== Type Definitions ==========
 
 export type SettlementStatus = 'idle' | 'validating' | 'settling' | 'completed'
@@ -773,9 +774,9 @@ async function handleSettlementGroupClick(groupData: GroupClickData): Promise<vo
       ElMessage.warning(`無法載入該組的交易記錄: ${response.error?.message || '未知錯誤'}`)
       settlementGroupTransactions.value = []
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error loading settlement transactions:', error)
-    ElMessage.error(`載入交易記錄失敗: ${error.message || '請稍後再試'}`)
+    ElMessage.error(`載入交易記錄失敗: ${getErrorMessage(error) || '請稍後再試'}`)
     settlementGroupTransactions.value = []
   } finally {
     loadingSettlementTransactions.value = false
@@ -1061,14 +1062,14 @@ async function settleStage(stage: Stage, forceSettle = false): Promise<void> {
         error: response.error?.message || '未知錯誤'
       })
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error settling stage:', error)
     settlementStatus.value = 'idle'
     ElMessage.error('結算階段失敗，請重試')
     // Emit error event to parent
     emit('settlement-error', {
       stageId: stage.stageId,
-      error: error.message || '未知錯誤'
+      error: getErrorMessage(error) || '未知錯誤'
     })
   }
 }

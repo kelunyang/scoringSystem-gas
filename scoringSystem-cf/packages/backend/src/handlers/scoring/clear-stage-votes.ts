@@ -31,6 +31,7 @@ import type { Env } from '@/types';
 import { successResponse, errorResponse } from '@utils/response';
 import { logProjectOperation } from '@utils/logging';
 import { reverseSettlement } from '../settlement/manage';
+import { isSudoWriteBlocked } from '@utils/sudo-db-proxy';
 
 export interface ClearStageVotesParams {
   reason: string;
@@ -188,9 +189,9 @@ export async function clearStageVotes(
       withdrawnProposals,
       reversedSettlements: reversedSettlementIds.length
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[clearStageVotes] error:', error);
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
     }
     const message = error instanceof Error ? error.message : String(error);

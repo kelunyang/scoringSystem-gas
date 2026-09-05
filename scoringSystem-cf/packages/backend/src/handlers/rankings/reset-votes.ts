@@ -8,6 +8,7 @@ import type { Env } from '../../types';
 import { successResponse, errorResponse } from '../../utils/response';
 import { logProjectOperation, logApiAction } from '../../utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
+import { isSudoWriteBlocked } from '../../utils/sudo-db-proxy';
 
 /**
  * Reset votes on a ranking proposal
@@ -298,11 +299,11 @@ export async function resetProposalVotes(
       }
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Reset proposal votes error:', error);
 
     // Handle SUDO mode write blocked error (check both name and message for robustness)
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
     }
 

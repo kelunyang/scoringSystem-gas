@@ -470,6 +470,7 @@ import {
   useBatchResendEmails
 } from '@/composables/admin/useEmailLogs'
 
+import { getErrorMessage } from '@/utils/errorHandler'
 // ================== TanStack Query Mutations ==================
 const emailStatisticsQuery = useEmailStatistics()
 const resendEmailMutation = useResendEmail()
@@ -818,9 +819,9 @@ const loadEmailLogs = async (append: boolean = false, withFilters: boolean = fal
       const errorMessage = response.error?.message || '無法載入郵件紀錄'
       ElMessage.error(errorMessage)
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error loading email logs:', error)
-    const errorMessage = error?.response?.error?.message || error?.message || '載入郵件紀錄失敗'
+    const errorMessage = getErrorMessage(error) || '載入郵件紀錄失敗'
     ElMessage.error(errorMessage)
   } finally {
     loading.value = false

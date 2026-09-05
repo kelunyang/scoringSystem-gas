@@ -20,6 +20,7 @@ import { checkIsTeacherOrAbove } from '../../middleware/permissions';
 import { logProjectOperation } from '../../utils/logging';
 import { queueDirectRanking, queueBTRanking, queueMultiAgentRanking } from '../../queues/ai-ranking-producer';
 import { getExpectedComparisonCount } from '../../utils/bradley-terry';
+import { isSudoWriteBlocked } from '../../utils/sudo-db-proxy';
 
 /**
  * Get list of enabled AI providers for ranking suggestions
@@ -161,11 +162,11 @@ export async function submitAIRankingSuggestion(
       message: 'AI ranking request queued. Listen to WebSocket for progress updates.',
       estimatedTime: '10-30 seconds'
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Submit AI ranking suggestion error:', error);
 
     // Handle SUDO mode write blocked error (check both name and message for robustness)
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
     }
 
@@ -312,11 +313,11 @@ export async function submitBTRankingSuggestion(
       message: 'BT ranking request queued. Listen to WebSocket for progress updates.',
       estimatedTime
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Submit BT ranking suggestion error:', error);
 
     // Handle SUDO mode write blocked error (check both name and message for robustness)
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
     }
 
@@ -455,11 +456,11 @@ export async function submitMultiAgentRankingSuggestion(
       message: 'Multi-Agent ranking request queued. Listen to WebSocket for progress updates.',
       estimatedTime
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Submit Multi-Agent ranking suggestion error:', error);
 
     // Handle SUDO mode write blocked error (check both name and message for robustness)
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
     }
 

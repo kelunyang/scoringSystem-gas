@@ -17,6 +17,7 @@ import { handleApiError } from './errorHandler'
 import { getCachedClientIP } from './ip'
 import { authEventBus } from './authEventBus'
 
+import { getErrorMessage } from '@/utils/errorHandler'
 interface SessionInfo {
   isValid: boolean
   message?: string
@@ -253,17 +254,21 @@ class APIClient {
 
       return result
 
-    } catch (error: any) {
+    } catch (error) {
       // Network or system error
       console.error('API call error:', error)
 
       // 判斷錯誤類型
-      const isConnectionError = error.message === 'Failed to fetch' ||
-                               error.name === 'TypeError' ||
-                               error.message.includes('fetch')
+      const message = getErrorMessage(error)
+      const isConnectionError = message === 'Failed to fetch' ||
+                               (error instanceof Error && error.name === 'TypeError') ||
+                               message.includes('fetch')
 
-      const isServiceUnavailable = error.status === 503 ||
-                                   error.message.includes('503')
+      // status 不是 Error 的標準欄位；fetch 失敗時多半沒有，
+      // 真正判斷得靠訊息內容，這裡保留兩者
+      const isServiceUnavailable =
+        (typeof error === 'object' && error !== null && 'status' in error && error.status === 503) ||
+        message.includes('503')
 
       // 特殊處理：冷啟動或服務暫時不可用
       if (isConnectionError || isServiceUnavailable) {
@@ -286,7 +291,7 @@ class APIClient {
           success: false,
           error: {
             code: 'NETWORK_ERROR',
-            message: error.message || '網路連線錯誤'
+            message: message || '網路連線錯誤'
           }
         }, action)
       }
@@ -295,7 +300,7 @@ class APIClient {
         success: false,
         error: {
           code: 'NETWORK_ERROR',
-          message: error.message || '網路錯誤，請重試'
+          message: message || '網路錯誤，請重試'
         }
       }
     }

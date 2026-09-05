@@ -7,6 +7,8 @@ import type { Env } from '../../types';
 import { successResponse, errorResponse } from '../../utils/response';
 import { generateId } from '../../utils/id-generator';
 import { logProjectOperation, logApiAction } from '../../utils/logging';
+import { isSudoWriteBlocked } from '../../utils/sudo-db-proxy';
+import { getErrorMessage } from '@utils/response';
 
 /**
  * Vote on a ranking proposal
@@ -200,15 +202,15 @@ export async function voteOnRankingProposal(
     try {
       await env.DB.batch(statements);
       console.log(`✅ ${isUpdate ? 'Updated' : 'Created'} vote ${voteId} for proposal ${proposalId} by ${userEmail}`);
-    } catch (batchError: any) {
+    } catch (batchError) {
       console.error('Vote batch error:', batchError);
 
       // Handle SUDO mode write blocked error (check both name and message for robustness)
-      if (batchError?.name === 'SudoWriteBlockedError' || batchError?.message?.includes('SUDO_NO_WRITE')) {
+      if (isSudoWriteBlocked(batchError)) {
         return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
       }
 
-      if (batchError.message?.includes('UNIQUE constraint failed')) {
+      if (getErrorMessage(batchError).includes('UNIQUE constraint failed')) {
         return errorResponse('ALREADY_VOTED', 'Vote already recorded');
       }
       throw batchError;
@@ -278,11 +280,11 @@ export async function voteOnRankingProposal(
       }
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Vote on proposal error:', error);
 
     // Handle SUDO mode write blocked error (check both name and message for robustness)
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
     }
 

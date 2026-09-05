@@ -4,7 +4,7 @@
  */
 
 import { Env } from '../../types';
-import { successResponse, errorResponse } from '../../utils/response';
+import { successResponse, errorResponse, isUniqueConstraintViolation } from '../../utils/response';
 import { generateId } from '../../utils/id-generator';
 import { parseJSON, stringifyJSON } from '../../utils/json';
 import { sendInvitationEmail, sendBatchInvitationEmails } from './email';
@@ -152,9 +152,9 @@ export async function generateInvitationCode(
           defaultGlobalGroupCount: defaultGlobalGroups.length
         })
       ).run();
-    } catch (insertError: any) {
+    } catch (insertError) {
       // Handle UNIQUE constraint violations (race condition)
-      if (insertError.message && insertError.message.includes('UNIQUE constraint failed')) {
+      if (isUniqueConstraintViolation(insertError)) {
         console.log(`[Generate] Race condition detected: invitation was created concurrently for ${targetEmail}`);
         return errorResponse('INVITATION_EXISTS', 'Active invitation already exists for this email (concurrent creation detected)');
       }
@@ -441,7 +441,7 @@ export async function generateBatchInvitationCodes(
       try {
         await env.DB.batch(batchStatements);
         console.log(`[Batch Generate] ✅ Batch executed: ${batchStatements.length} operations`);
-      } catch (batchError: any) {
+      } catch (batchError) {
         console.error('[Batch Generate] Batch execution failed:', batchError);
         // If batch fails, we need to report all as errors
         for (const item of emailsToCreate) {

@@ -4,7 +4,7 @@
  */
 
 import type { Env } from '@/types';
-import { successResponse, errorResponse } from '@utils/response';
+import { successResponse, errorResponse, getErrorMessage } from '@utils/response';
 import { parseJSON, stringifyJSON } from '@utils/json';
 import { generateId } from '@utils/id-generator';
 import { logProjectOperation, logApiAction } from '@utils/logging';
@@ -12,6 +12,7 @@ import { checkIsAdminTeacherOrObserver, checkIsTeacherOrObserver, getProjectRole
 import { queueBatchNotifications } from '../../queues/notification-producer';
 import { queueSubmissionForceWithdrawnEmail } from '../../queues/email-producer';
 import { getGroupMemberEmails } from '@utils/notifications';
+import { isSudoWriteBlocked } from '@utils/sudo-db-proxy';
 
 /**
  * Extract unique participant emails from participationProposal
@@ -250,11 +251,11 @@ export async function submitDeliverable(
       status: 'submitted'
     }, 'Submission created successfully');
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Submit deliverable error:', error);
 
     // Handle SUDO mode write blocked error (check both name and message for robustness)
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
     }
 
@@ -530,11 +531,11 @@ export async function updateSubmission(
 
     return successResponse(null, 'Submission updated successfully');
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Update submission error:', error);
 
     // Handle SUDO mode write blocked error (check both name and message for robustness)
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
     }
 
@@ -727,25 +728,25 @@ export async function withdrawSubmission(
 
     return successResponse(null, 'Submission withdrawn successfully');
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Withdraw submission error:', error);
 
     // Handle SUDO mode write blocked error (check both name and message for robustness)
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
     }
 
     // Handle specific D1 errors
-    if (error.message?.includes('FOREIGN KEY constraint failed')) {
+    if (getErrorMessage(error).includes('FOREIGN KEY constraint failed')) {
       return errorResponse('INVALID_REFERENCE', 'Invalid submission reference');
     }
 
-    if (error.message?.includes('database is locked') ||
-        error.message?.includes('timeout')) {
+    if (getErrorMessage(error).includes('database is locked') ||
+        getErrorMessage(error).includes('timeout')) {
       return errorResponse('DATABASE_BUSY', 'Database is busy, please try again');
     }
 
-    return errorResponse('SYSTEM_ERROR', `Failed to withdraw submission: ${error.message || 'Unknown error'}`);
+    return errorResponse('SYSTEM_ERROR', `Failed to withdraw submission: ${getErrorMessage(error)}`);
   }
 }
 
@@ -1325,10 +1326,10 @@ export async function voteParticipationProposal(
     // Execute atomically - if vote already exists, the INSERT will fail
     try {
       await env.DB.batch(statements);
-    } catch (batchError: any) {
+    } catch (batchError) {
       // Handle constraint violations gracefully
-      if (batchError.message?.includes('UNIQUE constraint failed') ||
-          batchError.message?.includes('already voted')) {
+      if (getErrorMessage(batchError).includes('UNIQUE constraint failed') ||
+          getErrorMessage(batchError).includes('already voted')) {
         return errorResponse('ALREADY_VOTED', 'You have already voted on this submission');
       }
       // Re-throw other errors
@@ -1448,30 +1449,30 @@ export async function voteParticipationProposal(
       votingSummary
     }, 'Vote recorded successfully');
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Vote participation proposal error:', error);
 
     // Handle SUDO mode write blocked error (check both name and message for robustness)
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
     }
 
     // Handle specific D1 errors
-    if (error.message?.includes('UNIQUE constraint failed') ||
-        error.message?.includes('already voted')) {
+    if (getErrorMessage(error).includes('UNIQUE constraint failed') ||
+        getErrorMessage(error).includes('already voted')) {
       return errorResponse('ALREADY_VOTED', 'You have already voted on this submission');
     }
 
-    if (error.message?.includes('FOREIGN KEY constraint failed')) {
+    if (getErrorMessage(error).includes('FOREIGN KEY constraint failed')) {
       return errorResponse('INVALID_REFERENCE', 'Invalid submission or user reference');
     }
 
-    if (error.message?.includes('database is locked') ||
-        error.message?.includes('timeout')) {
+    if (getErrorMessage(error).includes('database is locked') ||
+        getErrorMessage(error).includes('timeout')) {
       return errorResponse('DATABASE_BUSY', 'Database is busy, please try again');
     }
 
-    return errorResponse('SYSTEM_ERROR', `Failed to record vote: ${error.message || 'Unknown error'}`);
+    return errorResponse('SYSTEM_ERROR', `Failed to record vote: ${getErrorMessage(error)}`);
   }
 }
 
@@ -1708,11 +1709,11 @@ export async function forceWithdrawSubmission(
       withdrawnAt: now
     }, 'Submission force withdrawn successfully');
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Force withdraw submission error:', error);
 
     // Handle SUDO mode write blocked error (check both name and message for robustness)
-    if (error?.name === 'SudoWriteBlockedError' || error?.message?.includes('SUDO_NO_WRITE')) {
+    if (isSudoWriteBlocked(error)) {
       return errorResponse('SUDO_NO_WRITE', 'SUDO 模式為唯讀，無法進行寫入操作');
     }
 
