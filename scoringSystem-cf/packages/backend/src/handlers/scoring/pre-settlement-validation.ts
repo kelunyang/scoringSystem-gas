@@ -5,9 +5,26 @@
 
 import type { Env } from '@/types';
 
-export interface ValidationCheckDetail {
+export interface ValidationCheckDetail<D = Record<string, unknown>> {
   passed: boolean;
-  details: any;
+  /**
+   * 這一項檢查的診斷資料，形狀依檢查而異。多數只是序列化回前端顯示，
+   * 需要在後端讀欄位的（例如 checkAllGroupsRanked 要組警告訊息）
+   * 就用泛型參數指明形狀。
+   */
+  details: D;
+}
+
+/** checkAllGroupsRanked 的 details：組警告訊息時會讀這幾個欄位。 */
+export interface AllGroupsRankedDetail {
+  totalGroups: number;
+  allGroupsRankedByStudents: boolean;
+  allGroupsRankedByTeachers: boolean;
+  /** 沒有收到任何學生排名的組別名稱。沒有已批准成果時提早返回，此時為空陣列。 */
+  unrankedByStudents: string[];
+  unrankedByTeachers: string[];
+  studentRankedCount: number;
+  teacherRankedCount: number;
 }
 
 export interface ValidationResult {
@@ -18,7 +35,7 @@ export interface ValidationResult {
     hasCommentRankings: ValidationCheckDetail;
     hasTeacherSubmissionRankings: ValidationCheckDetail;
     hasTeacherCommentRankings: ValidationCheckDetail;
-    allGroupsRanked: ValidationCheckDetail;  // 新增：檢查所有組是否都收到排名
+    allGroupsRanked: ValidationCheckDetail<AllGroupsRankedDetail>;  // 新增：檢查所有組是否都收到排名
   };
   warnings: string[];
   errors: string[];
@@ -44,7 +61,18 @@ export async function validatePreSettlement(
       hasCommentRankings: { passed: true, details: {} },
       hasTeacherSubmissionRankings: { passed: true, details: {} },
       hasTeacherCommentRankings: { passed: true, details: {} },
-      allGroupsRanked: { passed: true, details: {} },
+      allGroupsRanked: {
+        passed: true,
+        details: {
+          totalGroups: 0,
+          allGroupsRankedByStudents: true,
+          allGroupsRankedByTeachers: true,
+          unrankedByStudents: [],
+          unrankedByTeachers: [],
+          studentRankedCount: 0,
+          teacherRankedCount: 0
+        }
+      },
     },
     warnings: [],
     errors: [],
@@ -111,13 +139,13 @@ export async function validatePreSettlement(
 
     if (!allGroupsRankedCheck.passed) {
       // 將詳細的警告信息添加到結果中
-      if (allGroupsRankedCheck.details.unrankedByStudents?.length > 0) {
+      if (allGroupsRankedCheck.details.unrankedByStudents.length > 0) {
         result.warnings.push(
           `以下組別沒有收到任何學生排名：${allGroupsRankedCheck.details.unrankedByStudents.join(', ')}。` +
           `這些組別在結算時將被視為最後一名（排名 ${allGroupsRankedCheck.details.totalGroups + 1}）。`
         );
       }
-      if (allGroupsRankedCheck.details.unrankedByTeachers?.length > 0) {
+      if (allGroupsRankedCheck.details.unrankedByTeachers.length > 0) {
         result.warnings.push(
           `以下組別沒有收到任何教師排名：${allGroupsRankedCheck.details.unrankedByTeachers.join(', ')}。` +
           `這些組別的教師排名將使用最差值（排名 ${allGroupsRankedCheck.details.totalGroups + 1}）。`
@@ -147,7 +175,7 @@ async function checkAllGroupsVoted(
     SELECT DISTINCT g.groupId, g.groupName
     FROM groups g
     WHERE g.projectId = ? AND g.status = 'active'
-  `).bind(projectId).all();
+  `).bind(projectId).all<{ groupId: string; groupName: string }>();
 
   const totalGroups = allGroupsResult.results?.length || 0;
 
@@ -157,10 +185,10 @@ async function checkAllGroupsVoted(
     FROM rankingproposals_with_status rp
     WHERE rp.projectId = ? AND rp.stageId = ?
       AND rp.status = 'pending' AND rp.votingResult = 'agree'
-  `).bind(projectId, stageId).all();
+  `).bind(projectId, stageId).all<{ groupId: string }>();
 
   const settledGroupIds = new Set(
-    (settledGroupsResult.results || []).map((r: any) => r.groupId)
+    (settledGroupsResult.results || []).map(r => r.groupId)
   );
 
   // For each group with settled proposal, check if all members voted
@@ -187,7 +215,7 @@ async function checkAllGroupsVoted(
       if (!proposalResult) {
         return {
           groupId,
-          groupName: allGroupsResult.results?.find((g: any) => g.groupId === groupId)?.groupName,
+          groupName: allGroupsResult.results?.find(g => g.groupId === groupId)?.groupName,
           passed: false,
           reason: 'no_settled_proposal',
           totalMembers,
@@ -206,7 +234,7 @@ async function checkAllGroupsVoted(
 
       return {
         groupId,
-        groupName: allGroupsResult.results?.find((g: any) => g.groupId === groupId)?.groupName,
+        groupName: allGroupsResult.results?.find(g => g.groupId === groupId)?.groupName,
         passed: votedMembers >= totalMembers,
         reason: votedMembers < totalMembers ? 'incomplete_votes' : 'complete',
         totalMembers,
@@ -263,19 +291,26 @@ async function checkAllProposalsApproved(
     FROM LatestProposals lp
     LEFT JOIN groups g ON g.groupId = lp.groupId
     WHERE lp.rn = 1
-  `).bind(projectId, stageId).all();
+  `).bind(projectId, stageId).all<{
+    proposalId: string;
+    groupId: string;
+    status: string;
+    votingResult: string | null;
+    settleTime: number | null;
+    groupName: string | null;
+  }>();
 
   const proposals = latestProposalsResult.results || [];
 
   const totalProposals = proposals.length;
-  const settledProposals = proposals.filter((p: any) => p.status === 'settled').length;
+  const settledProposals = proposals.filter(p => p.status === 'settled').length;
   // Count approved proposals (pending + agree = ready for settlement)
-  const agreedProposals = proposals.filter((p: any) => p.status === 'pending' && p.votingResult === 'agree').length;
-  const disagreedProposals = proposals.filter((p: any) => p.votingResult === 'disagree').length;
-  const tieProposals = proposals.filter((p: any) => p.votingResult === 'tie').length;
-  const pendingProposals = proposals.filter((p: any) => p.status === 'pending').length;
-  const withdrawnProposals = proposals.filter((p: any) => p.status === 'withdrawn').length;
-  const resetProposals = proposals.filter((p: any) => p.status === 'reset').length;
+  const agreedProposals = proposals.filter(p => p.status === 'pending' && p.votingResult === 'agree').length;
+  const disagreedProposals = proposals.filter(p => p.votingResult === 'disagree').length;
+  const tieProposals = proposals.filter(p => p.votingResult === 'tie').length;
+  const pendingProposals = proposals.filter(p => p.status === 'pending').length;
+  const withdrawnProposals = proposals.filter(p => p.status === 'withdrawn').length;
+  const resetProposals = proposals.filter(p => p.status === 'reset').length;
 
   // Query reset count for each group to distinguish tie proposals
   const resetCountsResult = await env.DB.prepare(`
@@ -283,25 +318,25 @@ async function checkAllProposalsApproved(
     FROM rankingproposals_with_status
     WHERE projectId = ? AND stageId = ? AND status = 'reset'
     GROUP BY groupId
-  `).bind(projectId, stageId).all();
+  `).bind(projectId, stageId).all<{ groupId: string; resetCount: number }>();
 
   const resetCounts = new Map<string, number>();
-  resetCountsResult.results?.forEach((r: any) => {
-    resetCounts.set(r.groupId as string, r.resetCount as number);
+  resetCountsResult.results?.forEach(r => {
+    resetCounts.set(r.groupId, r.resetCount);
   });
 
   // Distinguish tie proposals by reset status
-  const tieProposalsCanReset = proposals.filter((p: any) =>
+  const tieProposalsCanReset = proposals.filter(p =>
     p.votingResult === 'tie' && (resetCounts.get(p.groupId) || 0) === 0
   ).length;
-  const tieProposalsUsedReset = proposals.filter((p: any) =>
+  const tieProposalsUsedReset = proposals.filter(p =>
     p.votingResult === 'tie' && (resetCounts.get(p.groupId) || 0) > 0
   ).length;
 
   // Get detailed list of unapproved proposals (not pending + agree)
   const unsettledProposals = proposals
-    .filter((p: any) => !(p.status === 'pending' && p.votingResult === 'agree'))
-    .map((p: any) => ({
+    .filter(p => !(p.status === 'pending' && p.votingResult === 'agree'))
+    .map(p => ({
       groupId: p.groupId,
       groupName: p.groupName,
       status: p.status,
@@ -449,14 +484,14 @@ async function checkAllGroupsRanked(
   env: Env,
   projectId: string,
   stageId: string
-): Promise<ValidationCheckDetail> {
+): Promise<ValidationCheckDetail<AllGroupsRankedDetail>> {
   // 1. 獲取所有已批准的成果（即所有應該被排名的組）
   const submissions = await env.DB.prepare(`
     SELECT DISTINCT s.groupId, g.groupName
     FROM submissions_with_status s
     LEFT JOIN groups g ON g.groupId = s.groupId AND g.projectId = s.projectId
     WHERE s.projectId = ? AND s.stageId = ? AND s.approvedTime IS NOT NULL
-  `).bind(projectId, stageId).all();
+  `).bind(projectId, stageId).all<{ groupId: string; groupName: string | null }>();
 
   if (!submissions.results || submissions.results.length === 0) {
     return {
@@ -464,12 +499,16 @@ async function checkAllGroupsRanked(
       details: {
         totalGroups: 0,
         allGroupsRankedByStudents: true,
-        allGroupsRankedByTeachers: true
+        allGroupsRankedByTeachers: true,
+        unrankedByStudents: [],
+        unrankedByTeachers: [],
+        studentRankedCount: 0,
+        teacherRankedCount: 0
       }
     };
   }
 
-  const allGroupIds = new Set(submissions.results.map((s: any) => s.groupId));
+  const allGroupIds = new Set(submissions.results.map(s => s.groupId));
   const totalGroups = allGroupIds.size;
 
   // 2. 檢查學生排名 - 從 JSON 中提取 submissionId 並統計每個 groupId 被排名的次數
@@ -488,10 +527,10 @@ async function checkAllGroupsRanked(
       AND rp.status = 'pending'
       AND rp.votingResult = 'agree'
     GROUP BY json_extract(rankings.value, '$.submissionId'), s.groupId
-  `).bind(projectId, stageId).all();
+  `).bind(projectId, stageId).all<{ submissionId: string; groupId: string; rankCount: number }>();
 
   const studentRankedGroups = new Set(
-    studentRankings.results?.map((r: any) => r.groupId) || []
+    studentRankings.results?.map(r => r.groupId) || []
   );
 
   // 3. 檢查教師排名
@@ -501,10 +540,10 @@ async function checkAllGroupsRanked(
     INNER JOIN submissions s ON s.submissionId = tsr.submissionId
     WHERE tsr.projectId = ? AND tsr.stageId = ?
     GROUP BY tsr.submissionId, s.groupId
-  `).bind(projectId, stageId).all();
+  `).bind(projectId, stageId).all<{ submissionId: string; groupId: string; rankCount: number }>();
 
   const teacherRankedGroups = new Set(
-    teacherRankings.results?.map((r: any) => r.groupId) || []
+    teacherRankings.results?.map(r => r.groupId) || []
   );
 
   // 4. 找出沒有被排名的組
@@ -512,8 +551,8 @@ async function checkAllGroupsRanked(
   const unrankedByTeachers: string[] = [];
 
   for (const submission of submissions.results) {
-    const groupId = (submission as any).groupId;
-    const groupName = (submission as any).groupName || groupId;
+    const groupId = submission.groupId;
+    const groupName = submission.groupName || groupId;
 
     if (!studentRankedGroups.has(groupId)) {
       unrankedByStudents.push(groupName);

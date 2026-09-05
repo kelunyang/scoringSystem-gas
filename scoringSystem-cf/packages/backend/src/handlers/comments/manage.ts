@@ -14,7 +14,8 @@ import {
   batchCheckCommentsHaveHelpfulReaction,
   batchCalculateReactionUsers,
   batchCalculateReplyUsers,
-  type CommentForBatch
+  type CommentForBatch,
+  type ReplyUserInfo
 } from '@utils/commentVotingUtils';
 import { isSudoWriteBlocked } from '@utils/sudo-db-proxy';
 
@@ -28,12 +29,111 @@ import { isSudoWriteBlocked } from '@utils/sudo-db-proxy';
  *   - Is mentioned via their group in mentionedGroups
  * Note: Level 0 (Global Admin) does NOT participate in project interactions
  */
+/** 一則 reaction 的聚合結果（同一種類型合併計數）。 */
+interface ReactionSummary {
+  type: string;
+  count: number;
+  users: Array<string | null>;
+}
+
+/** 某則評論的 reaction 統計，加上「當前使用者按了什麼」。 */
+interface ReactionAggregate {
+  reactions: ReactionSummary[];
+  userReaction: string | null;
+  totalReactions: number;
+}
+
+/** reaction 批次查詢回來的一列。注意沒有 userId——比對使用者要用 userEmail。 */
+interface ReactionRow {
+  commentId: string;
+  reactionType: string;
+  userEmail: string;
+  displayName: string | null;
+}
+
+/** 評論列表查詢回來的一列（root 與 reply 共用同一組欄位）。 */
+interface CommentRow {
+  commentId: string;
+  stageId: string;
+  content: string;
+  authorEmail: string;
+  mentionedGroups: string | null;
+  mentionedUsers: string | null;
+  parentCommentId: string | null;
+  isReply: number;
+  replyLevel: number;
+  isAwarded: number;
+  awardRank: number | null;
+  createdTime: number;
+  displayName: string | null;
+  avatarSeed: string | null;
+  avatarStyle: string | null;
+  avatarOptions: string | null;
+  /** projectviewers 的角色：teacher / observer / member，或 null。 */
+  authorRole: string | null;
+  /** usergroups 的角色：leader / member，或 null（代表不是組員）。 */
+  groupRole: string | null;
+  reactionCount: number;
+}
+
+/**
+ * 組成樹狀結構後回給前端的評論。
+ * 由 CommentRow 加上批次查詢的結果拼出來，replies 遞迴掛在同型別上。
+ */
+interface ThreadedComment {
+  commentId: string;
+  stageId: string;
+  content: string;
+  authorEmail: string;
+  authorName: string;
+  authorAvatarSeed: string | null;
+  authorAvatarStyle: string | null;
+  authorAvatarOptions: string | null;
+  authorRole: string | null;
+  isGroupMember: boolean;
+  mentionedUsers: string[];
+  mentionedGroups: string[];
+  reactionUsers: string[];
+  replyUsers: ReplyUserInfo[];
+  parentCommentId: string | null;
+  isReply: boolean;
+  replyLevel: number;
+  isAwarded: boolean;
+  awardRank: number | null;
+  createdTime: number;
+  reactionCount: number;
+  reactions: ReactionSummary[];
+  userReaction: string | null;
+  canBeVoted: boolean;
+  replies: ThreadedComment[];
+}
+
+/** getAllStagesComments 針對單一階段回傳的區塊。 */
+interface StageCommentsResult {
+  comments: ThreadedComment[];
+  total: number;
+  totalWithReplies: number;
+  votingEligible: boolean;
+  stageStatus: string;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
+/** checkReplyPermission 會讀到的父評論欄位。 */
+interface ParentCommentForPermission {
+  authorEmail: string;
+  parentCommentId: string | null;
+  mentionedGroups: string | null;
+  mentionedUsers: string | null;
+}
+
 async function checkReplyPermission(
   env: Env,
   userEmail: string,
   projectId: string,
   stageId: string,
-  parentComment: any
+  parentComment: ParentCommentForPermission
 ): Promise<boolean> {
   try {
     // Get user's permission level via projectviewers
@@ -142,15 +242,15 @@ async function extractMentionedGroups(env: Env, content: string, projectId: stri
     const groups = await env.DB.prepare(`
       SELECT groupId, groupName FROM groups
       WHERE projectId = ? AND status = 'active'
-    `).bind(projectId).all();
+    `).bind(projectId).all<{ groupId: string; groupName: string }>();
 
     const mentionedGroupIds: string[] = [];
     const contentLower = content.toLowerCase();
 
     // Check if any group name is mentioned with @ prefix
     for (const group of groups.results) {
-      const groupName = (group as any).groupName as string;
-      const groupId = (group as any).groupId as string;
+      const groupName = group.groupName;
+      const groupId = group.groupId;
 
       // Use indexOf instead of regex to prevent ReDoS
       const searchPattern = `@${groupName.toLowerCase()}`;
@@ -205,10 +305,10 @@ async function validateMentionedUsers(
     `;
 
     const params = [...mentionedUsers, projectId];
-    const result = await env.DB.prepare(query).bind(...params).all();
+    const result = await env.DB.prepare(query).bind(...params).all<{ userEmail: string }>();
 
     // Check which users are missing from results (no active group membership)
-    const validUsers = new Set(result.results?.map((row: any) => row.userEmail) || []);
+    const validUsers = new Set(result.results?.map(row => row.userEmail) || []);
     const invalidUsers = mentionedUsers.filter(email => !validUsers.has(email));
 
     return {
@@ -247,10 +347,10 @@ async function validateMentionedGroups(
     `;
 
     const params = [...mentionedGroupIds, projectId];
-    const result = await env.DB.prepare(query).bind(...params).all();
+    const result = await env.DB.prepare(query).bind(...params).all<{ groupId: string }>();
 
     // Check which groups are missing or inactive
-    const validGroups = new Set(result.results?.map((row: any) => row.groupId) || []);
+    const validGroups = new Set(result.results?.map(row => row.groupId) || []);
     const invalidGroups = mentionedGroupIds.filter(id => !validGroups.has(id));
 
     return {
@@ -293,7 +393,7 @@ export async function createComment(
     }
 
     // If replying to a comment, validate parent and check reply permission
-    let parentComment: any = null;
+    let parentComment: ParentCommentForPermission | null = null;
     if (commentData.parentCommentId) {
       parentComment = await env.DB.prepare(`
         SELECT commentId, parentCommentId, authorEmail, mentionedUsers, mentionedGroups
@@ -557,7 +657,7 @@ export async function getStageComments(
     // Sort by createdTime DESC (newest first) with pagination
     rootQuery += ` ORDER BY c.createdTime DESC LIMIT ? OFFSET ?`;
 
-    const rootComments = await env.DB.prepare(rootQuery).bind(projectId, stageId, limit, offset).all();
+    const rootComments = await env.DB.prepare(rootQuery).bind(projectId, stageId, limit, offset).all<CommentRow>();
 
     if (!rootComments.results || rootComments.results.length === 0) {
       return successResponse({
@@ -573,7 +673,7 @@ export async function getStageComments(
 
     // Step 3: Get all replies for these root comments (no pagination on replies)
     const rootCommentIds = rootComments.results.map(c => c.commentId as string);
-    let repliesResult: any = { results: [] };
+    let repliesResult: { results: CommentRow[] } = { results: [] };
 
     if (rootCommentIds.length > 0) {
       const placeholders = rootCommentIds.map(() => '?').join(',');
@@ -616,7 +716,7 @@ export async function getStageComments(
         ORDER BY c.createdTime ASC
       `;
 
-      repliesResult = await env.DB.prepare(repliesQuery).bind(projectId, ...rootCommentIds).all();
+      repliesResult = await env.DB.prepare(repliesQuery).bind(projectId, ...rootCommentIds).all<CommentRow>();
     }
 
     // Combine root comments and replies for processing
@@ -626,16 +726,11 @@ export async function getStageComments(
 
     // Batch query all reactions for these comments (分批處理避免 SQLite 變數限制)
     const commentIds = comments.results.map(c => c.commentId as string);
-    const reactionsByComment: Record<string, any> = {};
+    const reactionsByComment: Record<string, ReactionAggregate> = {};
 
     if (commentIds.length > 0) {
-      // Get current user ID for userReaction check
-      const currentUser = await env.DB.prepare(`
-        SELECT userId FROM users WHERE userEmail = ?
-      `).bind(userEmail).first();
-
       const MAX_IN_PARAMS = 100; // 保守設定，確保不超過 SQLite 999 限制
-      const allReactionsResults: any[] = [];
+      const allReactionsResults: ReactionRow[] = [];
 
       // 分批查詢 reactions
       for (let i = 0; i < commentIds.length; i += MAX_IN_PARAMS) {
@@ -664,7 +759,7 @@ export async function getStageComments(
           FROM latest_reactions lr
           JOIN users u ON lr.userEmail = u.userEmail
           WHERE lr.rn = 1 AND lr.reactionType IS NOT NULL
-        `).bind(...batch).all();
+        `).bind(...batch).all<ReactionRow>();
 
         allReactionsResults.push(...(batchResult.results || []));
       }
@@ -674,9 +769,9 @@ export async function getStageComments(
         const commentReactions = allReactionsResults.filter(r => r.commentId === commentId);
 
         // Group by type
-        const byType: Record<string, any> = {};
+        const byType: Record<string, ReactionSummary> = {};
         for (const reaction of commentReactions) {
-          const type = reaction.reactionType as string;
+          const type = reaction.reactionType;
           if (!byType[type]) {
             byType[type] = {
               type,
@@ -688,10 +783,12 @@ export async function getStageComments(
           byType[type].users.push(reaction.displayName);
         }
 
-        // Check user's reaction
-        const userReaction = currentUser
-          ? commentReactions.find(r => r.userId === currentUser.userId)?.reactionType || null
-          : null;
+        // Check user's reaction.
+        // 比對 userEmail：上面的 SELECT 只回 commentId / reactionType /
+        // userEmail / displayName，沒有 userId。舊版比對 r.userId，永遠是
+        // undefined，所以 userReaction 對任何人都是 null。
+        const userReaction =
+          commentReactions.find(r => r.userEmail === userEmail)?.reactionType || null;
 
         reactionsByComment[commentId] = {
           reactions: Object.values(byType),
@@ -708,7 +805,7 @@ export async function getStageComments(
 
     // ============ BATCH QUERIES FOR REACTION/REPLY USERS (Optimization: fixes N+1 problem) ============
     // Prepare comments for batch processing
-    const commentsForBatch: CommentForBatch[] = (comments.results || []).map((c: any) => ({
+    const commentsForBatch: CommentForBatch[] = (comments.results || []).map(c => ({
       commentId: c.commentId as string,
       authorEmail: c.authorEmail as string,
       mentionedGroups: c.mentionedGroups as string | null,
@@ -722,12 +819,12 @@ export async function getStageComments(
 
     const batchReplyUsersMap = isActiveStage
       ? await batchCalculateReplyUsers(env.DB, projectId, commentsForBatch)
-      : new Map<string, any[]>();
+      : new Map<string, ReplyUserInfo[]>();
 
 
     // Organize comments into threads
-    const commentMap: Record<string, any> = {};
-    const rootCommentsArray: any[] = [];
+    const commentMap: Record<string, ThreadedComment> = {};
+    const rootCommentsArray: ThreadedComment[] = [];
 
     // First pass: create comment objects with voting metadata
     for (const c of comments.results) {
@@ -854,8 +951,8 @@ export async function getStageComments(
           uniqueByAuthor.set(comment.authorEmail, comment);
         } else {
           // 比较 helpful reaction 数量
-          const existingHelpful = existing.reactions?.find((r: any) => r.type === 'helpful')?.count || 0;
-          const currentHelpful = comment.reactions?.find((r: any) => r.type === 'helpful')?.count || 0;
+          const existingHelpful = existing.reactions?.find(r => r.type === 'helpful')?.count || 0;
+          const currentHelpful = comment.reactions?.find(r => r.type === 'helpful')?.count || 0;
 
           if (currentHelpful > existingHelpful ||
               (currentHelpful === existingHelpful && comment.createdTime < existing.createdTime)) {
@@ -1026,14 +1123,8 @@ export async function getAllStagesComments(
 
     console.log(`📊 [getAllStagesComments] START: stageCount=${stageIds.length}, excludeTeachers=${excludeTeachers}, forVoting=${forVoting}, limit=${limit}, offset=${offset}`);
 
-    // Get current user ID once for all stages
-    let _t0 = Date.now();
-    const currentUser = await env.DB.prepare(`
-      SELECT userId FROM users WHERE userEmail = ?
-    `).bind(userEmail).first();
-    _metrics['1_getCurrentUser'] = Date.now() - _t0;
-
     // Batch query: Get all stages' status in one query
+    let _t0 = Date.now();
     _t0 = Date.now();
     const stageIdsPlaceholders = stageIds.map(() => '?').join(',');
     const stagesStatusResult = await env.DB.prepare(`
@@ -1165,11 +1256,11 @@ export async function getAllStagesComments(
     // offset+1 to limit+offset for ROW_NUMBER (1-based)
     const rootCommentsResult = await env.DB.prepare(rootCommentsQuery)
       .bind(projectId, ...stageIds, offset, offset + limit)
-      .all();
+      .all<CommentRow>();
 
     // Step 3: Get all replies for these root comments
     const paginatedRootCommentIds = (rootCommentsResult.results || []).map(c => c.commentId as string);
-    let repliesResult: any = { results: [] };
+    let repliesResult: { results: CommentRow[] } = { results: [] };
 
     if (paginatedRootCommentIds.length > 0) {
       const replyPlaceholders = paginatedRootCommentIds.map(() => '?').join(',');
@@ -1211,7 +1302,7 @@ export async function getAllStagesComments(
         WHERE c.projectId = ? AND c.parentCommentId IN (${replyPlaceholders})
         ORDER BY c.createdTime ASC
       `;
-      repliesResult = await env.DB.prepare(repliesQuery).bind(projectId, ...paginatedRootCommentIds).all();
+      repliesResult = await env.DB.prepare(repliesQuery).bind(projectId, ...paginatedRootCommentIds).all<CommentRow>();
     }
 
     // Combine root comments and replies
@@ -1226,10 +1317,10 @@ export async function getAllStagesComments(
 
     // Batch query: Get all reactions for all comments (分批處理避免 SQLite 變數限制)
     _t0 = Date.now();
-    const reactionsByComment: Record<string, any> = {};
+    const reactionsByComment: Record<string, ReactionAggregate> = {};
     if (allCommentIds.length > 0) {
       const MAX_IN_PARAMS = 100; // 保守設定，確保不超過 SQLite 999 限制
-      const allReactionsResults: any[] = [];
+      const allReactionsResults: ReactionRow[] = [];
 
       // 分批查詢 reactions
       for (let i = 0; i < allCommentIds.length; i += MAX_IN_PARAMS) {
@@ -1257,7 +1348,7 @@ export async function getAllStagesComments(
           FROM latest_reactions lr
           JOIN users u ON lr.userEmail = u.userEmail
           WHERE lr.rn = 1 AND lr.reactionType IS NOT NULL
-        `).bind(...batch).all();
+        `).bind(...batch).all<ReactionRow>();
 
         allReactionsResults.push(...(batchResult.results || []));
       }
@@ -1267,9 +1358,9 @@ export async function getAllStagesComments(
         const commentReactions = allReactionsResults.filter(r => r.commentId === commentId);
 
         // Group by type
-        const byType: Record<string, any> = {};
+        const byType: Record<string, ReactionSummary> = {};
         for (const reaction of commentReactions) {
-          const type = reaction.reactionType as string;
+          const type = reaction.reactionType;
           if (!byType[type]) {
             byType[type] = {
               type,
@@ -1282,9 +1373,8 @@ export async function getAllStagesComments(
         }
 
         // Check user's reaction
-        const userReaction = currentUser
-          ? commentReactions.find(r => r.userEmail === userEmail)?.reactionType || null
-          : null;
+        const userReaction =
+          commentReactions.find(r => r.userEmail === userEmail)?.reactionType || null;
 
         reactionsByComment[commentId] = {
           reactions: Object.values(byType),
@@ -1302,7 +1392,7 @@ export async function getAllStagesComments(
 
     // Group comments by stageId and process each stage
     _t0 = Date.now();
-    const resultsByStage: Record<string, any> = {};
+    const resultsByStage: Record<string, StageCommentsResult> = {};
 
     // Initialize all stages (even empty ones) with pagination info
     for (const stageId of stageIds) {
@@ -1320,7 +1410,7 @@ export async function getAllStagesComments(
     }
 
     // Group raw comments by stageId
-    const commentsByStage: Record<string, any[]> = {};
+    const commentsByStage: Record<string, CommentRow[]> = {};
     for (const comment of allComments.results || []) {
       const stageId = comment.stageId as string;
       if (!commentsByStage[stageId]) {
@@ -1331,7 +1421,7 @@ export async function getAllStagesComments(
 
     // ============ BATCH QUERIES FOR REACTION/REPLY USERS (Optimization: fixes N+1 problem) ============
     // Prepare ALL comments for batch processing (across all stages)
-    const allCommentsForBatch: CommentForBatch[] = (allComments.results || []).map((c: any) => ({
+    const allCommentsForBatch: CommentForBatch[] = (allComments.results || []).map(c => ({
       commentId: c.commentId as string,
       authorEmail: c.authorEmail as string,
       mentionedGroups: c.mentionedGroups as string | null,
@@ -1350,8 +1440,8 @@ export async function getAllStagesComments(
       const stageStatus = stageStatusMap[stageId] || 'pending';
       const isActiveStage = stageStatus === 'active';
 
-      const commentMap: Record<string, any> = {};
-      const rootComments: any[] = [];
+      const commentMap: Record<string, ThreadedComment> = {};
+      const rootComments: ThreadedComment[] = [];
 
       // First pass: create comment objects
       for (const c of stageComments) {
@@ -1458,8 +1548,8 @@ export async function getAllStagesComments(
           if (!existing) {
             uniqueByAuthor.set(comment.authorEmail, comment);
           } else {
-            const existingHelpful = existing.reactions?.find((r: any) => r.type === 'helpful')?.count || 0;
-            const currentHelpful = comment.reactions?.find((r: any) => r.type === 'helpful')?.count || 0;
+            const existingHelpful = existing.reactions?.find(r => r.type === 'helpful')?.count || 0;
+            const currentHelpful = comment.reactions?.find(r => r.type === 'helpful')?.count || 0;
 
             if (currentHelpful > existingHelpful ||
                 (currentHelpful === existingHelpful && comment.createdTime < existing.createdTime)) {

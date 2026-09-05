@@ -1,4 +1,35 @@
 /**
+ * 專案群組的一列（`groups` 資料表）。
+ */
+interface ActiveGroupRow {
+  groupId: string;
+  projectId: string;
+  groupName: string;
+  description: string | null;
+  createdBy: string;
+  createdTime: number;
+  status: string;
+  /** SQLite 存 0/1，不是 boolean。 */
+  allowChange: number;
+}
+
+/**
+ * 取得專案裡一個仍然 active 的群組。
+ *
+ * 這段查詢原本在本檔案裡逐字重複六次，每次都接著
+ * `group.groupName || '未命名群組'`。
+ */
+async function getActiveGroup(
+  env: Env,
+  projectId: string,
+  groupId: string
+): Promise<ActiveGroupRow | null> {
+  return env.DB.prepare(`
+    SELECT * FROM groups WHERE projectId = ? AND groupId = ? AND status = 'active'
+  `).bind(projectId, groupId).first<ActiveGroupRow>();
+}
+
+/**
  * Group Member Management Handlers
  * Migrated from GAS scripts/groups_api.js
  */
@@ -60,9 +91,7 @@ export async function addUserToGroup(
 
     // Get group
     console.log('[addUserToGroup] Fetching group...');
-    const group = await env.DB.prepare(`
-      SELECT * FROM groups WHERE projectId = ? AND groupId = ? AND status = 'active'
-    `).bind(projectId, groupId).first();
+    const group = await getActiveGroup(env, projectId, groupId);
 
     if (!group) {
       console.log('[addUserToGroup] Group not found');
@@ -73,11 +102,11 @@ export async function addUserToGroup(
     // Check if group allows changes (allowChange is stored as 0/1 in database)
     // Admin and users with manage permission can bypass this restriction
     const canBypassLock = isAdmin || hasManagePermission;
-    if ((group.allowChange === 0 || group.allowChange === false) && !canBypassLock) {
+    if (group.allowChange === 0 && !canBypassLock) {
       console.log('[addUserToGroup] Group locked and user cannot bypass');
       return errorResponse('GROUP_LOCKED', 'Group membership changes are not allowed');
     }
-    if (group.allowChange === 0 || group.allowChange === false) {
+    if (group.allowChange === 0) {
       console.log('[addUserToGroup] Group locked but user can bypass (admin or manage permission)');
     }
 
@@ -217,7 +246,7 @@ export async function addUserToGroup(
 
     // 通知被添加的用戶
     try {
-      const groupName = (group as any).groupName || '未命名群組';
+      const groupName = group.groupName || '未命名群組';
       await queueSingleNotification(env, {
         targetUserEmail: userEmail,
         type: 'group_member_added',
@@ -267,9 +296,7 @@ export async function removeUserFromGroup(
     }
 
     // Get group
-    const group = await env.DB.prepare(`
-      SELECT * FROM groups WHERE projectId = ? AND groupId = ? AND status = 'active'
-    `).bind(projectId, groupId).first();
+    const group = await getActiveGroup(env, projectId, groupId);
 
     if (!group) {
       return errorResponse('GROUP_NOT_FOUND', 'Active group not found');
@@ -316,7 +343,7 @@ export async function removeUserFromGroup(
     // 通知被移除的用戶（如果不是自己移除自己）
     try {
       if (!isSelfRemoval) {
-        const groupName = (group as any).groupName || '未命名群組';
+        const groupName = group.groupName || '未命名群組';
         await queueSingleNotification(env, {
           targetUserEmail: userEmail,
           type: 'group_member_removed',
@@ -369,11 +396,11 @@ export async function listProjectGroups(
       LEFT JOIN users u ON g.createdBy = u.userId
       WHERE g.projectId = ?${statusFilter}
       ORDER BY g.createdTime
-    `).bind(projectId).all();
+    `).bind(projectId).all<ActiveGroupRow & { creatorDisplayName: string | null }>();
 
     // Enrich groups with details
     const groupsWithDetails = await Promise.all(
-      groups.results.map(async (group: any) => {
+      groups.results.map(async group => {
         // Get members
         const members = await env.DB.prepare(`
           SELECT pug.membershipId, u.userId, u.userEmail, u.displayName, pug.role, pug.joinTime,
@@ -384,12 +411,12 @@ export async function listProjectGroups(
         `).bind(projectId, group.groupId).all();
 
         // Check if current user is group leader
-        const isGroupLeader = members.results.some((m: any) =>
+        const isGroupLeader = members.results.some(m =>
           m.userEmail === userEmail && m.role === 'leader'
         );
 
         // Include member details if user is leader or admin
-        const memberDetails = (isGroupLeader || isAdmin) ? members.results.map((m: any) => ({
+        const memberDetails = (isGroupLeader || isAdmin) ? members.results.map(m => ({
           membershipId: m.membershipId,
           userId: m.userId,
           userEmail: m.userEmail,
@@ -402,8 +429,8 @@ export async function listProjectGroups(
         })) : [];
 
         // Calculate member and leader counts separately
-        const memberCount = members.results.filter((m: any) => m.role === 'member').length;
-        const leaderCount = members.results.filter((m: any) => m.role === 'leader').length;
+        const memberCount = members.results.filter(m => m.role === 'member').length;
+        const leaderCount = members.results.filter(m => m.role === 'leader').length;
 
         return {
           groupId: group.groupId,
@@ -571,9 +598,7 @@ export async function batchRemoveUsersFromGroup(
     }
 
     // Get group
-    const group = await env.DB.prepare(`
-      SELECT * FROM groups WHERE projectId = ? AND groupId = ? AND status = 'active'
-    `).bind(projectId, groupId).first();
+    const group = await getActiveGroup(env, projectId, groupId);
 
     if (!group) {
       return errorResponse('GROUP_NOT_FOUND', 'Active group not found');
@@ -581,7 +606,7 @@ export async function batchRemoveUsersFromGroup(
 
     // Check if group allows changes (admins and users with manage permission can bypass)
     const canBypassLock = isAdmin || hasManagePermission;
-    if ((group.allowChange === 0 || group.allowChange === false) && !canBypassLock) {
+    if (group.allowChange === 0 && !canBypassLock) {
       return errorResponse('GROUP_LOCKED', 'Group membership changes are not allowed');
     }
 
@@ -590,17 +615,17 @@ export async function batchRemoveUsersFromGroup(
     const existingMemberships = await env.DB.prepare(`
       SELECT membershipId, userEmail FROM usergroups
       WHERE projectId = ? AND groupId = ? AND userEmail IN (${placeholders})
-    `).bind(projectId, groupId, ...userEmails).all();
+    `).bind(projectId, groupId, ...userEmails).all<{ membershipId: string; userEmail: string }>();
 
     if (existingMemberships.results.length === 0) {
       return errorResponse('USER_NOT_IN_GROUP', 'None of the specified users are members of this group');
     }
 
-    const foundEmails = new Set(existingMemberships.results.map((m: any) => m.userEmail));
+    const foundEmails = new Set(existingMemberships.results.map(m => m.userEmail));
     const missingUsers = userEmails.filter(email => !foundEmails.has(email));
 
     // Prepare batch DELETE statements
-    const deleteStatements = existingMemberships.results.map((membership: any) =>
+    const deleteStatements = existingMemberships.results.map(membership =>
       env.DB.prepare(`
         DELETE FROM usergroups WHERE membershipId = ?
       `).bind(membership.membershipId)
@@ -618,8 +643,8 @@ export async function batchRemoveUsersFromGroup(
 
     // Queue notifications for all removed users
     try {
-      const groupName = (group as any).groupName || '未命名群組';
-      const notificationPromises = existingMemberships.results.map((membership: any) =>
+      const groupName = group.groupName || '未命名群組';
+      const notificationPromises = existingMemberships.results.map(membership =>
         queueSingleNotification(env, {
           targetUserEmail: membership.userEmail,
           type: 'group_member_removed',
@@ -690,9 +715,7 @@ export async function batchAddUsersToGroup(
     }
 
     // Get group
-    const group = await env.DB.prepare(`
-      SELECT * FROM groups WHERE projectId = ? AND groupId = ? AND status = 'active'
-    `).bind(projectId, groupId).first();
+    const group = await getActiveGroup(env, projectId, groupId);
 
     if (!group) {
       return errorResponse('GROUP_NOT_FOUND', 'Active group not found');
@@ -700,7 +723,7 @@ export async function batchAddUsersToGroup(
 
     // Check if group allows changes
     const canBypassLock = isAdmin || hasManagePermission;
-    if ((group.allowChange === 0 || group.allowChange === false) && !canBypassLock) {
+    if (group.allowChange === 0 && !canBypassLock) {
       return errorResponse('GROUP_LOCKED', 'Group membership changes are not allowed');
     }
 
@@ -725,9 +748,9 @@ export async function batchAddUsersToGroup(
     // Check all users exist
     const existingUsers = await env.DB.prepare(`
       SELECT userEmail FROM users WHERE userEmail IN (${placeholders}) AND status = 'active'
-    `).bind(...userEmails).all();
+    `).bind(...userEmails).all<{ userEmail: string }>();
 
-    const existingUserEmails = new Set(existingUsers.results.map((u: any) => u.userEmail));
+    const existingUserEmails = new Set(existingUsers.results.map(u => u.userEmail));
     const missingUsers = userEmails.filter(email => !existingUserEmails.has(email));
 
     if (missingUsers.length > 0) {
@@ -741,7 +764,7 @@ export async function batchAddUsersToGroup(
     `).bind(projectId, groupId, ...userEmails).all();
 
     if (existingMemberships.results.length > 0) {
-      const duplicates = existingMemberships.results.map((m: any) => m.userEmail).join(', ');
+      const duplicates = existingMemberships.results.map(m => m.userEmail).join(', ');
       return errorResponse('USER_ALREADY_IN_GROUP', `Users already in group: ${duplicates}`);
     }
 
@@ -749,14 +772,14 @@ export async function batchAddUsersToGroup(
     const viewerRoles = await env.DB.prepare(`
       SELECT userEmail, role FROM projectviewers
       WHERE projectId = ? AND userEmail IN (${placeholders}) AND isActive = 1
-    `).bind(projectId, ...userEmails).all();
+    `).bind(projectId, ...userEmails).all<{ userEmail: string; role: string }>();
 
-    const conflicts = viewerRoles.results.filter((v: any) =>
+    const conflicts = viewerRoles.results.filter(v =>
       v.role === 'teacher' || v.role === 'observer'
     );
 
     if (conflicts.length > 0) {
-      const conflictList = conflicts.map((c: any) => `${c.userEmail} (${c.role})`).join(', ');
+      const conflictList = conflicts.map(c => `${c.userEmail} (${c.role})`).join(', ');
       return errorResponse(
         'ROLE_CONFLICT',
         `Users with teacher/observer roles cannot join groups: ${conflictList}`
@@ -770,11 +793,11 @@ export async function batchAddUsersToGroup(
       JOIN groups pg ON pug.groupId = pg.groupId
       WHERE pug.projectId = ? AND pug.groupId != ? AND pug.userEmail IN (${placeholders})
         AND pug.isActive = 1
-    `).bind(projectId, groupId, ...userEmails).all();
+    `).bind(projectId, groupId, ...userEmails).all<{ userEmail: string; groupName: string }>();
 
     if (otherGroupMemberships.results.length > 0) {
       const conflicts = otherGroupMemberships.results
-        .map((m: any) => `${m.userEmail} (in ${m.groupName})`)
+        .map(m => `${m.userEmail} (in ${m.groupName})`)
         .join(', ');
       return errorResponse('USER_ALREADY_IN_PROJECT_GROUP', `Users already in other groups: ${conflicts}`);
     }
@@ -803,7 +826,7 @@ export async function batchAddUsersToGroup(
 
     // Queue notifications for all added users
     try {
-      const groupName = (group as any).groupName || '未命名群組';
+      const groupName = group.groupName || '未命名群組';
       const notificationPromises = members.map(({ userEmail, role }) =>
         queueSingleNotification(env, {
           targetUserEmail: userEmail,
@@ -875,9 +898,7 @@ export async function updateMemberRole(
     }
 
     // Get group
-    const group = await env.DB.prepare(`
-      SELECT * FROM groups WHERE projectId = ? AND groupId = ? AND status = 'active'
-    `).bind(projectId, groupId).first();
+    const group = await getActiveGroup(env, projectId, groupId);
 
     if (!group) {
       return errorResponse('GROUP_NOT_FOUND', 'Active group not found');
@@ -885,7 +906,7 @@ export async function updateMemberRole(
 
     // Check if group allows changes (admins and managers can bypass)
     const canBypassLock = isAdmin || hasManagePermission;
-    if ((group.allowChange === 0 || group.allowChange === false) && !canBypassLock) {
+    if (group.allowChange === 0 && !canBypassLock) {
       return errorResponse('GROUP_LOCKED', 'Group membership changes are not allowed');
     }
 
@@ -925,7 +946,7 @@ export async function updateMemberRole(
 
     // Notify the user about role change
     try {
-      const groupName = (group as any).groupName || '未命名群組';
+      const groupName = group.groupName || '未命名群組';
       const roleText = newRole === 'leader' ? '組長' : '成員';
       await queueSingleNotification(env, {
         targetUserEmail: userEmail,
@@ -999,9 +1020,7 @@ export async function batchUpdateMemberRoles(
     }
 
     // Get group
-    const group = await env.DB.prepare(`
-      SELECT * FROM groups WHERE projectId = ? AND groupId = ? AND status = 'active'
-    `).bind(projectId, groupId).first();
+    const group = await getActiveGroup(env, projectId, groupId);
 
     if (!group) {
       return errorResponse('GROUP_NOT_FOUND', 'Active group not found');
@@ -1009,7 +1028,7 @@ export async function batchUpdateMemberRoles(
 
     // Check if group allows changes (admins and managers can bypass)
     const canBypassLock = isAdmin || hasManagePermission;
-    if ((group.allowChange === 0 || group.allowChange === false) && !canBypassLock) {
+    if (group.allowChange === 0 && !canBypassLock) {
       return errorResponse('GROUP_LOCKED', 'Group membership changes are not allowed');
     }
 
@@ -1026,7 +1045,7 @@ export async function batchUpdateMemberRoles(
     }
 
     const membershipMap = new Map(
-      existingMemberships.results.map((m: any) => [m.userEmail, { membershipId: m.membershipId, oldRole: m.role }])
+      existingMemberships.results.map(m => [m.userEmail, { membershipId: m.membershipId, oldRole: m.role }])
     );
 
     const missingUsers = userEmails.filter(email => !membershipMap.has(email));
@@ -1074,7 +1093,7 @@ export async function batchUpdateMemberRoles(
 
     // Queue notifications for all updated users
     try {
-      const groupName = (group as any).groupName || '未命名群組';
+      const groupName = group.groupName || '未命名群組';
       const notificationPromises = updatedMembers.map(({ userEmail, newRole }) => {
         const roleText = newRole === 'leader' ? '組長' : '成員';
         return queueSingleNotification(env, {
