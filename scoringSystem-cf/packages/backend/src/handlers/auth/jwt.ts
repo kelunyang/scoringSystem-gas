@@ -76,7 +76,10 @@ export async function verifyToken(
     const encoder = new TextEncoder();
     const secretKey = encoder.encode(secret);
 
-    const { payload } = await jwtVerify(token, secretKey);
+    // Pin the algorithm. jose already refuses non-HMAC algorithms for an octet
+    // key, so this is belt-and-braces rather than a live hole — but it makes the
+    // intent explicit and survives a future change of key type.
+    const { payload } = await jwtVerify(token, secretKey, { algorithms: ['HS256'] });
 
     return payload as SessionPayload;
   } catch (error) {

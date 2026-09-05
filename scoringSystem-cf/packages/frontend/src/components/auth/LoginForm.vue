@@ -45,6 +45,7 @@
       v-else
       key="twofactor-step"
       :user-email="userEmail"
+      :pre-auth-token="preAuthToken"
       :method="twoFactorMethod"
       :available-methods="availableMethods"
       :last-email-sent-at="lastEmailSentAt"
@@ -101,6 +102,7 @@ const {
   userEmail,
   lastEmailSentAt,
   resendCooldownSeconds,
+  preAuthToken,
   verifyPassword,
   verifyTwoFactor,
   resendVerificationCode,

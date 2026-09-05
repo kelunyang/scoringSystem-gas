@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { resolve } from 'node:path';
-import { createD1FromMigration } from '../mocks/d1-sqlite';
+import { createD1FromMigration, hasNodeSqlite, NODE_SQLITE_SKIP_REASON } from '../mocks/d1-sqlite';
 import {
   checkRateLimit,
   commitRateLimit,
@@ -36,7 +36,12 @@ const hourly = (limit: number, identity = 'email:a@example.com'): WindowRule => 
   windowMs: HOUR
 });
 
-describe('window counters', () => {
+
+if (!hasNodeSqlite) {
+  console.warn(`[skip] ${'rate-limiter.test.ts'}: ${NODE_SQLITE_SKIP_REASON}`);
+}
+
+describe.skipIf(!hasNodeSqlite)('window counters', () => {
   it('allows up to the limit and rejects the next one', async () => {
     const rule = hourly(3);
     const now = 1_000_000_000_000;
@@ -115,7 +120,7 @@ describe('window counters', () => {
   });
 });
 
-describe('cooldowns', () => {
+describe.skipIf(!hasNodeSqlite)('cooldowns', () => {
   const cooldown = { name: 'recipient_cooldown', identity: 'email:a@example.com', minIntervalMs: 60_000 };
 
   it('rejects a second hit inside the interval and reports the wait', async () => {
@@ -147,7 +152,7 @@ describe('cooldowns', () => {
   });
 });
 
-describe('rolling windows', () => {
+describe.skipIf(!hasNodeSqlite)('rolling windows', () => {
   const rule: RollingRule = {
     name: 'daily',
     identity: 'global',
@@ -191,7 +196,7 @@ describe('rolling windows', () => {
   });
 });
 
-describe('housekeeping', () => {
+describe.skipIf(!hasNodeSqlite)('housekeeping', () => {
   it('sweeps only expired buckets', async () => {
     const now = 1_000_000_000_000;
 
@@ -219,7 +224,7 @@ describe('housekeeping', () => {
   });
 });
 
-describe('concurrency', () => {
+describe.skipIf(!hasNodeSqlite)('concurrency', () => {
   it('counts a burst of simultaneous requests without losing any', async () => {
     // The failure this guards against: KV allows ~1 write/sec to a key and
     // reads are eventually consistent, so 40 simultaneous logins used to be
@@ -251,7 +256,7 @@ describe('concurrency', () => {
   });
 });
 
-describe('failure behaviour', () => {
+describe.skipIf(!hasNodeSqlite)('failure behaviour', () => {
   it('surfaces a broken database rather than silently allowing', async () => {
     // checkRateLimit itself must not swallow errors — callers decide whether
     // to fail open, and they log it when they do.

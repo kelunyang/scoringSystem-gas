@@ -6,14 +6,12 @@
  * doesn't require modifying individual handlers.
  *
  * Blocked operations:
- * - D1PreparedStatement.run() - INSERT, UPDATE, DELETE
+ * - D1PreparedStatement.run()/.first()/.all()/.raw() carrying a write statement
  * - D1Database.batch() - Batch operations
  * - D1Database.exec() - Raw SQL execution
  *
  * Allowed operations:
- * - D1PreparedStatement.first() - SELECT single row
- * - D1PreparedStatement.all() - SELECT multiple rows
- * - D1PreparedStatement.raw() - Raw SELECT results
+ * - D1PreparedStatement.first()/.all()/.raw() carrying a SELECT/WITH/PRAGMA
  * - D1Database.prepare() - Prepare statements (allowed, but run() blocked)
  * - D1Database.dump() - Database dump (read-only)
  */
@@ -29,18 +27,58 @@ export class SudoWriteBlockedError extends Error {
 }
 
 /**
+ * SQL that only reads. Anything else is refused in sudo mode.
+ *
+ * Deliberately a whitelist: an unrecognised statement is treated as a write.
+ */
+const READ_ONLY_PREFIXES = ['select', 'with', 'pragma table_info', 'explain'];
+
+/**
+ * Best-effort read of the SQL a prepared statement carries.
+ *
+ * D1PreparedStatement does not expose its SQL in the public type, but the
+ * runtime object carries it. When it cannot be read we return null and the
+ * caller falls back to allowing the call — the path whitelist in
+ * middleware/auth.ts is the primary defence; this proxy is the safety net.
+ */
+function readStatementSql(stmt: D1PreparedStatement): string | null {
+  const raw = (stmt as unknown as { statement?: unknown; sql?: unknown });
+  const candidate = raw.statement ?? raw.sql;
+  return typeof candidate === 'string' ? candidate : null;
+}
+
+/**
+ * Whether a statement only reads.
+ *
+ * @param sql - The statement text
+ * @returns true when the statement is safe to run in sudo mode
+ */
+function isReadOnlySql(sql: string): boolean {
+  const normalised = sql.trim().toLowerCase();
+  return READ_ONLY_PREFIXES.some(prefix => normalised.startsWith(prefix));
+}
+
+/**
  * Create a sudo-safe D1PreparedStatement proxy
- * Blocks .run() but allows .first(), .all(), .raw()
+ * Blocks any execution of a non-read statement.
  */
 function createSudoSafeStatement(stmt: D1PreparedStatement): D1PreparedStatement {
   return new Proxy(stmt, {
     get(target, prop: keyof D1PreparedStatement) {
       const value = target[prop];
 
-      // Block .run() - this is used for INSERT, UPDATE, DELETE
-      if (prop === 'run') {
-        return () => {
-          throw new SudoWriteBlockedError('D1PreparedStatement.run()');
+      // Block every method that can execute the statement, not just .run().
+      // D1 happily runs an INSERT/UPDATE/DELETE through .first(), .all() or
+      // .raw() as well — blocking only .run() left the wrapper looking like a
+      // guarantee while being bypassable by a one-word change at the call site.
+      if (prop === 'run' || prop === 'first' || prop === 'all' || prop === 'raw') {
+        const method = prop;
+        return (...args: unknown[]) => {
+          const sql = readStatementSql(target);
+          if (sql !== null && !isReadOnlySql(sql)) {
+            throw new SudoWriteBlockedError(`D1PreparedStatement.${method}() on a write statement`);
+          }
+          return (target[method] as (...a: unknown[]) => unknown).apply(target, args);
         };
       }
 

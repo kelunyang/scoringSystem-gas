@@ -64,10 +64,6 @@ binding = "NOTIFICATION_QUEUE"
 queue = "notification-queue"
 
 [[queues.producers]]
-binding = "SETTLEMENT_QUEUE"
-queue = "settlement-queue"
-
-[[queues.producers]]
 binding = "LOGIN_EVENTS"
 queue = "login-events-queue"
 
@@ -102,13 +98,6 @@ max_retries = 3                 # Retry up to 3 times on failure
 dead_letter_queue = "notification-dlq" # Failed messages go here
 
 [[queues.consumers]]
-queue = "settlement-queue"
-max_batch_size = 1
-max_batch_timeout = 5
-max_retries = 2
-dead_letter_queue = "settlement-dlq"
-
-[[queues.consumers]]
 queue = "login-events-queue"
 max_batch_size = 10
 max_batch_timeout = 30
@@ -128,6 +117,11 @@ dead_letter_queue = "ai-ranking-dlq" # Failed requests go here
 
 # Environment Variables
 [vars]
+# Deployment kind. Read by the 2FA fallback in router/auth.ts (skipping email
+# verification is allowed ONLY in development) and by the rate limiter's dev
+# allowance. Leave this as "production" for a real deployment; local runs
+# override it to "development" via .dev.vars.
+ENVIRONMENT = "production"
 SYSTEM_TITLE = "評分系統" # System title for branding and emails
 SESSION_TIMEOUT = "86400000" # 24 hours in milliseconds
 INVITE_CODE_TIMEOUT = "604800000" # 7 days in milliseconds

@@ -6,39 +6,6 @@ import type { Env } from '../types';
 import type { NotificationQueueMessage, NotificationData } from './types';
 
 /**
- * Validate user emails exist in database
- * Returns only valid (existing, active) user emails
- */
-async function validateUserEmails(env: Env, emails: string[]): Promise<string[]> {
-  if (emails.length === 0) return [];
-
-  try {
-    // Query users table to check which emails exist
-    const placeholders = emails.map(() => '?').join(',');
-    const result = await env.DB.prepare(`
-      SELECT userEmail
-      FROM users
-      WHERE userEmail IN (${placeholders})
-        AND isActive = 1
-    `).bind(...emails).all();
-
-    const validEmails = new Set(result.results?.map((row: any) => row.userEmail) || []);
-
-    // Log invalid emails for debugging
-    const invalidEmails = emails.filter(email => !validEmails.has(email));
-    if (invalidEmails.length > 0) {
-      console.log(`[Notification Queue] Filtered out ${invalidEmails.length} invalid/inactive user emails:`, invalidEmails);
-    }
-
-    return Array.from(validEmails);
-  } catch (error) {
-    console.error('[Notification Queue] Error validating user emails:', error);
-    // On error, return empty array to avoid queuing notifications to non-existent users
-    return [];
-  }
-}
-
-/**
  * 推送單條通知到 Queue
  */
 export async function queueSingleNotification(

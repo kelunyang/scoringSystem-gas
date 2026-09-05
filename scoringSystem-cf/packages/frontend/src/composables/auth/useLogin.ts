@@ -25,6 +25,8 @@ export interface UseLoginReturn {
   userEmail: Ref<string>;
   lastEmailSentAt: Ref<number>;
   resendCooldownSeconds: Ref<number>;
+  /** Password proof from step 1; required by every session-issuing endpoint. */
+  preAuthToken: Ref<string>;
   canSubmitPassword: ComputedRef<boolean>;
   canSubmitVerificationCode: ComputedRef<boolean>;
   verifyPassword: (credentials: LoginCredentials, turnstileToken: string) => Promise<boolean>;
@@ -73,6 +75,12 @@ export function useLogin(): UseLoginReturn {
   const availableMethods = ref<TwoFactorMethod[]>(['email']);
   const errorMessage = ref('');
   const userEmail = ref('');
+  /**
+   * Short-lived proof (5 min) that step 1 verified the password. Every endpoint
+   * that can issue a session demands it, so it must survive between the two
+   * steps of the login form.
+   */
+  const preAuthToken = ref('');
   // Timestamp (ms) of the last successful email-code send. 0 = none sent yet.
   // Drives the 2FA email panel: 0 → show manual "send code" button (SMTP down /
   // dev mode); >0 → show the resend countdown.
@@ -131,6 +139,10 @@ export function useLogin(): UseLoginReturn {
       if (response.success) {
         emailPasswordVerified.value = true;
         userEmail.value = credentials.email;
+        // Proof that the password was just checked. Step 2 refuses to issue a
+        // session without it, so login is genuinely two-factor rather than
+        // "whoever holds the mailbox or a TOTP code".
+        preAuthToken.value = response.data?.preAuthToken || '';
         // Check if dev mode (SMTP not configured)
         devMode.value = response.data?.devMode === true;
         // Track 2FA method
@@ -185,6 +197,7 @@ export function useLogin(): UseLoginReturn {
           code: codeToSend.trim(),
           // Email OTP and TOTP are both 6 digits — tell the server which one this is
           method: twoFactorData.method ?? (twoFactorMethod.value === 'totp' ? 'totp' : 'email'),
+          preAuthToken: preAuthToken.value,
           turnstileToken: twoFactorData.turnstileToken || ''
         }
       });
@@ -209,10 +222,19 @@ export function useLogin(): UseLoginReturn {
         });
 
         return true;
-      } else {
-        errorMessage.value = response.error?.message || '驗證碼錯誤';
+      }
+
+      // Same dead end as above: without a valid proof no code can be accepted.
+      if (response.error?.code === 'PRE_AUTH_REQUIRED') {
+        emailPasswordVerified.value = false;
+        preAuthToken.value = '';
+        lastEmailSentAt.value = 0;
+        errorMessage.value = '登入階段已逾時，請重新輸入密碼';
         return false;
       }
+
+      errorMessage.value = response.error?.message || '驗證碼錯誤';
+      return false;
     } catch (error: any) {
       errorMessage.value = error.message || '驗證過程發生錯誤';
       return false;
@@ -236,20 +258,38 @@ export function useLogin(): UseLoginReturn {
       const httpResponse = await (rpcClient.api.auth as any)['resend-2fa'].$post({
         json: {
           userEmail: userEmail.value,
+          preAuthToken: preAuthToken.value,
           turnstileToken
         }
       });
       const response = await httpResponse.json();
 
       if (response.success) {
+        // The server re-issues the proof with the new code so both expire
+        // together; keep it or the next step would submit a stale one.
+        if (response.data?.preAuthToken) {
+          preAuthToken.value = response.data.preAuthToken;
+        }
         lastEmailSentAt.value = Date.now();
         resendCooldownSeconds.value = DEFAULT_RESEND_COOLDOWN_SECONDS;
         return true;
-      } else {
-        applyRateLimitCountdown(response);
-        errorMessage.value = response.error?.message || '重新發送失敗';
+      }
+
+      // The password proof has expired. Staying on the code screen is a dead
+      // end — there is nothing the user can type that will work — so send them
+      // back to the password step instead of showing an error next to an input
+      // that can no longer succeed.
+      if (response.error?.code === 'PRE_AUTH_REQUIRED') {
+        emailPasswordVerified.value = false;
+        preAuthToken.value = '';
+        lastEmailSentAt.value = 0;
+        errorMessage.value = '登入階段已逾時，請重新輸入密碼';
         return false;
       }
+
+      applyRateLimitCountdown(response);
+      errorMessage.value = response.error?.message || '重新發送失敗';
+      return false;
     } catch {
       errorMessage.value = '重新發送失敗';
       return false;
@@ -281,6 +321,7 @@ export function useLogin(): UseLoginReturn {
     availableMethods.value = ['email'];
     errorMessage.value = '';
     userEmail.value = '';
+    preAuthToken.value = '';
     lastEmailSentAt.value = 0;
     resendCooldownSeconds.value = DEFAULT_RESEND_COOLDOWN_SECONDS;
   }
@@ -297,6 +338,7 @@ export function useLogin(): UseLoginReturn {
     userEmail,
     lastEmailSentAt,
     resendCooldownSeconds,
+    preAuthToken,
     canSubmitPassword,
     canSubmitVerificationCode,
     verifyPassword,

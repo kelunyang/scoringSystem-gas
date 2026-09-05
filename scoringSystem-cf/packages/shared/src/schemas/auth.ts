@@ -88,6 +88,16 @@ const FlexibleVerificationCodeSchema = z.string()
 /**
  * Login verify 2FA request schema
  */
+/**
+ * Proof that the account password was verified moments ago.
+ *
+ * Issued by `/auth/login-verify-password` and required by every endpoint that
+ * can issue a session. Without it, step 2 of login accepted `{ userEmail, code }`
+ * alone and the password was never actually required — see
+ * `handlers/auth/pre-auth.ts`.
+ */
+export const PreAuthTokenSchema = z.string().min(1, 'Pre-auth token is required');
+
 export const LoginVerify2FARequestSchema = z.object({
   userEmail: EmailSchema,
   code: FlexibleVerificationCodeSchema,
@@ -98,6 +108,8 @@ export const LoginVerify2FARequestSchema = z.object({
    * format-based routing on the server.
    */
   method: z.enum(['email', 'totp']).optional(),
+  /** Password proof from step 1. Required — this is what makes login two-factor. */
+  preAuthToken: PreAuthTokenSchema,
   turnstileToken: TurnstileTokenSchema
 });
 
@@ -195,6 +207,12 @@ export type RefreshTokenRequest = z.infer<typeof RefreshTokenRequestSchema>;
  */
 export const Resend2FARequestSchema = z.object({
   userEmail: EmailSchema,
+  /**
+   * Password proof from step 1. Required: without it this endpoint mints a
+   * login-valid code for any address, which is exactly how the password factor
+   * used to be bypassable.
+   */
+  preAuthToken: PreAuthTokenSchema,
   turnstileToken: TurnstileTokenSchema
 });
 
@@ -309,6 +327,8 @@ export type PasskeyRegisterVerifyRequest = z.infer<typeof PasskeyRegisterVerifyR
  */
 export const PasskeyAuthInitRequestSchema = z.object({
   userEmail: EmailSchema,
+  /** Password proof from step 1 — passkey is the second factor, not the only one. */
+  preAuthToken: PreAuthTokenSchema,
   // true = 使用你的手機登入（discoverable / 跳 QR）；預設 false = 使用這台電腦
   crossDevice: z.boolean().optional()
 });
@@ -330,6 +350,8 @@ export const PasskeyAuthVerifyRequestSchema = z.object({
     signature: z.string().min(1),
     userHandle: z.string().optional()
   }),
+  /** Password proof from step 1 — passkey is the second factor, not the only one. */
+  preAuthToken: PreAuthTokenSchema,
   turnstileToken: TurnstileTokenSchema
 });
 

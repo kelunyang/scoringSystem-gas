@@ -15,6 +15,336 @@
 
 ## A. 未解決 Issues
 
+### #010 ｜ 底層系統檢查（2026-09-05）：認證流程、sudo、migrations、佇列 ｜ 大部分已修
+
+> **2026-09-05 修復完成。** 甲、乙、丁全部修掉，戊修掉兩項。
+> 教訓已轉寫成 pitfalls.md 兩條（單一因子登入、`c.env` 不可 mutate）。
+> **丙（migrations）只做了本地能安全做的部分，仍需你確認遠端狀態**——見下方丙節。
+> 驗證：`pnpm type-check` 過、`pnpm test` 258 passed / 55 skipped、
+> backend `pnpm lint` 0 error。
+>
+> **注意**：本次修復改了登入 API 的請求格式（新增必填 `preAuthToken`），
+> 前後端必須一起部署，不能只部署一邊。
+
+
+**背景**：開發後期都在衝前端，越底層越沒 review。這次由下往上掃一遍
+backend：migrations／認證／權限／帳本／佇列／中介層。
+
+**掃法**：`packages/backend/src` 141 檔 58,309 行全域 grep + 逐檔閱讀關鍵路徑；
+另跑 `pnpm type-check`（過）與 `pnpm test`（4 個 suite 失敗，見丁-1、丁-2）。
+
+#### 修復摘要（2026-09-05）
+
+**新增檔案**
+
+| 檔案 | 作用 |
+|------|------|
+| `handlers/auth/pre-auth.ts` | 簽發／驗證 5 分鐘短效的密碼證明（`typ: 'pre_auth'`） |
+| `handlers/auth/account-guard.ts` | `assertAccountUsable`——唯一決定「這個帳號現在能不能登入」的地方 |
+| `migrations/0008_2fa_binding.sql` | `two_factor_codes` 加 `context` + `passwordVerified` |
+| `migrations/README.md` | migrations 實際狀態、以及還原遠端前必跑的查詢 |
+
+**修掉的洞**
+
+- **甲-1（含 review 中追加發現的 OTP context confusion）**：
+  step 1 簽 `preAuthToken`，step 2／`/resend-2fa`／passkey 的
+  `auth-init`＋`auth-verify` 全部強制驗證。
+  `two_factor_codes` 真的存 `context` 了，`verifyTwoFactorCode`
+  改成依 context 查詢，登入路徑額外要求 `passwordVerified = 1`。
+  fail-open 那行加上 `ENVIRONMENT === 'development'` 閘，production 回 503。
+- **甲-2**：刪掉死掉的 `authenticateUser`（連同它的
+  `recordFailedAttempt`／`shouldDisableAccount`）。
+  `assertAccountUsable` 掛在 `/login-verify-password`、`/login-verify-2fa`、
+  `/resend-2fa`、`passkey/auth-verify` 和 **`authMiddleware`**——
+  最後這個讓暫時鎖定也能終止既有 session。
+  原本只對 2FA 生效的三振鎖定泛化成 `checkFailureAndLock(kind)`，
+  密碼失敗現在也會走 15 分鐘 → 1 小時 → 永久停用。
+- **甲-3**：`DUMMY_PASSWORD_HASH` 改成真正的 PBKDF2 格式字串，
+  新增 `burnPasswordTiming()`，`/login-verify-password` 在使用者不存在時呼叫它。
+  測試會實測「假雜湊耗時不得低於真雜湊的 1/10」。
+- **甲-4**：`/check-email` 加每 IP 每小時 60 次的預算；
+  `/resend-2fa` 因為改成需要 preAuthToken，回應不再洩漏帳號存在與否。
+- **甲-5**：`verifyToken` 明寫 `algorithms: ['HS256']`；
+  `getSessionId` 移除 `?sessionId=` query 來源（WebSocket 的 `?token=` 保留，
+  瀏覽器 API 不給帶 header）。
+- **乙**：`(c.env as any).DB = ...` → `(c as any).env = { ...c.env, DB: ... }`。
+  sudo proxy 從只擋 `.run()` 擴大到 `.run()/.first()/.all()/.raw()`
+  並改為 SQL 唯讀白名單判定。
+- **丁-1**：`wrangler.toml` 移除 `settlement-queue` 的 producer binding 與 consumer
+  （程式端本來就沒有生產者也沒有 router case）。
+- **丁-2**：`tests/mocks/d1-sqlite.ts` 改成惰性載入 `node:sqlite`
+  並導出 `hasNodeSqlite`，三個 suite 改用 `describe.skipIf`——
+  在 Node 20 顯示為 skipped 而不是整個載入失敗。加了 `.nvmrc`（22）。
+- **戊**：`lastActivityTime` 改成 5 分鐘節流（原本每個請求寫一次 D1）；
+  `clearFailedAttempts` 不再 `DELETE FROM sys_logs`，
+  改由 `countRecentFailures` 以「最近一次 `login_success` 之後」界定計數範圍。
+
+**同時結掉 A 區的 #001**（「2FA 帳號鎖定實際上沒生效」）。那條的診斷完全正確——
+`lockUntil` 只在死掉的 `authenticateUser()` 裡被檢查——本次甲-2 即是它的修復，
+已依規則移出 A 區。教訓見 pitfalls.md 2026-09-05「登入其實是單一因子」條目末段。
+
+**#002（改密碼無法撤銷既有 JWT）本次未修**，維持開放。甲-5 只是重述了它，
+沒有動手：那需要 `users.password_changed_at` 或 token version 欄位，
+屬於獨立的一輪工作，不適合夾在這批修復裡。
+
+**review 過程中額外發現、一併修掉**
+
+- `passkey/auth-verify` 撈了 `status` 卻從不檢查，也不看 `lockUntil`——
+  被停用或鎖定的帳號只要有 passkey 就能登入。已接上 `assertAccountUsable`。
+- `queues/notification-producer.ts` 的 `validateUserEmails` 是死碼，
+  且查詢用了 `users.isActive`——**這個欄位不存在**（實際是 `status`），
+  真接上去會直接拋錯。已刪除。
+- `middleware/sudo.ts` 的 `MiddlewareHandler`、
+  `handlers/admin/system.ts` 的 `parseJSON`：未使用的 import，
+  是 backend lint 僅有的 2 個 error。已清掉，backend lint 現在 0 error。
+
+**測試**：`tests/handlers/auth/login.test.ts` 原本整檔在測
+`authenticateUser`——也就是在測死碼。改寫成針對這次修的三件事的回歸測試：
+`assertAccountUsable` 的鎖定語意、pre-auth token 的綁定與不可替換性
+（含「session token 不能當 pre-auth 用」）、以及假雜湊的實際耗時。
+
+**戊 未做**：權限查詢的 KV 快取（`authMiddleware` 每個請求仍查兩次 D1）。
+這牽涉快取失效策略（改群組權限要能即時生效），不適合夾在安全修復裡做。
+
+**前端 lint 未處理**：`packages/frontend` 有 77 個既有的
+`no-unused-vars` error，散在我沒動到的檔案。屬於另一輪清理，這次不擴張範圍。
+
+---
+
+**沒問題的部分**（查證過，不用再想）：
+- **SQL 注入**：全域只有兩處字串拼進 `prepare()`
+  （`admin/users.ts:1268`、`projects/scoring-config.ts:187`），
+  拼的都是硬編碼白名單的表名／欄名，值一律走 `bind()`。動態 `IN (...)`
+  一律 `map(() => '?')`。乾淨。
+- **結算原子性**：`scoring/settlement.ts` 用 `settlingTime IS NULL` 的 CAS 鎖
+  搶佔（`:245` 起），全部寫入收進單一 `DB.batch()`（`:621`），
+  失敗由 D1 整批 rollback。這塊寫得比周邊都好。
+- **帳本**：無餘額欄位，一律 `SUM(amount)` 聚合；沒有找到「先查餘額再寫入」
+  的 TOCTOU 樣式。
+- **改 Email 的引用重寫**：`EMAIL_REFERENCES`（`admin/users.ts:1005`）
+  涵蓋 30 個欄位，且刻意排除的項目在 `:994` 有寫明理由。查證過沒有漏網的身分欄位。
+
+---
+
+#### 甲：認證流程（最嚴重）
+
+**甲-1｜`/auth/login-verify-2fa` 在 SMTP 讀不到時直接發 JWT，等於免密碼登入**
+
+`router/auth.ts:801-805`：
+
+```ts
+} else {
+  // Dev mode: SMTP not configured, skip verification
+  verified = true;
+}
+```
+
+這條路徑的進入條件是 `getSmtpConfig(c.env) === null`。
+
+**（更正）**：初判寫「KV 或 D1 任何一次讀取拋錯就回 null」是錯的。
+`utils/config.ts` 的 `getConfigValue` 自己有 try/catch，出錯回 `DEFAULT_VALUES`，
+不會往上拋。所以 null 的真正條件是 **SMTP 真的沒設定**（KV 沒值、
+無環境變數、預設值是空字串），不是暫時性故障。
+且 Cloudflare Email Service 那條路徑在 `utils/email.ts` 是整段註解掉的，
+SMTP 是唯一出口——只要系統寄得出信，devMode 就是關的。
+
+所以這條的實際風險是：**管理員在後台清空 SMTP 設定的那個空窗期，
+全站變成免密碼登入**。信也會同時寄不出去，所以不是無聲的洞，但仍必須修。
+
+更關鍵的是 `/login-verify-2fa` **完全不驗密碼**——它的 body 只有
+`{ userEmail, code }`，沒有 authMiddleware，也沒有任何綁定 step 1 的憑證。
+兩件事疊起來：只要 `getSmtpConfig` 回 null，任何人 POST
+`{userEmail: "<管理員信箱>", code: "000000"}` 就能拿到該帳號的 JWT。
+
+即使 SMTP 正常，這個端點的設計本身也有洞：**step 1（驗密碼）和 step 2（發 token）
+之間沒有任何伺服器端狀態**。對已啟用 TOTP 的使用者，攻擊者只要有 TOTP 碼就能登入，
+密碼完全不需要——「兩階段」實際上退化成單一因子。
+
+**修法**：step 1 驗密碼成功後簽一枚短效的一次性 `preAuthToken`（含 userEmail、
+5 分鐘到期），step 2 強制帶上並驗證；`verified = true` 的 dev 分支改成
+只在 `env.ENVIRONMENT === 'development'` 成立，其餘一律回 500。
+
+**甲-2｜`lockUntil` 有人寫、沒人讀——暫時鎖定完全無效**
+
+- **寫入**：`queues/login-events-consumer.ts:408`（Layer 2 非同步風控）、
+  `utils/security.ts:187`、`handlers/auth/users.ts` 的管理員操作。
+- **讀取／強制**：全域 grep `lockUntil`，唯一會擋下登入的檢查在
+  `handlers/auth/login.ts:113-135` 的 `authenticateUser()`。
+- 而 **`authenticateUser()` 是死碼**——全域只有它自己的定義和 JSDoc 提到它，
+  沒有任何呼叫端。實際登入走的是 `/login-verify-password` + `/login-verify-2fa`，
+  這兩條路徑**從頭到尾沒有出現 `lockUntil` 這個字**。
+
+也就是說：風控判定「暫時鎖定 30 分鐘」→ 寫進 DB → 寄信通知管理員「已鎖定至 XX:XX」
+→ **被鎖的人照樣可以登入**。只有 `status = 'disabled'`（永久停用）那條有效，
+因為 `router/auth.ts:386` 和 `:818` 有檢查 status。
+
+同樣連帶失效的還有 `shouldDisableAccount()`（3 次失敗即鎖，
+`config/security.ts:11`）——它只被死掉的 `authenticateUser` 呼叫。
+**現行登入路徑沒有任何失敗次數鎖定**，只有記 log 和丟進佇列。
+
+**修法**：把 `lockUntil` 檢查搬進 `/login-verify-password` 和
+`/login-verify-2fa` 兩處（2FA 那處必須也檢查，否則已通過 step 1 的人不受影響），
+然後刪掉整支 `authenticateUser`。
+
+**甲-3｜防時序攻擊的 dummy hash 是空包彈，使用者列舉照樣可行**
+
+`handlers/auth/login.ts:80`（死碼，但同樣的問題在 `/login-verify-password`
+是「根本沒做」）：
+
+```ts
+const dummyHash = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
+await verifyPassword(password, dummyHash);  // 宣稱防時序攻擊
+```
+
+追進 `shared/src/utils/password.ts`：這個字串不以 `pbkdf2-sha256$` 開頭但含 `$`
+→ 走 `verifyLegacyMD5Password` → `split('$')` 得到 5 段，`!== 2` → **立刻回 false**。
+一次雜湊都沒算。真實使用者要跑 PBKDF2 100,000 輪（約 20-30ms），
+不存在的使用者是微秒級。**時間差兩個數量級，帳號列舉完全暢通。**
+
+而現行的 `/login-verify-password`（`router/auth.ts:311`）連這個假動作都沒有：
+使用者不存在就直接 401 返回。
+
+**修法**：dummy hash 改成真的 `pbkdf2-sha256$100000$<隨機 salt>$<隨機 hash>`
+格式，讓它真的跑滿 100,000 輪。
+
+**甲-4｜以 email 列舉帳號的 oracle 還有兩個**
+
+- `GET /auth/check-email`（`router/auth.ts:175`）：無認證、無 rate limit，
+  直接回 `available: true/false`。
+- `POST /auth/resend-2fa`（`router/auth.ts:940`）：使用者不存在回
+  **401 `用戶不存在`**，存在則回 200。程式碼註解自己承認了
+  （`:944` 「The 401 below is a pre-existing one」）。
+
+**甲-5｜JWT 沒有撤銷機制，且可從 query string 傳入**
+
+- `middleware/auth.ts:38` 的 `getSessionId` 依序找 **body → query `?sessionId=`
+  → Authorization header → `x-session-id`**。query string 會進 CF 存取記錄、
+  瀏覽器歷史、Referer。WebSocket 路由（`router/websocket.ts:31`）同樣吃
+  `?token=`（WS 這個較難避免，但至少要意識到 log 會留）。
+- 登出（`router/auth.ts:113`）只寫 log，token 到期前一直有效。管理員停用帳號後
+  舊 token 也還能用到下一次 `authMiddleware` 查 DB 為止——這點還好，因為
+  `middleware/auth.ts:80` 每次都會查 status。但**改密碼不會使既有 session 失效**。
+- `verifyToken`（`handlers/auth/jwt.ts:74`）沒有指定 `algorithms: ['HS256']`
+  也沒有 `iss`/`aud`。用對稱金鑰時 jose 不會接受非 HMAC 演算法，所以不是洞，
+  但明寫比較穩。
+
+---
+
+#### 乙：sudo 唯讀模式會污染整個 isolate
+
+`middleware/auth.ts:229`：
+
+```ts
+(c.env as any).DB = createSudoSafeDB(c.env.DB);
+```
+
+**`c.env` 在 Cloudflare Workers 不是 request-scoped**——它是 isolate 層級的物件，
+同一個 isolate 內所有請求拿到的是同一個參照。這裡把 `DB` 換成唯讀 Proxy 之後
+**從來沒有還原**（全域 grep 只有這一處賦值）。後果：
+
+1. **併發污染（必然發生）**：一個 sudo 請求進行中，同 isolate 內任何其他
+   同時在跑的請求，`c.env.DB` 都會變成唯讀 Proxy，所有寫入丟
+   `SudoWriteBlockedError` → 被 `app.onError`（`index.ts:275`）翻譯成
+   403「SUDO 模式為唯讀」。使用者會看到一個跟自己操作毫無關係的錯誤。
+2. **持久污染**：由於沒有還原，isolate 被回收前，**之後每一個請求**都繼承
+   唯讀 DB。而且每次 sudo 都再包一層，Proxy 會不斷疊加。
+
+`middleware/sudo.ts:127` 的註解其實已經察覺這個 mutation 逃逸了
+（「by which time `c.env.DB` is wrapped」），只是解讀成「waitUntil 時序問題」，
+用「先存一份 originalDB」繞過，沒往上追到 env 是共享物件。
+
+**修法**：不要動 `c.env`。改成 `c.set('db', sudoSafeDB)`，handler 一律從
+context 取 DB；或維持現行的路徑白名單（`middleware/auth.ts:145-215`）當唯一防線，
+把 Proxy 這層拿掉。前者較正確但要改所有 handler，後者一行就能止血。
+
+**乙-2（次要）**：`createSudoSafeStatement` 只擋 `.run()`，
+但 D1 的 `.first()` / `.all()` 一樣能執行 INSERT/UPDATE/DELETE。
+目前靠路徑白名單兜住，但 Proxy 本身不是完整防線。
+
+---
+
+#### 丙：Migrations 目錄是壞的，全新環境建不起來
+
+`packages/backend/migrations/` 有**兩套互相衝突的編號**，且其中一套沒進版控：
+
+| 檔案 | 版控狀態 |
+|------|----------|
+| `0001_add_aiservicecalls.sql` / `0002_add_announcements.sql` / `0003_add_totp_support.sql` / `0004_add_passkey_support.sql` / `0005_add_withdraw_reason.sql` / `0006_add_rate_limit_counters.sql` | **已追蹤** |
+| `0001_initial.sql` / `0003_init_schema.sql` / `0004_fix_invitation_unique_index.sql` / `0005_add_stage_pause.sql` / `0006_add_max_vote_reset_count.sql` / `0007_add_passkey_support.sql` | **未追蹤（untracked）** |
+
+三個具體後果：
+
+1. **建表的那份沒進版控**：`0003_init_schema.sql`（36KB、34 張表）是 untracked。
+   從乾淨 checkout 跑 `pnpm migrate:local` 拿不到任何一張表。
+2. **順序本來就是錯的**：wrangler 按檔名排序執行，
+   `0001_add_aiservicecalls` 和 `0003_add_totp_support`（`ALTER TABLE users`）
+   排在 `0003_init_schema`（`CREATE TABLE users`）**之前**。全新資料庫必爆。
+3. **passkey 有兩份，跑第二份必爆**：`0004_add_passkey_support.sql:5` 和
+   `0007_add_passkey_support.sql:32` 都執行
+   `ALTER TABLE users ADD COLUMN passkeyEnabled` → duplicate column name。
+   兩份的 schema 還不一致（0007 有 FK 和 `idx_..._lastused` 索引，0004 沒有；
+   0004 的 `transports` 是 `NOT NULL`，0007 可為 null）。
+   **目前 production 到底是哪一份，要實際查 DB 才知道。**
+
+另外 `0001_initial.sql` 的註解說 schema 由 `/auth/init-system` 端點建立，
+但 `index.ts:89` 也還在引導使用者呼叫它——等於「migrations」和「init 端點」
+兩套建庫機制並存，沒有單一事實來源。
+
+**修法**：先在 remote D1 跑 `PRAGMA table_info(users)` 和
+`SELECT name FROM sqlite_master` 確認**實際**狀態，再據此重寫成單一線性序列，
+全部進版控，刪掉 `/auth/init-system` 這條路。這件事沒做之前，
+**不要在乾淨環境重建資料庫**。
+
+---
+
+#### 丁：測試與設定
+
+**丁-1｜`settlement-queue` 有 consumer 設定但沒有 router case**
+
+`wrangler.toml:108-112` 註冊了 `settlement-queue` 的 consumer，
+但 `index.ts:333` 的 switch 沒有這個 case → 落到 `default` 丟
+`Unknown queue`。同時全域 grep `SETTLEMENT_QUEUE` **沒有任何生產者**
+（`wrangler.toml:70` 有 binding，程式沒用）。
+
+所以目前是「死設定」不是「壞功能」，但它讓 `pnpm test` 是紅的
+（`tests/worker-entrypoint.test.ts` 就是為了防這個而寫的守衛測試）。
+**修法**：把 producer binding 和 consumer 兩段一起從 wrangler.toml 刪掉。
+
+**丁-2｜三個測試 suite 在 Node 20 下根本不會執行**
+
+`tests/utils/rate-limiter.test.ts`、`tests/utils/email-budget.test.ts`、
+`tests/handlers/admin/change-email.test.ts` 都因
+`Error: No such built-in module: node:sqlite` 整個 suite 載入失敗。
+`node:sqlite` 需要 Node 22（package.json 的 engines 也寫 `>=22`），
+但實際跑的是 v20.19.5，pnpm 只發 WARN 不擋。
+
+**這三個 suite 涵蓋的正好是速率限制和改 email 這兩塊底層邏輯**——
+等於這部分目前完全沒有測試保護。
+**修法**：升到 Node 22，或在 package.json 加
+`"engine-strict": true` 讓版本不符直接失敗而不是靜默略過。
+
+---
+
+#### 戊：效能與設計觀察（非 bug，但值得記）
+
+- **每個已認證請求都對 D1 寫一次**：`middleware/auth.ts:126` 用 `waitUntil`
+  更新 `users.lastActivityTime`。D1 的寫入有 rate limit 也要計費，
+  熱門時段（全班同時操作）這是純浪費。改成節流（例如只在距上次
+  超過 5 分鐘才寫）或改寫進 KV。
+- **每個請求都查兩次 DB 取權限**：`authMiddleware` 先查 users，
+  再 `getUserGlobalPermissions` 查 globalusergroups JOIN globalgroups。
+  CLAUDE.md 寫「Cache JWT validation results in KV」，實際沒做。
+- **身分以 email 而非 userId 當外鍵**：schema 沒有任何指向 `users` 的
+  foreign key，22 處欄位直接存 email 字串。這就是為什麼改一個 email
+  需要 `admin/users.ts` 裡 30 個欄位的重寫清單。已經有完整的處理，
+  不建議現在動，但要知道新增任何「指向人」的欄位都必須同步加進
+  `EMAIL_REFERENCES`，否則會靜默漏改。
+- **`clearFailedAttempts` 會刪 `sys_logs`**（`handlers/auth/login.ts:508`）：
+  登入成功就把該帳號的 `login_failed` 稽核記錄刪掉。稽核軌跡不該被業務邏輯刪除，
+  「已解決」應該用標記而不是 DELETE。
+
+---
+
 ### #009 ｜ 死模組普查：重構殘骸清單 ｜ 已完成清理
 
 > **2026-09-03 完成**：前後端皆已清理。合計 110 個檔案異動、
@@ -478,27 +808,6 @@ router 內卻**沒有呼叫 `verifyTurnstileMiddleware`**：
 ---
 
 以下三項皆已讀原始碼確認，非推測。均為 2026-07-17 討論 JWT 認證機制時順帶挖出。
-
-### #001 ｜ 2FA 帳號鎖定實際上沒生效 🔥 高
-
-**問題**：`lockUntil` 只在 `scoringSystem-cf/packages/backend/src/handlers/auth/login.ts:113`
-的 `authenticateUser()` 內被檢查，但該函式 grep 全庫**只有 `tests/handlers/auth/login.test.ts` 呼叫**——
-線上沒有任何路由用到它。
-
-實際的線上路由是 `scoringSystem-cf/packages/backend/src/router/auth.ts:302`
-`POST /auth/login-verify-password`，它只檢查 `status === 'disabled'`，
-**不看 `lockUntil`，也不觸發「5 分鐘內 3 次失敗即停用」的 Layer 1 同步防護**。
-
-**後果**：
-1. `check2FAFailureAndLock`（`login.ts:837`）鎖定帳號後（3 次鎖 15 分／5 次鎖 1 小時／7 次永久），
-   使用者**仍能通過密碼驗證**進到 2FA 步驟——鎖等於白鎖。
-2. 密碼暴力破解缺乏同步節流。Layer 2（`queues/login-events-consumer.ts`）是非同步的，
-   batch 10 / 30s timeout，有 30 秒以上延遲；期間只有 `status === 'disabled'` 擋得住。
-
-**注意**：測試全綠，因為測試打的是 `authenticateUser()`——那個沒上線的函式。
-這正是「測試覆蓋到的不是線上路徑」的典型。
-
----
 
 ### #002 ｜ 改密碼／重設密碼無法撤銷既有 JWT ｜ 中
 

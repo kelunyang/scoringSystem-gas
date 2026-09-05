@@ -9,6 +9,13 @@ import { verifyToken } from '../handlers/auth/jwt';
 import { errorResponse, ERROR_CODES } from '../utils/response';
 import { processSudoHeaders } from './sudo';
 import { createSudoSafeDB } from '../utils/sudo-db-proxy';
+import { assertAccountUsable } from '../handlers/auth/account-guard';
+
+/**
+ * How stale `users.lastActivityTime` may get before it is rewritten.
+ * Only feeds "last seen" displays, so minutes of drift are harmless.
+ */
+const LAST_ACTIVITY_THROTTLE_MS = 5 * 60 * 1000;
 
 /**
  * Extract session ID from request
@@ -30,19 +37,19 @@ async function getSessionId(c: Context<any>): Promise<string | null> {
     // Body parsing failed, continue to other methods
   }
 
-  // 2. Try to get from query parameters
-  const sessionIdFromQuery = c.req.query('sessionId');
-  if (sessionIdFromQuery) {
-    return sessionIdFromQuery;
-  }
+  // 2. Authorization header (Bearer token) — the path the frontend uses
+  //
+  // Deliberately no `?sessionId=` query parameter: a session token in a URL
+  // lands in Cloudflare request logs, browser history and Referer headers.
+  // The WebSocket upgrade in router/websocket.ts still takes `?token=`
+  // because the browser API allows no headers there.
 
-  // 3. Try to get from Authorization header (Bearer token)
   const authHeader = c.req.header('authorization');
   if (authHeader && authHeader.startsWith('Bearer ')) {
     return authHeader.substring(7);
   }
 
-  // 4. Try to get from custom header
+  // 3. Custom header
   const sessionIdFromHeader = c.req.header('x-session-id');
   if (sessionIdFromHeader) {
     return sessionIdFromHeader;
@@ -77,7 +84,7 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: HonoV
 
     // 3. Check user status in database (real-time disabling)
     const user = await c.env.DB.prepare(
-      'SELECT userId, userEmail, status, displayName, avatarSeed, avatarStyle, avatarOptions FROM users WHERE userId = ?'
+      'SELECT userId, userEmail, status, displayName, avatarSeed, avatarStyle, avatarOptions, lastActivityTime, lockUntil, lockReason FROM users WHERE userId = ?'
     )
       .bind(payload.userId)
       .first();
@@ -86,8 +93,15 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: HonoV
       return errorResponse(ERROR_CODES.USER_NOT_FOUND, 'User not found');
     }
 
-    if (user.status === 'disabled') {
-      return errorResponse(ERROR_CODES.USER_DISABLED, 'User account is disabled');
+    // Disabled *and* temporarily locked accounts lose their existing sessions.
+    // Checking only at login would leave an already-issued token working for the
+    // whole lock window, which defeats the point of locking.
+    const refusal = await assertAccountUsable(c.env, user);
+    if (refusal) {
+      return errorResponse(
+        refusal.code === 'USER_DISABLED' ? ERROR_CODES.USER_DISABLED : ERROR_CODES.FORBIDDEN,
+        refusal.message
+      );
     }
 
     // 4. Get user's global permissions
@@ -115,13 +129,20 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: HonoV
       );
     }
 
-    // 6. Update lastActivityTime (session extension)
-    // Use waitUntil to not block the response
-    c.executionCtx.waitUntil(
-      c.env.DB.prepare('UPDATE users SET lastActivityTime = ? WHERE userId = ?')
-        .bind(now, payload.userId)
-        .run()
-    );
+    // 6. Update lastActivityTime (session extension), throttled.
+    //
+    // This used to write to D1 on *every* authenticated request. The column is
+    // only read to show "last seen", so per-request precision buys nothing while
+    // costing a D1 write per request — the whole class hitting the app at once
+    // turned that into the busiest write in the system.
+    const lastActivity = (user.lastActivityTime as number) || 0;
+    if (now - lastActivity > LAST_ACTIVITY_THROTTLE_MS) {
+      c.executionCtx.waitUntil(
+        c.env.DB.prepare('UPDATE users SET lastActivityTime = ? WHERE userId = ?')
+          .bind(now, payload.userId)
+          .run()
+      );
+    }
 
     // 7. Set user in context for handlers to use
     c.set('user', {
@@ -225,8 +246,16 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: HonoV
           }
         }, 403);
       }
-      // Wrap DB for reads (as a safety net for any writes that slip through)
-      (c.env as any).DB = createSudoSafeDB(c.env.DB);
+      // Wrap DB for reads (as a safety net for any writes that slip through).
+      //
+      // This MUST replace `c.env` wholesale rather than assign `c.env.DB`.
+      // In Workers the `env` object is shared across every request an isolate
+      // handles, so mutating a binding on it leaks: concurrent requests would
+      // suddenly see a read-only DB and fail with SUDO_NO_WRITE, and since
+      // nothing ever restored it, every later request in that isolate inherited
+      // the read-only wrapper (re-wrapped once more on each sudo request).
+      // A shallow copy is per-request because `c` is per-request.
+      (c as any).env = { ...c.env, DB: createSudoSafeDB(c.env.DB) };
     }
 
     // Continue to next handler
@@ -261,7 +290,7 @@ export const optionalAuthMiddleware: MiddlewareHandler<{ Bindings: Env; Variable
         const payload = await verifyToken(sessionId, c.env.JWT_SECRET);
 
         const user = await c.env.DB.prepare(
-          'SELECT userId, userEmail, status, displayName, avatarSeed, avatarStyle, avatarOptions FROM users WHERE userId = ?'
+          'SELECT userId, userEmail, status, displayName, avatarSeed, avatarStyle, avatarOptions, lastActivityTime FROM users WHERE userId = ?'
         )
           .bind(payload.userId)
           .first();
@@ -282,13 +311,16 @@ export const optionalAuthMiddleware: MiddlewareHandler<{ Bindings: Env; Variable
             permissions: permissions
           });
 
-          // Update lastActivityTime
+          // Update lastActivityTime, throttled the same way as authMiddleware
           const now = Date.now();
-          c.executionCtx.waitUntil(
-            c.env.DB.prepare('UPDATE users SET lastActivityTime = ? WHERE userId = ?')
-              .bind(now, payload.userId)
-              .run()
-          );
+          const lastActivity = (user.lastActivityTime as number) || 0;
+          if (now - lastActivity > LAST_ACTIVITY_THROTTLE_MS) {
+            c.executionCtx.waitUntil(
+              c.env.DB.prepare('UPDATE users SET lastActivityTime = ? WHERE userId = ?')
+                .bind(now, payload.userId)
+                .run()
+            );
+          }
         }
       } catch {
         // Invalid token - continue without user

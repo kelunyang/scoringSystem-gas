@@ -4,6 +4,176 @@
 > 新坑往上加，讓最近的教訓最先被看到。
 
 ---
+## 2026-09-05 ｜ 把認證檢查放在速率限制之後，讓失敗的請求照樣扣配額
+
+**症狀**：使用者登入後太晚輸入 2FA 驗證碼，按「重新寄送」，**信一直沒來，
+也沒有明顯的錯誤訊息**——按鈕反而進入 60 秒倒數，看起來像「已寄出、請稍候」。
+
+**根因**：`/auth/resend-2fa` 加上 `preAuthToken` 檢查時，我把它插在
+`guardEmailTrigger()` **後面**：
+
+```ts
+const emailGuard = await guardEmailTrigger(...);   // ← consumeRateLimit，會扣
+if (!emailGuard.allowed) return rateLimitResponse(...);
+
+if (!await verifyPreAuthToken(...)) return 401;     // ← 才驗證
+```
+
+於是每按一次重寄：**信沒寄出去，`open` channel 的配額照扣**
+（預設每收件人每小時 5 封）。扣完之後回應從 `PRE_AUTH_REQUIRED`
+變成 `EMAIL_RATE_LIMITED`，而前端收到後者會呼叫 `applyRateLimitCountdown()`
+把按鈕打回倒數——**錯誤被偽裝成「正在寄送」**。
+
+原本的順序有它的理由（註解寫著「先限流再查使用者，讓回應不因帳號是否存在而不同」），
+我照著那個理由把新檢查排在後面，但沒發現 `verifyPreAuthToken` **根本不碰資料庫**，
+它是純簽章驗證，不構成帳號列舉風險，本來就該排最前面。
+
+**同時暴露的第二個設計不一致**：`PRE_AUTH_TTL_MS` 當初設 5 分鐘，
+而驗證碼壽命是 10 分鐘。這不是「比較嚴格」，是**錯的**——
+第 9 分鐘重寄會發出一組有效到第 19 分鐘的碼，但送出它所需的憑證第 10 分鐘就死。
+等於發一組對方用不到的碼。
+
+**修法**：
+- `verifyPreAuthToken` 移到 `guardEmailTrigger` 之前，失敗不扣配額。
+- `PRE_AUTH_TTL_MS` 改為 10 分鐘，與驗證碼同步到期。
+- 重寄成功時**換發新的 preAuthToken**，讓新碼的整段壽命都可用。
+- 前端收到 `PRE_AUTH_REQUIRED` 直接退回輸密碼那一步，
+  不要停在一個「打什麼都不會成功」的輸入框旁顯示錯誤。
+
+**教訓與防護**：
+
+1. **便宜且不碰 I/O 的驗證，一律排在會消耗資源的檢查之前。**
+   順序原則是：純計算的認證／授權 → 限流／計費 → 資料庫查詢 → 副作用。
+   把認證排在限流後面，等於讓「未授權的請求」消耗「受害者的配額」——
+   這本身就是一個 DoS 原語。
+
+2. **沿用既有註解的理由之前，先確認新程式碼適不適用那個理由。**
+   「先限流再查使用者以免洩漏帳號存在」是對的，但它針對的是**會查資料庫**的檢查。
+   我把一個不查資料庫的檢查套進同一個框架，理由不成立，代價卻是真的。
+
+3. **兩個相關的有效期限，要嘛相同、要嘛長的在外層。**
+   「憑證」比「它保護的資源」短命，會產生「發出去就用不了」的狀態。
+   訂 TTL 時把相關的到期時間列出來排一排，不要各訂各的。
+
+4. **錯誤被偽裝成正常狀態，比錯誤本身更難查。**
+   前端對所有失敗一律呼叫 `applyRateLimitCountdown()`，
+   結果 401 逾時在畫面上跟「寄送中」長得一樣。
+   **失敗處理要依錯誤碼分流**，不要用同一套 UI 反應蓋掉所有失敗。
+
+---
+## 2026-09-05 ｜ 登入其實是單一因子：密碼那關沒有留下任何伺服器端痕跡
+
+**症狀**：無。系統看起來完全正常——密碼錯了會擋、驗證碼會寄、輸錯碼會鎖。
+是做底層 review 逐條追流程才發現的。
+
+**根因**：`/auth/login-verify-password`（step 1）驗完密碼後，
+**唯一的寫入動作是插一列驗證碼進 `two_factor_codes`**。沒有 session、
+沒有 cookie、沒有 KV，也沒有任何「這個人剛通過密碼」的標記。
+而 `/auth/login-verify-2fa`（step 2）的 body 只有 `{ userEmail, code }`，
+不驗密碼、也沒有 authMiddleware。
+
+兩個洞疊起來，密碼變成可選：
+
+- `/auth/resend-2fa` **不需要密碼**就會寄出一組登入可用的驗證碼。
+  有信箱存取權 → 拿碼 → 登入，全程不需要密碼。
+- TOTP 使用者更直接：有一組有效 TOTP 碼就能打 step 2 拿 JWT。
+
+**同一個根因還長出兩個附帶問題**：
+
+1. `two_factor_codes` **沒有 context 欄位**。`storeVerificationCode` 有
+   `context: 'login' | 'password_reset'` 參數，但它只被拿去拼 codeId 字串前綴
+   和寫 log。`verifyTwoFactorCode` 的查詢是
+   `WHERE userEmail = ? AND isUsed = 0 AND expiresAt > ?`——**沒有 context 過濾**，
+   所以忘記密碼的碼可以拿去通過登入 2FA，反之亦然（OTP context confusion）。
+2. `getSmtpConfig()` 回 null 時，step 2 直接 `verified = true` 發 JWT。
+   而 null 的條件是「SMTP 沒設定」——管理員在後台清空 SMTP 設定的那個瞬間，
+   全站變成「知道 email 就能登入」。
+
+**修法**：
+- 新增 `handlers/auth/pre-auth.ts`：step 1 驗完密碼簽一枚 5 分鐘、
+  帶 `typ: 'pre_auth'` 的短效 JWT；step 2、`/resend-2fa`、
+  passkey 的 `auth-init`／`auth-verify` 全部強制驗證它。
+  `typ` 讓 session token 無法被拿來當 pre-auth 用，反之亦然。
+- migration `0008_2fa_binding.sql` 給 `two_factor_codes` 加
+  `context` 與 `passwordVerified` 兩個欄位，`verifyTwoFactorCode`
+  改成依 context 查詢，登入路徑額外要求 `passwordVerified = 1`。
+- fail-open 那行加上 `env.ENVIRONMENT === 'development'` 閘，
+  production 改回 503。
+
+**教訓與防護**：
+
+1. **多步驟流程的每一步，都要問「上一步在伺服器留下了什麼？」**
+   前端記得住不算數。這裡前端確實記著「密碼過了」，
+   所以 UI 流程看起來完全正確——但後端從來沒被告知過這件事。
+   凡是分成兩個 endpoint 的流程，中間**一定要有一個伺服器端可驗證的憑證**。
+
+2. **「參數存在」不等於「參數有被使用」。** `context` 參數傳了三年，
+   看 call site 完全正常，但它從來沒有寫進資料庫、也從來沒有被查詢過。
+   加參數時要一路追到 schema：欄位在嗎？查詢有 filter 嗎？
+
+3. **fail-open 的預設值要看「什麼情況會走到 else」。**
+   `getSmtpConfig()` 回 null 讀起來像「暫時失敗」，
+   實際語意是「沒設定」——而「沒設定」是管理員一個動作就能造成的狀態。
+   任何 `if (設定存在) { 驗證 } else { 放行 }` 都要問：
+   誰能讓那個設定消失？
+
+4. **「同一件事的兩個實作，其中一個是死的」是這個 codebase 的慣性病症**
+   （見 issue.md #009）。這次又中：`authenticateUser()` 有完整的
+   `lockUntil` 檢查與三振鎖定，但**沒有任何呼叫端**，
+   真正在跑的 `/login-verify-password` 一行都沒有。
+   風控寫 `lockUntil`、寄信通知管理員「已鎖定」，被鎖的人照樣登入。
+   **加防線之前先確認「現在真的在跑的是哪一支」**，
+   不要看到有實作就以為有防護。
+
+---
+## 2026-09-05 ｜ 不要 mutate `c.env`：它是 isolate 共用的，會汙染別的請求
+
+**症狀**：無回報，但屬於會產生「幽靈錯誤」的那種——
+使用者在完全正常的操作中收到 403「SUDO 模式為唯讀」。
+
+**根因**：sudo 唯讀模式在 `middleware/auth.ts` 這樣實作：
+
+```ts
+(c.env as any).DB = createSudoSafeDB(c.env.DB);
+```
+
+Cloudflare Workers 的 `env` **不是 request-scoped**，
+是 isolate 層級的物件，同一個 isolate 內所有請求拿到同一個參照。
+而這行改完**從來沒有還原**。後果有兩層：
+
+1. **併發汙染**：sudo 請求進行中，同 isolate 內其他同時在跑的請求
+   全部拿到唯讀 DB，寫入丟 `SudoWriteBlockedError`，
+   被 `app.onError` 翻成 403。錯誤訊息跟使用者的操作毫無關係。
+2. **持久汙染**：沒有還原，isolate 回收前**每一個後續請求**都繼承唯讀 DB，
+   而且每次 sudo 再包一層 Proxy。
+
+`middleware/sudo.ts` 的註解其實已經撞到這個現象
+（「by which time `c.env.DB` is wrapped」），但解讀成 waitUntil 的時序問題，
+用「先存一份 originalDB」繞過，沒往上追到 env 是共享物件。
+
+**修法**：改成替換整個 `c.env`（`c` 才是 per-request 的）：
+
+```ts
+(c as any).env = { ...c.env, DB: createSudoSafeDB(c.env.DB) };
+```
+
+**順帶修掉的第二個洞**：`createSudoSafeStatement` 只擋 `.run()`，
+但 D1 的 `.first()` / `.all()` / `.raw()` 一樣能執行 INSERT/UPDATE/DELETE。
+現在四個方法都會先檢查 SQL 是不是唯讀（白名單：select / with / pragma / explain），
+不是就擋。
+
+**教訓與防護**：
+
+1. **Workers 裡 `env` 是共享的，永遠不要寫它。** 需要 per-request 的
+   binding 覆寫，就替換 `c.env` 整包（淺拷貝），或改用 `c.set()`。
+2. **「繞過一個奇怪現象」之前先解釋它。** 那句註解已經觀察到正確的事實，
+   但停在「加個變數就好了」。如果當時多問一句「為什麼 waitUntil 裡
+   `c.env.DB` 還是包過的？」，就會追到 env 是共享物件。
+   **繞過去的成本是 5 分鐘，弄懂的成本也是 5 分鐘，但後者順便修掉一個 bug。**
+3. **安全的 wrapper 只擋一個方法，等於沒擋。** 列舉「所有能達成該效果的路徑」，
+   不是「最常見的那一條」。
+
+---
 ## 2026-09-04 ｜ 元件測試裡 `el-tooltip` 包住的 DOM 全部消失，斷言抓到 0 個元素
 
 **症狀**：新寫的 `StagePointsShareChart` 元件測試，`wrapper.findAll('.share-seg')`

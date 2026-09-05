@@ -17,7 +17,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { resolve } from 'node:path';
-import { createD1FromMigration } from '../../mocks/d1-sqlite';
+import { createD1FromMigration, hasNodeSqlite, NODE_SQLITE_SKIP_REASON } from '../../mocks/d1-sqlite';
 import { changeUserEmail, getUserEmailImpact } from '../../../src/handlers/admin/users';
 import type { Env } from '../../../src/types';
 
@@ -211,7 +211,12 @@ beforeEach(() => {
   seedReferences(OLD);
 });
 
-describe('getUserEmailImpact', () => {
+
+if (!hasNodeSqlite) {
+  console.warn(`[skip] ${'change-email.test.ts'}: ${NODE_SQLITE_SKIP_REASON}`);
+}
+
+describe.skipIf(!hasNodeSqlite)('getUserEmailImpact', () => {
   it('counts wallet, permission and activity rows, and reports the ledger balance', async () => {
     const body = await (await getUserEmailImpact(env, OLD)).json() as ImpactBody;
 
@@ -248,7 +253,7 @@ describe('getUserEmailImpact', () => {
   });
 });
 
-describe('changeUserEmail', () => {
+describe.skipIf(!hasNodeSqlite)('changeUserEmail', () => {
   it('rewrites exactly what the scan promised', async () => {
     const scan = await (await getUserEmailImpact(env, OLD)).json() as ImpactBody;
     const body = await (await changeUserEmail(env, ADMIN, OLD, NEW)).json() as ChangeBody;

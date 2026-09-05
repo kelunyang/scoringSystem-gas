@@ -16,5 +16,7 @@ export {
   verifyPassword,
   validatePasswordStrength,
   generateRandomPassword,
-  needsPasswordUpgrade
+  needsPasswordUpgrade,
+  burnPasswordTiming,
+  DUMMY_PASSWORD_HASH
 } from '@repo/shared/utils/password';

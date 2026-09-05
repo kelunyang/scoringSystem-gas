@@ -1,3 +1,8 @@
+# Set to "development" for local work. This is what allows the 2FA email step
+# to be skipped when no SMTP is configured; any other value (or leaving it
+# unset) makes login refuse with 503 instead, which is what production wants.
+ENVIRONMENT="development"
+
 # Local Development Secrets
 # Copy this file to .dev.vars and fill in your local development secrets
 # DO NOT commit .dev.vars to git!

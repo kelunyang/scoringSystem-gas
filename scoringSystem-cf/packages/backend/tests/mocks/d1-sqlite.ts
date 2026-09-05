@@ -8,7 +8,40 @@
  * and transaction behaviour in `batch()` are exercised for real.
  */
 
-import { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
+
+/**
+ * `node:sqlite` only exists on Node 22+ (package.json requires >=22), but pnpm
+ * only WARNs on a version mismatch. A static import therefore threw at module
+ * load on Node 20 and took three whole suites down with
+ * "No such built-in module: node:sqlite" — the rate limiter, email budget and
+ * change-email tests silently stopped running.
+ *
+ * Loading it lazily lets those suites report themselves as *skipped* on an old
+ * Node instead of failing to load, which is visible rather than silent.
+ */
+const nodeRequire = createRequire(import.meta.url);
+
+type DatabaseSyncCtor = new (path: string) => any;
+
+/** The raw sqlite handle a test may reach for via `_raw`. */
+export type RawSqlite = any;
+
+let DatabaseSync: DatabaseSyncCtor | null = null;
+
+/** Whether this Node build provides `node:sqlite`. Gate suites on it. */
+export const hasNodeSqlite: boolean = (() => {
+  try {
+    DatabaseSync = nodeRequire('node:sqlite').DatabaseSync as DatabaseSyncCtor;
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+/** Message shown when a suite is skipped for lacking node:sqlite. */
+export const NODE_SQLITE_SKIP_REASON =
+  'requires node:sqlite (Node 22+); current Node is too old — run with Node 22 to exercise these';
 import { readFileSync } from 'node:fs';
 
 interface RunMeta {
@@ -47,7 +80,10 @@ function normalise(values: unknown[]): unknown[] {
  * @example
  * const db = createSqliteD1(readFileSync('migrations/0006_...sql', 'utf-8'));
  */
-export function createSqliteD1(schemaSql: string): D1Database & { _raw: DatabaseSync } {
+export function createSqliteD1(schemaSql: string): D1Database & { _raw: RawSqlite } {
+  if (!DatabaseSync) {
+    throw new Error(`createSqliteD1 ${NODE_SQLITE_SKIP_REASON}`);
+  }
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec(schemaSql);
 
@@ -133,7 +169,7 @@ export function createSqliteD1(schemaSql: string): D1Database & { _raw: Database
     _raw: sqlite
   };
 
-  return db as unknown as D1Database & { _raw: DatabaseSync };
+  return db as unknown as D1Database & { _raw: RawSqlite };
 }
 
 /**

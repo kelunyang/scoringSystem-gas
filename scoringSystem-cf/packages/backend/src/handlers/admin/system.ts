@@ -5,7 +5,6 @@
 
 import { Env } from '../../types';
 import { successResponse, errorResponse } from '../../utils/response';
-import { parseJSON } from '../../utils/json';
 import { logGlobalOperation } from '../../utils/logging';
 
 /**

@@ -382,7 +382,10 @@ export async function verifyCodeAndGetProjects(
     }
 
     // Verify 2FA code
-    const verifyResult = await verifyTwoFactorCode(env, userEmail, verificationCode);
+    // Scope to the reset context: a login 2FA code must not unlock a password
+    // reset, and vice versa. Before context was persisted, verifyTwoFactorCode
+    // took whichever code was newest regardless of what it was issued for.
+    const verifyResult = await verifyTwoFactorCode(env, userEmail, verificationCode, 'password_reset');
 
     if (!verifyResult.success) {
       return {

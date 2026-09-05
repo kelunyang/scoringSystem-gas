@@ -1,10 +1,14 @@
 /**
- * @fileoverview User login handler with malicious attempt detection
- * Tracks failed login attempts and auto-disables accounts after threshold
+ * @fileoverview Login-adjacent handlers: session validation, password change,
+ * and the progressive failure lock shared by the password and 2FA steps.
+ *
+ * The old `authenticateUser()` single-step login lived here and was dead code —
+ * nothing called it — which is why the lock and the `lockUntil` check it
+ * contained never ran for real logins. The live flow is
+ * `/auth/login-verify-password` → `/auth/login-verify-2fa` in `router/auth.ts`.
  */
 
 import { verifyPassword } from './password';
-import { generateToken } from './jwt';
 import { errorResponse, successResponse, ERROR_CODES } from '../../utils/response';
 import type { ApiResponse } from '../../utils/response';
 import { parseJSON } from '../../utils/json';
@@ -12,520 +16,34 @@ import { logGlobalOperation } from '../../utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
 import { queueAccountLockedEmail } from '../../queues/email-producer';
 import type { Env } from '../../types';
-import { notifyAdmins, logSecurityAction, disableUserAccount } from '../../utils/security';
-import { PASSWORD_SECURITY, TWO_FA_SECURITY, SECURITY_ACTION } from '../../config/security';
-
-/**
- * Request context from Cloudflare
- */
-export interface RequestContext {
-  ipAddress: string;
-  country: string;
-  city: string | null;
-  timezone: string;
-  userAgent: string;
-  requestPath: string;
-}
+import { PASSWORD_SECURITY, TWO_FA_SECURITY } from '../../config/security';
 
 // Note: Login configuration moved to ../../config/security.ts
 // Use PASSWORD_SECURITY and TWO_FA_SECURITY constants
 
 /**
- * Authenticate user with userEmail and password
+ * Reset a user's login-failure streak after a successful sign-in.
  *
- * @param env - Cloudflare environment bindings
- * @param userEmail - User email
- * @param password - Plain text password
- * @param jwtSecret - JWT secret for token generation
- * @param requestContext - Request context from Cloudflare (IP, country, city, timezone, user agent, path)
- * @param sessionTimeout - Session timeout in milliseconds
- * @returns ApiResponse with session token or error
+ * This used to `DELETE FROM sys_logs`, which destroyed the audit trail as a
+ * side effect of ordinary business logic: every `login_failed` record for the
+ * account vanished the moment the attacker (or the real user) got in. The
+ * failure counters now bound their window by the most recent `login_success`
+ * instead — see {@link countRecentFailures} — so nothing needs deleting and the
+ * history survives.
  *
- * @example
- * const result = await authenticateUser(env, 'john@example.com', 'password123', env.JWT_SECRET, { ipAddress: '1.2.3.4', country: 'US', ... }, 86400000);
- * if (result.success) {
- *   console.log('Token:', result.data.sessionId);
- * }
- */
-export async function authenticateUser(
-  env: Env,
-  userEmail: string,
-  password: string,
-  jwtSecret: string,
-  requestContext: RequestContext,
-  sessionTimeout: number = 86400000
-): Promise<ApiResponse> {
-  const db = env.DB;
-  try {
-    // Validate inputs
-    if (!userEmail || !password) {
-      return {
-        success: false,
-        error: {
-          code: ERROR_CODES.INVALID_INPUT,
-          message: 'Email and password are required'
-        }
-      };
-    }
-
-    // Get user from database
-    const user = await db
-      .prepare('SELECT * FROM users WHERE userEmail = ?')
-      .bind(userEmail)
-      .first();
-
-    // **FIX: Timing attack prevention**
-    // Always hash the password even if user doesn't exist
-    // This prevents timing-based user enumeration
-    const dummyHash = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy'; // dummy bcrypt hash
-    let isValidPassword = false;
-
-    if (!user) {
-      // User not found - perform dummy hash to prevent timing attack
-      await verifyPassword(password, dummyHash);
-      // Record failed attempt
-      await recordFailedAttempt(env, userEmail, 'user_not_found', requestContext);
-      return {
-        success: false,
-        error: {
-          code: ERROR_CODES.INVALID_CREDENTIALS,
-          message: 'Invalid email or password'
-        }
-      };
-    } else {
-      // Verify actual password
-      isValidPassword = await verifyPassword(password, user.password as string);
-    }
-
-    // Check if user is permanently disabled
-    if (user.status === 'disabled') {
-      return {
-        success: false,
-        error: {
-          code: ERROR_CODES.USER_DISABLED,
-          message: 'This account has been disabled. Please contact an administrator.'
-        }
-      };
-    }
-
-    // Check temporary lock status
-    const now = Date.now();
-    const lockUntil = user.lockUntil as number | null;
-
-    if (lockUntil) {
-      if (lockUntil > now) {
-        // Account is still locked
-        const remainingMinutes = Math.ceil((lockUntil - now) / 60000);
-        const remainingHours = Math.floor(remainingMinutes / 60);
-        const remainingMins = remainingMinutes % 60;
-
-        let timeMessage = '';
-        if (remainingHours > 0) {
-          timeMessage = `${remainingHours} 小時 ${remainingMins} 分鐘`;
-        } else {
-          timeMessage = `${remainingMins} 分鐘`;
-        }
-
-        return {
-          success: false,
-          error: {
-            code: ERROR_CODES.USER_DISABLED,
-            message: `Account temporarily locked due to security reasons. Please try again in ${timeMessage}.`
-          }
-        };
-      } else {
-        // Lock has expired - auto unlock
-        await db
-          .prepare('UPDATE users SET lockUntil = NULL, lockReason = NULL WHERE userId = ?')
-          .bind(user.userId)
-          .run();
-
-        // Log the auto-unlock event
-        await logGlobalOperation(
-          env,
-          userEmail,
-          'account_auto_unlocked',
-          'user',
-          user.userId as string,
-          {
-            userEmail,
-            lockExpiredAt: lockUntil,
-            unlockedAt: now,
-            ipAddress: requestContext.ipAddress,
-            country: requestContext.country,
-            city: requestContext.city,
-            timezone: requestContext.timezone,
-            userAgent: requestContext.userAgent,
-            requestPath: requestContext.requestPath
-          },
-          { level: 'info' }
-        );
-      }
-    }
-
-    // Password verification already done above (timing attack fix)
-    if (!isValidPassword) {
-      // Invalid password - record failed attempt and check if should disable
-      await recordFailedAttempt(env, userEmail, 'invalid_password', requestContext);
-      const shouldDisable = await shouldDisableAccount(db, userEmail);
-
-      if (shouldDisable) {
-        const reason = '短時間內多次登入失敗（Layer 1: 3 次失敗）';
-        const dedupKey = `${SECURITY_ACTION.PASSWORD_LOCK}:${userEmail}`;
-
-        // 🔥 Query related failed login records for email notification
-        const windowStart = now - PASSWORD_SECURITY.PASSWORD_FAILURE_WINDOW_MS;
-        const recentFailedLogsResult = await db
-          .prepare(`
-            SELECT logId, createdAt, action, message, context
-            FROM sys_logs
-            WHERE action = 'login_failed'
-              AND entityId = ?
-              AND createdAt > ?
-            ORDER BY createdAt DESC
-            LIMIT 10
-          `)
-          .bind(userEmail, windowStart)
-          .all();
-
-        // Extract logId list and construct detailed log entries
-        const relatedLogIds: string[] = [];
-        const relatedLogsDetails: Array<{
-          logId: string;
-          timestamp: number;
-          ipAddress: string;
-          country: string;
-          city: string | null;
-          timezone: string;
-          userAgent: string;
-          reason: string;
-          attemptCount: number;
-        }> = [];
-
-        (recentFailedLogsResult.results || []).forEach((log: any) => {
-          relatedLogIds.push(log.logId as string);
-
-          try {
-            const context = JSON.parse(log.context as string || '{}');
-            relatedLogsDetails.push({
-              logId: log.logId as string,
-              timestamp: log.createdAt as number,
-              ipAddress: context.ipAddress || 'Unknown',
-              country: context.country || 'Unknown',
-              city: context.city || null,
-              timezone: context.timezone || 'Unknown',
-              userAgent: context.userAgent || 'Unknown',
-              reason: context.reason || 'login_failed',
-              attemptCount: context.attemptCount || 1
-            });
-          } catch (e) {
-            console.error('[authenticateUser] Failed to parse log context:', e);
-          }
-        });
-
-        // **FIX: Deduplication** - Prevent duplicate actions
-        const isNewAction = await logSecurityAction(env, {
-          dedupKey,
-          action: 'password_lock',
-          userId: user.userId as string,
-          userEmail,
-          details: reason,
-          severity: 'critical'
-        });
-
-        if (isNewAction) {
-          // This is a NEW action (not duplicate), execute it
-          // **FIX: Database transaction** - Use atomic operation
-          try {
-            await disableUserAccount(env, user.userId as string, reason, null);
-          } catch (error) {
-            // **FIX: Fail-closed security** - Log and alert on critical failure
-            console.error('[authenticateUser] CRITICAL: Failed to disable account:', error);
-            await logGlobalOperation(
-              env,
-              'SYSTEM',
-              'CRITICAL_SECURITY_FAILURE',
-              'system',
-              'security',
-              { error: String(error), userEmail, reason },
-              { level: 'error' }
-            );
-            // Re-throw to prevent login
-            throw new Error('Critical security operation failed', { cause: error });
-          }
-
-          // Send notification to user about account disable (WebSocket + Email)
-          try {
-            await queueSingleNotification(env, {
-              targetUserEmail: userEmail,
-              type: 'account_locked',
-              title: '【重要安全警示】帳號已被停用',
-              content: `由於您的帳號在短時間內多次登入失敗，系統偵測到異常登入嘗試。為了保護您的帳號安全，帳號已被停用。請聯絡系統管理員以解除鎖定。`,
-              metadata: {
-                reason: 'multiple_failed_login_attempts',
-                ipAddress: requestContext.ipAddress,
-                country: requestContext.country,
-                city: requestContext.city,
-                timezone: requestContext.timezone,
-                userAgent: requestContext.userAgent,
-                requestPath: requestContext.requestPath,
-                timestamp: now
-              }
-            });
-
-            // Send immediate email for critical security event
-            await queueAccountLockedEmail(
-              env,
-              userEmail,
-              user.displayName as string || userEmail,
-              reason,
-              'permanent',
-              undefined,
-              relatedLogsDetails  // 🔥 Pass related logs to email
-            );
-
-            // Notify admins (Layer 1 also notifies admins for ≥Medium severity)
-            await notifyAdmins(env, {
-              userEmail,
-              reason,
-              lockType: 'permanent',
-              ipAddress: requestContext.ipAddress,
-              country: requestContext.country,
-              timestamp: now,
-              severity: 'critical',
-              relatedLogsDetails  // 🔥 Pass related logs to admin email
-            });
-          } catch (notifError) {
-            console.error('[authenticateUser] Failed to send account disabled notification:', notifError);
-            // Notification failures are logged but don't throw
-          }
-        } else {
-          console.log('[authenticateUser] Duplicate password lock action ignored for', userEmail);
-        }
-
-        return {
-          success: false,
-          error: {
-            code: ERROR_CODES.USER_DISABLED,
-            message: 'Account disabled due to multiple failed login attempts. Please contact an administrator.'
-          }
-        };
-      }
-
-      return {
-        success: false,
-        error: {
-          code: ERROR_CODES.INVALID_CREDENTIALS,
-          message: 'Invalid email or password'
-        }
-      };
-    }
-
-    // **FIX: Don't clear failed attempts here** - Only clear after 2FA success
-    // This prevents bypassing Layer 1 protection by stopping after password verification
-
-    // NOTE: This function is deprecated in two-factor auth flow
-    // Failed attempts are now cleared in /login-verify-2fa after successful 2FA
-
-    // Generate JWT token (for backward compatibility with single-step login)
-    const token = await generateToken(
-      user.userId as string,
-      user.userEmail as string,
-      jwtSecret,
-      sessionTimeout
-    );
-
-    // Update last activity time (reuse now from line 100)
-    await db
-      .prepare(
-        'UPDATE users SET lastActivityTime = ? WHERE userId = ?'
-      )
-      .bind(now, user.userId)
-      .run();
-
-    // Log successful login to sys_logs
-    await logGlobalOperation(
-      env,
-      userEmail,
-      'login_success',
-      'user',
-      user.userId as string,
-      {
-        userEmail,
-        userId: user.userId,
-        ipAddress: requestContext.ipAddress,
-        country: requestContext.country,
-        city: requestContext.city,
-        timezone: requestContext.timezone,
-        userAgent: requestContext.userAgent,
-        requestPath: requestContext.requestPath,
-        timestamp: now,
-        sessionId: token.substring(0, 16) + '...' // Only log partial token for security
-      },
-      { level: 'info' }
-    );
-
-    // Get user's global permissions
-    const { getUserGlobalPermissions } = await import('../../utils/permissions');
-    const permissions = await getUserGlobalPermissions(db, user.userId as string);
-
-    // Parse JSON fields
-    const avatarOptions = parseJSON(user.avatarOptions as string, {
-      backgroundColor: 'b6e3f4',
-      clothesColor: '3c4858',
-      skinColor: 'ae5d29'
-    });
-
-    // Return success with token and user info
-    return {
-      success: true,
-      data: {
-        sessionId: token,
-        user: {
-          userId: user.userId,
-          userEmail: user.userEmail,
-          displayName: user.displayName,
-          avatarSeed: user.avatarSeed,
-          avatarStyle: user.avatarStyle,
-          avatarOptions: avatarOptions,
-          permissions: permissions
-        }
-      }
-    };
-  } catch (error) {
-    console.error('Login error:', error);
-    return {
-      success: false,
-      error: {
-        code: ERROR_CODES.INTERNAL_ERROR,
-        message: 'An error occurred during login'
-      }
-    };
-  }
-}
-
-/**
- * Record a failed login attempt
+ * Kept as an explicit no-op rather than removed so the login flows still read
+ * as "…and now the streak is cleared", which is where the reset conceptually
+ * happens.
  *
- * @param env - Cloudflare environment bindings
- * @param userEmail - User email that failed login
- * @param reason - Reason for failure (user_not_found, invalid_password, etc.)
- * @param requestContext - Request context from Cloudflare
- */
-async function recordFailedAttempt(
-  env: Env,
-  userEmail: string,
-  reason: string,
-  requestContext: RequestContext
-): Promise<void> {
-  try {
-    const now = Date.now();
-
-    // Count recent failed attempts
-    const db = env.DB;
-    const windowStart = now - PASSWORD_SECURITY.PASSWORD_FAILURE_WINDOW_MS;
-    const result = await db
-      .prepare(
-        `SELECT COUNT(*) as count
-         FROM sys_logs
-         WHERE action = ?
-           AND entityId = ?
-           AND createdAt > ?`
-      )
-      .bind('login_failed', userEmail, windowStart)
-      .first();
-
-    const attemptCount = ((result?.count as number) || 0) + 1;
-
-    // Log failed login attempt to sys_logs with full context
-    await logGlobalOperation(
-      env,
-      userEmail,
-      'login_failed',
-      'user',
-      userEmail,
-      {
-        userEmail,
-        reason,
-        ipAddress: requestContext.ipAddress,
-        country: requestContext.country,
-        city: requestContext.city,
-        timezone: requestContext.timezone,
-        userAgent: requestContext.userAgent,
-        requestPath: requestContext.requestPath,
-        timestamp: now,
-        attemptCount
-      },
-      { level: 'warning' }
-    );
-  } catch (error) {
-    console.error('Error recording failed attempt:', error);
-    // Don't throw - logging failure shouldn't block login flow
-  }
-}
-
-/**
- * Check if account should be disabled based on failed attempts
- *
- * @param db - D1 database instance
- * @param userEmail - User email to check
- * @returns true if account should be disabled
- */
-async function shouldDisableAccount(
-  db: D1Database,
-  userEmail: string
-): Promise<boolean> {
-  try {
-    const windowStart = Date.now() - PASSWORD_SECURITY.PASSWORD_FAILURE_WINDOW_MS;
-
-    // Count failed attempts in the time window from sys_logs
-    const result = await db
-      .prepare(
-        `SELECT COUNT(*) as count
-         FROM sys_logs
-         WHERE action = ?
-           AND entityId = ?
-           AND createdAt > ?`
-      )
-      .bind('login_failed', userEmail, windowStart)
-      .first();
-
-    const attemptCount = (result?.count as number) || 0;
-    return attemptCount >= PASSWORD_SECURITY.MAX_PASSWORD_FAILURES;
-  } catch (error) {
-    console.error('Error checking failed attempts:', error);
-    return false;
-  }
-}
-
-/**
- * Clear failed login attempts for a user
- * Called after successful login (after 2FA, not just password)
- *
- * @param db - D1 database instance
- * @param userEmail - User email to clear attempts for
+ * @param _db - Unused; retained so call sites need no change
+ * @param _userEmail - Unused
  */
 export async function clearFailedAttempts(
-  db: D1Database,
-  userEmail: string
+  _db: D1Database,
+  _userEmail: string
 ): Promise<void> {
-  try {
-    // **FIX: Add time filter** - Only delete recent failures to avoid full table scan
-    const cutoffTime = Date.now() - PASSWORD_SECURITY.FAILED_ATTEMPTS_RETENTION_MS;
-
-    await db
-      .prepare(
-        `DELETE FROM sys_logs
-         WHERE action = ?
-           AND entityId = ?
-           AND createdAt > ?`
-      )
-      .bind('login_failed', userEmail, cutoffTime)
-      .run();
-  } catch (error) {
-    console.error('Error clearing failed attempts:', error);
-    // Don't throw - clearing failure shouldn't block login
-  }
+  // Intentionally empty: the streak resets because countRecentFailures only
+  // counts failures newer than the last successful login.
 }
 
 /**
@@ -825,21 +343,96 @@ export async function changePassword(
   }
 }
 
+/** What a failure streak is being counted for. */
+export type LoginFailureKind = 'password' | '2fa';
+
 /**
- * Check 2FA failure count and apply progressive account locking
+ * Per-kind settings for the progressive lock.
+ *
+ * `pattern` is matched against `context.reason` in `sys_logs`, so every caller
+ * must log a reason with the matching prefix or its failures are invisible to
+ * the counter.
+ */
+const FAILURE_KINDS: Record<LoginFailureKind, {
+  pattern: string;
+  maxAttempts: number;
+  label: string;
+}> = {
+  password: {
+    pattern: 'password_%',
+    maxAttempts: PASSWORD_SECURITY.MAX_PASSWORD_FAILURES,
+    label: '密碼'
+  },
+  '2fa': {
+    pattern: '2fa_%',
+    maxAttempts: TWO_FA_SECURITY.MAX_2FA_FAILURES_PERMANENT,
+    label: '2FA（雙因素認證）'
+  }
+};
+
+/**
+ * Count a user's failures of one kind since their last successful login.
+ *
+ * Bounding by the last `login_success` is what replaced the old
+ * `DELETE FROM sys_logs`: the streak still resets on a good login, but the
+ * audit records survive.
+ *
+ * @param db - D1 database
+ * @param userId - Whose failures to count
+ * @param pattern - SQL LIKE pattern for `context.reason`
+ * @param windowStart - Ignore anything older than this timestamp
+ * @returns Number of failures in the current streak
+ */
+async function countRecentFailures(
+  db: D1Database,
+  userId: string,
+  pattern: string,
+  windowStart: number
+): Promise<number> {
+  const row = await db
+    .prepare(`
+      SELECT COUNT(*) as count
+      FROM sys_logs
+      WHERE userId = ?
+        AND action = 'login_failed'
+        AND JSON_EXTRACT(context, '$.reason') LIKE ?
+        AND createdAt > ?
+        AND createdAt > COALESCE((
+          SELECT MAX(createdAt) FROM sys_logs
+          WHERE userId = ? AND action = 'login_success'
+        ), 0)
+    `)
+    .bind(userId, pattern, windowStart, userId)
+    .first();
+
+  return (row?.count as number) || 0;
+}
+
+/**
+ * Record a failed login of the given kind and apply progressive locking.
+ *
+ * Progression is per account, tracked in `users.lockCount`:
+ * 1st lock 15 minutes, 2nd lock 1 hour, 3rd permanent disable.
+ *
+ * Fails open: if the bookkeeping throws, the caller is told not to lock, so a
+ * logging outage cannot lock everybody out.
+ *
  * @param env Environment bindings
  * @param userEmail User's email
  * @param userId User's ID
- * @param failureReason Reason for 2FA failure
+ * @param failureReason Reason string; must start with the kind's prefix
+ *   (`password_` or `2fa_`) or the failure will not be counted
  * @param ipAddress IP address of the attempt
- * @returns Object with lock status and details
+ * @param kind Which streak this failure belongs to
+ * @returns Lock status and details
  */
-export async function check2FAFailureAndLock(
+async function checkFailureAndLock(
   env: Env,
   userEmail: string,
   userId: string,
   failureReason: string,
-  ipAddress: string | null = null
+  ipAddress: string | null,
+  kind: LoginFailureKind
 ): Promise<{
   shouldLock: boolean;
   lockType: 'temporary' | 'permanent' | null;
@@ -847,10 +440,9 @@ export async function check2FAFailureAndLock(
   lockCount: number;
 }> {
   const db = env.DB;
+  const { pattern, maxAttempts, label } = FAILURE_KINDS[kind];
 
   try {
-    // Use centralized configuration
-    const maxAttempts = TWO_FA_SECURITY.MAX_2FA_FAILURES_PERMANENT;
 
     // Log the 2FA failure
     await logGlobalOperation(
@@ -869,21 +461,10 @@ export async function check2FAFailureAndLock(
       { level: 'warning' }
     );
 
-    // Count recent 2FA failures (last 24 hours)
+    // Count this kind's failures in the current streak (last 24 hours, and only
+    // since the last successful login)
     const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
-    const recentFailures = await db
-      .prepare(`
-        SELECT COUNT(*) as count
-        FROM sys_logs
-        WHERE userId = ?
-          AND action = 'login_failed'
-          AND JSON_EXTRACT(context, '$.reason') LIKE '2fa_%'
-          AND createdAt > ?
-      `)
-      .bind(userId, twentyFourHoursAgo)
-      .first();
-
-    const failureCount = (recentFailures?.count as number) || 0;
+    const failureCount = await countRecentFailures(db, userId, pattern, twentyFourHoursAgo);
 
     // Check if threshold exceeded
     if (failureCount >= maxAttempts) {
@@ -914,15 +495,15 @@ export async function check2FAFailureAndLock(
       if (newLockCount === 1) {
         // First lock: 15 minutes
         lockDuration = TWO_FA_SECURITY.TEMP_LOCK_DURATION_MS;
-        lockReason = '2fa_failures_first_lock';
+        lockReason = `${kind}_failures_first_lock`;
       } else if (newLockCount === 2) {
         // Second lock: 1 hour
         lockDuration = TWO_FA_SECURITY.EXTENDED_LOCK_DURATION_MS;
-        lockReason = '2fa_failures_second_lock';
+        lockReason = `${kind}_failures_second_lock`;
       } else {
         // Third lock: Permanent disable
         lockType = 'permanent';
-        lockReason = '2fa_failures_permanent_disable';
+        lockReason = `${kind}_failures_permanent_disable`;
       }
 
       const now = Date.now();
@@ -964,7 +545,7 @@ export async function check2FAFailureAndLock(
             targetUserEmail: userEmail,
             type: 'account_locked',
             title: '【重要安全警示】您的帳號已被永久停用',
-            content: `由於您的帳號在短時間內多次 2FA（雙因素認證）驗證失敗，系統偵測到異常登入嘗試。為了保護您的帳號安全，您的帳號已被永久停用。如果這不是您本人的操作，請立即聯絡系統管理員解除鎖定並進行安全檢查。`,
+            content: `由於您的帳號在短時間內多次${label}驗證失敗，系統偵測到異常登入嘗試。為了保護您的帳號安全，您的帳號已被永久停用。如果這不是您本人的操作，請立即聯絡系統管理員解除鎖定並進行安全檢查。`,
             metadata: {
               reason: lockReason,
               failureCount,
@@ -976,12 +557,12 @@ export async function check2FAFailureAndLock(
           });
           // Email already queued via sendAccountLockedEmail() below
         } catch (notifError) {
-          console.error('[check2FAFailureAndLock] Failed to send permanent disable notification:', notifError);
+          console.error('[checkFailureAndLock] Failed to send permanent disable notification:', notifError);
           // Don't block main operation if notification fails
         }
 
         // Send email notification
-        await sendAccountLockedEmail(env, userEmail, displayName, 'permanent', null, newLockCount);
+        await sendAccountLockedEmail(env, userEmail, displayName, 'permanent', null, newLockCount, label);
 
         return {
           shouldLock: true,
@@ -1039,7 +620,7 @@ export async function check2FAFailureAndLock(
             targetUserEmail: userEmail,
             type: 'account_locked',
             title: '【安全警示】帳號已被暫時鎖定',
-            content: `由於您的帳號在短時間內多次 2FA（雙因素認證）驗證失敗，系統偵測到可疑登入嘗試。為了保護您的帳號安全，帳號已被暫時鎖定 ${durationText}。系統將在鎖定時間到期後自動解鎖。`,
+            content: `由於您的帳號在短時間內多次${label}驗證失敗，系統偵測到可疑登入嘗試。為了保護您的帳號安全，帳號已被暫時鎖定 ${durationText}。系統將在鎖定時間到期後自動解鎖。`,
             metadata: {
               reason: lockReason,
               failureCount,
@@ -1052,12 +633,12 @@ export async function check2FAFailureAndLock(
           });
           // Email already queued via sendAccountLockedEmail() below
         } catch (notifError) {
-          console.error('[check2FAFailureAndLock] Failed to send temporary lock notification:', notifError);
+          console.error('[checkFailureAndLock] Failed to send temporary lock notification:', notifError);
           // Don't block main operation if notification fails
         }
 
         // Send email notification
-        await sendAccountLockedEmail(env, userEmail, displayName, 'temporary', lockDuration, newLockCount);
+        await sendAccountLockedEmail(env, userEmail, displayName, 'temporary', lockDuration, newLockCount, label);
 
         return {
           shouldLock: true,
@@ -1076,7 +657,7 @@ export async function check2FAFailureAndLock(
       lockCount: 0
     };
   } catch (error) {
-    console.error('[check2FAFailureAndLock] Error occurred:', error);
+    console.error('[checkFailureAndLock] Error occurred:', error);
     // Don't throw - fail open for availability
     return {
       shouldLock: false,
@@ -1085,6 +666,48 @@ export async function check2FAFailureAndLock(
       lockCount: 0
     };
   }
+}
+
+/**
+ * Record a failed 2FA attempt and apply progressive locking.
+ *
+ * @param failureReason Must start with `2fa_` to be counted
+ *
+ * @example
+ * const lock = await check2FAFailureAndLock(env, email, userId, '2fa_totp_invalid', ip);
+ * if (lock.shouldLock) { ... }
+ */
+export async function check2FAFailureAndLock(
+  env: Env,
+  userEmail: string,
+  userId: string,
+  failureReason: string,
+  ipAddress: string | null = null
+) {
+  return checkFailureAndLock(env, userEmail, userId, failureReason, ipAddress, '2fa');
+}
+
+/**
+ * Record a failed password attempt and apply progressive locking.
+ *
+ * The live login path had no failure lockout at all: the only implementation
+ * hung off `authenticateUser()`, which nothing called. Password failures were
+ * logged and queued for async analysis, but nothing stopped a fourth attempt.
+ *
+ * @param failureReason Must start with `password_` to be counted
+ *
+ * @example
+ * const lock = await checkPasswordFailureAndLock(env, email, userId, 'password_invalid', ip);
+ * if (lock.shouldLock) { ... }
+ */
+export async function checkPasswordFailureAndLock(
+  env: Env,
+  userEmail: string,
+  userId: string,
+  failureReason: string,
+  ipAddress: string | null = null
+) {
+  return checkFailureAndLock(env, userEmail, userId, failureReason, ipAddress, 'password');
 }
 
 /**
@@ -1102,10 +725,11 @@ async function sendAccountLockedEmail(
   displayName: string,
   lockType: 'temporary' | 'permanent',
   lockDuration: number | null,
-  lockCount: number
+  lockCount: number,
+  label: string = '2FA（雙因素認證）'
 ): Promise<void> {
   try {
-    const reason = `2FA 驗證失敗次數過多 (${lockCount} 次)`;
+    const reason = `${label}驗證失敗次數過多 (${lockCount} 次)`;
     const unlockTime = lockDuration ? Date.now() + lockDuration : undefined;
 
     // Queue the email for asynchronous processing

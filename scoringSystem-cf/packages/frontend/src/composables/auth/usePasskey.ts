@@ -40,8 +40,8 @@ export interface UsePasskeyReturn {
   deletePasskey: (credentialId: string, password: string) => Promise<boolean>;
 
   // Authentication methods
-  initAuthentication: (userEmail: string, crossDevice?: boolean) => Promise<any>;
-  verifyAuthentication: (userEmail: string, turnstileToken: string) => Promise<boolean>;
+  initAuthentication: (userEmail: string, preAuthToken: string, crossDevice?: boolean) => Promise<any>;
+  verifyAuthentication: (userEmail: string, turnstileToken: string, preAuthToken: string) => Promise<boolean>;
 }
 
 // ─── Helper Functions ───
@@ -305,8 +305,15 @@ export function usePasskey(): UsePasskeyReturn {
 
   /**
    * Initialize passkey authentication (called during login)
+   *
+   * @param preAuthToken - Proof from step 1 that the password was verified.
+   *   Passkey is the second factor, so the server rejects the ceremony without it.
    */
-  async function initAuthentication(userEmail: string, crossDevice = false): Promise<any> {
+  async function initAuthentication(
+    userEmail: string,
+    preAuthToken: string,
+    crossDevice = false
+  ): Promise<any> {
     if (!isSupported.value) {
       errorMessage.value = '您的瀏覽器不支援 Passkey';
       return null;
@@ -319,7 +326,7 @@ export function usePasskey(): UsePasskeyReturn {
       // Get authentication options from server
       // crossDevice: true = 使用你的手機登入（discoverable，跳 QR）
       const initResponse = await (rpcClient.api.auth as any).passkey['auth-init'].$post({
-        json: { userEmail, crossDevice }
+        json: { userEmail, preAuthToken, crossDevice }
       });
       const initResult = await initResponse.json();
 
@@ -372,7 +379,14 @@ export function usePasskey(): UsePasskeyReturn {
   /**
    * Verify passkey authentication and complete login
    */
-  async function verifyAuthentication(userEmail: string, turnstileToken: string): Promise<boolean> {
+  /**
+   * @param preAuthToken - Proof from step 1; required before a session is issued.
+   */
+  async function verifyAuthentication(
+    userEmail: string,
+    turnstileToken: string,
+    preAuthToken: string
+  ): Promise<boolean> {
     if (!pendingCredential) {
       errorMessage.value = '請先進行 Passkey 認證';
       return false;
@@ -387,6 +401,7 @@ export function usePasskey(): UsePasskeyReturn {
       const httpResponse = await (rpcClient.api.auth as any).passkey['auth-verify'].$post({
         json: {
           userEmail,
+          preAuthToken,
           id: pendingCredential.id,
           rawId: arrayBufferToBase64Url(pendingCredential.rawId),
           type: pendingCredential.type,

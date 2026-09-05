@@ -264,6 +264,45 @@ function constantTimeCompare(a: string, b: string): boolean {
 }
 
 /**
+ * A structurally valid PBKDF2 hash that no password matches.
+ *
+ * Login must burn the same CPU for an unknown address as for a real account,
+ * otherwise response time answers "does this account exist?".
+ *
+ * The previous attempt at this used a **bcrypt** string as the dummy. That
+ * string has 5 `$`-separated parts, so `verifyPassword` routed it to the legacy
+ * MD5 branch, which rejects anything that is not exactly 2 parts and returned
+ * `false` without hashing at all. The mitigation cost microseconds while a real
+ * account cost the full ~25ms of PBKDF2 — a two-order-of-magnitude tell.
+ *
+ * This constant is in the real format, so `verifyPassword` runs all
+ * {@link PBKDF2_ITERATIONS} rounds against it before failing.
+ *
+ * The salt and hash are random bytes generated once for this constant; no
+ * password produces this digest.
+ */
+export const DUMMY_PASSWORD_HASH =
+  'pbkdf2-sha256$100000$fff5d2609db462857ea42db900a8ed5c$28112d6e01a0de5c2b0117bf93119fd669df18d61a6d2c07561b9e8a81a0db66';
+
+/**
+ * Spend the same time verifying a password as a real account would, then fail.
+ *
+ * Call this on the "account does not exist" branch of login so the two branches
+ * are indistinguishable by timing.
+ *
+ * @param password - The submitted password, hashed and discarded
+ *
+ * @example
+ * if (!user) {
+ *   await burnPasswordTiming(body.password);
+ *   return c.json({ success: false, error: { code: 'INVALID_CREDENTIALS' } }, 401);
+ * }
+ */
+export async function burnPasswordTiming(password: string): Promise<void> {
+  await verifyPassword(password, DUMMY_PASSWORD_HASH);
+}
+
+/**
  * Validate password strength
  *
  * @param password - Password to validate

@@ -165,13 +165,12 @@
       <CountdownButton
         ref="countdownRef"
         label="重新發送驗證碼"
-        :duration="60"
+        :duration="cooldownSeconds"
         :loading="resendLoading"
-        type="primary"
         size="normal"
         :full-width="true"
+        :start-on-click="false"
         :theme-color="themeColor"
-        enable-smart-text
         @click="handleResend"
       />
     </div>
@@ -208,6 +207,12 @@ import type { TwoFactorData, TwoFactorMethod } from '../../types/auth';
 // Props
 export interface Props {
   userEmail: string;
+  /**
+   * Password proof from step 1. Passkey is a second factor, so the server
+   * refuses the ceremony without it. Empty in flows that never verified a
+   * password (the forgot-password form), where passkey is not offered anyway.
+   */
+  preAuthToken?: string;
   method?: TwoFactorMethod;
   availableMethods?: TwoFactorMethod[];
   loading?: boolean;
@@ -224,6 +229,7 @@ export interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  preAuthToken: '',
   method: 'email',
   availableMethods: () => ['email'],
   loading: false,
@@ -418,11 +424,11 @@ async function handlePasskeyAuth() {
   if (!turnstileToken.value) return;
 
   // Step 1: Get authentication options and trigger browser prompt
-  const credential = await initAuthentication(props.userEmail, passkeyCrossDevice.value);
+  const credential = await initAuthentication(props.userEmail, props.preAuthToken, passkeyCrossDevice.value);
   if (!credential) return;
 
   // Step 2: Verify with server
-  const success = await verifyAuthentication(props.userEmail, turnstileToken.value);
+  const success = await verifyAuthentication(props.userEmail, turnstileToken.value, props.preAuthToken);
   if (success) {
     emit('passkeySuccess');
   }

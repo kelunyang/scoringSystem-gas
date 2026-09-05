@@ -10,12 +10,13 @@
  * - All sudo activities are logged for audit
  */
 
-import type { Context, MiddlewareHandler } from 'hono';
+import type { Context } from 'hono';
 import type { Env, HonoVariables, SudoTargetUser } from '../types';
 import { errorResponse, ERROR_CODES } from '../utils/response';
 
-// Note: Write operations are blocked by the D1 Proxy wrapper in sudo-db-proxy.ts
-// This middleware only handles permission validation and context setup
+// Note: write operations are blocked in two places — a path whitelist in
+// middleware/auth.ts, and the D1 proxy in sudo-db-proxy.ts as a safety net.
+// This middleware only handles permission validation and context setup.
 
 /**
  * Core sudo processing logic
@@ -121,8 +122,10 @@ export async function processSudoHeaders(c: Context<{ Bindings: Env; Variables: 
     } as SudoTargetUser);
 
     // 4. Log sudo activity (non-blocking)
-    // IMPORTANT: Capture original DB before it gets wrapped with sudo-safe proxy
-    // The waitUntil function runs after the response, by which time c.env.DB is wrapped
+    //
+    // Capture the writable DB now. By the time this waitUntil body runs, the
+    // auth middleware has replaced `c.env` with a copy whose DB is the
+    // read-only sudo proxy, and the audit log is a write.
     const originalDB = c.env.DB;
     c.executionCtx.waitUntil(
       (async () => {

@@ -21,14 +21,24 @@ export function generateVerificationCode(): string {
 // getSmtpConfig has been moved to email utils - SMTP configuration is now managed centrally
 
 /**
- * Store verification code in D1 database
- * @param context - 'login' or 'password_reset' to distinguish usage context
+ * Store a verification code in D1.
+ *
+ * `context` used to exist only as a prefix on the generated `codeId` string and
+ * in the audit log — it was never a column, and `verifyTwoFactorCode` did not
+ * filter on it. A password-reset code therefore satisfied the login 2FA check
+ * and vice versa. It is now persisted and enforced.
+ *
+ * @param context - What the code is for. Codes are not interchangeable across contexts.
+ * @param passwordVerified - Whether the caller checked the account password before
+ *   issuing this code. `/auth/login-verify-2fa` refuses codes issued without it,
+ *   which is what stops `/auth/resend-2fa` from being a password-free login path.
  */
 export async function storeVerificationCode(
   env: Env,
   userEmail: string,
   verificationCode: string,
-  context: 'login' | 'password_reset' = 'login'
+  context: 'login' | 'password_reset' = 'login',
+  passwordVerified: boolean = false
 ): Promise<{ success: boolean; expiresAt: number; codeId: string }> {
   const db = env.DB;
   try {
@@ -48,10 +58,11 @@ export async function storeVerificationCode(
     await db
       .prepare(`
         INSERT INTO two_factor_codes (
-          codeId, userEmail, verificationCode, createdTime, expiresAt, isUsed, attempts
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          codeId, userEmail, verificationCode, createdTime, expiresAt, isUsed, attempts,
+          context, passwordVerified
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
-      .bind(codeId, userEmail, cleanCode, now, expiresAt, 0, 0)
+      .bind(codeId, userEmail, cleanCode, now, expiresAt, 0, 0, context, passwordVerified ? 1 : 0)
       .run();
 
 
@@ -66,6 +77,7 @@ export async function storeVerificationCode(
         {
           userEmail,
           context,
+          passwordVerified,
           expiresAt,
           codeGeneratedAt: now,
           // DO NOT include: verificationCode (sensitive)
@@ -85,13 +97,29 @@ export async function storeVerificationCode(
 }
 
 /**
- * Verify two-factor authentication code
+ * Verify a two-factor authentication code.
+ *
+ * The lookup is scoped to `context`: a code minted for a password reset can no
+ * longer satisfy a login check, and vice versa. Callers must say which kind of
+ * code they expect rather than taking whichever row is newest.
+ *
+ * @param context - Which flow is verifying. Defaults to 'login'.
+ * @returns `passwordVerified` reports whether a password was checked before this
+ *   code was issued, so the login flow can refuse codes minted by `/auth/resend-2fa`.
  */
 export async function verifyTwoFactorCode(
   env: Env,
   userEmail: string,
-  inputCode: string
-): Promise<{ success: boolean; error?: string; message?: string; attemptsLeft?: number; user?: any }> {
+  inputCode: string,
+  context: 'login' | 'password_reset' = 'login'
+): Promise<{
+  success: boolean;
+  error?: string;
+  message?: string;
+  attemptsLeft?: number;
+  user?: any;
+  passwordVerified?: boolean;
+}> {
   const db = env.DB;
   try {
     // Trim whitespace and remove separators from inputs
@@ -107,15 +135,15 @@ export async function verifyTwoFactorCode(
       .bind(userEmail)
       .first();
 
-    // Find the most recent unused code for this user
+    // Find the most recent unused code issued for *this* context
     const result = await db
       .prepare(`
         SELECT * FROM two_factor_codes
-        WHERE userEmail = ? AND isUsed = 0 AND expiresAt > ?
+        WHERE userEmail = ? AND context = ? AND isUsed = 0 AND expiresAt > ?
         ORDER BY createdTime DESC
         LIMIT 1
       `)
-      .bind(userEmail, now)
+      .bind(userEmail, context, now)
       .first();
 
     if (!result) {
@@ -129,6 +157,7 @@ export async function verifyTwoFactorCode(
           userEmail,
           {
             userEmail,
+            context,
             reason: 'code_not_found_or_expired',
             attemptTime: now
           },
@@ -218,7 +247,8 @@ export async function verifyTwoFactorCode(
 
       return {
         success: true,
-        user
+        user,
+        passwordVerified: result.passwordVerified === 1
       };
     } else {
       // Log invalid code attempt

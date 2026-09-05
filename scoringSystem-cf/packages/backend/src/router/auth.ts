@@ -15,11 +15,14 @@ import { jsonResponse, ERROR_CODES } from '../utils/response';
 import { verifyTurnstileMiddleware } from '../utils/turnstile';
 import { guardEmailTrigger } from '../utils/email-budget';
 import { rateLimitResponse } from '../middleware/rate-limit';
+import { consumeRateLimit } from '../utils/rate-limiter';
 import { getConfigValue } from '../utils/config';
 import { generateToken } from '../handlers/auth/jwt';
 import { logGlobalOperation } from '../utils/logging';
 import { getUserGlobalPermissions } from '../utils/permissions';
 import { verifyTwoFactorCode } from '../handlers/auth/two-factor';
+import { issuePreAuthToken, verifyPreAuthToken } from '../handlers/auth/pre-auth';
+import { assertAccountUsable } from '../handlers/auth/account-guard';
 import { getSmtpConfig } from '../utils/email';
 import {
   RegisterRequestSchema,
@@ -177,6 +180,30 @@ authRouter.get(
   zValidator('query', CheckEmailQuerySchema),
   async (c) => {
     const { email } = c.req.valid('query');
+
+    // Registration needs this to tell the user an address is taken, so it stays
+    // unauthenticated — but it is a direct "does this account exist?" oracle.
+    // A per-IP budget keeps it usable for a person filling in a form while
+    // making it useless for enumerating a roster.
+    const ip = c.req.header('CF-Connecting-IP') || 'unknown';
+    const decision = await consumeRateLimit(c.env, {
+      scope: 'check_email',
+      windows: [{
+        name: 'ip_hour',
+        identity: `ip:${ip}`,
+        limit: c.env.ENVIRONMENT === 'development' ? 100000 : 60,
+        windowMs: 60 * 60 * 1000
+      }]
+    });
+
+    if (!decision.allowed) {
+      return rateLimitResponse(
+        decision,
+        'RATE_LIMIT_EXCEEDED',
+        '查詢次數過於頻繁，請稍後再試'
+      );
+    }
+
     const result = await checkEmailAvailability(c.env.DB, email);
     return c.json(result, result.success ? 200 : 400);
   }
@@ -324,6 +351,11 @@ authRouter.post(
     };
 
     if (!user) {
+      // Spend the same CPU as a real account would, so response time does not
+      // answer "does this address have an account?". See burnPasswordTiming.
+      const { burnPasswordTiming } = await import('../handlers/auth/password');
+      await burnPasswordTiming(body.password);
+
       // Log failed login attempt - user not found
       const now = Date.now();
       const { logGlobalOperation } = await import('../utils/logging');
@@ -384,12 +416,16 @@ authRouter.post(
       }, 401);
     }
 
-    // Check if user is disabled
-    if (user.status === 'disabled') {
+    // Refuse disabled *and* temporarily locked accounts. `lockUntil` is written
+    // by the Layer 2 risk consumer and by admins; before this call existed the
+    // only code reading it lived in a function with no callers, so a "locked"
+    // account signed in as usual.
+    const refusal = await assertAccountUsable(c.env, user);
+    if (refusal) {
       return c.json({
         success: false,
-        error: { code: 'USER_DISABLED', message: '此帳號已被停用，請聯繫管理員' }
-      }, 403);
+        error: { code: refusal.code, message: refusal.message }
+      }, refusal.status);
     }
 
     // Verify password
@@ -397,27 +433,18 @@ authRouter.post(
     const isValidPassword = await verifyPassword(body.password, user.password as string);
 
     if (!isValidPassword) {
-      // Log failed login attempt - invalid password
       const now = Date.now();
-      const { logGlobalOperation } = await import('../utils/logging');
-      await logGlobalOperation(
+
+      // Records the failure *and* applies the progressive lock (15min / 1hr /
+      // permanent). The reason must keep the `password_` prefix or
+      // checkPasswordFailureAndLock cannot see it.
+      const { checkPasswordFailureAndLock } = await import('../handlers/auth/login');
+      const lockResult = await checkPasswordFailureAndLock(
         c.env,
         body.userEmail,
-        'login_failed',
-        'user',
-        body.userEmail,
-        {
-          userEmail: body.userEmail,
-          reason: 'invalid_password',
-          ipAddress: requestContext.ipAddress,
-          country: requestContext.country,
-          city: requestContext.city,
-          timezone: requestContext.timezone,
-          userAgent: requestContext.userAgent,
-          requestPath: requestContext.requestPath,
-          timestamp: now
-        },
-        { level: 'warning' }
+        user.userId as string,
+        'password_invalid',
+        requestContext.ipAddress
       );
 
       // Queue login event for security analysis (Layer 2)
@@ -451,11 +478,27 @@ authRouter.post(
         );
       }
 
+      if (lockResult.shouldLock) {
+        return c.json({
+          success: false,
+          error: {
+            code: lockResult.lockType === 'permanent' ? 'USER_DISABLED' : 'USER_LOCKED',
+            message: lockResult.lockType === 'permanent'
+              ? '因多次密碼錯誤，帳號已被停用，請聯繫管理員'
+              : '因多次密碼錯誤，帳號已被暫時鎖定，請稍後再試'
+          }
+        }, 403);
+      }
+
       return c.json({
         success: false,
         error: { code: 'INVALID_CREDENTIALS', message: '帳號或密碼錯誤' }
       }, 401);
     }
+
+    // Password is confirmed. Mint the proof step 2 will demand, so a session
+    // cannot be issued by anyone who never presented the password.
+    const preAuthToken = await issuePreAuthToken(user.userEmail as string, c.env.JWT_SECRET);
 
     // Check if user has TOTP enabled — if so, skip email entirely
     const totpEnabled = user.totpEnabled === 1;
@@ -498,7 +541,8 @@ authRouter.post(
           devMode: false,
           twoFactorMethod: preferredMethod,
           passkeyAvailable,
-          availableMethods
+          availableMethods,
+          preAuthToken
         }
       });
     }
@@ -535,7 +579,11 @@ authRouter.post(
 
       const verificationCode = generateVerificationCode();
 
-      const storeResult = await storeVerificationCode(c.env, body.userEmail, verificationCode);
+      // passwordVerified = true: this code was minted behind a password check,
+      // which is what /auth/login-verify-2fa requires before issuing a session.
+      const storeResult = await storeVerificationCode(
+        c.env, body.userEmail, verificationCode, 'login', true
+      );
       const emailResult = storeResult.success
         ? await sendVerificationCodeEmail(c.env, body.userEmail, verificationCode)
         : { success: false, error: 'Failed to store verification code' };
@@ -550,7 +598,8 @@ authRouter.post(
             twoFactorMethod: preferredMethod,
             passkeyAvailable,
             availableMethods,
-            expiresAt: storeResult.expiresAt
+            expiresAt: storeResult.expiresAt,
+            preAuthToken
           }
         });
       }
@@ -563,18 +612,37 @@ authRouter.post(
       }, 500);
     }
 
-    // Dev mode: No SMTP configured and no other second factor
+    // No SMTP, and this user has neither passkey nor TOTP — there is no second
+    // factor available at all.
+    //
+    // This used to fall through to a "dev mode" that skipped verification
+    // outright. Because getSmtpConfig() returns null whenever SMTP is merely
+    // unconfigured, clearing the SMTP settings in the admin UI silently turned
+    // login into "email address only, no password". It is now gated on the
+    // deployment actually being a development one.
+    if (c.env.ENVIRONMENT === 'development') {
+      return c.json({
+        success: true,
+        data: {
+          message: '密碼驗證成功（開發模式：無需驗證碼）',
+          emailSent: false,
+          devMode: true,
+          twoFactorMethod: 'email' as const,
+          passkeyAvailable: false,
+          availableMethods: ['email'] as const,
+          preAuthToken
+        }
+      });
+    }
+
+    console.error('[2FA] No second factor available: SMTP unconfigured and user has no passkey/TOTP');
     return c.json({
-      success: true,
-      data: {
-        message: '密碼驗證成功（開發模式：無需驗證碼）',
-        emailSent: false,
-        devMode: true,
-        twoFactorMethod: 'email' as const,
-        passkeyAvailable: false,
-        availableMethods: ['email'] as const
+      success: false,
+      error: {
+        code: 'NO_SECOND_FACTOR',
+        message: '系統未設定郵件服務，且您的帳號未啟用其他驗證方式，無法完成登入。請聯繫管理員'
       }
-    });
+    }, 503);
   }
 );
 
@@ -602,7 +670,22 @@ authRouter.post(
       requestPath: c.req.path
     };
 
-    // ─── 2FA Verification with verified flag pattern ───
+    // ─── Factor 1: the password proof from step 1 ───
+    // Without this the endpoint accepted { userEmail, code } and never checked a
+    // password, so whoever held the mailbox (or a TOTP code) could sign in.
+    // Checked before the user lookup so a bad token cannot be used to probe
+    // which addresses exist.
+    if (!(await verifyPreAuthToken(body.preAuthToken, body.userEmail, c.env.JWT_SECRET))) {
+      return c.json({
+        success: false,
+        error: {
+          code: 'PRE_AUTH_REQUIRED',
+          message: '登入階段已逾時，請重新輸入密碼'
+        }
+      }, 401);
+    }
+
+    // ─── Factor 2 verification, with an explicit verified flag ───
     // SECURITY: Every path must explicitly set verified=true before JWT is issued.
     // This prevents fallthrough bypass bugs.
     let verified: boolean;
@@ -618,6 +701,17 @@ authRouter.post(
         success: false,
         error: { code: 'INVALID_CREDENTIALS', message: '用戶不存在' }
       }, 401);
+    }
+
+    // Locked/disabled accounts must be stopped here too, not only at step 1 —
+    // otherwise anyone already holding a pre-auth token walks straight past
+    // a lock applied moments ago.
+    const refusal2fa = await assertAccountUsable(c.env, user);
+    if (refusal2fa) {
+      return c.json({
+        success: false,
+        error: { code: refusal2fa.code, message: refusal2fa.message }
+      }, refusal2fa.status);
     }
 
     const totpEnabled = user.totpEnabled === 1;
@@ -742,7 +836,20 @@ authRouter.post(
       const smtpConfigured = smtpConfig !== null;
 
       if (smtpConfigured) {
-        const verifyResult = await verifyTwoFactorCode(c.env, body.userEmail, body.code);
+        const verifyResult = await verifyTwoFactorCode(c.env, body.userEmail, body.code, 'login');
+
+        // A code is only good for login if a password was checked before it was
+        // issued. This is what stops /auth/resend-2fa (no password) from being a
+        // password-free way in.
+        if (verifyResult.success && !verifyResult.passwordVerified) {
+          return c.json({
+            success: false,
+            error: {
+              code: 'PRE_AUTH_REQUIRED',
+              message: '此驗證碼未經密碼驗證，請重新登入'
+            }
+          }, 401);
+        }
 
         if (!verifyResult.success) {
           const lockIpAddress = c.req.header('CF-Connecting-IP') || null;
@@ -800,9 +907,23 @@ authRouter.post(
         }
 
         verified = true;
-      } else {
-        // Dev mode: SMTP not configured, skip verification
+      } else if (c.env.ENVIRONMENT === 'development') {
+        // Development only: no SMTP to deliver a code with, so accept the step.
+        // Gated on ENVIRONMENT because getSmtpConfig() returns null for merely
+        // *unconfigured* SMTP — without this gate, clearing the SMTP settings in
+        // production turned this endpoint into a password-free login for any
+        // address.
+        console.warn('[2FA] Development mode: skipping email verification');
         verified = true;
+      } else {
+        console.error('[2FA] SMTP unconfigured in a non-development environment; refusing to skip verification');
+        return c.json({
+          success: false,
+          error: {
+            code: 'NO_SECOND_FACTOR',
+            message: '系統未設定郵件服務，無法完成驗證。請聯繫管理員'
+          }
+        }, 503);
       }
     }
 
@@ -943,15 +1064,30 @@ authRouter.post(
   async (c) => {
     const body = c.req.valid('json');
 
-    // Rate limit before the user lookup, so a throttled response looks the
-    // same whether or not the address exists and this check adds no new
-    // enumeration oracle. (The 401 below is a pre-existing one — see
-    // plan/issue.md.)
+    // Require the step 1 password proof FIRST. Without it this endpoint mints a
+    // login-valid code for any address that asks, which made the password
+    // factor optional: mailbox access alone was enough to sign in.
     //
-    // This endpoint sends mail without any password, so it carries the per-IP
-    // rule as well. The per-recipient buckets are the `open` channel, kept
-    // separate from the password-verified login path so flooding here cannot
-    // stop the real user from getting their own login code.
+    // Order matters: this check is a signature verification with no database
+    // access, so it is not an enumeration oracle and is safe to run before the
+    // rate limit. Running it *after* the limiter — as it briefly did — charged
+    // the recipient's quota for attempts that never sent anything, so a user
+    // whose proof had expired burned their 5-per-hour budget on refusals and
+    // then saw a rate-limit countdown instead of an explanation.
+    if (!(await verifyPreAuthToken(body.preAuthToken, body.userEmail, c.env.JWT_SECRET))) {
+      return c.json({
+        success: false,
+        error: {
+          code: 'PRE_AUTH_REQUIRED',
+          message: '登入階段已逾時，請重新輸入密碼'
+        }
+      }, 401);
+    }
+
+    // Now that the caller has proven they know the password, charge the budget.
+    // The per-recipient buckets are the `open` channel, kept separate from the
+    // password-verified login path so flooding here cannot stop the real user
+    // from getting their own login code.
     const emailGuard = await guardEmailTrigger(c.env, {
       recipient: body.userEmail,
       ip: c.req.header('CF-Connecting-IP'),
@@ -972,19 +1108,22 @@ authRouter.post(
       .bind(body.userEmail)
       .first();
 
+    // A valid pre-auth token already proves this account exists, so the
+    // response below is not an enumeration oracle — but keep it generic anyway
+    // so the shape never depends on account existence.
     if (!user) {
       return c.json({
         success: false,
-        error: { code: 'INVALID_CREDENTIALS', message: '用戶不存在' }
+        error: { code: 'PRE_AUTH_REQUIRED', message: '登入階段已逾時，請重新輸入密碼' }
       }, 401);
     }
 
-    // Check if user is disabled
-    if (user.status === 'disabled') {
+    const resendRefusal = await assertAccountUsable(c.env, user);
+    if (resendRefusal) {
       return c.json({
         success: false,
-        error: { code: 'USER_DISABLED', message: '此帳號已被停用' }
-      }, 403);
+        error: { code: resendRefusal.code, message: resendRefusal.message }
+      }, resendRefusal.status);
     }
 
     // Email is a universal 2FA fallback — TOTP/Passkey users may also request an
@@ -1001,8 +1140,11 @@ authRouter.post(
 
       const verificationCode = generateVerificationCode();
 
-      // Store verification code in database
-      const storeResult = await storeVerificationCode(c.env, body.userEmail, verificationCode);
+      // passwordVerified = true because the pre-auth token above is the password
+      // proof; a resend inherits step 1's check rather than bypassing it.
+      const storeResult = await storeVerificationCode(
+        c.env, body.userEmail, verificationCode, 'login', true
+      );
       if (!storeResult.success) {
         return c.json({
           success: false,
@@ -1021,13 +1163,24 @@ authRouter.post(
       }
 
 
+      // Re-issue the proof alongside the new code so the two expire together.
+      // Without this, a resend near the end of the window hands out a code
+      // whose 10-minute life outlasts the proof needed to submit it.
+      // Re-issuing requires an already-valid proof, so this extends a live
+      // login attempt rather than creating one.
+      const refreshedPreAuthToken = await issuePreAuthToken(
+        user.userEmail as string,
+        c.env.JWT_SECRET
+      );
+
       return c.json({
         success: true,
         data: {
           message: '驗證碼已重新發送到您的信箱',
           emailSent: true,
           devMode: false,
-          expiresAt: storeResult.expiresAt
+          expiresAt: storeResult.expiresAt,
+          preAuthToken: refreshedPreAuthToken
         }
       });
     } else {
@@ -1665,6 +1818,15 @@ authRouter.post(
   async (c) => {
     const body = c.req.valid('json');
 
+    // Passkey is the *second* factor. Without this the ceremony could be started
+    // for any address with no password at all.
+    if (!(await verifyPreAuthToken(body.preAuthToken, body.userEmail, c.env.JWT_SECRET))) {
+      return c.json({
+        success: false,
+        error: { code: 'PRE_AUTH_REQUIRED', message: '登入階段已逾時，請重新輸入密碼' }
+      }, 401);
+    }
+
     const { initPasskeyAuthentication } = await import('../handlers/auth/passkey');
     const options = await initPasskeyAuthentication(c.env, body.userEmail, body.crossDevice === true);
 
@@ -1702,6 +1864,15 @@ authRouter.post(
       return c.json(turnstileError, 403);
     }
 
+    // Same as auth-init: this endpoint issues a session, so it must demand the
+    // password proof rather than treating the passkey as the only factor.
+    if (!(await verifyPreAuthToken(body.preAuthToken, body.userEmail, c.env.JWT_SECRET))) {
+      return c.json({
+        success: false,
+        error: { code: 'PRE_AUTH_REQUIRED', message: '登入階段已逾時，請重新輸入密碼' }
+      }, 401);
+    }
+
     try {
       const { verifyPasskeyAuthentication } = await import('../handlers/auth/passkey');
       const result = await verifyPasskeyAuthentication(c.env, body.userEmail, body);
@@ -1710,7 +1881,7 @@ authRouter.post(
       const user = await c.env.DB
         .prepare(`
           SELECT userId, userEmail, displayName, status, registrationTime, lastActivityTime,
-                 avatarSeed, avatarStyle, avatarOptions
+                 avatarSeed, avatarStyle, avatarOptions, lockUntil, lockReason
           FROM users WHERE userId = ?
         `)
         .bind(result.userId)
@@ -1721,6 +1892,17 @@ authRouter.post(
           success: false,
           error: { code: 'USER_NOT_FOUND', message: 'User not found' }
         }, 404);
+      }
+
+      // This path selected `status` but never looked at it, and never looked at
+      // lockUntil either — a disabled or locked account with a passkey signed in
+      // normally.
+      const passkeyRefusal = await assertAccountUsable(c.env, user);
+      if (passkeyRefusal) {
+        return c.json({
+          success: false,
+          error: { code: passkeyRefusal.code, message: passkeyRefusal.message }
+        }, passkeyRefusal.status);
       }
 
       // Generate JWT token

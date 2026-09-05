@@ -8,7 +8,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { resolve } from 'node:path';
-import { createD1FromMigration } from '../mocks/d1-sqlite';
+import { createD1FromMigration, hasNodeSqlite, NODE_SQLITE_SKIP_REASON } from '../mocks/d1-sqlite';
 import {
   guardEmailTrigger,
   checkEmailBudget,
@@ -38,7 +38,12 @@ beforeEach(() => {
   env = makeEnv();
 });
 
-describe('trigger limits', () => {
+
+if (!hasNodeSqlite) {
+  console.warn(`[skip] ${'email-budget.test.ts'}: ${NODE_SQLITE_SKIP_REASON}`);
+}
+
+describe.skipIf(!hasNodeSqlite)('trigger limits', () => {
   it('blocks a second mail to the same address inside the cooldown', async () => {
     const first = await guardEmailTrigger(env, { recipient: 'student@example.com', channel: 'open' });
     expect(first.allowed).toBe(true);
@@ -132,7 +137,7 @@ describe('trigger limits', () => {
   });
 });
 
-describe('daily budget', () => {
+describe.skipIf(!hasNodeSqlite)('daily budget', () => {
   it('lets every priority through while there is room', async () => {
     for (const priority of ['critical', 'normal', 'bulk'] as const) {
       expect((await checkEmailBudget(env, priority)).allowed).toBe(true);
@@ -186,7 +191,7 @@ describe('daily budget', () => {
   });
 });
 
-describe('priority classification', () => {
+describe.skipIf(!hasNodeSqlite)('priority classification', () => {
   it('classifies every EmailTrigger', async () => {
     // A trigger with no entry silently falls back to `normal`, which would
     // quietly let a new bulk mail type compete with login codes.
