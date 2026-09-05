@@ -19,7 +19,7 @@
     "type-check": "tsc --noEmit",
     "predeploy": "npm run type-check",
     "logs": "wrangler tail",
-    "lint": "eslint src/**/*.ts",
+    "lint": "eslint \"src/**/*.ts\"",
     "format": "prettier --write src/**/*.ts",
     "clean": "rm -rf .wrangler dist",
     "test": "vitest run",

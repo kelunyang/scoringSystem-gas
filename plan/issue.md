@@ -456,11 +456,9 @@ issue 原本的評估仍成立：前端算錯最多是按鈕多顯示或少顯�
 依序套用到全新 SQLite 成功、關鍵表／view／欄位齊全。
 新增 migration 若破壞順序或相依，這條會紅。
 
-**⚠️ 遠端記帳尚未更新**：遠端 `d1_migrations` 仍記著舊檔名，
-所以 `wrangler d1 migrations list --remote` 目前會列出全部 12 個為「待套用」。
-**在執行下面那段 UPDATE 之前，不要跑 `migrate:remote`**——會在
-`ALTER TABLE stages ADD COLUMN pausedTime` 撞欄位失敗。
-指令見 `migrations/README.md`。
+**遠端記帳已同步**（2026-09-05）：12 筆 UPDATE + 1 筆 DELETE 全部成功，
+`wrangler d1 migrations list --remote` 回報 `No migrations to apply!`。
+本地與遠端現在都與目錄內容一致。
 
 #### 丁：測試與設定
 
@@ -489,6 +487,30 @@ issue 原本的評估仍成立：前端算錯最多是按鈕多顯示或少顯�
 `"engine-strict": true` 讓版本不符直接失敗而不是靜默略過。
 
 ---
+
+#### 庚：`pnpm lint` 一直沒有檢查到全部檔案（2026-09-05）
+
+**症狀**：backend lint 長期回報 118 個 problem、0 error。實際是 460 個。
+
+**根因**：`packages/backend/package.json` 的
+`"lint": "eslint src/**/*.ts"` **沒有加引號**。glob 由 shell 先展開，
+而 zsh 預設不啟用 globstar，`**` 等同 `*`，所以只掃到
+`src/<單層目錄>/*.ts`——`src/*.ts` 和更深的巢狀目錄全部漏掉。
+
+加引號讓 eslint 自己處理 glob 之後，數字從 118 跳到 460。
+
+**這也是我本輪多次誤報「backend lint 0 error」的原因**——我用的是同一個
+未加引號的指令。移除除錯日誌時留下的 5 個 error
+（`sampleLogs`、`uniqueUserEmails`、`viewerRole` 成為孤兒變數，
+兩個 `else {}` 成為空區塊）就是這樣被漏掉的，已修。
+
+**順帶**：`packages/frontend` 的 lint 是 `eslint . --fix`。
+**檢查指令不該有副作用**——跑一次 lint 會自動改碼，
+在 CI 或 pre-commit 裡尤其危險。已改為 `eslint .`，
+另存 `lint:fix` 給想要自動修的時候用。
+
+**教訓**：跟本輪其他發現同一個形狀——**檢查存在、但沒有真的在檢查**。
+「0 error」看起來跟「檢查過且乾淨」完全一樣。
 
 #### 戊：效能與設計觀察
 

@@ -112,16 +112,6 @@ export async function getProjectEventLogs(
 
     const result = await env.DB.prepare(query).bind(...params).all();
 
-    const sampleLogs = result.results?.slice(0, 5).map((log: any) => ({
-      logId: log.logId,
-      eventType: log.eventType,
-      userEmail: log.userEmail,
-      userId: log.userId,
-      timestamp: log.timestamp
-    })) || [];
-
-    const uniqueUserEmails = Array.from(new Set(result.results?.map((log: any) => log.userEmail) || []));
-
 
     // Enrich event logs with parsed details and display names
     const enrichedLogs = result.results?.map((log: any) => {
@@ -249,9 +239,10 @@ export async function getUserProjectEventLogs(
         viewerRole = 'teacher';
       }
     } else if (viewerRoles.length === 1) {
-      viewerRole = (viewerRoles[0] as any).role;
-    } else {
+      viewerRole = (viewerRoles[0] as { role: string }).role;
     }
+    // No viewer row: viewerRole stays null and the checks below fall through to
+    // the group-membership path.
 
     // Level 2: teacher or observer → See all project logs
     if (viewerRole === 'teacher' || viewerRole === 'observer') {

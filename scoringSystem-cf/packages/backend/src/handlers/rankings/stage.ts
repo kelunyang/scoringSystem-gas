@@ -361,7 +361,7 @@ export async function getStageRankings(
     // Use shared permission check function
     const permCheck = await checkUserPermissionAndGroups(env, userEmail, projectId);
 
-    const { isGlobalPM, viewerRole, hasAccess, isTeacherOrObserver, currentUserGroupIds } = permCheck;
+    const { isGlobalPM, hasAccess, isTeacherOrObserver, currentUserGroupIds } = permCheck;
 
 
     // Check project access (if not Global PM)
@@ -526,7 +526,6 @@ export async function getStageRankings(
         } catch (parseError) {
           console.error(`❌ [getStageRankings] Failed to parse ranking data:`, parseError);
         }
-      } else {
       }
     }
 
