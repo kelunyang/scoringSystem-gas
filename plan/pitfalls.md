@@ -4,6 +4,57 @@
 > 新坑往上加，讓最近的教訓最先被看到。
 
 ---
+## 2026-09-06 ｜ 權限檢查讀錯一層，於是整段收窄邏輯從來沒跑過
+
+**症狀**：無。專案裡任何一位組員，都可以透過「看事件記錄背後那筆成果」
+的端點，看到專案內**任何一份**成果——包含別組的。
+
+**根因**：`getEventResourceDetails` 呼叫另一個 handler 拿權限層級：
+
+```ts
+const permissionData = await permissionCheckResponse.json() as any;
+const userPermissionLevel = permissionData.userPermissionLevel;   // undefined
+```
+
+被呼叫的那個回的是 `successResponse(data)`，body 是
+`{ success, data: { …, userPermissionLevel } }`——值在 `.data` 底下。
+讀最外層永遠是 `undefined`，於是底下
+
+```ts
+if (userPermissionLevel === 'member_in_group') { /* 只能看自己的 */ }
+else if (userPermissionLevel === 'group_leader') { /* 只能看自己組的 */ }
+// admin / teacher / observer 可以看全部（不需額外檢查）
+```
+
+兩個分支都不成立，直接落到最寬鬆的預設路徑。
+路由層只擋到專案層級的 `view`，所以沒有第二道關。
+
+**同一個檔案裡另外四處就寫了 `responseData.data || responseData`**
+來處理這層包裝，唯獨這裡漏了。
+
+**同時發現**：`resourceType === 'comment'` 的兩個查詢都寫
+`LEFT JOIN users u ON c.authorId = u.userId`，但 comments 資料表沒有
+`authorId`（它以 `authorEmail` 關聯）。SQLite 直接報錯，被外層
+try/catch 轉成 SYSTEM_ERROR——**看評論詳情從來沒有成功過**。
+陰錯陽差之下，權限漏洞實際只影響 submission。
+
+**教訓與防護**：
+
+1. **「handler 呼叫另一個 handler、再解析它的 Response」是高風險模式。**
+   回傳值多包了一層 `data`，型別上完全看不出來，`as any` 更是直接放行。
+   同一個 codebase 裡對同一個函式有兩種解包寫法，就是訊號。
+2. **權限收窄如果只寫在 handler 裡，就要有測試證明它會執行。**
+   「路由擋粗的、handler 擋細的」本身沒問題，但細的那層一旦失效，
+   外面那層的寬鬆權限就直接生效，而且不會有任何錯誤。
+   新測試特地用「別組的組員」而非「完全沒權限的人」，
+   因為前者才會通過路由層、走到真正該收窄的地方。
+3. **SQL 欄位名寫錯會被 try/catch 吃掉，變成一個永遠失敗的功能。**
+   `catch → errorResponse('SYSTEM_ERROR')` 讓「這段 SQL 根本跑不起來」
+   和「偶發的資料庫問題」長得一模一樣。
+   查 `no such column` 這類錯誤最快的方法是把 migrations 灌進
+   in-memory SQLite 直接跑那句查詢——本次就是這樣三十秒內確認的。
+
+---
 ## 2026-09-06 ｜ 讀一個 SELECT 沒回傳的欄位，於是功能安靜地半殘
 
 **症狀**：階段評論頁重新整理後，自己按過的 reaction 不會顯示為已選取；
