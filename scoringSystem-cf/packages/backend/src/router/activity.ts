@@ -27,16 +27,16 @@ import {
 import { errorResponse } from '../utils/response';
 
 
-const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
 // Apply authentication middleware to all routes
-app.use('*', authMiddleware);
+  .use('*', authMiddleware)
 
 /**
  * Get event logs for a project with optional filters
  * Body: { sessionId, projectId, filters?: EventLogFilters }
  */
-app.post(
+  .post(
   '/project',
   zValidator('json', GetProjectEventLogsRequestSchema),
   async (c) => {
@@ -58,7 +58,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get event logs for current user in a project
@@ -66,7 +66,7 @@ app.post(
  * If user is just a member, shows only their own events
  * Body: { sessionId, projectId, filters?: EventLogFilters }
  */
-app.post(
+  .post(
   '/user',
   zValidator('json', GetUserProjectEventLogsRequestSchema),
   async (c) => {
@@ -89,13 +89,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get resource details (submission or comment) for event log expansion
  * Body: { sessionId, projectId, resourceType, resourceId }
  */
-app.post(
+  .post(
   '/resource',
   zValidator('json', GetEventResourceDetailsRequestSchema),
   async (c) => {

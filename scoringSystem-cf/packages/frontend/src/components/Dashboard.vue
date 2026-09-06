@@ -623,7 +623,7 @@ const loadUngroupedMembers = async (projectId: string) => {
   try {
     loadingUngroupedMembers.value = true
     const { rpcClient } = await import('@/utils/rpc-client')
-    const httpResponse = await rpcClient.projects.viewers['mark-unassigned'].$post({
+    const httpResponse = await rpcClient.api.projects.viewers['mark-unassigned'].$post({
       json: {
         projectId: projectId
       }
@@ -854,7 +854,7 @@ const handleRemoveMemberConfirm = async () => {
 
       // Use batch remove mutation (need to import useBatchRemoveGroupMembers)
       const { rpcClient } = await import('@/utils/rpc-client')
-      const httpResponse = await rpcClient.groups['batch-remove-members'].$post({
+      const httpResponse = await rpcClient.api.groups['batch-remove-members'].$post({
         json: {
           projectId: selectedProject.value.projectId,
           groupId: selectedGroupForManagement.value.groupId,

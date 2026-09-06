@@ -39,7 +39,7 @@ export async function addUserToGroup(
   groupId: string,
   userEmail: string,
   role: string = 'member'
-): Promise<Response> {
+) {
   try {
     console.log('[addUserToGroup] Starting with params:', { currentUserEmail, projectId, groupId, userEmail, role });
 
@@ -269,7 +269,7 @@ export async function removeUserFromGroup(
   projectId: string,
   groupId: string,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     // Check permissions
     const isAdmin = await checkGlobalPermission(env, currentUserEmail, 'system_admin');
@@ -358,7 +358,7 @@ export async function listProjectGroups(
   userEmail: string,
   projectId: string,
   includeInactive: boolean = false
-): Promise<Response> {
+) {
   try {
     // Check access
     const isAdmin = await checkGlobalPermission(env, userEmail, 'system_admin');
@@ -492,7 +492,7 @@ export async function getGroupMentionData(
   userEmail: string,
   projectId: string,
   groupIds: string[]
-): Promise<Response> {
+) {
   try {
     console.log('[getGroupMentionData] Starting with groupIds:', groupIds);
 
@@ -557,7 +557,7 @@ export async function batchRemoveUsersFromGroup(
   projectId: string,
   groupId: string,
   userEmails: string[]
-): Promise<Response> {
+) {
   try {
     console.log('[batchRemoveUsersFromGroup] Starting batch remove with', userEmails.length, 'users');
 
@@ -671,7 +671,7 @@ export async function batchAddUsersToGroup(
   projectId: string,
   groupId: string,
   members: Array<{ userEmail: string; role: string }>
-): Promise<Response> {
+) {
   try {
     console.log('[batchAddUsersToGroup] Starting batch add with', members.length, 'members');
 
@@ -858,7 +858,7 @@ export async function updateMemberRole(
   groupId: string,
   userEmail: string,
   newRole: 'member' | 'leader'
-): Promise<Response> {
+) {
   try {
     console.log('[updateMemberRole] Starting with params:', { currentUserEmail, projectId, groupId, userEmail, newRole });
 
@@ -970,7 +970,7 @@ export async function batchUpdateMemberRoles(
   projectId: string,
   groupId: string,
   updates: Array<{ userEmail: string; newRole: 'member' | 'leader' }>
-): Promise<Response> {
+) {
   try {
     console.log('[batchUpdateMemberRoles] Starting batch update with', updates.length, 'updates');
 

@@ -50,7 +50,7 @@ export async function clearStageVotes(
   projectId: string,
   stageId: string,
   params: ClearStageVotesParams
-): Promise<Response> {
+) {
   const { reason, targetState } = params;
   const extendHours = params.extendHours;
 

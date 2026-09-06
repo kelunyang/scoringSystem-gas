@@ -1580,7 +1580,7 @@ const updateGroupAllowChange = async (projectGroup: ProjectGroupMembership) => {
   updatingGroupSettings.value.add(groupKey)
 
   try {
-    const httpResponse = await rpcClient.groups.update.$post({
+    const httpResponse = await rpcClient.api.groups.update.$post({
       json: {
         projectId: projectGroup.projectId,
         groupId: projectGroup.groupId,
@@ -1613,7 +1613,7 @@ const removeUserFromProjectGroup = async (projectGroup: ProjectGroupMembership) 
   removingFromGroups.value.add(groupKey)
 
   try {
-    const httpResponse = await rpcClient.groups['remove-member'].$post({
+    const httpResponse = await rpcClient.api.groups['remove-member'].$post({
       json: {
         projectId: projectGroup.projectId,
         groupId: projectGroup.groupId,

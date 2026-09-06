@@ -541,7 +541,7 @@ const loadEventLogs = async (useBackendFilters = true) => {
 
     console.log('📊 EventLogViewer: Loading event logs', { endpoint, params, useBackendFilters })
 
-    const httpResponse = await rpcClient.activity[endpoint].$post({
+    const httpResponse = await rpcClient.api.activity[endpoint].$post({
       json: params
     })
     const response = await httpResponse.json()
@@ -662,7 +662,7 @@ const loadResourceForEvent = async (event: EventLog) => {
     const eventWithResource = event as EventLog & { resourceId?: string }
 
     // Type assertion needed due to AppType being any
-    const httpResponse = await rpcClient.activity.resource.$post({
+    const httpResponse = await rpcClient.api.activity.resource.$post({
       json: {
         projectId: props.projectId,
         resourceType: event.resourceType,

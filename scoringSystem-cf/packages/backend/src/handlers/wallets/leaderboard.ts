@@ -20,7 +20,7 @@ import { parseJSON } from '../../utils/json';
  * @param zeroScoreThreshold - Points below this threshold are treated as 0 score (default: 0 = disabled)
  */
 /** 排行榜上的一列。非同組的使用者名稱會被遮蔽（isMasked）。 */
-interface LeaderboardEntry {
+export interface LeaderboardEntry {
   userEmail: string;
   currentBalance: number;
   userId: string;
@@ -37,7 +37,7 @@ export async function getProjectWalletLadder(
   userEmail: string,
   projectId: string,
   zeroScoreThreshold: number = 0
-): Promise<Response> {
+) {
   try {
     // Get project score range settings
     const project = await env.DB.prepare(`
@@ -211,7 +211,7 @@ export async function exportProjectWalletSummary(
   userEmail: string,
   projectId: string,
   zeroScoreThreshold: number = 0
-): Promise<Response> {
+) {
   try {
     // Get all user balances
     const userBalances = await env.DB.prepare(`
@@ -330,7 +330,7 @@ export async function getStageGrowthData(
   userEmail: string,
   projectId: string,
   targetUserEmail?: string
-): Promise<Response> {
+) {
   try {
     // Get all project stages
     const stages = await env.DB.prepare(`

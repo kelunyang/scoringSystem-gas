@@ -23,7 +23,7 @@ export async function voteOnRankingProposal(
     agree: boolean;
     comment?: string;
   }
-): Promise<Response> {
+) {
   const { userEmail } = context;
   const { projectId, proposalId, agree, comment } = requestData;
 

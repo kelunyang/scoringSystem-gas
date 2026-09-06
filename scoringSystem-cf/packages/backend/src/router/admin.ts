@@ -213,14 +213,14 @@ import { logGlobalOperation } from '../utils/logging';
 import { getAllConfigValues, getConfigValue, setConfigValue, deleteConfigValue, UPDATABLE_CONFIG_KEYS } from '../utils/config';
 import type { ConfigValue } from '../utils/config';
 
-const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
 // Apply authentication middleware to all routes
-app.use('*', authMiddleware);
+  .use('*', authMiddleware)
 
 // Apply permission check to all routes
 // Requires either system_admin OR specific management permissions depending on endpoint
-app.use('*', async (c, next) => {
+  .use('*', async (c, next) => {
   const user = c.get('user');
 
   if (!user) {
@@ -290,7 +290,7 @@ app.use('*', async (c, next) => {
 
   // If no specific permission matched, deny access
   return errorResponse('ACCESS_DENIED', 'Insufficient permissions - requires system_admin or specific management permission');
-});
+})
 
 /**
  * ========================================
@@ -300,7 +300,7 @@ app.use('*', async (c, next) => {
 
 
 // Alternative endpoint for compatibility - with query parameters
-app.get('/users/list', async (c) => {
+  .get('/users/list', async (c) => {
   try {
     // Parse query parameters
     const search = c.req.query('search');
@@ -326,10 +326,10 @@ app.get('/users/list', async (c) => {
     console.error('Get all users error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to get users');
   }
-});
+})
 
 // POST version for compatibility with frontend that sends filters in body
-app.post(
+  .post(
   '/users/list',
   zValidator('json', GetAllUsersRequestSchema),
   async (c) => {
@@ -342,13 +342,13 @@ app.post(
       return errorResponse('SYSTEM_ERROR', 'Failed to get users');
     }
   }
-);
+)
 
 /**
  * Update user status
  * Body: { userEmail, status }
  */
-app.post(
+  .post(
   '/users/update-status',
   zValidator('json', UpdateUserStatusRequestSchema),
   async (c) => {
@@ -365,14 +365,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 
 /**
  * Alternative endpoint for compatibility - Update user profile
  * Body: { userData: { userEmail, displayName?, status?, avatarSeed?, avatarStyle?, avatarOptions? } }
  */
-app.post(
+  .post(
   '/user-profile',
   zValidator('json', UpdateUserProfileAdminRequestSchema),
   async (c) => {
@@ -401,14 +401,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Reset user password
  * Body: { userEmail }
  * Backend auto-generates random password and emails to user
  */
-app.post(
+  .post(
   '/users/reset-password',
   zValidator('json', ResetUserPasswordRequestSchema),
   async (c) => {
@@ -424,7 +424,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Scan what a user's email is attached to (read-only)
@@ -432,7 +432,7 @@ app.post(
  * Pre-flight for the change-email drawer - counts wallet, permission and
  * activity rows that a rename would rewrite
  */
-app.post(
+  .post(
   '/users/email-impact',
   zValidator('json', GetUserEmailImpactRequestSchema),
   async (c) => {
@@ -442,14 +442,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Change a user's login email
  * Body: { userEmail, newEmail }
  * Rewrites every live reference to the old email in one transaction
  */
-app.post(
+  .post(
   '/users/change-email',
   zValidator('json', ChangeUserEmailRequestSchema),
   async (c) => {
@@ -466,13 +466,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Unlock a locked user account
  * Body: { userEmail, unlockReason, resetLockCount? }
  */
-app.post(
+  .post(
   '/users/unlock',
   zValidator('json', UnlockUserRequestSchema),
   async (c) => {
@@ -494,13 +494,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Batch update user status
  * Body: { userEmails: string[], status: 'active' | 'inactive' }
  */
-app.post(
+  .post(
   '/users/batch-update-status',
   zValidator('json', BatchUpdateUserStatusRequestSchema),
   async (c) => {
@@ -517,13 +517,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Batch reset password
  * Body: { userEmails: string[], newPassword: string }
  */
-app.post(
+  .post(
   '/users/batch-reset-password',
   zValidator('json', BatchResetPasswordRequestSchema),
   async (c) => {
@@ -540,13 +540,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * POST version for compatibility - Get user's global groups
  * Body: { userEmail }
  */
-app.post(
+  .post(
   '/user-global-groups',
   zValidator('json', GetUserGlobalGroupsRequestSchema),
   async (c) => {
@@ -556,13 +556,13 @@ app.post(
     const response = await getUserGlobalGroups(c.env, userEmail);
     return response;
   }
-);
+)
 
 /**
  * POST version for compatibility - Get user's project groups
  * Body: { userEmail }
  */
-app.post(
+  .post(
   '/user-project-groups',
   zValidator('json', GetUserProjectGroupsRequestSchema),
   async (c) => {
@@ -572,7 +572,7 @@ app.post(
     const response = await getUserProjectGroups(c.env, userEmail);
     return response;
   }
-);
+)
 
 /**
  * Get user activity statistics
@@ -581,7 +581,7 @@ app.post(
  *
  * Permission: Self or manage_users/system_admin
  */
-app.post(
+  .post(
   '/users/activity',
   zValidator('json', UserActivityRequestSchema, (result, c) => {
     // Log validation result
@@ -627,7 +627,7 @@ app.post(
     const status = result.success ? 200 : (result.error?.code === 'PERMISSION_DENIED' ? 403 : 400);
     return c.json(result, status);
   }
-);
+)
 
 /**
  * ========================================
@@ -638,7 +638,7 @@ app.post(
 /**
  * Get all global groups
  */
-app.get('/global-groups', async (c) => {
+  .get('/global-groups', async (c) => {
   try {
     const response = await getGlobalGroups(c.env);
     return response;
@@ -646,10 +646,10 @@ app.get('/global-groups', async (c) => {
     console.error('Get global groups error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to get global groups');
   }
-});
+})
 
 // Alternative endpoint for compatibility
-app.get('/global-groups/list', async (c) => {
+  .get('/global-groups/list', async (c) => {
   try {
     const response = await getGlobalGroups(c.env);
     return response;
@@ -657,10 +657,10 @@ app.get('/global-groups/list', async (c) => {
     console.error('Get global groups error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to get global groups');
   }
-});
+})
 
 // POST version for compatibility with frontend that sends sessionId in body
-app.post('/global-groups/list', async (c) => {
+  .post('/global-groups/list', async (c) => {
   try {
     const response = await getGlobalGroups(c.env);
     return response;
@@ -668,10 +668,10 @@ app.post('/global-groups/list', async (c) => {
     console.error('Get global groups error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to get global groups');
   }
-});
+})
 
 // POST version for direct /global-groups endpoint
-app.post('/global-groups', async (c) => {
+  .post('/global-groups', async (c) => {
   try {
     // Parse request body for filtering options
     const body = await c.req.json().catch(() => ({}));
@@ -688,7 +688,7 @@ app.post('/global-groups', async (c) => {
     console.error('Get global groups error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to get global groups');
   }
-});
+})
 
 
 /**
@@ -696,7 +696,7 @@ app.post('/global-groups', async (c) => {
  * Body: { groupName, description?, globalPermissions? } (frontend format)
  * OR: { groupData: { groupName, description?, globalPermissions? } } (wrapped format)
  */
-app.post(
+  .post(
   '/create-global-group',
   zValidator('json', CreateGlobalGroupRequestSchema),
   async (c) => {
@@ -714,7 +714,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 
 /**
@@ -722,7 +722,7 @@ app.post(
  * Body: { groupId, groupName?, description?, globalPermissions? } (frontend format)
  * OR: { groupId, groupData: { groupName?, description?, globalPermissions? } } (wrapped format)
  */
-app.post(
+  .post(
   '/update-global-group',
   zValidator('json', UpdateGlobalGroupRequestSchema),
   async (c) => {
@@ -747,14 +747,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 
 /**
  * Alternative endpoint for compatibility - Deactivate global group
  * Body: { groupId }
  */
-app.post(
+  .post(
   '/deactivate-global-group',
   zValidator('json', DeactivateGlobalGroupRequestSchema),
   async (c) => {
@@ -770,14 +770,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 
 /**
  * Alternative endpoint for compatibility - Activate global group
  * Body: { groupId }
  */
-app.post(
+  .post(
   '/activate-global-group',
   zValidator('json', ActivateGlobalGroupRequestSchema),
   async (c) => {
@@ -793,14 +793,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 
 /**
  * Alternative endpoint for compatibility - Get global group members (POST version)
  * Body: { groupId }
  */
-app.post(
+  .post(
   '/global-groups/members',
   zValidator('json', GetGlobalGroupMembersRequestSchema),
   async (c) => {
@@ -810,13 +810,13 @@ app.post(
     const response = await getGlobalGroupMembers(c.env, groupId);
     return response;
   }
-);
+)
 
 /**
  * Add user to global group
  * Body: { groupId, userEmail }
  */
-app.post(
+  .post(
   '/global-groups/add-user',
   zValidator('json', AddUserToGlobalGroupRequestSchema),
   async (c) => {
@@ -833,13 +833,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Alternative endpoint for compatibility - Add user to global group
  * Body: { groupId, userEmail }
  */
-app.post(
+  .post(
   '/add-user-to-global-group',
   zValidator('json', AddUserToGlobalGroupRequestSchema),
   async (c) => {
@@ -856,13 +856,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Remove user from global group
  * Body: { groupId, userEmail }
  */
-app.post(
+  .post(
   '/global-groups/remove-user',
   zValidator('json', RemoveUserFromGlobalGroupRequestSchema),
   async (c) => {
@@ -879,13 +879,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Alternative endpoint for compatibility - Remove user from global group
  * Body: { groupId, userEmail }
  */
-app.post(
+  .post(
   '/remove-user-from-global-group',
   zValidator('json', RemoveUserFromGlobalGroupRequestSchema),
   async (c) => {
@@ -902,13 +902,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Batch add users to global group
  * Body: { groupId, userEmails: string[] }
  */
-app.post(
+  .post(
   '/global-groups/batch-add-users',
   zValidator('json', BatchAddUsersToGlobalGroupRequestSchema),
   async (c) => {
@@ -925,13 +925,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Batch remove users from global group
  * Body: { groupId, userEmails: string[] }
  */
-app.post(
+  .post(
   '/global-groups/batch-remove-users',
   zValidator('json', BatchRemoveUsersFromGlobalGroupRequestSchema),
   async (c) => {
@@ -948,13 +948,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Batch deactivate global groups
  * Body: { groupIds: string[] }
  */
-app.post(
+  .post(
   '/batch-deactivate-global-groups',
   zValidator('json', BatchDeactivateGlobalGroupsRequestSchema),
   async (c) => {
@@ -970,13 +970,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Batch activate global groups
  * Body: { groupIds: string[] }
  */
-app.post(
+  .post(
   '/batch-activate-global-groups',
   zValidator('json', BatchActivateGlobalGroupsRequestSchema),
   async (c) => {
@@ -992,7 +992,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * ========================================
@@ -1003,7 +1003,7 @@ app.post(
 /**
  * Get system statistics
  */
-app.get('/system/stats', async (c) => {
+  .get('/system/stats', async (c) => {
   try {
     const user = c.get('user');
     const response = await getSystemStats(c.env, user?.userEmail);
@@ -1012,12 +1012,12 @@ app.get('/system/stats', async (c) => {
     console.error('Get system stats error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to get system statistics');
   }
-});
+})
 
 /**
  * POST version for compatibility - Get system statistics
  */
-app.post('/system/stats', async (c) => {
+  .post('/system/stats', async (c) => {
   try {
     const user = c.get('user');
     const response = await getSystemStats(c.env, user?.userEmail);
@@ -1026,14 +1026,14 @@ app.post('/system/stats', async (c) => {
     console.error('Get system stats error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to get system statistics');
   }
-});
+})
 
 
 /**
  * Get system logs with filters
  * Body: { options: { level?, action?, startTime?, endTime?, limit?, offset? } }
  */
-app.post(
+  .post(
   '/system/logs',
   zValidator('json', GetSystemLogsRequestSchema),
   async (c) => {
@@ -1043,12 +1043,12 @@ app.post(
     const response = await getSystemLogs(c.env, options || {});
     return response;
   }
-);
+)
 
 /**
  * Get log statistics (GET)
  */
-app.get('/system/log-statistics', async (c) => {
+  .get('/system/log-statistics', async (c) => {
   try {
     const response = await getLogStatistics(c.env);
     return response;
@@ -1056,13 +1056,13 @@ app.get('/system/log-statistics', async (c) => {
     console.error('Get log statistics error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to get log statistics');
   }
-});
+})
 
 /**
  * Get log statistics (POST)
  * Frontend uses POST for consistency with other RPC endpoints
  */
-app.post('/system/log-statistics', async (c) => {
+  .post('/system/log-statistics', async (c) => {
   try {
     const response = await getLogStatistics(c.env);
     return response;
@@ -1070,13 +1070,13 @@ app.post('/system/log-statistics', async (c) => {
     console.error('Get log statistics error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to get log statistics');
   }
-});
+})
 
 
 /**
  * Get entity details by type and ID
  */
-app.post(
+  .post(
   '/system/entity-details',
   zValidator('json', GetEntityDetailsRequestSchema),
   async (c) => {
@@ -1115,7 +1115,7 @@ app.post(
       });
     }
   }
-);
+)
 
 /**
  * ========================================
@@ -1128,7 +1128,7 @@ app.post(
  * Get all system properties configuration
  * Now reads from KV first, then environment variables, then defaults
  */
-app.post('/properties/get-all', async (c) => {
+  .post('/properties/get-all', async (c) => {
   try {
     const user = c.get('user');
     const env = c.env;
@@ -1158,14 +1158,14 @@ app.post('/properties/get-all', async (c) => {
     console.error('Get all properties error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to get properties');
   }
-});
+})
 
 /**
  * POST /admin/properties/update
  * Update system properties - now supports all configurable parameters in KV
  * Body: { properties: { ... } }
  */
-app.post(
+  .post(
   '/properties/update',
   zValidator('json', UpdatePropertiesRequestSchema),
   async (c) => {
@@ -1279,13 +1279,13 @@ app.post(
       return errorResponse('UPDATE_FAILED', 'Failed to update properties');
     }
   }
-);
+)
 
 /**
  * POST /admin/properties/reset
  * Reset properties to default values
  */
-app.post('/properties/reset', async (c) => {
+  .post('/properties/reset', async (c) => {
   try {
     const user = c.get('user');
     const env = c.env;
@@ -1365,7 +1365,7 @@ app.post('/properties/reset', async (c) => {
     console.error('Reset properties error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to reset properties');
   }
-});
+})
 
 /**
  * ========================================
@@ -1378,7 +1378,7 @@ app.post('/properties/reset', async (c) => {
  * List all notifications with filters
  * Body: { targetUserEmail?, type?, isRead?, limit?, offset? }
  */
-app.post(
+  .post(
   '/notifications/list',
   zValidator('json', ListAllNotificationsRequestSchema),
   async (c) => {
@@ -1393,7 +1393,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 
 /**
@@ -1401,7 +1401,7 @@ app.post(
  * Send a single notification email
  * Body: { notificationId }
  */
-app.post(
+  .post(
   '/notifications/send-single',
   zValidator('json', SendSingleNotificationRequestSchema),
   async (c) => {
@@ -1417,14 +1417,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * POST /admin/notifications/send-batch
  * Send batch notification emails with rate limiting
  * Body: { targetUserEmail?, type?, isRead?, limit? }
  */
-app.post(
+  .post(
   '/notifications/send-batch',
   zValidator('json', SendBatchNotificationsRequestSchema),
   async (c) => {
@@ -1460,14 +1460,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * POST /admin/notifications/delete
  * Delete a notification (admin)
  * Body: { notificationId }
  */
-app.post(
+  .post(
   '/notifications/delete',
   zValidator('json', DeleteNotificationAdminRequestSchema),
   async (c) => {
@@ -1483,7 +1483,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * ========================================
@@ -1501,7 +1501,7 @@ app.post(
  * Read one account's email rate limit usage.
  * Body: { userEmail }
  */
-app.post('/rate-limit/status', async (c) => {
+  .post('/rate-limit/status', async (c) => {
   const body = await c.req.json<{ userEmail?: string }>();
   if (!body.userEmail) {
     return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: '缺少 userEmail' } }, 400);
@@ -1514,7 +1514,7 @@ app.post('/rate-limit/status', async (c) => {
     return c.json({ success: false, error: { code: 'SYSTEM_ERROR', message: '無法讀取速率限制狀態' } }, 500);
   }
   return c.json({ success: true, data: status });
-});
+})
 
 /**
  * POST /admin/rate-limit/reset
@@ -1527,7 +1527,7 @@ app.post('/rate-limit/status', async (c) => {
  *
  * Body: { userEmail }
  */
-app.post('/rate-limit/reset', async (c) => {
+  .post('/rate-limit/reset', async (c) => {
   const user = c.get('user');
   const body = await c.req.json<{ userEmail?: string }>();
   if (!body.userEmail) {
@@ -1551,9 +1551,9 @@ app.post('/rate-limit/reset', async (c) => {
     success: ok,
     data: { userEmail: body.userEmail, message: ok ? '已清除該帳號的寄信速率限制' : '清除失敗' }
   });
-});
+})
 
-app.post('/robots/status', async (c) => {
+  .post('/robots/status', async (c) => {
   try {
     const user = c.get('user');
     interface RobotPatrolStatus {
@@ -1613,14 +1613,14 @@ app.post('/robots/status', async (c) => {
     console.error('Get robot status error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to get robot status');
   }
-});
+})
 
 /**
  * POST /admin/robots/notification-patrol
  * Manually trigger notification patrol robot
  * Body (optional): { timeWindowHours?: number, dryRun?: boolean }
  */
-app.post(
+  .post(
   '/robots/notification-patrol',
   zValidator('json', NotificationPatrolRequestSchema),
   async (c) => {
@@ -1634,13 +1634,13 @@ app.post(
 
     return result;
   }
-);
+)
 
 /**
  * POST /admin/robots/notification-patrol/config
  * Get notification patrol robot configuration
  */
-app.post('/robots/notification-patrol/config', async (c) => {
+  .post('/robots/notification-patrol/config', async (c) => {
   try {
     const config = await getNotificationPatrolConfig(c.env);
     return c.json({
@@ -1651,14 +1651,14 @@ app.post('/robots/notification-patrol/config', async (c) => {
     console.error('Get notification patrol config error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to get notification patrol configuration');
   }
-});
+})
 
 /**
  * POST /admin/robots/notification-patrol/update-config
  * Update notification patrol robot configuration
  * Body: { config: Partial<NotificationPatrolConfig> }
  */
-app.post('/robots/notification-patrol/update-config', async (c) => {
+  .post('/robots/notification-patrol/update-config', async (c) => {
   try {
     const user = c.get('user');
     const body = await c.req.json();
@@ -1686,14 +1686,14 @@ app.post('/robots/notification-patrol/update-config', async (c) => {
       errorCode: 'UPDATE_FAILED'
     }, 400);
   }
-});
+})
 
 /**
  * POST /admin/robots/notification-patrol/pending
  * Get pending email notifications (unsent)
  * Body (optional): { filters?: { limit, offset, targetUserEmail, startDate, endDate, notificationType } }
  */
-app.post('/robots/notification-patrol/pending', async (c) => {
+  .post('/robots/notification-patrol/pending', async (c) => {
   try {
     const user = c.get('user');
     const body = await c.req.json().catch(() => ({}));
@@ -1705,13 +1705,13 @@ app.post('/robots/notification-patrol/pending', async (c) => {
     console.error('Get pending notifications error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to get pending notifications');
   }
-});
+})
 
 /**
  * POST /admin/robots/notification-patrol/statistics
  * Get notification patrol statistics
  */
-app.post('/robots/notification-patrol/statistics', async (c) => {
+  .post('/robots/notification-patrol/statistics', async (c) => {
   try {
     const user = c.get('user');
     const result = await getNotificationPatrolStatistics(c.env, user.userEmail);
@@ -1720,7 +1720,7 @@ app.post('/robots/notification-patrol/statistics', async (c) => {
     console.error('Get notification patrol statistics error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to get patrol statistics');
   }
-});
+})
 
 /**
  * ========================================
@@ -1733,7 +1733,7 @@ app.post('/robots/notification-patrol/statistics', async (c) => {
  * Check for suspicious login attempts
  * Body (optional): { timeWindowHours?: number }
  */
-app.post('/security/suspicious-logins', async (c) => {
+  .post('/security/suspicious-logins', async (c) => {
   try {
     const user = c.get('user');
     const body = await c.req.json().catch(() => ({}));
@@ -1750,7 +1750,7 @@ app.post('/security/suspicious-logins', async (c) => {
     console.error('Check suspicious logins error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to check suspicious logins');
   }
-});
+})
 
 /**
  * ========================================
@@ -1763,7 +1763,7 @@ app.post('/security/suspicious-logins', async (c) => {
  * Get SMTP configuration (password will be masked for security)
  * Uses KV-first strategy via getSmtpConfig()
  */
-app.post('/smtp/get-config', async (c) => {
+  .post('/smtp/get-config', async (c) => {
   try {
     // Get SMTP config using KV-first strategy
     const smtpConfig = await getSmtpConfig(c.env);
@@ -1791,14 +1791,14 @@ app.post('/smtp/get-config', async (c) => {
     console.error('Get SMTP config error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to get SMTP configuration');
   }
-});
+})
 
 /**
  * POST /admin/smtp/update-config
  * Update SMTP configuration in KV
  * Body: { config: { host, port, username, password, fromName, fromEmail } }
  */
-app.post(
+  .post(
   '/smtp/update-config',
   zValidator('json', UpdateSmtpConfigRequestSchema),
   async (c) => {
@@ -1809,7 +1809,7 @@ app.post(
       message: 'SMTP configuration is managed via environment variables. Please update .dev.vars or production environment settings.'
     });
   }
-);
+)
 
 /**
  * POST /admin/smtp/test-connection
@@ -1818,7 +1818,7 @@ app.post(
  * - If config provided: Test the provided config temporarily (without saving)
  * - If config not provided: Test current stored configuration
  */
-app.post(
+  .post(
   '/smtp/test-connection',
   zValidator('json', TestSmtpConnectionRequestSchema),
   async (c) => {
@@ -1885,14 +1885,14 @@ app.post(
       return errorResponse('CONNECTION_FAILED', 'SMTP connection test failed');
     }
   }
-);
+)
 
 /**
  * POST /admin/email/test-cloudflare
  * Test Cloudflare Email Service connection
  * Sends a test email to the current admin user
  */
-app.post('/email/test-cloudflare', async (c) => {
+  .post('/email/test-cloudflare', async (c) => {
   const user = c.get('user');
 
   try {
@@ -1920,7 +1920,7 @@ app.post('/email/test-cloudflare', async (c) => {
       errorCode: 'CF_EMAIL_TEST_FAILED'
     }, 500);
   }
-});
+})
 
 // ============================================
 // Email Logs Management Routes
@@ -1930,7 +1930,7 @@ app.post('/email/test-cloudflare', async (c) => {
  * Query email logs with filters
  * Permission: manage_email_logs
  */
-app.post(
+  .post(
   '/email-logs/query',
   zValidator('json', EmailLogsQueryRequestSchema, (result, c) => {
     if (!result.success) {
@@ -1949,22 +1949,22 @@ app.post(
     const body = c.req.valid('json');
     return await getEmailLogs(c.env, user.userEmail, body.filters || {});
   }
-);
+)
 
 /**
  * Get email statistics
  * Permission: manage_email_logs
  */
-app.post('/email-logs/statistics', async (c) => {
+  .post('/email-logs/statistics', async (c) => {
   const user = c.get('user');
   return await getEmailStatistics(c.env, user.userEmail);
-});
+})
 
 /**
  * Resend single email
  * Permission: manage_email_logs
  */
-app.post(
+  .post(
   '/email-logs/resend-single',
   zValidator('json', ResendEmailRequestSchema, (result, c) => {
     if (!result.success) {
@@ -1989,13 +1989,13 @@ app.post(
 
     return await resendSingleEmail(c.env, user.userEmail, body.logId);
   }
-);
+)
 
 /**
  * Batch resend emails
  * Permission: manage_email_logs
  */
-app.post(
+  .post(
   '/email-logs/resend-batch',
   zValidator('json', ResendBatchEmailsRequestSchema, (result, c) => {
     if (!result.success) {
@@ -2024,7 +2024,7 @@ app.post(
 
     return await resendBatchEmailsHandler(c.env, user.userEmail, body.logIds);
   }
-);
+)
 
 /**
  * ========================================
@@ -2036,7 +2036,7 @@ app.post(
  * Query AI service logs with filters
  * Permission: view_ai_service_logs
  */
-app.post(
+  .post(
   '/ai-service-logs/query',
   zValidator('json', AIServiceLogsQueryRequestSchema, (result, c) => {
     if (!result.success) {
@@ -2055,22 +2055,22 @@ app.post(
     const body = c.req.valid('json');
     return await getAIServiceLogs(c.env, user.userEmail, body.filters || {});
   }
-);
+)
 
 /**
  * Get AI service statistics
  * Permission: view_ai_service_logs
  */
-app.post('/ai-service-logs/statistics', async (c) => {
+  .post('/ai-service-logs/statistics', async (c) => {
   const user = c.get('user');
   return await getAIServiceStatistics(c.env, user.userEmail);
-});
+})
 
 /**
  * Get AI service log detail
  * Permission: view_ai_service_logs
  */
-app.get('/ai-service-logs/:callId', async (c) => {
+  .get('/ai-service-logs/:callId', async (c) => {
   const user = c.get('user');
   const callId = c.req.param('callId');
   return await getAIServiceLogDetail(c.env, user.userEmail, callId);

@@ -36,83 +36,6 @@ import {
 } from '../handlers/system/aiProviders';
 import { errorResponse } from '../utils/response';
 
-const systemRouter = new Hono<{ Bindings: Env }>();
-
-/**
- * POST /system/turnstile-config
- * Get Turnstile configuration (public endpoint, no auth required)
- *
- * This endpoint doesn't require authentication since it only returns public configuration
- * (site key and enabled status, NOT the secret key)
- */
-systemRouter.post('/turnstile-config', async (c) => {
-  // Use KV-first configuration strategy
-  const enabled = String(await getConfigValue(c.env, 'TURNSTILE_ENABLED'));
-  const siteKey = String(await getConfigValue(c.env, 'TURNSTILE_SITE_KEY'));
-
-  const data: z.infer<typeof TurnstileConfigSchema> = {
-    enabled: enabled === 'true',
-    siteKey: siteKey || null
-  };
-
-  return c.json({
-    success: true,
-    data
-  });
-});
-
-/**
- * GET /system/info
- * Get basic system information (public endpoint, no auth required)
- */
-systemRouter.get('/info', async (c) => {
-  const systemTitle = await getSystemTitle(c.env);
-  const brandingIcon = String(await getConfigValue(c.env, 'BRANDING_ICON') || 'fa-star');
-
-  const data: z.infer<typeof SystemInfoSchema> = {
-    name: 'Scoring System API',
-    version: '1.0.0',
-    environment: c.env.ENVIRONMENT || 'development',
-    systemTitle,
-    brandingIcon,
-    timestamp: Date.now()
-  };
-
-  return c.json({
-    success: true,
-    data
-  });
-});
-
-/**
- * POST /system/info
- * Get basic system information (public endpoint, no auth required)
- * Backward compatibility for frontend using POST
- */
-systemRouter.post('/info', async (c) => {
-  const systemTitle = await getSystemTitle(c.env);
-  const brandingIcon = String(await getConfigValue(c.env, 'BRANDING_ICON') || 'fa-star');
-
-  const data: z.infer<typeof SystemInfoSchema> = {
-    name: 'Scoring System API',
-    version: '1.0.0',
-    environment: c.env.ENVIRONMENT || 'development',
-    systemTitle,
-    brandingIcon,
-    timestamp: Date.now()
-  };
-
-  return c.json({
-    success: true,
-    data
-  });
-});
-
-/**
- * All remaining system routes require authentication and system admin permission
- */
-systemRouter.use('*', authMiddleware);
-
 /**
  * Permission middleware for log endpoints
  * Allows either system_admin OR view_system_logs permission
@@ -136,13 +59,112 @@ const requireViewSystemLogs: MiddlewareHandler<{ Bindings: Env; Variables: HonoV
 };
 
 /**
+ * Permission middleware for AI provider management
+ * Requires system_admin permission
+ */
+const requireAIProviderAdmin: MiddlewareHandler<{ Bindings: Env; Variables: HonoVariables }> = async (c, next) => {
+  const user = c.get('user');
+
+  if (!user) {
+    return errorResponse('UNAUTHORIZED', 'Authentication required');
+  }
+
+  // Check if user has system_admin permission
+  const hasPermission = await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.SYSTEM_ADMIN);
+
+  if (!hasPermission) {
+    return errorResponse('ACCESS_DENIED', 'Insufficient permissions - requires system_admin');
+  }
+
+  return next();
+};
+
+const systemRouter = new Hono<{ Bindings: Env }>()
+
+/**
+ * POST /system/turnstile-config
+ * Get Turnstile configuration (public endpoint, no auth required)
+ *
+ * This endpoint doesn't require authentication since it only returns public configuration
+ * (site key and enabled status, NOT the secret key)
+ */
+  .post('/turnstile-config', async (c) => {
+  // Use KV-first configuration strategy
+  const enabled = String(await getConfigValue(c.env, 'TURNSTILE_ENABLED'));
+  const siteKey = String(await getConfigValue(c.env, 'TURNSTILE_SITE_KEY'));
+
+  const data: z.infer<typeof TurnstileConfigSchema> = {
+    enabled: enabled === 'true',
+    siteKey: siteKey || null
+  };
+
+  return c.json({
+    success: true,
+    data
+  });
+})
+
+/**
+ * GET /system/info
+ * Get basic system information (public endpoint, no auth required)
+ */
+  .get('/info', async (c) => {
+  const systemTitle = await getSystemTitle(c.env);
+  const brandingIcon = String(await getConfigValue(c.env, 'BRANDING_ICON') || 'fa-star');
+
+  const data: z.infer<typeof SystemInfoSchema> = {
+    name: 'Scoring System API',
+    version: '1.0.0',
+    environment: c.env.ENVIRONMENT || 'development',
+    systemTitle,
+    brandingIcon,
+    timestamp: Date.now()
+  };
+
+  return c.json({
+    success: true,
+    data
+  });
+})
+
+/**
+ * POST /system/info
+ * Get basic system information (public endpoint, no auth required)
+ * Backward compatibility for frontend using POST
+ */
+  .post('/info', async (c) => {
+  const systemTitle = await getSystemTitle(c.env);
+  const brandingIcon = String(await getConfigValue(c.env, 'BRANDING_ICON') || 'fa-star');
+
+  const data: z.infer<typeof SystemInfoSchema> = {
+    name: 'Scoring System API',
+    version: '1.0.0',
+    environment: c.env.ENVIRONMENT || 'development',
+    systemTitle,
+    brandingIcon,
+    timestamp: Date.now()
+  };
+
+  return c.json({
+    success: true,
+    data
+  });
+})
+
+/**
+ * All remaining system routes require authentication and system admin permission
+ */
+  .use('*', authMiddleware)
+
+
+/**
  * POST /system/logs
  * Get system logs with filters
  * Body: { options: { level?, action?, startTime?, endTime?, limit?, offset? } }
  *
  * Permission: view_system_logs OR system_admin
  */
-systemRouter.post(
+  .post(
   '/logs',
   zValidator('json', SystemLogsQuerySchema),
   requireViewSystemLogs,
@@ -160,7 +182,7 @@ systemRouter.post(
 
     return await getSystemLogs(c.env, mergedOptions);
   }
-);
+)
 
 /**
  * POST /system/logs/stats
@@ -168,9 +190,9 @@ systemRouter.post(
  *
  * Permission: view_system_logs OR system_admin
  */
-systemRouter.post('/logs/stats', requireViewSystemLogs, async (c) => {
+  .post('/logs/stats', requireViewSystemLogs, async (c) => {
   return await getLogStatistics(c.env);
-});
+})
 
 /**
  * POST /system/logs-stats
@@ -178,9 +200,9 @@ systemRouter.post('/logs/stats', requireViewSystemLogs, async (c) => {
  *
  * Permission: view_system_logs OR system_admin
  */
-systemRouter.post('/logs-stats', requireViewSystemLogs, async (c) => {
+  .post('/logs-stats', requireViewSystemLogs, async (c) => {
   return await getLogStatistics(c.env);
-});
+})
 
 /**
  * GET /system/secrets-checklist
@@ -206,26 +228,6 @@ systemRouter.post('/logs-stats', requireViewSystemLogs, async (c) => {
 // AI Provider Management Routes
 // ============================================
 
-/**
- * Permission middleware for AI provider management
- * Requires system_admin permission
- */
-const requireAIProviderAdmin: MiddlewareHandler<{ Bindings: Env; Variables: HonoVariables }> = async (c, next) => {
-  const user = c.get('user');
-
-  if (!user) {
-    return errorResponse('UNAUTHORIZED', 'Authentication required');
-  }
-
-  // Check if user has system_admin permission
-  const hasPermission = await hasGlobalPermission(c.env.DB, user.userId, GLOBAL_PERMISSIONS.SYSTEM_ADMIN);
-
-  if (!hasPermission) {
-    return errorResponse('ACCESS_DENIED', 'Insufficient permissions - requires system_admin');
-  }
-
-  return next();
-};
 
 /**
  * POST /system/ai-providers/list
@@ -233,9 +235,9 @@ const requireAIProviderAdmin: MiddlewareHandler<{ Bindings: Env; Variables: Hono
  *
  * Permission: system_admin
  */
-systemRouter.post('/ai-providers/list', requireAIProviderAdmin, async (c) => {
+  .post('/ai-providers/list', requireAIProviderAdmin, async (c) => {
   return await listAIProviders(c.env);
-});
+})
 
 /**
  * POST /system/ai-providers/create
@@ -243,7 +245,7 @@ systemRouter.post('/ai-providers/list', requireAIProviderAdmin, async (c) => {
  *
  * Permission: system_admin
  */
-systemRouter.post(
+  .post(
   '/ai-providers/create',
   zValidator('json', CreateAIProviderRequestSchema),
   requireAIProviderAdmin,
@@ -251,7 +253,7 @@ systemRouter.post(
     const body = c.req.valid('json');
     return await createAIProvider(c.env, body);
   }
-);
+)
 
 /**
  * POST /system/ai-providers/update
@@ -259,7 +261,7 @@ systemRouter.post(
  *
  * Permission: system_admin
  */
-systemRouter.post(
+  .post(
   '/ai-providers/update',
   zValidator('json', UpdateAIProviderRequestSchema),
   requireAIProviderAdmin,
@@ -268,7 +270,7 @@ systemRouter.post(
     const { providerId, ...updates } = body;
     return await updateAIProviderHandler(c.env, providerId, updates);
   }
-);
+)
 
 /**
  * POST /system/ai-providers/delete
@@ -276,7 +278,7 @@ systemRouter.post(
  *
  * Permission: system_admin
  */
-systemRouter.post(
+  .post(
   '/ai-providers/delete',
   zValidator('json', DeleteAIProviderRequestSchema),
   requireAIProviderAdmin,
@@ -284,7 +286,7 @@ systemRouter.post(
     const body = c.req.valid('json');
     return await deleteAIProviderHandler(c.env, body.providerId);
   }
-);
+)
 
 /**
  * POST /system/ai-providers/test
@@ -292,7 +294,7 @@ systemRouter.post(
  *
  * Permission: system_admin
  */
-systemRouter.post(
+  .post(
   '/ai-providers/test',
   zValidator('json', TestAIProviderRequestSchema),
   requireAIProviderAdmin,
@@ -300,7 +302,7 @@ systemRouter.post(
     const body = c.req.valid('json');
     return await testAIProviderHandler(c.env, body.providerId);
   }
-);
+)
 
 /**
  * POST /system/ai-prompts/get
@@ -308,9 +310,9 @@ systemRouter.post(
  *
  * Permission: system_admin
  */
-systemRouter.post('/ai-prompts/get', requireAIProviderAdmin, async (c) => {
+  .post('/ai-prompts/get', requireAIProviderAdmin, async (c) => {
   return await getAIPromptConfig(c.env);
-});
+})
 
 /**
  * POST /system/ai-prompts/update
@@ -318,7 +320,7 @@ systemRouter.post('/ai-prompts/get', requireAIProviderAdmin, async (c) => {
  *
  * Permission: system_admin
  */
-systemRouter.post(
+  .post(
   '/ai-prompts/update',
   zValidator('json', UpdateAIPromptConfigRequestSchema),
   requireAIProviderAdmin,

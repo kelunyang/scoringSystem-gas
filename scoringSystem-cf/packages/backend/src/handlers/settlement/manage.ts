@@ -22,7 +22,7 @@ interface StageSettlementRow {
 }
 
 /** 上面那一列解析後回給前端的形狀。 */
-interface StageSettlementRanking {
+export interface StageSettlementRanking {
   groupId: string;
   finalRank: number;
   allocatedPoints: number;
@@ -31,7 +31,7 @@ interface StageSettlementRanking {
 }
 
 /** commentsettlements 的一列。 */
-interface CommentSettlementRow {
+export interface CommentSettlementRow {
   commentId: string;
   authorEmail: string;
   finalRank: number;
@@ -50,7 +50,7 @@ export async function reverseSettlement(
   projectId: string,
   settlementId: string,
   reason: string
-): Promise<Response> {
+) {
   try {
     // Check if user has manage permissions (must be Global PM or Project Teacher)
     const { canManageSettlements } = await import('@utils/permissions');
@@ -287,7 +287,7 @@ export async function getReversePreview(
   userEmail: string,
   projectId: string,
   settlementId: string
-): Promise<Response> {
+) {
   try {
     // Check if user has manage permissions (must be Global PM or Project Teacher)
     const { canManageSettlements } = await import('@utils/permissions');
@@ -387,7 +387,7 @@ export async function getSettlementHistory(
     settlementType?: string;
     status?: string;
   } = {}
-): Promise<Response> {
+) {
   try {
     // Check if user is Global PM (only Global PMs can view settlement history)
     const globalPMCheck = await env.DB.prepare(`
@@ -454,7 +454,7 @@ export async function getSettlementDetails(
   userEmail: string,
   projectId: string,
   settlementId: string
-): Promise<Response> {
+) {
   try {
     // Check project access
     const projectAccess = await env.DB.prepare(`
@@ -527,7 +527,7 @@ export async function getStageSettlementRankings(
   userEmail: string,
   projectId: string,
   stageId: string
-): Promise<Response> {
+) {
   console.log('[getStageSettlementRankings] Called with:', { userEmail, projectId, stageId });
 
   try {
@@ -655,7 +655,7 @@ export async function getCommentSettlementRankings(
   userEmail: string,
   projectId: string,
   stageId: string
-): Promise<Response> {
+) {
   console.log('[getCommentSettlementRankings] Called with:', { userEmail, projectId, stageId });
 
   try {

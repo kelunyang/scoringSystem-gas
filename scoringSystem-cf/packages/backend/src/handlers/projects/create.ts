@@ -22,7 +22,7 @@ export async function createProject(
     scoreRangeMin?: number;
     scoreRangeMax?: number;
   }
-): Promise<Response> {
+) {
   try {
     // Check if user has permission to create projects (must be Global PM)
     const isGlobalPM = await checkGlobalPermission(env, userEmail, 'create_project');
@@ -119,7 +119,7 @@ export async function cloneProject(
   projectId: string,
   newProjectName: string,
   copyViewers: boolean = false
-): Promise<Response> {
+) {
   try {
     // Check if user has permission to create projects
     const isGlobalPM = await checkGlobalPermission(env, userEmail, 'create_project');

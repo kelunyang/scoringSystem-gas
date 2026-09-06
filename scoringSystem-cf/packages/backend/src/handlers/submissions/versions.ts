@@ -35,7 +35,7 @@ export async function getSubmissionVersions(
     includeWithdrawn?: boolean;
     includeActive?: boolean;
   } = {}
-): Promise<Response> {
+) {
   try {
     // Check user's permissions first
     const user = await env.DB.prepare('SELECT userId FROM users WHERE userEmail = ?').bind(userEmail).first();
@@ -219,7 +219,7 @@ export async function restoreSubmissionVersion(
   projectId: string,
   stageId: string,
   submissionId: string
-): Promise<Response> {
+) {
   try {
     // 1. 取得要 restore 的 submission（完整資料用於複製）
     const oldSubmission = await env.DB.prepare(`

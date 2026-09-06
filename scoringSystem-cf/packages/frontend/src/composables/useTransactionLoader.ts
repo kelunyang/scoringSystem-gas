@@ -38,7 +38,7 @@ export function useTransactionLoader(projectId: string, userEmail = null) {
     error.value = null
 
     try {
-      const httpResponse = await rpcClient.wallets.transactions.$post({
+      const httpResponse = await rpcClient.api.wallets.transactions.$post({
         json: {
           projectId: projectId,
           targetUserEmail: userEmail || null,
@@ -182,7 +182,7 @@ export function useTransactionDetailsLoader(projectId: string | Ref<string | nul
       if (transaction.relatedSubmissionId) {
         const pid = typeof projectId === 'string' ? projectId : projectId.value
         promises.push(
-          rpcClient.submissions.details.$post({
+          rpcClient.api.submissions.details.$post({
             json: {
               projectId: pid || '',
               submissionId: transaction.relatedSubmissionId
@@ -194,7 +194,7 @@ export function useTransactionDetailsLoader(projectId: string | Ref<string | nul
       if (transaction.relatedCommentId) {
         const pid = typeof projectId === 'string' ? projectId : projectId.value
         promises.push(
-          rpcClient.comments.details.$post({
+          rpcClient.api.comments.details.$post({
             json: {
               projectId: pid || '',
               commentId: transaction.relatedCommentId

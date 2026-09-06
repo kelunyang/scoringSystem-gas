@@ -269,7 +269,7 @@ async function handleAvatarRegenerate() {
     // Use email from props or form data
     const email = props.targetEmail || formData.value.email || `temp-${Date.now()}@example.com`;
 
-    const httpResponse = await rpcClient.users.avatar.generate.$post({
+    const httpResponse = await rpcClient.api.users.avatar.generate.$post({
       json: { email }
     });
     const response = await httpResponse.json();

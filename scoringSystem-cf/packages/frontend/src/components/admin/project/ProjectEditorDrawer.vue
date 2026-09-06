@@ -362,7 +362,7 @@ watch(() => props.visible, async (visible) => {
 async function loadSystemDefaults(): Promise<void> {
   try {
     loadingDefaults.value = true
-    const httpResponse = await rpcClient.projects.system['scoring-defaults'].$get()
+    const httpResponse = await rpcClient.api.projects.system['scoring-defaults'].$get()
     const response = await httpResponse.json()
 
     if (response.success) {
@@ -385,7 +385,7 @@ async function loadSystemDefaults(): Promise<void> {
  */
 async function loadProjectScoringConfig(projectId: string): Promise<void> {
   try {
-    const httpResponse = await rpcClient.projects[':projectId']['scoring-config'].$get({
+    const httpResponse = await rpcClient.api.projects[':projectId']['scoring-config'].$get({
       param: { projectId }
     })
     const response = await httpResponse.json()

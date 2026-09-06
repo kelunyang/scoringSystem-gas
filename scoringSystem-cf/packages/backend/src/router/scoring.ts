@@ -50,10 +50,10 @@ import {
 import { errorResponse } from '../utils/response';
 
 
-const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
 // Apply authentication middleware to all routes
-app.use('*', authMiddleware);
+  .use('*', authMiddleware)
 
 
 
@@ -61,7 +61,7 @@ app.use('*', authMiddleware);
  * Validate pre-settlement conditions
  * Body: { projectId, stageId }
  */
-app.post(
+  .post(
   '/validate-settlement',
   zValidator('json', ValidateSettlementRequestSchema),
   async (c) => {
@@ -81,13 +81,13 @@ app.post(
       data: validation
     });
   }
-);
+)
 
 /**
  * Settle stage
  * Body: { projectId, stageId, forceSettle?: boolean }
  */
-app.post(
+  .post(
   '/settle',
   zValidator('json', SettleStageRequestSchema),
   async (c) => {
@@ -110,7 +110,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 
 /**
@@ -119,7 +119,7 @@ app.post(
  * reverses any active stage settlement, and rolls the stage back to voting/active.
  * Body: { projectId, stageId, reason, targetState: 'voting'|'active', extendHours? }
  */
-app.post(
+  .post(
   '/clear-stage-votes',
   zValidator('json', ClearStageVotesRequestSchema),
   async (c) => {
@@ -135,25 +135,25 @@ app.post(
       extendHours: body.extendHours
     });
   }
-);
+)
 
 /**
  * Get submission voting data for analysis
  * Body: { stageId }
  */
-app.post(
+  .post(
   '/submission-voting-data',
   zValidator('json', GetSubmissionVotingDataRequestSchema),
   async (c) => {
     return await getSubmissionVotingData(c);
   }
-);
+)
 
 /**
  * Get comment voting data for analysis
  * Body: { stageId }
  */
-app.post(
+  .post(
   '/comment-voting-data',
   zValidator('json', GetCommentVotingDataRequestSchema),
   async (c) => {

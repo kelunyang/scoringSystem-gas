@@ -165,7 +165,7 @@ interface GroupProposalStats {
  * key 多數是排名種類（voteRank / teacherRank / settlementRank…），
  * 但 proposalStats 是例外——它裝的是統計而不是名次。
  */
-interface GroupRankings {
+export interface GroupRankings {
   proposalStats?: GroupProposalStats;
   [rankingType: string]: RankingEntryWithMeta | GroupProposalStats | undefined;
 }
@@ -175,7 +175,7 @@ export async function getAllStagesRankings(
   userEmail: string,
   projectId: string,
   stageIds: string[]
-): Promise<Response> {
+) {
   try {
     console.log(`🚀 [getAllStagesRankings] Starting: projectId=${projectId}, stageCount=${stageIds.length}`);
 
@@ -429,7 +429,7 @@ export async function getStageRankings(
   userEmail: string,
   projectId: string,
   stageId: string
-): Promise<Response> {
+) {
   try {
     console.log(`🚀 [getStageRankings] Starting: projectId=${projectId}, stageId=${stageId}, userEmail=${userEmail}`);
 

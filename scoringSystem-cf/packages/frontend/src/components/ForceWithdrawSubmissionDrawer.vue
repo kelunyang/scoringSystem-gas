@@ -233,7 +233,7 @@ async function confirmWithdraw() {
   isWithdrawing.value = true
 
   try {
-    const httpResponse = await rpcClient.submissions['force-withdraw'].$post({
+    const httpResponse = await rpcClient.api.submissions['force-withdraw'].$post({
       json: {
         projectId: props.projectId,
         submissionId: props.submission.submissionId,

@@ -18,7 +18,7 @@ import type { SqlBindValue } from '../../types';
  * Supports server-side filtering, searching, and sorting
  */
 /** 使用者所屬的全域群組，附在管理後台的使用者清單上。 */
-interface UserGlobalGroup {
+export interface UserGlobalGroup {
   groupId: string;
   groupName: string;
   description: string | null;
@@ -52,7 +52,7 @@ export async function getAllUsers(
     limit?: number;
     offset?: number;
   }
-): Promise<Response> {
+) {
   try {
     // Build WHERE conditions
     const conditions: string[] = [];
@@ -243,7 +243,7 @@ export async function updateUserStatus(
   adminEmail: string,
   userEmail: string,
   status: string
-): Promise<Response> {
+) {
   try {
     // Validate status
     if (!['active', 'inactive'].includes(status)) {
@@ -333,7 +333,7 @@ export async function updateUserProfile(
     avatarStyle?: string;
     avatarOptions?: Record<string, string>;
   }
-): Promise<Response> {
+) {
   try {
     // Validate required userEmail
     if (!userData.userEmail) {
@@ -450,7 +450,7 @@ export async function resetUserPassword(
   env: Env,
   adminEmail: string,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     // Get user (including displayName for email)
     const user = await env.DB.prepare(`
@@ -517,7 +517,7 @@ export async function batchUpdateUserStatus(
   userEmails: string[],
   status: string,
   adminEmail: string
-): Promise<Response> {
+) {
   try {
     if (!userEmails || userEmails.length === 0) {
       return errorResponse('INVALID_INPUT', 'userEmails array is required');
@@ -677,7 +677,7 @@ export async function batchResetPassword(
   userEmails: string[],
   _newPassword: string,
   _adminEmail: string
-): Promise<Response> {
+) {
   try {
     if (!userEmails || userEmails.length === 0) {
       return errorResponse('INVALID_INPUT', 'userEmails array is required');
@@ -710,7 +710,7 @@ export async function batchResetPassword(
 export async function getUserGlobalGroups(
   env: Env,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     // Admin-facing listing, not an authorization check: a deactivated group is
     // worth showing (it explains why a permission stopped applying), so it is
@@ -759,7 +759,7 @@ export async function getUserGlobalGroups(
 export async function getUserProjectGroups(
   env: Env,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     // Validate userEmail
     if (!userEmail) {
@@ -821,7 +821,7 @@ export async function unlockUser(
   userEmail: string,
   unlockReason: string,
   resetLockCount: boolean = false
-): Promise<Response> {
+) {
   try {
     // Validate inputs
     if (!userEmail) {
@@ -1113,7 +1113,7 @@ function rewriteMentions(content: string, oldEmail: string, newEmail: string): s
 }
 
 /** One row of the impact scan */
-interface EmailImpactItem {
+export interface EmailImpactItem {
   key: string;
   label: string;
   category: EmailRefCategory;
@@ -1192,7 +1192,7 @@ async function scanEmailReferences(env: Env, email: string): Promise<EmailImpact
 export async function getUserEmailImpact(
   env: Env,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     const email = userEmail.trim();
 
@@ -1253,7 +1253,7 @@ export async function changeUserEmail(
   adminEmail: string,
   userEmail: string,
   newEmailInput: string
-): Promise<Response> {
+) {
   try {
     // Normalise the same way registration does, so the stored form is consistent
     const oldEmail = userEmail.trim();

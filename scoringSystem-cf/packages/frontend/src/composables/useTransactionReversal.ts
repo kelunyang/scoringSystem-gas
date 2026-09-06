@@ -66,7 +66,7 @@ export function useTransactionReversal(projectId: string | Ref<string | null>, o
 
     try {
       console.log('Reversing transaction:', transactionId)
-      const httpResponse = await rpcClient.wallets.reverse.$post({
+      const httpResponse = await rpcClient.api.wallets.reverse.$post({
         json: {
           projectId: pid,
           transactionId: transactionId,

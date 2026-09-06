@@ -17,7 +17,7 @@ export async function getStageVotingStatus(
     projectId: string;
     stageId: string;
   }
-): Promise<Response> {
+) {
   const { userEmail, userId } = context;
   const { projectId, stageId } = requestData;
 

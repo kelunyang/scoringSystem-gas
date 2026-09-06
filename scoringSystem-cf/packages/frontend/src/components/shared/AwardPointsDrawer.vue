@@ -415,7 +415,7 @@ async function handleSubmit() {
     // Batch award points to each selected user
     for (const userEmail of selectedUsers.value) {
       try {
-        const httpResponse = await rpcClient.wallets.award.$post({
+        const httpResponse = await rpcClient.api.wallets.award.$post({
           json: {
             projectId: props.projectId,
             targetUserEmail: userEmail,

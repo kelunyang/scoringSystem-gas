@@ -33,16 +33,16 @@ import {
 } from '@repo/shared/schemas/settlement';
 
 
-const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
 // Apply authentication middleware to all routes
-app.use('*', authMiddleware);
+  .use('*', authMiddleware)
 
 /**
  * Reverse a settlement
  * Body: { projectId, settlementId, reason }
  */
-app.post(
+  .post(
   '/reverse',
   zValidator('json', ReverseSettlementRequestSchema),
   async (c) => {
@@ -59,13 +59,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get reverse settlement preview
  * Body: { projectId, settlementId }
  */
-app.post(
+  .post(
   '/reverse-preview',
   zValidator('json', GetReversePreviewRequestSchema),
   async (c) => {
@@ -81,13 +81,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get settlement history
  * Body: { projectId, filters?: { stageId?, settlementType?, status? } }
  */
-app.post(
+  .post(
   '/history',
   zValidator('json', GetSettlementHistoryRequestSchema),
   async (c) => {
@@ -103,13 +103,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get settlement details
  * Body: { projectId, settlementId }
  */
-app.post(
+  .post(
   '/details',
   zValidator('json', GetSettlementDetailsRequestSchema),
   async (c) => {
@@ -125,14 +125,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 
 /**
  * Get stage settlement rankings
  * Body: { projectId, stageId }
  */
-app.post(
+  .post(
   '/stage-rankings',
   zValidator('json', GetStageSettlementRankingsRequestSchema),
   async (c) => {
@@ -148,13 +148,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get comment settlement rankings
  * Body: { projectId, stageId }
  */
-app.post(
+  .post(
   '/comment-rankings',
   zValidator('json', GetCommentSettlementRankingsRequestSchema),
   async (c) => {

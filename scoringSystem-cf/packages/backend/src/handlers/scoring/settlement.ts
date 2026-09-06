@@ -146,7 +146,7 @@ export async function settleStage(
   projectId: string,
   stageId: string,
   forceSettle: boolean = false
-): Promise<Response> {
+) {
   let settlementId: string | undefined; // Declare here for catch block access
 
   try {

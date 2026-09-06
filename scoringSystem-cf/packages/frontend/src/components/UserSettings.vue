@@ -657,7 +657,7 @@ function handleAutoOpenNotificationChange(rawValue: string | number | boolean) {
 // Comment page size preference methods (stored in KV)
 async function loadCommentPageSizePreference() {
   try {
-    const httpResponse = await rpcClient.users.settings.$get()
+    const httpResponse = await rpcClient.api.users.settings.$get()
     const response = await httpResponse.json()
     if (response.success && response.data?.commentPageSize) {
       commentPageSize.value = response.data.commentPageSize
@@ -675,7 +675,7 @@ async function handleCommentPageSizeChange(rawValue: number | number[]) {
 
   savingCommentPageSize.value = true
   try {
-    const httpResponse = await rpcClient.users.settings['comment-page-size'].$put({
+    const httpResponse = await rpcClient.api.users.settings['comment-page-size'].$put({
       json: { pageSize: value }
     })
     const response = await httpResponse.json()
@@ -723,7 +723,7 @@ function closeActivityDetail() {
 // Avatar management methods (simplified with shared component)
 async function regenerateAvatar() {
   try {
-    const httpResponse = await rpcClient.users.avatar.regenerate.$post()
+    const httpResponse = await rpcClient.api.users.avatar.regenerate.$post()
     const response = await httpResponse.json()
 
     if (response.success) {
@@ -740,7 +740,7 @@ async function regenerateAvatar() {
 
 async function saveAvatarSettings(data: AvatarData) {
   try {
-    const httpResponse = await rpcClient.users.avatar.update.$post({
+    const httpResponse = await rpcClient.api.users.avatar.update.$post({
       json: { avatarData: data }
     })
     const response = await httpResponse.json()
@@ -794,7 +794,7 @@ async function saveProfile() {
 
   savingProfile.value = true
   try {
-    const httpResponse = await rpcClient.users.profile.update.$post({
+    const httpResponse = await rpcClient.api.users.profile.update.$post({
       json: {
         updates: {
           displayName: editProfileForm.value.displayName

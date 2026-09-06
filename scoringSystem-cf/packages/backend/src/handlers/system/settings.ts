@@ -24,7 +24,7 @@ import type { ConfigValue } from '@utils/config';
 export async function getSystemSettings(
   env: Env,
   db: D1Database
-): Promise<Response> {
+) {
   try {
     // Get system title from KV or environment
     const systemTitle = await getSystemTitle(env);
@@ -122,7 +122,7 @@ export async function updateSystemSettings(
   env: Env,
   db: D1Database,
   updates: Record<string, ConfigValue>
-): Promise<Response> {
+) {
   try {
     // Note: Environment variables (vars) cannot be updated at runtime
     // They must be changed in wrangler.toml and redeployed

@@ -899,7 +899,7 @@ const loadInvitations = async (): Promise<void> => {
   invitationsLoading.value = true
   try {
     // Vue 3 Best Practice: rpcClient automatically handles authentication
-    const httpResponse = await rpcClient.invitations.list.$post({
+    const httpResponse = await rpcClient.api.invitations.list.$post({
       json: {}
     })
     const response = await httpResponse.json()
@@ -988,7 +988,7 @@ const handleGenerateInvite = async (): Promise<void> => {
 
     const batchPromises = batches.map(async (batch, batchIndex) => {
       try {
-        const httpResponse = await rpcClient.invitations['generate-batch'].$post({
+        const httpResponse = await rpcClient.api.invitations['generate-batch'].$post({
           json: {
             targetEmails: batch,
             validDays: inviteForm.validDays,
@@ -1129,7 +1129,7 @@ const openResendDrawer = async (invitation: Invitation): Promise<void> => {
   // Fetch email status from API
   emailStatusLoading.value = true
   try {
-    const httpResponse = await rpcClient.invitations['email-status'].$post({
+    const httpResponse = await rpcClient.api.invitations['email-status'].$post({
       json: { invitationCodes: [invitation.invitationCode] }
     })
     const response = await httpResponse.json()
@@ -1232,10 +1232,10 @@ const handleConfirmAction = async (): Promise<void> => {
 
     // Call API - use conditional to avoid type error
     const httpResponse = isDeactivate
-      ? await rpcClient.invitations.deactivate.$post({
+      ? await rpcClient.api.invitations.deactivate.$post({
           json: { invitationId: invitation.invitationId }
         })
-      : await rpcClient.invitations.reactivate.$post({
+      : await rpcClient.api.invitations.reactivate.$post({
           json: { invitationId: invitation.invitationId }
         })
 

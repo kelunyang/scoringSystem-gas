@@ -94,7 +94,7 @@ export function useProjectCore(projectId: Ref<string | null> | string | Ref<stri
   return useQuery({
     queryKey: ['project', 'core', projectId],
     queryFn: async (): Promise<ProjectCoreData> => {
-      const httpResponse = await rpcClient.projects.core.$post({
+      const httpResponse = await rpcClient.api.projects.core.$post({
         json: {
           projectId: getValue(projectId)
         }
@@ -132,7 +132,7 @@ export function useStages(projectId: Ref<string> | string): UseQueryReturnType<S
   return useQuery({
     queryKey: ['stages', projectId],
     queryFn: async (): Promise<Stage[]> => {
-      const httpResponse = await rpcClient.stages.list.$post({
+      const httpResponse = await rpcClient.api.stages.list.$post({
         json: {
           projectId: getValue(projectId)
         }
@@ -171,7 +171,7 @@ export function useCreateStage(): UseMutationReturnType<Stage, Error, CreateStag
 
   return useMutation({
     mutationFn: async ({ projectId, stageData }: CreateStageVariables): Promise<Stage> => {
-      const httpResponse = await rpcClient.stages.create.$post({
+      const httpResponse = await rpcClient.api.stages.create.$post({
         json: {
           projectId,
           stageData
@@ -219,7 +219,7 @@ export function useUpdateStage(): UseMutationReturnType<Stage, Error, UpdateStag
 
   return useMutation({
     mutationFn: async ({ projectId, stageId, updates }: UpdateStageVariables): Promise<Stage> => {
-      const httpResponse = await rpcClient.stages.update.$post({
+      const httpResponse = await rpcClient.api.stages.update.$post({
         json: {
           projectId,
           stageId,
@@ -295,7 +295,7 @@ export function useInfiniteStageComments(
       getValue(excludeTeachers)
     ]),
     queryFn: async ({ pageParam = 0 }): Promise<InfiniteCommentsPage> => {
-      const httpResponse = await rpcClient.comments.stage.$post({
+      const httpResponse = await rpcClient.api.comments.stage.$post({
         json: {
           projectId: getValue(projectId),
           stageId: getValue(stageId),

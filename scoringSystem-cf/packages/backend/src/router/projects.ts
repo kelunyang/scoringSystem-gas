@@ -61,16 +61,16 @@ import {
 } from '@repo/shared/schemas/projects';
 
 
-const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
 // Apply authentication middleware to all routes
-app.use('*', authMiddleware);
+  .use('*', authMiddleware)
 
 /**
  * Create new project
  * Body: { projectData: { projectName, description, scoreRangeMin?, scoreRangeMax? } }
  */
-app.post(
+  .post(
   '/create',
   zValidator('json', CreateProjectRequestSchema),
   async (c) => {
@@ -88,13 +88,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get project details
  * Body: { projectId }
  */
-app.post(
+  .post(
   '/get',
   zValidator('json', GetProjectRequestSchema),
   async (c) => {
@@ -109,13 +109,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Update project
  * Body: { projectId, updates: { projectName?, description?, status?, scoreRangeMin?, scoreRangeMax? } }
  */
-app.post(
+  .post(
   '/update',
   zValidator('json', UpdateProjectRequestSchema),
   async (c) => {
@@ -131,13 +131,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Delete (archive) project
  * Body: { projectId }
  */
-app.post(
+  .post(
   '/delete',
   zValidator('json', DeleteProjectRequestSchema),
   async (c) => {
@@ -152,13 +152,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * List user's projects
  * Body: { filters?: { status?, createdBy?, tagId?, includeStages? } }
  */
-app.post(
+  .post(
   '/list',
   zValidator('json', ListProjectsRequestSchema),
   async (c) => {
@@ -173,13 +173,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * List user's projects with stages (convenience endpoint)
  * Body: { filters?: { status?, createdBy?, tagId? } }
  */
-app.post(
+  .post(
   '/list-with-stages',
   zValidator('json', ListProjectsRequestSchema),
   async (c) => {
@@ -197,13 +197,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get project core data
  * Body: { projectId }
  */
-app.post(
+  .post(
   '/core',
   zValidator('json', GetProjectCoreRequestSchema),
   async (c) => {
@@ -218,13 +218,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get project content data
  * Body: { projectId, stageId, contentType?, excludeTeachers?, excludeUserGroups?, includeSubmitted? }
  */
-app.post(
+  .post(
   '/content',
   zValidator('json', GetProjectContentRequestSchema),
   async (c) => {
@@ -256,13 +256,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Clone existing project
  * Body: { projectId, newProjectName, copyViewers? }
  */
-app.post(
+  .post(
   '/clone',
   zValidator('json', CloneProjectRequestSchema),
   async (c) => {
@@ -279,13 +279,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * List project viewers
  * Body: { projectId }
  */
-app.post(
+  .post(
   '/viewers/list',
   zValidator('json', ListProjectViewersRequestSchema),
   async (c) => {
@@ -300,13 +300,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Add project viewer
  * Body: { projectId, userEmail, role }
  */
-app.post(
+  .post(
   '/viewers/add',
   zValidator('json', AddProjectViewerRequestSchema),
   async (c) => {
@@ -323,13 +323,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Add project viewers in batch
  * Body: { projectId, viewers: [{ userEmail, role }] }
  */
-app.post(
+  .post(
   '/viewers/add-batch',
   zValidator('json', AddProjectViewersBatchRequestSchema),
   async (c) => {
@@ -345,13 +345,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Remove project viewer
  * Body: { projectId, userEmail }
  */
-app.post(
+  .post(
   '/viewers/remove',
   zValidator('json', RemoveProjectViewerRequestSchema),
   async (c) => {
@@ -367,13 +367,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Update project viewer role
  * Body: { projectId, userEmail, role }
  */
-app.post(
+  .post(
   '/viewers/update-role',
   zValidator('json', UpdateProjectViewerRoleRequestSchema),
   async (c) => {
@@ -390,13 +390,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Remove project viewers in batch
  * Body: { projectId, userEmails: string[] }
  */
-app.post(
+  .post(
   '/viewers/remove-batch',
   zValidator('json', RemoveProjectViewersBatchRequestSchema),
   async (c) => {
@@ -412,13 +412,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Update project viewers role in batch
  * Body: { projectId, userEmails: string[], role }
  */
-app.post(
+  .post(
   '/viewers/update-roles-batch',
   zValidator('json', UpdateProjectViewersRoleBatchRequestSchema),
   async (c) => {
@@ -435,13 +435,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Mark unassigned members - find members who are in projectviewers but not in any group
  * Body: { projectId }
  */
-app.post(
+  .post(
   '/viewers/mark-unassigned',
   zValidator('json', ListProjectViewersRequestSchema), // Reuse schema (same { projectId })
   async (c) => {
@@ -456,13 +456,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Load viewers from other projects
  * Body: { projectIds: string[], role?: 'teacher' | 'observer' | 'member' | 'all' }
  */
-app.post(
+  .post(
   '/viewers/load-from-projects',
   zValidator('json', LoadViewersFromProjectsRequestSchema),
   async (c) => {
@@ -478,7 +478,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Mount scoring configuration router
@@ -488,6 +488,6 @@ app.post(
  * - GET /system/scoring-defaults
  * - PUT /system/scoring-defaults
  */
-app.route('/', scoringConfigRouter);
+  .route('/', scoringConfigRouter);
 
 export default app;

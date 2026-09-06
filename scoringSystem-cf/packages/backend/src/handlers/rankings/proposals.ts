@@ -39,7 +39,7 @@ interface RankingProposalRow {
 }
 
 /** proposalvotes JOIN users 的一列。 */
-interface ProposalVoteRow {
+export interface ProposalVoteRow {
   proposalId: string;
   voteId: string;
   voterEmail: string;
@@ -56,7 +56,7 @@ export async function getStageRankingProposals(
   userEmail: string,
   projectId: string,
   stageId: string
-): Promise<Response> {
+) {
   try {
     console.log(`🚀 [getStageRankingProposals] Starting: projectId=${projectId}, stageId=${stageId}, userEmail=${userEmail}`);
 

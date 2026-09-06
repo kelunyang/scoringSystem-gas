@@ -69,7 +69,7 @@ export async function submitDeliverable(
     authors?: string[];
     participationProposal?: ParticipationProposal;
   }
-): Promise<Response> {
+) {
   try {
     // Get user's group membership
     const userGroup = await env.DB.prepare(`
@@ -306,7 +306,7 @@ export async function getStageSubmissions(
     includeWithdrawn?: boolean;
     groupId?: string;
   } = {}
-): Promise<Response> {
+) {
   try {
     let query = `
       SELECT
@@ -382,7 +382,7 @@ export async function getStageConsensusStatus(
   env: Env,
   projectId: string,
   stageId: string
-): Promise<Response> {
+) {
   try {
     const result = await env.DB.prepare(`
       WITH latest AS (
@@ -434,7 +434,7 @@ export async function getSubmissionDetails(
   userEmail: string,
   projectId: string,
   submissionId: string
-): Promise<Response> {
+) {
   try {
     const submission = await env.DB.prepare(`
       SELECT
@@ -504,7 +504,7 @@ export async function updateSubmission(
     authors?: string[];
     participationProposal?: ParticipationProposal;
   }
-): Promise<Response> {
+) {
   try {
     // Get submission to verify ownership
     const submission = await env.DB.prepare(`
@@ -589,7 +589,7 @@ export async function withdrawSubmission(
   userEmail: string,
   projectId: string,
   submissionId: string
-): Promise<Response> {
+) {
   try {
     // Get submission to verify ownership
     const submission = await env.DB.prepare(`
@@ -802,7 +802,7 @@ export async function deleteSubmission(
   userEmail: string,
   projectId: string,
   submissionId: string
-): Promise<Response> {
+) {
   // deleteSubmission is just an alias for withdrawSubmission (following GAS pattern)
   return withdrawSubmission(env, userEmail, projectId, submissionId);
 }
@@ -817,7 +817,7 @@ export async function getParticipationConfirmations(
   projectId: string,
   stageId: string,
   submissionId: string
-): Promise<Response> {
+) {
   try {
 
     // Find the submission
@@ -1015,7 +1015,7 @@ export async function getGroupStageVotingHistory(
   projectId: string,
   stageId: string,
   groupId?: string
-): Promise<Response> {
+) {
   try {
     // Find user's group if groupId not provided
     const userGroup = await env.DB.prepare(`
@@ -1175,7 +1175,7 @@ export async function voteParticipationProposal(
   projectId: string,
   stageId: string,
   agree: boolean
-): Promise<Response> {
+) {
   try {
     // SECURITY: Backend determines which submission to vote on (not frontend)
     // Step 1: Find user's active group
@@ -1537,7 +1537,7 @@ export async function forceWithdrawSubmission(
   projectId: string,
   submissionId: string,
   reason: string
-): Promise<Response> {
+) {
   try {
     // 1. Permission check: Only teachers can force withdraw
     const role = await getProjectRole(env.DB, teacherEmail, projectId);

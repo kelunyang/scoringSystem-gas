@@ -12,7 +12,7 @@ import { getEffectiveScoringConfig } from '../../utils/scoring-config';
  * Check if user is eligible to vote on comments
  */
 /** 一則評論在各種排名裡的名次。沒有排名時是 null。 */
-interface CommentRankingSummary {
+export interface CommentRankingSummary {
   commentId: string;
   userVoteRank: number | null;
   teacherVoteRank: number | null;
@@ -24,7 +24,7 @@ export async function checkVotingEligibility(
   userEmail: string,
   projectId: string,
   stageId: string
-): Promise<Response> {
+) {
   try {
     // Check if user has commented in this stage (excluding replies)
     const commentsResult = await env.DB.prepare(`
@@ -146,7 +146,7 @@ export async function submitCommentRanking(
   projectId: string,
   stageId: string,
   rankingData: Array<{ commentId: string; rank: number }>
-): Promise<Response> {
+) {
   try {
     // 1. Check voting eligibility
     const eligibilityResponse = await checkVotingEligibility(env, userEmail, projectId, stageId);
@@ -282,7 +282,7 @@ export async function getCommentRankings(
   projectId: string,
   stageId: string,
   commentId: string
-): Promise<Response> {
+) {
   try {
     const rankings: CommentRankingSummary = {
       commentId,
@@ -356,7 +356,7 @@ export async function getStageCommentRankings(
   userEmail: string,
   projectId: string,
   stageId: string
-): Promise<Response> {
+) {
   try {
     // Get all comments with awardRank (exclude teachers and replies)
     const commentsResult = await env.DB.prepare(`
@@ -481,7 +481,7 @@ export async function getCommentRankingHistory(
   userEmail: string,
   projectId: string,
   stageId: string
-): Promise<Response> {
+) {
   try {
     // Get all user's comment ranking proposals for this stage, ordered chronologically
     const proposalsResult = await env.DB.prepare(`

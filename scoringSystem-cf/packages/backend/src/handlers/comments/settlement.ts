@@ -27,7 +27,7 @@ export async function getCommentSettlementAnalysis(
   env: Env,
   projectId: string,
   stageId: string
-): Promise<Response> {
+) {
   try {
     // 1. Check stage status from VIEW (auto-calculated)
     const stage = await env.DB.prepare(`

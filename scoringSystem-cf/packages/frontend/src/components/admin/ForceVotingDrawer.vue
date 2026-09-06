@@ -166,7 +166,7 @@ async function loadStageStats() {
 
   loading.value = true
   try {
-    const httpResponse = await rpcClient.stages.get.$post({
+    const httpResponse = await rpcClient.api.stages.get.$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId
@@ -200,7 +200,7 @@ async function confirmForceVoting() {
 
   isProcessing.value = true
   try {
-    const httpResponse = await rpcClient.stages['force-transition'].$post({
+    const httpResponse = await rpcClient.api.stages['force-transition'].$post({
       json: {
         projectId: props.projectId!,
         stageId: props.stageId!

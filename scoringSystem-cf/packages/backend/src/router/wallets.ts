@@ -41,17 +41,17 @@ import {
 import { errorResponse } from '../utils/response';
 
 
-const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
 // Apply authentication middleware to all routes
-app.use('*', authMiddleware);
+  .use('*', authMiddleware)
 
 
 /**
  * Get user transaction history
  * Body: { sessionId, projectId, targetUserEmail?, limit?, offset?, transactionTypes?, dateStart?, dateEnd?, searchDescription?, searchUser? }
  */
-app.post(
+  .post(
   '/transactions',
   zValidator('json', GetUserTransactionsRequestSchema),
   async (c) => {
@@ -151,14 +151,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 
 /**
  * Award points to user
  * Body: { sessionId, projectId, targetUserEmail, amount, transactionType, source, relatedId?, settlementId?, stageId? }
  */
-app.post(
+  .post(
   '/award',
   zValidator('json', AwardPointsRequestSchema),
   async (c) => {
@@ -196,13 +196,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Reverse transaction
  * Body: { sessionId, projectId, transactionId, reason }
  */
-app.post(
+  .post(
   '/reverse',
   zValidator('json', ReverseTransactionRequestSchema),
   async (c) => {
@@ -226,14 +226,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get project wallet ladder (GAS-compatible endpoint)
  * User-based ladder with permission masking for visualization
  * Body: { sessionId, projectId, zeroScoreThreshold? }
  */
-app.post(
+  .post(
   '/project-ladder',
   zValidator('json', GetProjectWalletLadderRequestSchema),
   async (c) => {
@@ -259,14 +259,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 
 /**
  * Export project wallet summary
  * Body: { sessionId, projectId, zeroScoreThreshold? }
  */
-app.post(
+  .post(
   '/export',
   zValidator('json', ExportWalletSummaryRequestSchema),
   async (c) => {
@@ -289,13 +289,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get stage growth data for visualization
  * Body: { sessionId, projectId, targetUserEmail? }
  */
-app.post(
+  .post(
   '/stage-growth',
   zValidator('json', GetStageGrowthDataRequestSchema),
   async (c) => {

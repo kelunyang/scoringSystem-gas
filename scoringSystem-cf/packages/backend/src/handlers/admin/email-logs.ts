@@ -26,7 +26,7 @@ type QueryParam = string | number;
 /**
  * Email log filters (validated input)
  */
-interface EmailLogFilters {
+export interface EmailLogFilters {
   trigger?: string;
   recipient?: string;
   status?: 'sent' | 'failed';
@@ -45,13 +45,13 @@ interface AggregatedStatsResult {
   failed: number;
 }
 
-interface TriggerStatsResult {
+export interface TriggerStatsResult {
   trigger: string;
   count: number;
   status: string;
 }
 
-interface DateStatsResult {
+export interface DateStatsResult {
   date: string;
   count: number;
   status: string;
@@ -197,7 +197,7 @@ export async function getEmailLogs(
     limit?: number;
     offset?: number;
   } = {}
-): Promise<Response> {
+) {
   try {
     // Check permission
     const hasPermission = await checkEmailLogsPermission(env, userEmail);
@@ -245,7 +245,7 @@ export async function getEmailLogs(
 export async function getEmailStatistics(
   env: Env,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     // Check permission
     const hasPermission = await checkEmailLogsPermission(env, userEmail);
@@ -317,7 +317,7 @@ export async function resendSingleEmail(
   env: Env,
   userEmail: string,
   logId: string
-): Promise<Response> {
+) {
   try {
     // Check permission
     const hasPermission = await checkEmailLogsPermission(env, userEmail);
@@ -374,7 +374,7 @@ export async function resendBatchEmailsHandler(
   env: Env,
   userEmail: string,
   logIds: string[]
-): Promise<Response> {
+) {
   try {
     // Check permission
     const hasPermission = await checkEmailLogsPermission(env, userEmail);

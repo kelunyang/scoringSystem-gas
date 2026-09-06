@@ -1338,7 +1338,7 @@ async function confirmDelete() {
 
   try {
     deleting.value = true
-    const httpResponse = await rpcClient.submissions.delete.$post({
+    const httpResponse = await rpcClient.api.submissions.delete.$post({
       json: {
         projectId: props.projectId,
         submissionId: props.submissionId
@@ -1534,7 +1534,7 @@ async function confirmRestore() {
 
   try {
     restoring.value = true
-    const httpResponse = await rpcClient.submissions.restore.$post({
+    const httpResponse = await rpcClient.api.submissions.restore.$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,

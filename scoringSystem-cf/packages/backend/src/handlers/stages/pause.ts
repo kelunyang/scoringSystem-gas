@@ -26,7 +26,7 @@ export async function pauseStage(
   projectId: string,
   stageId: string,
   reason: string
-): Promise<Response> {
+) {
   try {
     // Get current stage with auto-calculated status
     const stage = await env.DB.prepare(`
@@ -138,7 +138,7 @@ export async function resumeStage(
   userEmail: string,
   projectId: string,
   stageId: string
-): Promise<Response> {
+) {
   try {
     // Get current stage with auto-calculated status
     const stage = await env.DB.prepare(`

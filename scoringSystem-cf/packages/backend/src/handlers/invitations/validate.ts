@@ -15,7 +15,7 @@ export async function verifyInvitationCode(
   env: Env,
   invitationCode: string,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     console.log('[Verify] Starting verification with:', { invitationCode, userEmail });
 

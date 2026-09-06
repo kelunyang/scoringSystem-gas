@@ -45,17 +45,15 @@ import {
 import { errorResponse } from '../utils/response';
 
 
-const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
-
 // Public routes (no authentication required)
-const publicApp = new Hono<{ Bindings: Env }>();
+const publicApp = new Hono<{ Bindings: Env }>()
 
 /**
  * Public: Generate avatar data
  * Body: { email: string }
  * No authentication required - used for registration
  */
-publicApp.post('/avatar/generate', async (c) => {
+  .post('/avatar/generate', async (c) => {
   const body = await c.req.json();
   const email = body.email || body.userEmail || `temp-${Date.now()}@example.com`;
 
@@ -68,17 +66,19 @@ publicApp.post('/avatar/generate', async (c) => {
   return response;
 });
 
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
+
 // Merge public routes BEFORE applying authentication middleware
-app.route('/', publicApp);
+  .route('/', publicApp)
 
 // Apply authentication middleware to all authenticated routes
-app.use('*', authMiddleware);
+  .use('*', authMiddleware)
 
 /**
  * Get user profile
  * Body: { sessionId, targetUserId? }
  */
-app.post(
+  .post(
   '/profile',
   zValidator('json', GetUserProfileRequestSchema),
   async (c) => {
@@ -95,13 +95,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Update user profile
  * Body: { sessionId, updates: { displayName?, preferences? } }
  */
-app.post(
+  .post(
   '/profile/update',
   zValidator('json', UpdateUserProfileRequestSchema),
   async (c) => {
@@ -118,13 +118,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Update user avatar
  * Body: { sessionId, avatarData: { avatarSeed?, avatarStyle?, avatarOptions? } }
  */
-app.post(
+  .post(
   '/avatar/update',
   zValidator('json', UpdateUserAvatarRequestSchema),
   async (c) => {
@@ -141,13 +141,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Regenerate avatar seed
  * Body: { sessionId }
  */
-app.post('/avatar/regenerate', async (c) => {
+  .post('/avatar/regenerate', async (c) => {
   const user = c.get('user');
 
   const response = await regenerateAvatarSeed(
@@ -157,13 +157,13 @@ app.post('/avatar/regenerate', async (c) => {
   );
 
   return response;
-});
+})
 
 /**
  * Search users
  * Body: { sessionId, query, limit? }
  */
-app.post(
+  .post(
   '/search',
   zValidator('json', SearchUsersRequestSchema),
   async (c) => {
@@ -180,7 +180,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 
 
@@ -188,7 +188,7 @@ app.post(
  * Get user display names (batch query)
  * Body: { sessionId, projectId, userEmails: string[] }
  */
-app.post(
+  .post(
   '/display-names',
   zValidator('json', GetUserDisplayNamesRequestSchema),
   async (c) => {
@@ -213,7 +213,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 // ============ User Settings Endpoints ============
 
@@ -221,25 +221,25 @@ app.post(
  * Get all user settings
  * Body: { sessionId }
  */
-app.get('/settings', async (c) => {
+  .get('/settings', async (c) => {
   const user = c.get('user');
   return getAllUserSettings(c.env, user.userEmail);
-});
+})
 
 /**
  * Get comment page size setting
  * Body: { sessionId }
  */
-app.get('/settings/comment-page-size', async (c) => {
+  .get('/settings/comment-page-size', async (c) => {
   const user = c.get('user');
   return getCommentPageSize(c.env, user.userEmail);
-});
+})
 
 /**
  * Update comment page size setting
  * Body: { sessionId, pageSize: number (3-10) }
  */
-app.put('/settings/comment-page-size', async (c) => {
+  .put('/settings/comment-page-size', async (c) => {
   const user = c.get('user');
   const body = await c.req.json();
   const pageSize = body.pageSize;

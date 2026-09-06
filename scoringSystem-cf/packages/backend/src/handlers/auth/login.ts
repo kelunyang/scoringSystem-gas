@@ -135,7 +135,7 @@ export async function validateSession(
   db: D1Database,
   token: string,
   jwtSecret: string
-): Promise<Response> {
+) {
   try {
     const { verifyToken } = await import('./jwt');
 

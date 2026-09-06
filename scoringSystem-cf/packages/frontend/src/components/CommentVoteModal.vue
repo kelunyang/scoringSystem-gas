@@ -597,7 +597,7 @@ async function checkVotingEligibility(): Promise<void> {
       return
     }
 
-    const httpResponse = await rpcClient.comments['voting-eligibility'].$post({
+    const httpResponse = await rpcClient.api.comments['voting-eligibility'].$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId
@@ -627,7 +627,7 @@ async function loadStageComments(): Promise<void> {
 
     loading.value = true
 
-    const httpResponse = await rpcClient.comments.stage.$post({
+    const httpResponse = await rpcClient.api.comments.stage.$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,
@@ -737,7 +737,7 @@ async function submitVote(): Promise<void> {
       content: comment.content.substring(0, 100) // For reference
     }))
 
-    const httpResponse = await rpcClient.comments.ranking.$post({
+    const httpResponse = await rpcClient.api.comments.ranking.$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,
@@ -819,7 +819,7 @@ function getCurrentUserEmail(): string | null {
 async function loadProposalVersions(): Promise<void> {
   isLoadingProposal.value = true  // Set lock to prevent initializeComments from clearing
   try {
-    const httpResponse = await rpcClient.comments['ranking-history'].$post({
+    const httpResponse = await rpcClient.api.comments['ranking-history'].$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId

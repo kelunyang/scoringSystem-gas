@@ -60,16 +60,16 @@ import {
 import { errorResponse } from '../utils/response';
 
 
-const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
 // Apply authentication middleware to all routes
-app.use('*', authMiddleware);
+  .use('*', authMiddleware)
 
 /**
  * Create new group
  * Body: { projectId, groupData: { groupName, description?, allowChange? } }
  */
-app.post(
+  .post(
   '/create',
   zValidator('json', CreateGroupRequestSchema),
   async (c) => {
@@ -91,13 +91,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Batch create groups
  * Body: { projectId, groupCount, allowChange?, namePrefix? }
  */
-app.post(
+  .post(
   '/batch-create',
   zValidator('json', BatchCreateGroupsSchema),
   async (c) => {
@@ -123,13 +123,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get group details
  * Body: { projectId, groupId }
  */
-app.post(
+  .post(
   '/details',
   zValidator('json', GetGroupDetailsRequestSchema),
   async (c) => {
@@ -151,13 +151,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Update group
  * Body: { projectId, groupId, updates: { groupName?, description?, allowChange? } }
  */
-app.post(
+  .post(
   '/update',
   zValidator('json', UpdateGroupRequestSchema),
   async (c) => {
@@ -176,13 +176,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Delete group
  * Body: { projectId, groupId }
  */
-app.post(
+  .post(
   '/delete',
   zValidator('json', DeleteGroupRequestSchema),
   async (c) => {
@@ -204,13 +204,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Deactivate group (set status to 'inactive')
  * Body: { projectId, groupId }
  */
-app.post(
+  .post(
   '/deactivate',
   zValidator('json', z.object({
     projectId: z.string(),
@@ -237,13 +237,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Activate group (set status to 'active')
  * Body: { projectId, groupId }
  */
-app.post(
+  .post(
   '/activate',
   zValidator('json', z.object({
     projectId: z.string(),
@@ -270,7 +270,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Add user to group
@@ -281,7 +281,7 @@ app.post(
  * - Teachers (manage permission)
  * - Group leaders (specific group check)
  */
-app.post(
+  .post(
   '/add-member',
   zValidator('json', AddMemberRequestSchema),
   async (c) => {
@@ -301,7 +301,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Batch add multiple users to group
@@ -315,7 +315,7 @@ app.post(
  * - Teachers (manage permission)
  * - Group leaders (specific group check)
  */
-app.post(
+  .post(
   '/batch-add-members',
   zValidator('json', BatchAddMembersRequestSchema),
   async (c) => {
@@ -333,7 +333,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Remove user from group
@@ -344,7 +344,7 @@ app.post(
  * - Teachers (manage permission)
  * - Group leaders (specific group check)
  */
-app.post(
+  .post(
   '/remove-member',
   zValidator('json', RemoveMemberRequestSchema),
   async (c) => {
@@ -363,7 +363,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Batch remove multiple users from group
@@ -377,7 +377,7 @@ app.post(
  * - Teachers (manage permission)
  * - Group leaders (specific group check)
  */
-app.post(
+  .post(
   '/batch-remove-members',
   zValidator('json', BatchRemoveMembersRequestSchema),
   async (c) => {
@@ -395,7 +395,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Update member role in group
@@ -404,7 +404,7 @@ app.post(
  * Permission: ONLY system admins and project managers (NOT group leaders)
  * Allows changing a member's role between 'member' and 'leader'
  */
-app.post(
+  .post(
   '/update-member-role',
   zValidator('json', UpdateMemberRoleRequestSchema),
   async (c) => {
@@ -424,7 +424,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Batch update member roles in group
@@ -433,7 +433,7 @@ app.post(
  * Optimized endpoint that uses D1 batch transaction instead of sequential updates.
  * Permission: ONLY system admins and project managers (NOT group leaders)
  */
-app.post(
+  .post(
   '/batch-update-roles',
   zValidator('json', BatchUpdateRolesRequestSchema),
   async (c) => {
@@ -452,13 +452,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * List project groups
  * Body: { projectId, includeInactive? }
  */
-app.post(
+  .post(
   '/list',
   zValidator('json', ListGroupsRequestSchema),
   async (c) => {
@@ -480,14 +480,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get group mention data (for comment mention resolution)
  * POST /groups/mention-data
  * Body: { projectId, groupIds: string[] }
  */
-app.post(
+  .post(
   '/mention-data',
   zValidator('json', GetGroupMentionDataRequestSchema),
   async (c) => {
@@ -511,13 +511,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Batch update group status (activate/deactivate)
  * Body: { projectId, groupIds: string[], status: 'active' | 'inactive' }
  */
-app.post(
+  .post(
   '/batch-update-status',
   zValidator('json', BatchUpdateGroupStatusSchema),
   async (c) => {
@@ -540,13 +540,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Batch update group allowChange (lock/unlock)
  * Body: { projectId, groupIds: string[], allowChange: boolean }
  */
-app.post(
+  .post(
   '/batch-update-allow-change',
   zValidator('json', BatchUpdateGroupAllowChangeSchema),
   async (c) => {

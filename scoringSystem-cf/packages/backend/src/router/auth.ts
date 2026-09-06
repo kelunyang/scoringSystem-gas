@@ -44,7 +44,7 @@ import {
   PasskeyCredentialDeleteRequestSchema
 } from '@repo/shared/schemas/auth';
 
-const authRouter = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
+const authRouter = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
 /**
  * POST /auth/register
@@ -62,7 +62,7 @@ const authRouter = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
  * }
  * Returns: { sessionId: string, user: {...} }
  */
-authRouter.post(
+  .post(
   '/register',
   zValidator('json', RegisterRequestSchema),
   async (c) => {
@@ -104,7 +104,7 @@ authRouter.post(
 
     return c.json(result, result.success ? 200 : 400);
   }
-);
+)
 
 /**
  * POST /auth/logout
@@ -113,12 +113,12 @@ authRouter.post(
  * Body: { sessionId: string } or Header: Authorization: Bearer <token>
  * Returns: { message: string }
  */
-authRouter.post('/logout', authMiddleware, async (c) => {
+  .post('/logout', authMiddleware, async (c) => {
   const user = c.get('user');
   const ipAddress = c.req.header('CF-Connecting-IP') || null;
   const result = await logoutUser(c.env, user.userId, ipAddress);
   return jsonResponse(result);
-});
+})
 
 /**
  * POST /auth/validate
@@ -127,14 +127,14 @@ authRouter.post('/logout', authMiddleware, async (c) => {
  * Body: { sessionId: string } or Header: Authorization: Bearer <token>
  * Returns: { user: {...} }
  */
-authRouter.post('/validate', authMiddleware, async (c) => {
+  .post('/validate', authMiddleware, async (c) => {
   // If we got here, authMiddleware has validated the token
   const user = c.get('user');
   return c.json({
     success: true,
     data: { user }
   });
-});
+})
 
 /**
  * POST /auth/change-password
@@ -147,7 +147,7 @@ authRouter.post('/validate', authMiddleware, async (c) => {
  * }
  * Returns: { message: string }
  */
-authRouter.post(
+  .post(
   '/change-password',
   authMiddleware,
   zValidator('json', ChangePasswordRequestSchema),
@@ -166,7 +166,7 @@ authRouter.post(
 
     return c.json(result, result.success ? 200 : 400);
   }
-);
+)
 
 /**
  * GET /auth/check-email
@@ -175,7 +175,7 @@ authRouter.post(
  * Query: ?email=john@example.com
  * Returns: { userEmail: string, available: boolean }
  */
-authRouter.get(
+  .get(
   '/check-email',
   zValidator('query', CheckEmailQuerySchema),
   async (c) => {
@@ -207,7 +207,7 @@ authRouter.get(
     const result = await checkEmailAvailability(c.env.DB, email);
     return c.json(result, result.success ? 200 : 400);
   }
-);
+)
 
 /**
  * POST /auth/current-user
@@ -219,7 +219,7 @@ authRouter.get(
  *
  * ✅ Includes sliding expiration: Auto-refreshes token if >50% through lifetime
  */
-authRouter.post('/current-user', async (c) => {
+  .post('/current-user', async (c) => {
   // Extract session ID from body or header
   let sessionId = null;
   try {
@@ -288,7 +288,7 @@ authRouter.post('/current-user', async (c) => {
   }
 
   return validationResponse;
-});
+})
 
 /**
  * POST /auth/refresh-token
@@ -297,7 +297,7 @@ authRouter.post('/current-user', async (c) => {
  * Body: { sessionId: string } or Header: Authorization: Bearer <token>
  * Returns: { token: string }
  */
-authRouter.post('/refresh-token', authMiddleware, async (c) => {
+  .post('/refresh-token', authMiddleware, async (c) => {
   const user = c.get('user');
 
   // Generate new token with same payload
@@ -318,7 +318,7 @@ authRouter.post('/refresh-token', authMiddleware, async (c) => {
       message: 'Token refreshed successfully'
     }
   });
-});
+})
 
 /**
  * POST /auth/login-verify-password
@@ -327,7 +327,7 @@ authRouter.post('/refresh-token', authMiddleware, async (c) => {
  * Body: { userEmail: string, password: string, turnstileToken?: string }
  * Returns: { success: true, message: string, emailSent: boolean, devMode: boolean }
  */
-authRouter.post(
+  .post(
   '/login-verify-password',
   zValidator('json', LoginVerifyPasswordRequestSchema),
   async (c) => {
@@ -659,7 +659,7 @@ authRouter.post(
       }
     }, 503);
   }
-);
+)
 
 /**
  * POST /auth/login-verify-2fa
@@ -668,7 +668,7 @@ authRouter.post(
  * Body: { userEmail: string, code: string }
  * Returns: { sessionId: string, user: {...} }
  */
-authRouter.post(
+  .post(
   '/login-verify-2fa',
   zValidator('json', LoginVerify2FARequestSchema),
   async (c) => {
@@ -1079,7 +1079,7 @@ authRouter.post(
       }
     });
   }
-);
+)
 
 /**
  * POST /auth/resend-2fa
@@ -1088,7 +1088,7 @@ authRouter.post(
  * Body: { userEmail: string, turnstileToken: string }
  * Returns: { success: true, message: string, emailSent: boolean, devMode: boolean }
  */
-authRouter.post(
+  .post(
   '/resend-2fa',
   zValidator('json', Resend2FARequestSchema),
   async (c) => {
@@ -1239,7 +1239,7 @@ authRouter.post(
       });
     }
   }
-);
+)
 
 /**
  * POST /auth/verify-email-for-reset
@@ -1248,7 +1248,7 @@ authRouter.post(
  * Body: { userEmail: string, selectedProjectIds?: string[], allParticipated?: boolean, turnstileToken: string }
  * Returns: { verified: true, message: string }
  */
-authRouter.post(
+  .post(
   '/verify-email-for-reset',
   zValidator('json', VerifyEmailForResetRequestSchema),
   async (c) => {
@@ -1297,7 +1297,7 @@ authRouter.post(
 
     return c.json(result, result.success ? 200 : 400);
   }
-);
+)
 
 /**
  * POST /auth/password-reset-verify-code
@@ -1306,7 +1306,7 @@ authRouter.post(
  * Body: { userEmail: string, code: string, turnstileToken: string }
  * Returns: { verified: true, projects: [...] }
  */
-authRouter.post(
+  .post(
   '/password-reset-verify-code',
   zValidator('json', PasswordResetVerifyCodeRequestSchema),
   async (c) => {
@@ -1332,7 +1332,7 @@ authRouter.post(
 
     return c.json(result, result.success ? 200 : 400);
   }
-);
+)
 
 /**
  * POST /auth/reset-password
@@ -1341,7 +1341,7 @@ authRouter.post(
  * Body: { userEmail: string, code: string, newPassword: string, turnstileToken: string }
  * Returns: { success: true, message: string }
  */
-authRouter.post(
+  .post(
   '/reset-password',
   zValidator('json', ResetPasswordRequestSchema),
   async (c) => {
@@ -1369,7 +1369,7 @@ authRouter.post(
 
     return c.json(result, result.success ? 200 : 400);
   }
-);
+)
 
 // ═══════════════════════════════════════════════════════════════
 // TOTP (Google Authenticator) Management Endpoints
@@ -1380,7 +1380,7 @@ authRouter.post(
  * GET /auth/totp/status
  * Get current TOTP status for the authenticated user
  */
-authRouter.get(
+  .get(
   '/totp/status',
   authMiddleware,
   async (c) => {
@@ -1411,13 +1411,13 @@ authRouter.get(
       }
     });
   }
-);
+)
 
 /**
  * POST /auth/totp/setup-init
  * Initialize TOTP setup: generate secret, store in KV temporarily
  */
-authRouter.post(
+  .post(
   '/totp/setup-init',
   authMiddleware,
   async (c) => {
@@ -1468,13 +1468,13 @@ authRouter.post(
       }
     });
   }
-);
+)
 
 /**
  * POST /auth/totp/setup-verify
  * Verify TOTP code and finalize setup (enable TOTP + generate recovery codes)
  */
-authRouter.post(
+  .post(
   '/totp/setup-verify',
   authMiddleware,
   zValidator('json', TotpSetupVerifyRequestSchema),
@@ -1542,13 +1542,13 @@ authRouter.post(
       }
     });
   }
-);
+)
 
 /**
  * POST /auth/totp/disable
  * Disable TOTP (requires password confirmation)
  */
-authRouter.post(
+  .post(
   '/totp/disable',
   authMiddleware,
   zValidator('json', TotpDisableRequestSchema),
@@ -1606,13 +1606,13 @@ authRouter.post(
       data: { disabled: true }
     });
   }
-);
+)
 
 /**
  * POST /auth/totp/recovery-codes/regenerate
  * Regenerate recovery codes (requires password confirmation)
  */
-authRouter.post(
+  .post(
   '/totp/recovery-codes/regenerate',
   authMiddleware,
   zValidator('json', TotpRegenerateCodesRequestSchema),
@@ -1679,7 +1679,7 @@ authRouter.post(
       }
     });
   }
-);
+)
 
 // ─── Passkey (WebAuthn) Routes ───
 
@@ -1687,7 +1687,7 @@ authRouter.post(
  * GET /auth/passkey/status
  * Get passkey status and registered credentials for authenticated user
  */
-authRouter.get(
+  .get(
   '/passkey/status',
   authMiddleware,
   async (c) => {
@@ -1701,13 +1701,13 @@ authRouter.get(
       data: status
     });
   }
-);
+)
 
 /**
  * POST /auth/passkey/register-init
  * Initialize passkey registration ceremony
  */
-authRouter.post(
+  .post(
   '/passkey/register-init',
   authMiddleware,
   async (c) => {
@@ -1738,13 +1738,13 @@ authRouter.post(
       data: options
     });
   }
-);
+)
 
 /**
  * POST /auth/passkey/register-verify
  * Complete passkey registration with authenticator response
  */
-authRouter.post(
+  .post(
   '/passkey/register-verify',
   authMiddleware,
   zValidator('json', PasskeyRegisterVerifyRequestSchema),
@@ -1773,13 +1773,13 @@ authRouter.post(
       }, 400);
     }
   }
-);
+)
 
 /**
  * GET /auth/passkey/credentials
  * List all registered passkeys for authenticated user
  */
-authRouter.get(
+  .get(
   '/passkey/credentials',
   authMiddleware,
   async (c) => {
@@ -1793,13 +1793,13 @@ authRouter.get(
       data: { credentials: status.credentials }
     });
   }
-);
+)
 
 /**
  * PATCH /auth/passkey/credentials/:credentialId
  * Update passkey device name
  */
-authRouter.patch(
+  .patch(
   '/passkey/credentials/:credentialId',
   authMiddleware,
   zValidator('json', PasskeyCredentialUpdateRequestSchema),
@@ -1823,13 +1823,13 @@ authRouter.patch(
       data: { message: 'Passkey renamed' }
     });
   }
-);
+)
 
 /**
  * DELETE /auth/passkey/credentials/:credentialId
  * Delete a passkey (requires password confirmation)
  */
-authRouter.delete(
+  .delete(
   '/passkey/credentials/:credentialId',
   authMiddleware,
   zValidator('json', PasskeyCredentialDeleteRequestSchema),
@@ -1875,13 +1875,13 @@ authRouter.delete(
       data: { message: 'Passkey deleted' }
     });
   }
-);
+)
 
 /**
  * POST /auth/passkey/auth-init
  * Initialize passkey authentication ceremony (called after password verification)
  */
-authRouter.post(
+  .post(
   '/passkey/auth-init',
   zValidator('json', PasskeyAuthInitRequestSchema),
   async (c) => {
@@ -1911,13 +1911,13 @@ authRouter.post(
       data: options
     });
   }
-);
+)
 
 /**
  * POST /auth/passkey/auth-verify
  * Complete passkey authentication and issue JWT
  */
-authRouter.post(
+  .post(
   '/passkey/auth-verify',
   zValidator('json', PasskeyAuthVerifyRequestSchema),
   async (c) => {

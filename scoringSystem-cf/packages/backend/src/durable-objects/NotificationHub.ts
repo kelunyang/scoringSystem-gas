@@ -97,7 +97,7 @@ export class NotificationHub {
   /**
    * Handle HTTP requests to establish WebSocket connections
    */
-  async fetch(request: Request): Promise<Response> {
+  async fetch(request: Request) {
     const url = new URL(request.url);
 
     // Handle internal broadcast requests (from settlement.ts, etc.)

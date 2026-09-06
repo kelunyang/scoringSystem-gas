@@ -52,16 +52,16 @@ import {
 import { errorResponse } from '../utils/response';
 
 
-const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
 // Apply authentication middleware to all routes
-app.use('*', authMiddleware);
+  .use('*', authMiddleware)
 
 /**
  * Create new stage
  * Body: { projectId, stageData: { stageName, description?, startTime, endTime, ... } }
  */
-app.post(
+  .post(
   '/create',
   zValidator('json', CreateStageRequestSchema),
   async (c) => {
@@ -83,13 +83,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get stage details
  * Body: { projectId, stageId }
  */
-app.post(
+  .post(
   '/get',
   zValidator('json', GetStageRequestSchema),
   async (c) => {
@@ -111,13 +111,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Update stage
  * Body: { projectId, stageId, updates: { stageName?, description?, ... } }
  */
-app.post(
+  .post(
   '/update',
   zValidator('json', UpdateStageRequestSchema),
   async (c) => {
@@ -140,13 +140,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * List project stages
  * Body: { projectId, includeArchived? }
  */
-app.post(
+  .post(
   '/list',
   zValidator('json', ListStagesRequestSchema),
   async (c) => {
@@ -168,13 +168,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Clone existing stage
  * Body: { projectId, stageId, newStageName, startTime?, endTime? }
  */
-app.post(
+  .post(
   '/clone',
   zValidator('json', CloneStageRequestSchema),
   async (c) => {
@@ -199,13 +199,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Clone stage to multiple projects
  * Body: { sourceProjectId, stageId, newStageName, targetProjectIds, startTime?, endTime? }
  */
-app.post(
+  .post(
   '/clone-to-projects',
   zValidator('json', CloneStageToProjectsRequestSchema),
   async (c) => {
@@ -256,13 +256,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Check if stage has voting records (voting lock check)
  * Body: { projectId, stageId }
  */
-app.post(
+  .post(
   '/check-voting-lock',
   zValidator('json', CheckVotingLockRequestSchema),
   async (c) => {
@@ -290,7 +290,7 @@ app.post(
       }
     });
   }
-);
+)
 
 /**
  * Force stage to voting status (manual override)
@@ -298,7 +298,7 @@ app.post(
  * Body: { projectId, stageId }
  * Note: No longer uses CAS - uses timestamp-based approach for status override
  */
-app.post(
+  .post(
   '/force-transition',
   zValidator('json', ForceStageTransitionRequestSchema),
   async (c) => {
@@ -392,13 +392,13 @@ app.post(
       }
     });
   }
-);
+)
 
 /**
  * Get stage configuration
  * Body: { projectId, stageId }
  */
-app.post(
+  .post(
   '/config/get',
   zValidator('json', GetStageConfigRequestSchema),
   async (c) => {
@@ -420,13 +420,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Update stage configuration
  * Body: { projectId, stageId, configUpdates: { ... } }
  */
-app.post(
+  .post(
   '/config/update',
   zValidator('json', UpdateStageConfigRequestSchema),
   async (c) => {
@@ -449,13 +449,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Reset stage configuration to defaults
  * Body: { projectId, stageId }
  */
-app.post(
+  .post(
   '/config/reset',
   zValidator('json', ResetStageConfigRequestSchema),
   async (c) => {
@@ -477,14 +477,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Pause a stage
  * Body: { projectId, stageId, reason }
  * Only stages in 'active' or 'voting' status can be paused
  */
-app.post(
+  .post(
   '/pause',
   zValidator('json', PauseStageRequestSchema),
   async (c) => {
@@ -507,14 +507,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Resume a paused stage
  * Body: { projectId, stageId }
  * Only stages in 'paused' status can be resumed
  */
-app.post(
+  .post(
   '/resume',
   zValidator('json', ResumeStageRequestSchema),
   async (c) => {

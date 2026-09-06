@@ -31,7 +31,7 @@ export function useProjectViewers(projectId: string | Ref<string | null>) {
   return useQuery({
     queryKey: ['projectViewers', projectIdValue],
     queryFn: async () => {
-      const httpResponse = await rpcClient.projects['viewers/list'].$post({
+      const httpResponse = await rpcClient.api.projects['viewers/list'].$post({
         json: { projectId: projectIdValue.value }
       })
       const result = await httpResponse.json()
@@ -71,7 +71,7 @@ export function useProjectRole(projectId: string | Ref<string | null>) {
   const projectCoreQuery = useQuery<ProjectCoreData>({
     queryKey: ['project', 'core', projectIdValue],
     queryFn: async () => {
-      const httpResponse = await rpcClient.projects.core.$post({
+      const httpResponse = await rpcClient.api.projects.core.$post({
         json: { projectId: projectIdValue.value }
       })
       const response = await httpResponse.json()

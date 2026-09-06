@@ -626,7 +626,7 @@ async function buildGroupNamesFromTransactions(): Promise<void> {
 
   try {
     // Fetch all transactions for this settlement
-    const httpResponse = await rpcClient.wallets.transactions.$post({
+    const httpResponse = await rpcClient.api.wallets.transactions.$post({
       json: {
         projectId: settlementProgress.projectId,
         settlementId: settlementResult.value.settlementId
@@ -735,7 +735,7 @@ async function handleSettlementGroupClick(groupData: GroupClickData): Promise<vo
       groupId: groupData.groupId
     }
 
-    const httpResponse = await rpcClient.wallets.transactions.$post({
+    const httpResponse = await rpcClient.api.wallets.transactions.$post({
       json: queryParams
     })
     const response = await httpResponse.json()
@@ -977,7 +977,7 @@ async function settleStage(stage: Stage, forceSettle = false): Promise<void> {
 
     // Run validation if not forced
     if (!forceSettle) {
-      const validationHttpResponse = await rpcClient.scoring['validate-settlement'].$post({
+      const validationHttpResponse = await rpcClient.api.scoring['validate-settlement'].$post({
         json: {
           projectId: projectId,
           stageId: stage.stageId
@@ -1008,7 +1008,7 @@ async function settleStage(stage: Stage, forceSettle = false): Promise<void> {
     settlementStatus.value = 'settling'
     settlementValidation.value = null
 
-    const httpResponse = await rpcClient.scoring.settle.$post({
+    const httpResponse = await rpcClient.api.scoring.settle.$post({
       json: {
         projectId: projectId,
         stageId: stage.stageId,

@@ -19,7 +19,7 @@ const MAX_COMMENT_PAGE_SIZE = 10;
 export async function getCommentPageSize(
   env: Env,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     // Try to get from KV first
     const kvKey = `user_settings:${userEmail}:comment_page_size`;
@@ -49,7 +49,7 @@ export async function updateCommentPageSize(
   env: Env,
   userEmail: string,
   pageSize: number
-): Promise<Response> {
+) {
   try {
     // Validate range
     if (pageSize < MIN_COMMENT_PAGE_SIZE || pageSize > MAX_COMMENT_PAGE_SIZE) {
@@ -87,7 +87,7 @@ export async function updateCommentPageSize(
 export async function getAllUserSettings(
   env: Env,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     // Get comment page size
     const commentPageSizeKey = `user_settings:${userEmail}:comment_page_size`;

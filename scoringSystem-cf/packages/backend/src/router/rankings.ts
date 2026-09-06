@@ -62,17 +62,17 @@ import { getEffectiveUser } from '../middleware/sudo';
 import { errorResponse } from '../utils/response';
 
 
-const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
 // Apply authentication middleware to all routes
-app.use('*', authMiddleware);
+  .use('*', authMiddleware)
 
 /**
  * Get stage rankings
  * Returns teacher rankings and user's group vote rankings
  * Body: { projectId, stageId }
  */
-app.post(
+  .post(
   '/stage-rankings',
   zValidator('json', GetStageRankingsRequestSchema),
   async (c) => {
@@ -98,7 +98,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get all stages rankings (Batch API)
@@ -106,7 +106,7 @@ app.post(
  * This significantly reduces API calls from N to 1
  * Body: { projectId, stageIds: string[] }
  */
-app.post(
+  .post(
   '/all-stages-rankings',
   zValidator('json', GetAllStagesRankingsRequestSchema),
   async (c) => {
@@ -131,14 +131,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get teacher vote history
  * Returns teacher's voting history for a stage
  * Body: { projectId, stageId }
  */
-app.post(
+  .post(
   '/teacher-vote-history',
   zValidator('json', GetTeacherVoteHistoryRequestSchema),
   async (c) => {
@@ -160,14 +160,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get ranking proposals for a stage
  * Returns all group ranking proposals with vote counts
  * Body: { projectId, stageId }
  */
-app.post(
+  .post(
   '/proposals',
   zValidator('json', GetRankingProposalsRequestSchema),
   async (c) => {
@@ -189,14 +189,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Submit teacher comprehensive vote
  * Allows teachers to vote on both submissions and comments
  * Body: { projectId, stageId, rankings: { submissions: [], comments: [] } }
  */
-app.post(
+  .post(
   '/teacher-comprehensive-vote',
   zValidator('json', SubmitTeacherComprehensiveVoteRequestSchema),
   async (c) => {
@@ -229,14 +229,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Submit group ranking proposal
  * Permission: Level 3-4 (Active group members)
  * Body: { projectId, stageId, rankingData }
  */
-app.post(
+  .post(
   '/submit',
   zValidator('json', SubmitGroupRankingRequestSchema),
   async (c) => {
@@ -256,14 +256,14 @@ app.post(
     const response = await submitGroupRanking(c.env, user, body);
     return response;
   }
-);
+)
 
 /**
  * Vote on ranking proposal
  * Permission: Level 3-4 (Same group members)
  * Body: { projectId, proposalId, agree, comment }
  */
-app.post(
+  .post(
   '/vote',
   zValidator('json', VoteOnRankingProposalRequestSchema),
   async (c) => {
@@ -291,14 +291,14 @@ app.post(
     const response = await voteOnRankingProposal(c.env, user, body);
     return response;
   }
-);
+)
 
 /**
  * Withdraw ranking proposal
  * Permission: Level 3-4 (Same group members as proposal)
  * Body: { proposalId }
  */
-app.post(
+  .post(
   '/withdraw',
   zValidator('json', WithdrawRankingProposalRequestSchema),
   async (c) => {
@@ -308,14 +308,14 @@ app.post(
     const response = await withdrawRankingProposal(c.env, user, body);
     return response;
   }
-);
+)
 
 /**
  * Reset votes on a ranking proposal
  * Permission: Level 3-4 (Group leader only, when all voted and tied)
  * Body: { proposalId, reason? }
  */
-app.post(
+  .post(
   '/reset-votes',
   zValidator('json', ResetProposalVotesRequestSchema),
   async (c) => {
@@ -325,14 +325,14 @@ app.post(
     const response = await resetProposalVotes(c.env, user, body);
     return response;
   }
-);
+)
 
 /**
  * Submit individual stage ranking vote
  * Permission: Level 3-4 (Active group members)
  * Body: { projectId, stageId, rankings }
  */
-app.post(
+  .post(
   '/stage-vote',
   zValidator('json', SubmitStageRankingVoteRequestSchema),
   async (c) => {
@@ -352,14 +352,14 @@ app.post(
     const response = await submitStageRankingVote(c.env, user, body);
     return response;
   }
-);
+)
 
 /**
  * Get voting status for a stage
  * Permission: Level 1-4 (Teachers, observers, and group members)
  * Body: { projectId, stageId }
  */
-app.post(
+  .post(
   '/voting-status',
   zValidator('json', GetVotingStatusRequestSchema),
   async (c) => {
@@ -369,14 +369,14 @@ app.post(
     const response = await getStageVotingStatus(c.env, user, body);
     return response;
   }
-);
+)
 
 /**
  * Get teacher rankings for a stage
  * Permission: Level 1 (Teachers only) or project creator/admin
  * Body: { projectId, stageId }
  */
-app.post(
+  .post(
   '/teacher-rankings',
   zValidator('json', GetTeacherRankingsRequestSchema),
   async (c) => {
@@ -386,7 +386,7 @@ app.post(
     const response = await getTeacherRankings(c.env, user, body);
     return response;
   }
-);
+)
 
 /**
  * Get teacher ranking version history
@@ -394,7 +394,7 @@ app.post(
  * Permission: Level 1 (Teachers only)
  * Body: { projectId, stageId, rankingType: 'submission' | 'comment' }
  */
-app.post(
+  .post(
   '/teacher-ranking-versions',
   zValidator('json', GetTeacherRankingVersionsRequestSchema),
   async (c) => {
@@ -412,7 +412,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 // ============================================
 // AI Ranking Suggestion Routes
@@ -423,7 +423,7 @@ app.post(
  * Permission: Teachers (Level 0-2: Admin/Creator/Teacher/Observer)
  * Body: { projectId }
  */
-app.post('/ai-providers', async (c) => {
+  .post('/ai-providers', async (c) => {
   const user = c.get('user');
   const body = await c.req.json();
   const { projectId } = body;
@@ -439,7 +439,7 @@ app.post('/ai-providers', async (c) => {
   }
 
   return await getAIProvidersForRanking(c.env);
-});
+})
 
 /**
  * Submit AI ranking suggestion request (direct mode)
@@ -448,7 +448,7 @@ app.post('/ai-providers', async (c) => {
  * Body: { projectId, stageId, rankingType, providerId, items, customPrompt? }
  * Rate limited: 10/minute, 60/hour per user
  */
-app.post(
+  .post(
   '/ai-suggestion',
   aiRateLimitMiddleware,
   zValidator('json', AIRankingSuggestionRequestSchema),
@@ -464,7 +464,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Submit Bradley-Terry AI ranking suggestion request
@@ -473,7 +473,7 @@ app.post(
  * Body: { projectId, stageId, rankingType, providerId, items, customPrompt?, pairsPerItem? }
  * Rate limited: 10/minute, 60/hour per user
  */
-app.post(
+  .post(
   '/ai-bt-suggestion',
   aiRateLimitMiddleware,
   zValidator('json', BTRankingSuggestionRequestSchema),
@@ -489,7 +489,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get AI ranking history for a stage
@@ -497,7 +497,7 @@ app.post(
  * Permission: Teachers (Level 1)
  * Body: { projectId, stageId, rankingType?, limit? }
  */
-app.post(
+  .post(
   '/ai-history',
   zValidator('json', AIRankingHistoryQuerySchema),
   async (c) => {
@@ -512,7 +512,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get AI ranking call detail
@@ -520,7 +520,7 @@ app.post(
  * Permission: Teachers (Level 1)
  * Body: { projectId, callId }
  */
-app.post(
+  .post(
   '/ai-detail',
   async (c) => {
     const user = c.get('user');
@@ -534,7 +534,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Submit Multi-Agent AI ranking suggestion request
@@ -543,7 +543,7 @@ app.post(
  * Body: { projectId, stageId, rankingType, providerIds, items, customPrompt? }
  * Rate limited: 10/minute, 60/hour per user
  */
-app.post(
+  .post(
   '/ai-multi-agent-suggestion',
   aiRateLimitMiddleware,
   zValidator('json', MultiAgentRankingSuggestionRequestSchema),

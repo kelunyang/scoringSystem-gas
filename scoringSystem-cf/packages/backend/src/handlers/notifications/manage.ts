@@ -34,7 +34,7 @@ interface NotificationRow {
 export async function getUserNotificationCount(
   env: Env,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     const result = await env.DB.prepare(`
       SELECT
@@ -73,7 +73,7 @@ export async function getUserNotifications(
   env: Env,
   userEmail: string,
   filters: NotificationFilters = {}
-): Promise<Response> {
+) {
   try {
     const {
       limit = 20,
@@ -182,7 +182,7 @@ export async function markNotificationAsRead(
   env: Env,
   userEmail: string,
   notificationId: string
-): Promise<Response> {
+) {
   try {
     // Verify notification belongs to user
     const notification = await env.DB.prepare(`
@@ -228,7 +228,7 @@ export async function markNotificationAsRead(
 export async function markAllNotificationsAsRead(
   env: Env,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     const timestamp = Date.now();
 
@@ -269,7 +269,7 @@ export async function deleteNotification(
   env: Env,
   userEmail: string,
   notificationId: string
-): Promise<Response> {
+) {
   try {
     // Verify notification belongs to user
     const notification = await env.DB.prepare(`

@@ -216,7 +216,7 @@ export function useRankingProposals(
   const configQuery = useQuery({
     queryKey: computed(() => ['projects', 'scoring-config', getValue(projectId)]),
     queryFn: async (): Promise<ProjectScoringConfig> => {
-      const httpResponse = await rpcClient.projects[':projectId']['scoring-config'].$get({
+      const httpResponse = await rpcClient.api.projects[':projectId']['scoring-config'].$get({
         param: { projectId: getValue(projectId) }
       })
       const response = await httpResponse.json()
@@ -241,7 +241,7 @@ export function useRankingProposals(
   const groupsQuery = useQuery({
     queryKey: computed(() => ['rankings', 'submitted-groups', getValue(projectId), getValue(stageId)]),
     queryFn: async (): Promise<SubmittedGroup[]> => {
-      const httpResponse = await rpcClient.projects.content.$post({
+      const httpResponse = await rpcClient.api.projects.content.$post({
         json: {
           projectId: getValue(projectId),
           stageId: getValue(stageId),

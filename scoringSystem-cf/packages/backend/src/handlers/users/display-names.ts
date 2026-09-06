@@ -45,7 +45,7 @@ export async function getUserDisplayNames(
   userEmail: string,
   projectId: string,
   userEmails: string[]
-): Promise<Response> {
+) {
   try {
     // Handle empty input
     if (!userEmails || userEmails.length === 0) {

@@ -80,7 +80,7 @@ interface CommentRow {
  * 組成樹狀結構後回給前端的評論。
  * 由 CommentRow 加上批次查詢的結果拼出來，replies 遞迴掛在同型別上。
  */
-interface ThreadedComment {
+export interface ThreadedComment {
   commentId: string;
   stageId: string;
   content: string;
@@ -109,7 +109,7 @@ interface ThreadedComment {
 }
 
 /** getAllStagesComments 針對單一階段回傳的區塊。 */
-interface StageCommentsResult {
+export interface StageCommentsResult {
   comments: ThreadedComment[];
   total: number;
   totalWithReplies: number;
@@ -376,7 +376,7 @@ export async function createComment(
     content: string;
     parentCommentId?: string; // For replies
   }
-): Promise<Response> {
+) {
   try {
     // Validate required fields
     if (!commentData.stageId || !commentData.content) {
@@ -572,7 +572,7 @@ export async function getStageComments(
   projectId: string,
   stageId: string,
   options?: { excludeTeachers?: boolean; forVoting?: boolean; limit?: number; offset?: number }
-): Promise<Response> {
+) {
   const _startTime = Date.now();
   console.log(`📊 [getStageComments] START: stageId=${stageId}`);
 
@@ -1001,7 +1001,7 @@ export async function getCommentDetails(
   userEmail: string,
   projectId: string,
   commentId: string
-): Promise<Response> {
+) {
   try {
     const comment = await env.DB.prepare(`
       SELECT
@@ -1111,7 +1111,7 @@ export async function getAllStagesComments(
   projectId: string,
   stageIds: string[],
   options?: { excludeTeachers?: boolean; forVoting?: boolean; limit?: number; offset?: number }
-): Promise<Response> {
+) {
   const _startTime = Date.now();
   const _metrics: Record<string, number> = {};
 

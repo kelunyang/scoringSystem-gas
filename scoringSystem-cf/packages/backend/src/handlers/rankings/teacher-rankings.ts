@@ -11,7 +11,7 @@ import { successResponse, errorResponse } from '../../utils/response';
  * Permission: Level 1 (Teachers only), or project creator/admin
  */
 /** 教師排名清單裡的一項：排了哪個對象、第幾名。 */
-interface TeacherRankingItem {
+export interface TeacherRankingItem {
   submissionId?: string;
   commentId?: string;
   rank: number;
@@ -25,7 +25,7 @@ export async function getTeacherRankings(
     projectId: string;
     stageId: string;
   }
-): Promise<Response> {
+) {
   const { userEmail } = context;
   const { projectId, stageId } = requestData;
 

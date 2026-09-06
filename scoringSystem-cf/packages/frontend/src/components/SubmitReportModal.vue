@@ -620,7 +620,7 @@ const submitReport = async (): Promise<void> => {
       }
     }
 
-    const httpResponse = await rpcClient.submissions.submit.$post({
+    const httpResponse = await rpcClient.api.submissions.submit.$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,
@@ -779,7 +779,7 @@ const loadHistoricalVersions = async (): Promise<void> => {
       }
     })
 
-    const httpResponse = await rpcClient.submissions.versions.$post({
+    const httpResponse = await rpcClient.api.submissions.versions.$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,

@@ -24,7 +24,7 @@ const pendingRequests = new Map<string, Promise<any>>()
  * // 相同的 key 在請求進行中時只會執行一次
  * const result = await dedupRequest(
  *   `comments:${projectId}:${stageId}`,
- *   () => rpcClient.comments.stage.$post({ json: { projectId, stageId } })
+ *   () => rpcClient.api.comments.stage.$post({ json: { projectId, stageId } })
  * )
  * ```
  */

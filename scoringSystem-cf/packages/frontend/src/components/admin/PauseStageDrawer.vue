@@ -148,7 +148,7 @@ async function confirmPause() {
 
   isProcessing.value = true
   try {
-    const httpResponse = await rpcClient.stages.pause.$post({
+    const httpResponse = await rpcClient.api.stages.pause.$post({
       json: {
         projectId: props.projectId!,
         stageId: props.stageId!,

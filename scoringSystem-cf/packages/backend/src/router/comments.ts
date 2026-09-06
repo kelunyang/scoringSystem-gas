@@ -65,16 +65,16 @@ import {
 import { errorResponse } from '../utils/response';
 
 
-const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
 // Apply authentication middleware to all routes
-app.use('*', authMiddleware);
+  .use('*', authMiddleware)
 
 /**
  * Create comment
  * Body: { sessionId, projectId, commentData: { stageId, content, parentCommentId? } }
  */
-app.post(
+  .post(
   '/create',
   zValidator('json', CreateCommentRequestSchema),
   async (c) => {
@@ -130,13 +130,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get comment details (GAS-compatible alias endpoint)
  * Body: { sessionId, projectId, commentId }
  */
-app.post(
+  .post(
   '/details',
   zValidator('json', GetCommentDetailsRequestSchema),
   async (c) => {
@@ -158,7 +158,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 
 
@@ -168,7 +168,7 @@ app.post(
  * Get stage comments (GAS-compatible endpoint)
  * Body: { sessionId, projectId, stageId, excludeTeachers?, limit?, offset? }
  */
-app.post(
+  .post(
   '/stage',
   zValidator('json', GetStageCommentsRequestSchema),
   async (c) => {
@@ -196,13 +196,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get comments for all stages in a single request (batch API)
  * Body: { projectId, stageIds: string[], excludeTeachers?, forVoting?, limit?, offset? }
  */
-app.post(
+  .post(
   '/all-stages',
   zValidator('json', GetAllStagesCommentsRequestSchema),
   async (c) => {
@@ -230,13 +230,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Add reaction to comment
  * Body: { sessionId, projectId, commentId, reactionType }
  */
-app.post(
+  .post(
   '/reactions/add',
   zValidator('json', AddReactionRequestSchema),
   async (c) => {
@@ -275,13 +275,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Remove reaction from comment
  * Body: { sessionId, projectId, commentId }
  */
-app.post(
+  .post(
   '/reactions/remove',
   zValidator('json', RemoveReactionRequestSchema),
   async (c) => {
@@ -303,13 +303,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get reactions for a comment
  * Body: { sessionId, projectId, commentId }
  */
-app.post(
+  .post(
   '/reactions/get',
   zValidator('json', GetCommentReactionsRequestSchema),
   async (c) => {
@@ -331,13 +331,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Check voting eligibility
  * Body: { sessionId, projectId, stageId }
  */
-app.post(
+  .post(
   '/voting-eligibility',
   zValidator('json', CheckVotingEligibilityRequestSchema),
   async (c) => {
@@ -359,13 +359,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Submit comment ranking
  * Body: { sessionId, projectId, stageId, rankingData: Array<{commentId, rank}> }
  */
-app.post(
+  .post(
   '/ranking',
   zValidator('json', SubmitCommentRankingRequestSchema),
   async (c) => {
@@ -398,13 +398,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get rankings for a single comment
  * Body: { sessionId, projectId, stageId, commentId }
  */
-app.post(
+  .post(
   '/rankings',
   zValidator('json', GetCommentRankingsRequestSchema),
   async (c) => {
@@ -427,13 +427,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get all comment rankings for a stage
  * Body: { sessionId, projectId, stageId }
  */
-app.post(
+  .post(
   '/stage-rankings',
   zValidator('json', GetStageCommentRankingsRequestSchema),
   async (c) => {
@@ -455,13 +455,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get comment settlement analysis
  * Body: { sessionId, projectId, stageId }
  */
-app.post(
+  .post(
   '/settlement-analysis',
   zValidator('json', GetCommentSettlementAnalysisRequestSchema),
   async (c) => {
@@ -482,13 +482,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get comment ranking history (version timeline)
  * Body: { sessionId, projectId, stageId }
  */
-app.post(
+  .post(
   '/ranking-history',
   zValidator('json', GetCommentRankingHistoryRequestSchema),
   async (c) => {

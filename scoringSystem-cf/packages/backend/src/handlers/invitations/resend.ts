@@ -16,7 +16,7 @@ export async function resendInvitationEmail(
   env: Env,
   invitationId: string,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     // Get invitation from database (using VIEW for auto-calculated status)
     const invitation = await env.DB.prepare(`

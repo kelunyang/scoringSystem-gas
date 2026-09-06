@@ -36,7 +36,7 @@ export async function updateStageConfig(
   projectId: string,
   stageId: string,
   configUpdates: StageConfig
-): Promise<Response> {
+) {
   try {
     // Get current stage
     const stage = await env.DB.prepare(`
@@ -106,7 +106,7 @@ export async function getStageConfig(
   userEmail: string,
   projectId: string,
   stageId: string
-): Promise<Response> {
+) {
   try {
     const stage = await env.DB.prepare(`
       SELECT config FROM stages
@@ -135,7 +135,7 @@ export async function resetStageConfig(
   userEmail: string,
   projectId: string,
   stageId: string
-): Promise<Response> {
+) {
   try {
     const stage = await env.DB.prepare(`
       SELECT stageId FROM stages

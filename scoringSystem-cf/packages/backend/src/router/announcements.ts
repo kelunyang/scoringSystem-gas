@@ -35,32 +35,18 @@ import {
   deleteAnnouncement
 } from '../handlers/announcements/admin';
 
-const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
-
-// ============================================================================
-// Public Routes (no auth required)
-// ============================================================================
-
-/**
- * POST /announcements/active
- * Get active announcements for public display (login page)
- */
-app.post('/active', async (c) => {
-  return getActiveAnnouncements(c.env);
-});
-
 // ============================================================================
 // Admin Routes (requires auth + permissions)
 // ============================================================================
 
 // Create a sub-router for admin routes with authentication
-const adminRouter = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
+const adminRouter = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
 // Apply auth middleware to all admin routes
-adminRouter.use('*', authMiddleware);
+  .use('*', authMiddleware)
 
 // Apply permission check
-adminRouter.use('*', async (c, next) => {
+  .use('*', async (c, next) => {
   const user = c.get('user');
 
   if (!user) {
@@ -85,13 +71,13 @@ adminRouter.use('*', async (c, next) => {
     success: false,
     error: { code: 'ACCESS_DENIED', message: '需要 manage_announcements 或 system_admin 權限' }
   }, 403);
-});
+})
 
 /**
  * POST /announcements/admin/list
  * List all announcements with filters
  */
-adminRouter.post(
+  .post(
   '/list',
   zValidator('json', AdminListAnnouncementsRequestSchema),
   async (c) => {
@@ -99,13 +85,13 @@ adminRouter.post(
     const { options } = c.req.valid('json');
     return listAnnouncements(c.env, user.userEmail, options);
   }
-);
+)
 
 /**
  * POST /announcements/admin/get
  * Get single announcement by ID
  */
-adminRouter.post(
+  .post(
   '/get',
   zValidator('json', AdminGetAnnouncementRequestSchema),
   async (c) => {
@@ -113,13 +99,13 @@ adminRouter.post(
     const { announcementId } = c.req.valid('json');
     return getAnnouncement(c.env, user.userEmail, announcementId);
   }
-);
+)
 
 /**
  * POST /announcements/admin/create
  * Create new announcement
  */
-adminRouter.post(
+  .post(
   '/create',
   zValidator('json', AdminCreateAnnouncementRequestSchema),
   async (c) => {
@@ -127,13 +113,13 @@ adminRouter.post(
     const data = c.req.valid('json');
     return createAnnouncement(c.env, user.userEmail, data);
   }
-);
+)
 
 /**
  * POST /announcements/admin/update
  * Update announcement
  */
-adminRouter.post(
+  .post(
   '/update',
   zValidator('json', AdminUpdateAnnouncementRequestSchema),
   async (c) => {
@@ -141,13 +127,13 @@ adminRouter.post(
     const data = c.req.valid('json');
     return updateAnnouncement(c.env, user.userEmail, data);
   }
-);
+)
 
 /**
  * POST /announcements/admin/delete
  * Delete announcement (soft delete)
  */
-adminRouter.post(
+  .post(
   '/delete',
   zValidator('json', AdminDeleteAnnouncementRequestSchema),
   async (c) => {
@@ -158,6 +144,21 @@ adminRouter.post(
 );
 
 // Mount admin router
-app.route('/admin', adminRouter);
+// 宣告放在 adminRouter 之後，讓 app 的兩個註冊能連續串接
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
+
+// ============================================================================
+// Public Routes (no auth required)
+// ============================================================================
+
+/**
+ * POST /announcements/active
+ * Get active announcements for public display (login page)
+ */
+  .post('/active', async (c) => {
+  return getActiveAnnouncements(c.env);
+})
+
+  .route('/admin', adminRouter);
 
 export default app;

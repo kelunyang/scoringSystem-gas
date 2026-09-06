@@ -654,7 +654,7 @@ const handleMarkUnassigned = async () => {
 
   markingUnassigned.value = true
   try {
-    const response = await rpcClient.projects.viewers['mark-unassigned'].$post({
+    const response = await rpcClient.api.projects.viewers['mark-unassigned'].$post({
       json: { projectId: props.selectedProject.projectId }
     })
 
@@ -679,7 +679,7 @@ const handleLoadFromProjects = async () => {
 
   loadingFromProjects.value = true
   try {
-    const response = await rpcClient.projects.viewers['load-from-projects'].$post({
+    const response = await rpcClient.api.projects.viewers['load-from-projects'].$post({
       json: {
         projectIds: loadFromProjectIds.value,
         role: loadFromRole.value

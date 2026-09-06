@@ -27,7 +27,7 @@ export function useProjectViewers() {
 
     loadingViewers.value = true
     try {
-      const httpResponse = await rpcClient.projects.viewers.list.$post({
+      const httpResponse = await rpcClient.api.projects.viewers.list.$post({
         json: { projectId }
       })
       const response = await httpResponse.json()
@@ -77,7 +77,7 @@ export function useProjectViewers() {
 
       for (const query of searchQueries) {
         try {
-          const httpResponse = await rpcClient.users.search.$post({
+          const httpResponse = await rpcClient.api.users.search.$post({
             json: { query, limit: 50 }
           })
           const response = await httpResponse.json()
@@ -160,7 +160,7 @@ export function useProjectViewers() {
       const errors = []
 
       for (const userEmail of userEmails) {
-        const httpResponse = await rpcClient.projects.viewers.add.$post({
+        const httpResponse = await rpcClient.api.projects.viewers.add.$post({
           json: {
             projectId,
             userEmail,
@@ -232,7 +232,7 @@ export function useProjectViewers() {
     }
 
     try {
-      const httpResponse = await rpcClient.projects.viewers['update-role'].$post({
+      const httpResponse = await rpcClient.api.projects.viewers['update-role'].$post({
         json: {
           projectId,
           userEmail,
@@ -266,7 +266,7 @@ export function useProjectViewers() {
     }
 
     try {
-      const httpResponse = await rpcClient.projects.viewers.remove.$post({
+      const httpResponse = await rpcClient.api.projects.viewers.remove.$post({
         json: {
           projectId,
           userEmail
@@ -315,7 +315,7 @@ export function useProjectViewers() {
       let failCount = 0
 
       for (const userEmail of userEmails) {
-        const httpResponse = await rpcClient.projects.viewers['update-role'].$post({
+        const httpResponse = await rpcClient.api.projects.viewers['update-role'].$post({
           json: {
             projectId,
             userEmail,
@@ -375,7 +375,7 @@ export function useProjectViewers() {
       let failCount = 0
 
       for (const userEmail of userEmails) {
-        const httpResponse = await rpcClient.projects.viewers.remove.$post({
+        const httpResponse = await rpcClient.api.projects.viewers.remove.$post({
           json: {
             projectId,
             userEmail

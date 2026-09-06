@@ -519,13 +519,13 @@ const loadVotingAnalysis = async (): Promise<void> => {
     if (props.isSettled) {
       // 結算後模式：載入結算結果數據
       const [stageHttpResponse, settlementResponse] = await Promise.all([
-        rpcClient.stages.get.$post({
+        rpcClient.api.stages.get.$post({
           json: {
             projectId: props.projectId,
             stageId: props.stageId
           }
         }),
-        rpcClient.settlement['stage-rankings'].$post({
+        rpcClient.api.settlement['stage-rankings'].$post({
           json: {
             projectId: props.projectId,
             stageId: props.stageId
@@ -544,7 +544,7 @@ const loadVotingAnalysis = async (): Promise<void> => {
 
         stageRewardPool.value = stageResponse.data.reportRewardPool || 0
 
-        const votingHttpResponse = await rpcClient.scoring['submission-voting-data'].$post({
+        const votingHttpResponse = await rpcClient.api.scoring['submission-voting-data'].$post({
           json: {
             stageId: props.stageId
           }
@@ -601,12 +601,12 @@ const loadVotingAnalysis = async (): Promise<void> => {
     } else {
       // 實時計算模式：載入投票數據並即時計算
       const [votingHttpResponse, stageHttpResponse] = await Promise.all([
-        rpcClient.scoring['submission-voting-data'].$post({
+        rpcClient.api.scoring['submission-voting-data'].$post({
           json: {
             stageId: props.stageId
           }
         }),
-        rpcClient.stages.get.$post({
+        rpcClient.api.stages.get.$post({
           json: {
             projectId: props.projectId,
             stageId: props.stageId
@@ -1065,7 +1065,7 @@ const handleGroupClick = async (groupData: GroupClickData): Promise<void> => {
       groupId: groupData.groupId
     })
 
-    const httpResponse = await rpcClient.wallets.transactions.$post({
+    const httpResponse = await rpcClient.api.wallets.transactions.$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,

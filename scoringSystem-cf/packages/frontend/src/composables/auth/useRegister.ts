@@ -100,7 +100,7 @@ export function useRegister(): UseRegisterReturn {
     errorMessage.value = '';
 
     try {
-      const httpResponse = await rpcClient.invitations.verify.$post({
+      const httpResponse = await rpcClient.api.invitations.verify.$post({
         json: {
           invitationCode: invitationCode.trim(),
           userEmail: userEmail.trim(),
@@ -148,7 +148,7 @@ export function useRegister(): UseRegisterReturn {
     invitationStatusMessage.value = '';
 
     try {
-      const httpResponse = await rpcClient.invitations.verify.$post({
+      const httpResponse = await rpcClient.api.invitations.verify.$post({
         json: {
           invitationCode: invitationCode.trim(),
           userEmail: userEmail.trim(),

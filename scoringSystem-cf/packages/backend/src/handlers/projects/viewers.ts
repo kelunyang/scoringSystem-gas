@@ -29,7 +29,7 @@ export async function listProjectViewers(
   env: Env,
   userEmail: string,
   projectId: string
-): Promise<Response> {
+) {
   try {
     // Check if user has permission to view project viewers
     // This includes admins, teachers, and group leaders (who need to see available members)
@@ -83,7 +83,7 @@ export async function addProjectViewer(
   projectId: string,
   targetUserEmail: string,
   role: 'teacher' | 'observer' | 'member'
-): Promise<Response> {
+) {
   try {
     // Check if user has permission to manage this project
     const canManage = await canManageProjectViewers(env, userEmail, projectId);
@@ -294,7 +294,7 @@ export async function removeProjectViewer(
   userEmail: string,
   projectId: string,
   targetUserEmail: string
-): Promise<Response> {
+) {
   try {
     // Check if user has permission to manage this project
     const canManage = await canManageProjectViewers(env, userEmail, projectId);
@@ -372,7 +372,7 @@ export async function updateProjectViewerRole(
   projectId: string,
   targetUserEmail: string,
   newRole: 'teacher' | 'observer' | 'member'
-): Promise<Response> {
+) {
   try {
     // Check if user has permission to manage this project
     const canManage = await canManageProjectViewers(env, userEmail, projectId);
@@ -588,7 +588,7 @@ export async function markUnassignedMembers(
   env: Env,
   userEmail: string,
   projectId: string
-): Promise<Response> {
+) {
   try {
     // Check if user can view unassigned members (group leader or above)
     const canView = await canViewUnassignedMembers(env, userEmail, projectId);
@@ -667,7 +667,7 @@ export async function loadViewersFromProjects(
   userEmail: string,
   projectIds: string[],
   role: 'teacher' | 'observer' | 'member' | 'all' = 'all'
-): Promise<Response> {
+) {
   try {
     if (!projectIds || projectIds.length === 0) {
       return errorResponse('INVALID_INPUT', 'No projects specified');
@@ -736,7 +736,7 @@ export async function addProjectViewersBatch(
   userEmail: string,
   projectId: string,
   viewers: Array<{ userEmail: string; role: 'teacher' | 'observer' | 'member' }>
-): Promise<Response> {
+) {
   try {
     // Validate input
     if (!viewers || viewers.length === 0) {
@@ -957,7 +957,7 @@ export async function removeProjectViewersBatch(
   userEmail: string,
   projectId: string,
   userEmails: string[]
-): Promise<Response> {
+) {
   try {
     if (!userEmails || userEmails.length === 0) {
       return errorResponse('INVALID_INPUT', 'No viewers to remove');
@@ -1066,7 +1066,7 @@ export async function updateProjectViewersRoleBatch(
   projectId: string,
   userEmails: string[],
   newRole: 'teacher' | 'observer' | 'member'
-): Promise<Response> {
+) {
   try {
     if (!userEmails || userEmails.length === 0) {
       return errorResponse('INVALID_INPUT', 'No viewers to update');

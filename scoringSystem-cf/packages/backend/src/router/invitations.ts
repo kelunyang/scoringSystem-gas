@@ -43,14 +43,19 @@ import { z } from 'zod';
 import { errorResponse } from '../utils/response';
 
 
-const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
+/** /email-status 的請求 schema（宣告在路由鏈之前，鏈中間不能夾敘述） */
+const EmailStatusRequestSchema = z.object({
+  invitationCodes: z.array(z.string()).min(1).max(100)
+});
+
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
 /**
  * POST /invitations/verify
  * Verify invitation code (public endpoint, no auth required)
  * Body: { invitationCode: string, userEmail: string, turnstileToken?: string }
  */
-app.post(
+  .post(
   '/verify',
   zValidator('json', VerifyInvitationRequestSchema),
   async (c) => {
@@ -64,16 +69,16 @@ app.post(
 
     return response;
   }
-);
+)
 
 // Apply authentication middleware to all routes below
-app.use('*', authMiddleware);
+  .use('*', authMiddleware)
 
 /**
  * Generate invitation code
  * Body: { targetEmail, validDays?, defaultTags?, defaultGlobalGroups? }
  */
-app.post(
+  .post(
   '/generate',
   zValidator('json', GenerateInvitationRequestSchema),
   async (c) => {
@@ -125,13 +130,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Generate batch invitation codes
  * Body: { targetEmails[], validDays?, defaultTags?, defaultGlobalGroups? }
  */
-app.post(
+  .post(
   '/generate-batch',
   zValidator('json', GenerateBatchInvitationsRequestSchema),
   async (c) => {
@@ -176,13 +181,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * List user's invitations
  * Body: { includeUsed?, includeExpired?, limit?, offset? }
  */
-app.post(
+  .post(
   '/list',
   zValidator('json', ListInvitationsRequestSchema),
   async (c) => {
@@ -203,13 +208,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Deactivate invitation
  * Body: { invitationId }
  */
-app.post(
+  .post(
   '/deactivate',
   zValidator('json', DeactivateInvitationRequestSchema),
   async (c) => {
@@ -233,13 +238,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Reactivate invitation
  * Body: { invitationId }
  */
-app.post(
+  .post(
   '/reactivate',
   zValidator('json', DeactivateInvitationRequestSchema), // Same schema as deactivate
   async (c) => {
@@ -263,13 +268,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Resend invitation email
  * Body: { invitationId }
  */
-app.post(
+  .post(
   '/resend-email',
   zValidator('json', ResendInvitationEmailRequestSchema),
   async (c) => {
@@ -300,18 +305,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get email send status for invitation codes (batch query)
  * Body: { invitationCodes: string[] }
  * Permissions: Requires system_admin OR generate_invites
  */
-const EmailStatusRequestSchema = z.object({
-  invitationCodes: z.array(z.string()).min(1).max(100)
-});
-
-app.post(
+  .post(
   '/email-status',
   zValidator('json', EmailStatusRequestSchema),
   async (c) => {

@@ -170,7 +170,7 @@ export function useWalletTransactions(
         filters
       })
 
-      const httpResponse = await rpcClient.wallets.transactions.$post({
+      const httpResponse = await rpcClient.api.wallets.transactions.$post({
         json: {
           projectId: pid,
           targetUserEmail: uid,
@@ -283,7 +283,7 @@ export function useInfiniteWalletTransactions(
         filters
       })
 
-      const httpResponse = await rpcClient.wallets.transactions.$post({
+      const httpResponse = await rpcClient.api.wallets.transactions.$post({
         json: {
           projectId: getValue(projectId),
           targetUserEmail: getValue(userId),
@@ -368,7 +368,7 @@ export function useWalletLeaderboard(
       getValue(projectId)
     ]),
     queryFn: async (): Promise<WalletLadderData> => {
-      const httpResponse = await rpcClient.wallets['project-ladder'].$post({
+      const httpResponse = await rpcClient.api.wallets['project-ladder'].$post({
         json: {
           projectId: getValue(projectId)
         }
@@ -413,7 +413,7 @@ export function useWalletProjectStages(
       getValue(projectId)
     ]),
     queryFn: async (): Promise<Stage[]> => {
-      const httpResponse = await rpcClient.projects.get.$post({
+      const httpResponse = await rpcClient.api.projects.get.$post({
         json: {
           projectId: getValue(projectId)
         }
@@ -481,7 +481,7 @@ export function useWalletData(
       getValue(projectId)
     ]),
     queryFn: async (): Promise<User[]> => {
-      const httpResponse = await rpcClient.projects.core.$post({
+      const httpResponse = await rpcClient.api.projects.core.$post({
         json: {
           projectId: getValue(projectId)
         }

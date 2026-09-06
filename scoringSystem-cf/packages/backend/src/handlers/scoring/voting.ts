@@ -26,7 +26,7 @@ export async function submitRankingVote(
   projectId: string,
   stageId: string,
   rankings: Record<string, number>
-): Promise<Response> {
+) {
   return errorResponse('DEPRECATED', 'This API endpoint is deprecated. Please use the proposal-based voting system.');
 }
 
@@ -35,7 +35,7 @@ export async function getStageVotingStatus(
   userEmail: string,
   projectId: string,
   stageId: string
-): Promise<Response> {
+) {
   return errorResponse('DEPRECATED', 'This API endpoint is deprecated. Please use the proposal-based voting system.');
 }
 
@@ -44,7 +44,7 @@ export async function getVotingData(
   userEmail: string,
   projectId: string,
   stageId: string
-): Promise<Response> {
+) {
   return errorResponse('DEPRECATED', 'This API endpoint is deprecated. Please use the proposal-based voting system.');
 }
 
@@ -53,7 +53,7 @@ export async function getVotingAnalysis(
   userEmail: string,
   projectId: string,
   stageId: string
-): Promise<Response> {
+) {
   return errorResponse('DEPRECATED', 'This API endpoint is deprecated. Please use the proposal-based voting system.');
 }
 */

@@ -31,7 +31,7 @@ interface AnnouncementRow {
 /**
  * Announcement with computed status
  */
-interface AnnouncementWithStatus extends Omit<AnnouncementRow, 'type'> {
+export interface AnnouncementWithStatus extends Omit<AnnouncementRow, 'type'> {
   type: AnnouncementType;
   status: 'pending' | 'active' | 'expired';
 }
@@ -39,7 +39,7 @@ interface AnnouncementWithStatus extends Omit<AnnouncementRow, 'type'> {
 /**
  * List filters
  */
-interface ListFilters {
+export interface ListFilters {
   limit: number;
   offset: number;
   type?: AnnouncementType;
@@ -121,7 +121,7 @@ export async function listAnnouncements(
     status?: string;
     searchText?: string;
   } = {}
-): Promise<Response> {
+) {
   try {
     // Check permission
     const hasPermission = await checkAnnouncementPermission(env, userEmail);
@@ -215,7 +215,7 @@ export async function getAnnouncement(
   env: Env,
   userEmail: string,
   announcementId: string
-): Promise<Response> {
+) {
   try {
     // Check permission
     const hasPermission = await checkAnnouncementPermission(env, userEmail);
@@ -257,7 +257,7 @@ export async function createAnnouncement(
     endTime: number;
     type?: string;
   }
-): Promise<Response> {
+) {
   try {
     // Check permission
     const hasPermission = await checkAnnouncementPermission(env, userEmail);
@@ -324,7 +324,7 @@ export async function updateAnnouncement(
     endTime?: number;
     type?: string;
   }
-): Promise<Response> {
+) {
   try {
     // Check permission
     const hasPermission = await checkAnnouncementPermission(env, userEmail);
@@ -420,7 +420,7 @@ export async function deleteAnnouncement(
   env: Env,
   userEmail: string,
   announcementId: string
-): Promise<Response> {
+) {
   try {
     // Check permission
     const hasPermission = await checkAnnouncementPermission(env, userEmail);

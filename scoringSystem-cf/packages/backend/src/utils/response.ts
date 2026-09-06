@@ -19,6 +19,22 @@ import type {
   ApiErrorResponse,
   ApiResponse
 } from '@repo/shared/types/api-responses';
+import type { TypedResponse } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
+
+/**
+ * 一個「帶 body 型別」的 JSON Response。
+ *
+ * DOM 的 `Response` 不帶 body 資訊，所以 handler 只要宣告回傳 `Response`，
+ * Hono 的 RPC 推導就只能得到 `unknown`——前端拿到的每個回應都要自己猜。
+ * Hono 官方的做法就是讓介面同時繼承 `Response` 與 `TypedResponse`
+ * （見 hono/dist/types/types.d.ts 的 NotFoundResponse 範例）。
+ *
+ * runtime 依然是一個普通的 JSON Response，這裡只是把「body 是什麼形狀」
+ * 這件事告訴型別系統。
+ */
+export interface JsonResponse<T, S extends ContentfulStatusCode = ContentfulStatusCode>
+  extends Response, TypedResponse<T, S, 'json'> {}
 
 /** @deprecated Use ApiSuccessResponse. */
 export type SuccessResponse<T = unknown> = ApiSuccessResponse<T>;
@@ -36,7 +52,7 @@ export type ErrorResponse = ApiErrorResponse;
  * return successResponse({ userId: 'usr_123', displayName: 'John Doe' });
  * // Returns Response with: { success: true, data: { userId: 'usr_123', displayName: 'John Doe' } }
  */
-export function successResponse<T>(data: T, message?: string): Response {
+export function successResponse<T>(data: T, message?: string): JsonResponse<ApiSuccessResponse<T>, 200> {
   const responseBody: ApiSuccessResponse<T> = {
     success: true,
     data
@@ -51,7 +67,7 @@ export function successResponse<T>(data: T, message?: string): Response {
     headers: {
       'Content-Type': 'application/json'
     }
-  });
+  }) as JsonResponse<ApiSuccessResponse<T>, 200>;
 }
 
 /**
@@ -70,7 +86,7 @@ export function errorResponse(
   message: string,
   /** 附在 error.context 上一起序列化，不會被讀取。 */
   context?: unknown
-): Response {
+): JsonResponse<ApiErrorResponse> {
   const errorBody: ApiErrorResponse = {
     success: false,
     error: {
@@ -87,7 +103,7 @@ export function errorResponse(
     headers: {
       'Content-Type': 'application/json'
     }
-  });
+  }) as JsonResponse<ApiErrorResponse>;
 }
 
 /**

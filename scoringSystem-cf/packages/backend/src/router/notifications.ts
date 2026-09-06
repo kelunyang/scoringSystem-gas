@@ -36,16 +36,16 @@ import {
 } from '@repo/shared/schemas/notifications';
 
 
-const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
 // Apply authentication middleware to all routes
-app.use('*', authMiddleware);
+  .use('*', authMiddleware)
 
 /**
  * Get user's unread notification count
  * Body: { sessionId }
  */
-app.post('/count', async (c) => {
+  .post('/count', async (c) => {
   const user = c.get('user');
 
   const response = await getUserNotificationCount(
@@ -54,13 +54,13 @@ app.post('/count', async (c) => {
   );
 
   return response;
-});
+})
 
 /**
  * Get user's notifications with pagination and filtering
  * Body: { sessionId, options?: { limit, offset, unreadOnly, searchText, projectId } }
  */
-app.post(
+  .post(
   '/list',
   zValidator('json', GetUserNotificationsRequestSchema),
   async (c) => {
@@ -75,13 +75,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Mark notification as read
  * Body: { sessionId, notificationId }
  */
-app.post(
+  .post(
   '/mark-read',
   zValidator('json', MarkNotificationAsReadRequestSchema),
   async (c) => {
@@ -96,13 +96,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Mark all user notifications as read
  * Body: { sessionId }
  */
-app.post('/mark-all-read', async (c) => {
+  .post('/mark-all-read', async (c) => {
   const user = c.get('user');
 
   const response = await markAllNotificationsAsRead(
@@ -111,13 +111,13 @@ app.post('/mark-all-read', async (c) => {
   );
 
   return response;
-});
+})
 
 /**
  * Delete notification (soft delete)
  * Body: { sessionId, notificationId }
  */
-app.post(
+  .post(
   '/delete',
   zValidator('json', DeleteNotificationRequestSchema),
   async (c) => {

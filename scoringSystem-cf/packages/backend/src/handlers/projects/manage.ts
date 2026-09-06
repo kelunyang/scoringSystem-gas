@@ -17,7 +17,7 @@ export async function getProject(
   env: Env,
   userEmail: string,
   projectId: string
-): Promise<Response> {
+) {
   try {
     // Get project
     const project = await env.DB.prepare(`
@@ -81,7 +81,7 @@ export async function updateProject(
     scoreRangeMin?: number;
     scoreRangeMax?: number;
   }
-): Promise<Response> {
+) {
   try {
     // Get project
     const project = await env.DB.prepare(`
@@ -226,7 +226,7 @@ export async function deleteProject(
   env: Env,
   userEmail: string,
   projectId: string
-): Promise<Response> {
+) {
   try {
     // Get project
     const project = await env.DB.prepare(`

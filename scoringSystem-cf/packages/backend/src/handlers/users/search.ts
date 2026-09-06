@@ -19,7 +19,7 @@ import { parseJSON } from '../../utils/json';
  * by checking projectviewers table
  */
 /** 顯示在使用者名稱旁的身分標記。 */
-interface UserBadge {
+export interface UserBadge {
   type: string;
   label: string;
   color: string;
@@ -42,7 +42,7 @@ export async function searchUsers(
   sessionUserEmail: string,
   query: string,
   limit: number = 10
-): Promise<Response> {
+) {
   try {
     if (!query || query.length < 2) {
       return errorResponse('INVALID_INPUT', 'Search query must be at least 2 characters');

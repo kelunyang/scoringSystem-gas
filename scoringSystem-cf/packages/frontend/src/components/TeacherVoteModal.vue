@@ -1113,7 +1113,7 @@ async function loadTeacherVoteData(): Promise<void> {
     } else {
       // Fallback: 調用 API（向後兼容）
       try {
-        const httpResponse = await rpcClient.projects.core.$post({
+        const httpResponse = await rpcClient.api.projects.core.$post({
           json: {
             projectId: props.projectId
           }
@@ -1131,7 +1131,7 @@ async function loadTeacherVoteData(): Promise<void> {
 
     // ===== 2. 載入成果提交數據 =====
     // 投票需要完整數據，始終調用 API（不依賴父組件可能被分頁的快取數據）
-    const httpResponse1 = await rpcClient.projects.content.$post({
+    const httpResponse1 = await rpcClient.api.projects.content.$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,
@@ -1179,7 +1179,7 @@ async function loadTeacherVoteData(): Promise<void> {
     // 投票需要完整數據，始終調用 API（不依賴父組件可能被分頁的快取數據）
     let commentsToProcess: any[] = []
 
-    const httpResponse2 = await rpcClient.comments.stage.$post({
+    const httpResponse2 = await rpcClient.api.comments.stage.$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,

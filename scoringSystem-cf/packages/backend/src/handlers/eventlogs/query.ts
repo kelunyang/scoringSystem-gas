@@ -54,7 +54,7 @@ interface EventLogRow {
  * 多數欄位是 EventLogRow 的別名（action/resourceType/resourceId），
  * 為了相容舊版前端而保留。
  */
-interface EnrichedEventLog {
+export interface EnrichedEventLog {
   logId: string;
   projectId: string;
   userId: string | null;
@@ -95,7 +95,7 @@ type EventResource =
     };
 
 /** getUserProjectEventLogs 的內容：權限層級與該使用者看得到的記錄。 */
-interface EventLogPermissionPayload {
+export interface EventLogPermissionPayload {
   userPermissionLevel?: string;
   logs?: Array<{ userEmail: string }>;
 }
@@ -109,7 +109,7 @@ export async function getProjectEventLogs(
   env: Env,
   projectId: string,
   filters: EventLogFilters = {}
-): Promise<Response> {
+) {
   try {
     // Build SQL query with filters
     // SECURITY FIX: Use INNER JOIN for users to ensure only valid user logs are returned
@@ -251,7 +251,7 @@ export async function getUserProjectEventLogs(
   userEmail: string,
   projectId: string,
   filters: EventLogFilters = {}
-): Promise<Response> {
+) {
   try {
 
     // Get userId from userEmail
@@ -430,7 +430,7 @@ export async function getEventResourceDetails(
   projectId: string,
   resourceType: string,
   resourceId: string
-): Promise<Response> {
+) {
   try {
     // First, verify the user has permission to view logs for this resource
     // by checking if the resource appears in their allowed event logs

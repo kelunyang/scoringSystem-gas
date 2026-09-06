@@ -99,7 +99,7 @@ export function useGroupMembers(projectId: Ref<string | null>, groupId: Ref<stri
         throw new Error('Project ID or Group ID is null')
       }
 
-      const httpResponse = await rpcClient.groups.details.$post({
+      const httpResponse = await rpcClient.api.groups.details.$post({
         json: {
           projectId: projectId.value,
           groupId: groupId.value
@@ -134,7 +134,7 @@ export function useProjectGroups(projectId: Ref<string | null>): UseQueryReturnT
         throw new Error('Project ID is null')
       }
 
-      const httpResponse = await rpcClient.groups.list.$post({
+      const httpResponse = await rpcClient.api.groups.list.$post({
         json: {
           projectId: projectId.value
         }
@@ -175,7 +175,7 @@ export function useAvailableGroupUsers(projectId: Ref<string | null>): UseQueryR
         throw new Error('Project ID is null')
       }
 
-      const httpResponse = await rpcClient.projects.viewers.list.$post({
+      const httpResponse = await rpcClient.api.projects.viewers.list.$post({
         json: {
           projectId: projectId.value
         }
@@ -225,7 +225,7 @@ export function useBatchAddGroupMembers() {
       groupId: string
       members: Array<{ userEmail: string; role: 'leader' | 'member' }>
     }) => {
-      const httpResponse = await rpcClient.groups['batch-add-members'].$post({
+      const httpResponse = await rpcClient.api.groups['batch-add-members'].$post({
         json: {
           projectId,
           groupId,
@@ -264,7 +264,7 @@ export function useRemoveGroupMember() {
 
   return useMutation({
     mutationFn: async ({ projectId, groupId, userEmail }: { projectId: string; groupId: string; userEmail: string }) => {
-      const httpResponse = await rpcClient.groups['remove-member'].$post({
+      const httpResponse = await rpcClient.api.groups['remove-member'].$post({
         json: {
           projectId,
           groupId,
@@ -303,7 +303,7 @@ export function useUpdateGroup() {
 
   return useMutation({
     mutationFn: async ({ projectId, groupId, updates }: { projectId: string; groupId: string; updates: GroupUpdateData }) => {
-      const httpResponse = await rpcClient.groups.update.$post({
+      const httpResponse = await rpcClient.api.groups.update.$post({
         json: {
           projectId,
           groupId,

@@ -22,7 +22,7 @@ export async function submitStageRankingVote(
     stageId: string;
     rankings: Array<{ groupId: string; rank: number }>;
   }
-): Promise<Response> {
+) {
   const { userEmail, userId } = context;
   const { projectId, stageId, rankings } = requestData;
 

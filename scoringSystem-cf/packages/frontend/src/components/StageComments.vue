@@ -714,7 +714,7 @@ async function loadCommentRankings() {
 
     console.log('開始調用 API 獲取排名...')
     // 先嘗試載入舊的評論排名 API (投票期間使用)
-    const httpResponse = await rpcClient.comments['stage-rankings'].$post({
+    const httpResponse = await rpcClient.api.comments['stage-rankings'].$post({
       json: {
         projectId: projectId,
         stageId: props.stageId
@@ -753,7 +753,7 @@ async function loadCommentRankings() {
     if (props.stageStatus === 'completed') {
       try {
         console.log('開始調用結算排名 API...')
-        const settlementHttpResponse = await rpcClient.settlement['comment-rankings'].$post({
+        const settlementHttpResponse = await rpcClient.api.settlement['comment-rankings'].$post({
           json: {
             projectId: projectId,
             stageId: props.stageId
@@ -866,7 +866,7 @@ async function handleReaction(comment: ProcessedComment, reactionType: string) {
 // 添加 reaction
 async function addReaction(comment: ProcessedComment, reactionType: string) {
   try {
-    const httpResponse = await rpcClient.comments.reactions.add.$post({
+    const httpResponse = await rpcClient.api.comments.reactions.add.$post({
       json: {
         projectId: props.projectId,
         commentId: comment.commentId,
@@ -896,7 +896,7 @@ async function addReaction(comment: ProcessedComment, reactionType: string) {
 // 移除 reaction
 async function removeReaction(comment: ProcessedComment) {
   try {
-    const httpResponse = await rpcClient.comments.reactions.remove.$post({
+    const httpResponse = await rpcClient.api.comments.reactions.remove.$post({
       json: {
         projectId: props.projectId,
         commentId: comment.commentId

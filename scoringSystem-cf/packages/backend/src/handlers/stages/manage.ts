@@ -45,7 +45,7 @@ export async function createStage(
     commentRewardPool?: number;
     stageType?: string;
   }
-): Promise<Response> {
+) {
   try {
     // Validate required fields
     if (!stageData.stageName || !stageData.startTime || !stageData.endTime) {
@@ -163,7 +163,7 @@ export async function getStage(
   userEmail: string,
   projectId: string,
   stageId: string
-): Promise<Response> {
+) {
   try {
     // Get stage with statistics
     const stage = await env.DB.prepare(`
@@ -228,7 +228,7 @@ export async function updateStage(
     reportRewardPool?: number;
     commentRewardPool?: number;
   }
-): Promise<Response> {
+) {
   try {
     // Get current stage with auto-calculated status
     const stage = await env.DB.prepare(`
@@ -530,7 +530,7 @@ export async function listProjectStages(
   userEmail: string,
   projectId: string,
   includeArchived: boolean = false
-): Promise<Response> {
+) {
   try {
     let query = `
       SELECT
@@ -594,7 +594,7 @@ export async function cloneStage(
   newStageName: string,
   startTime?: number,
   endTime?: number
-): Promise<Response> {
+) {
   try {
     // Get original stage (no need for VIEW here, just copying config)
     const originalStage = await env.DB.prepare(`
@@ -700,7 +700,7 @@ export async function cloneStageToProjects(
   targetProjectIds: string[],
   startTime?: number,
   endTime?: number
-): Promise<Response> {
+) {
   try {
     // 1. Validate source stage exists
     const originalStage = await env.DB.prepare(`

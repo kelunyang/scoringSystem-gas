@@ -30,7 +30,7 @@ interface AnnouncementRow {
  */
 export async function getActiveAnnouncements(
   env: Env
-): Promise<Response> {
+) {
   try {
     const now = Date.now();
 

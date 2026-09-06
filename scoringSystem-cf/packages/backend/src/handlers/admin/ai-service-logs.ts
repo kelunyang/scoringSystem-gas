@@ -30,7 +30,7 @@ type QueryParam = string | number;
 /**
  * AI service log filters (validated input)
  */
-interface AIServiceLogFilters {
+export interface AIServiceLogFilters {
   search?: string;
   serviceType?: AIServiceType;
   rankingType?: AIRankingType;
@@ -70,12 +70,12 @@ interface ProviderStatsResult {
   avgResponseTime: number;
 }
 
-interface StatusStatsResult {
+export interface StatusStatsResult {
   status: string;
   count: number;
 }
 
-interface DateStatsResult {
+export interface DateStatsResult {
   date: string;
   count: number;
   totalTokens: number;
@@ -263,7 +263,7 @@ export async function getAIServiceLogs(
     limit?: number;
     offset?: number;
   } = {}
-): Promise<Response> {
+) {
   try {
     // Check permission
     const hasPermission = await checkAIServiceLogsPermission(env, userEmail);
@@ -311,7 +311,7 @@ export async function getAIServiceLogs(
 export async function getAIServiceStatistics(
   env: Env,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     // Check permission
     const hasPermission = await checkAIServiceLogsPermission(env, userEmail);
@@ -415,7 +415,7 @@ export async function getAIServiceLogDetail(
   env: Env,
   userEmail: string,
   callId: string
-): Promise<Response> {
+) {
   try {
     // Check permission
     const hasPermission = await checkAIServiceLogsPermission(env, userEmail);

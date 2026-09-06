@@ -42,7 +42,7 @@ interface SubmissionRow {
 /**
  * Processed submission for API response
  */
-interface ProcessedSubmission {
+export interface ProcessedSubmission {
   submissionId: string;
   projectId: string;
   stageId: string;
@@ -115,7 +115,7 @@ interface ProjectContentCommentRow {
 }
 
 /** 上面那一列加上解析後的欄位，回給前端用。 */
-interface ProjectContentComment extends Omit<ProjectContentCommentRow, 'mentionedGroups' | 'mentionedUsers'> {
+export interface ProjectContentComment extends Omit<ProjectContentCommentRow, 'mentionedGroups' | 'mentionedUsers'> {
   isGroupMember: boolean;
   mentionedGroups: string[];
   mentionedUsers: string[];
@@ -154,7 +154,7 @@ interface ProjectListItemBase {
 }
 
 /** 一般使用者看到的專案清單項目。 */
-interface ProjectWithDetails extends ProjectListItemBase {
+export interface ProjectWithDetails extends ProjectListItemBase {
   updatedAt: number;
   viewerRole: 'teacher' | 'observer' | 'member' | null;
 }
@@ -167,7 +167,7 @@ interface ProjectWithDetails extends ProjectListItemBase {
  * 實務上無害——前端 useDetailedProjectPermissions 先檢查 hasGlobalAdmin
  * 並提早返回，永遠走不到讀 viewerRole 的分支。
  */
-interface AdminProjectListItem extends ProjectListItemBase {
+export interface AdminProjectListItem extends ProjectListItemBase {
   totalStages: number;
   currentStage: number;
   isCreator: boolean;
@@ -219,7 +219,7 @@ export async function listUserProjects(
     limit?: number;
     offset?: number;
   } = {}
-): Promise<Response> {
+) {
   try {
     // Check if user is system admin
     const isAdmin = await checkSystemAdmin(env, userEmail);
@@ -259,7 +259,7 @@ export async function getProjectCore(
   env: Env,
   userEmail: string,
   projectId: string
-): Promise<Response> {
+) {
   try {
     // Check access
     const hasAccess = await checkProjectAccess(env, userEmail, projectId);
@@ -367,7 +367,7 @@ export async function getProjectContent(
   stageId: string,
   contentType: string = 'all',
   options?: { excludeTeachers?: boolean; excludeUserGroups?: boolean; includeSubmitted?: boolean }
-): Promise<Response> {
+) {
   try {
     const excludeTeachers = options?.excludeTeachers || false;
     const excludeUserGroups = options?.excludeUserGroups || false;

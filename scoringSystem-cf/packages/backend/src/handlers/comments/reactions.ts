@@ -19,7 +19,7 @@ export async function addReaction(
   projectId: string,
   commentId: string,
   reactionType: string
-): Promise<Response> {
+) {
   try {
     // Validate reaction type
     const validReactions = ['helpful', 'disagreed'];
@@ -248,7 +248,7 @@ export async function removeReaction(
   userEmail: string,
   projectId: string,
   commentId: string
-): Promise<Response> {
+) {
   try {
     // Verify user exists
     const user = await env.DB.prepare(`
@@ -321,7 +321,7 @@ export async function getCommentReactions(
   userEmail: string,
   projectId: string,
   commentId: string
-): Promise<Response> {
+) {
   try {
     // Append-only architecture: Get latest reactions using window function
     // Only count non-NULL reactions (NULL = removed)

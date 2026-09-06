@@ -36,7 +36,7 @@ export async function getGlobalGroups(
     limit?: number;
     offset?: number;
   }
-): Promise<Response> {
+) {
   try {
     // Build WHERE conditions
     const conditions: string[] = [];
@@ -154,7 +154,7 @@ export async function createGlobalGroup(
     description?: string;
     globalPermissions?: string[];
   }
-): Promise<Response> {
+) {
   try {
     // Validate required fields
     if (!groupData.groupName) {
@@ -257,7 +257,7 @@ export async function updateGlobalGroup(
     description?: string;
     globalPermissions?: string[];
   }
-): Promise<Response> {
+) {
   try {
     // Validate inputs
     if (!groupId) {
@@ -377,7 +377,7 @@ export async function deactivateGlobalGroup(
   env: Env,
   adminEmail: string,
   groupId: string
-): Promise<Response> {
+) {
   try {
     // Validate inputs
     if (!groupId) {
@@ -441,7 +441,7 @@ export async function activateGlobalGroup(
   env: Env,
   adminEmail: string,
   groupId: string
-): Promise<Response> {
+) {
   try {
     // Validate inputs
     if (!groupId) {
@@ -494,7 +494,7 @@ export async function activateGlobalGroup(
 export async function getGlobalGroupMembers(
   env: Env,
   groupId: string
-): Promise<Response> {
+) {
   try {
     // Validate inputs
     if (!groupId) {
@@ -560,7 +560,7 @@ export async function addUserToGlobalGroup(
   adminEmail: string,
   groupId: string,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     // Validate inputs
     if (!groupId || !userEmail) {
@@ -658,7 +658,7 @@ export async function removeUserFromGlobalGroup(
   adminEmail: string,
   groupId: string,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     // Validate inputs
     if (!groupId || !userEmail) {
@@ -737,7 +737,7 @@ export async function batchAddUsersToGlobalGroup(
   adminEmail: string,
   groupId: string,
   userEmails: string[]
-): Promise<Response> {
+) {
   try {
     // Validate inputs
     if (!groupId || !Array.isArray(userEmails) || userEmails.length === 0) {
@@ -842,7 +842,7 @@ export async function batchRemoveUsersFromGlobalGroup(
   adminEmail: string,
   groupId: string,
   userEmails: string[]
-): Promise<Response> {
+) {
   try {
     // Validate inputs
     if (!groupId || !Array.isArray(userEmails) || userEmails.length === 0) {
@@ -936,7 +936,7 @@ export async function batchDeactivateGlobalGroups(
   env: Env,
   adminEmail: string,
   groupIds: string[]
-): Promise<Response> {
+) {
   try {
     // Validate inputs
     if (!groupIds || groupIds.length === 0) {
@@ -1046,7 +1046,7 @@ export async function batchActivateGlobalGroups(
   env: Env,
   adminEmail: string,
   groupIds: string[]
-): Promise<Response> {
+) {
   try {
     // Validate inputs
     if (!groupIds || groupIds.length === 0) {

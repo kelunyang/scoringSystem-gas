@@ -13,7 +13,7 @@ import { queueSingleNotification } from '../../queues/notification-producer';
  * Get user profile by userId
  */
 /** 顯示在使用者名稱旁的身分標記。 */
-interface UserBadge {
+export interface UserBadge {
   type: string;
   label: string;
   color: string;
@@ -25,7 +25,7 @@ export async function getUserProfile(
   sessionUserId: string,
   sessionUserEmail: string,
   targetUserId?: string
-): Promise<Response> {
+) {
   try {
     // If no targetUserId provided, return current user's profile
     const userId = targetUserId || sessionUserId;
@@ -83,7 +83,7 @@ export async function updateUserProfile(
   userId: string,
   userEmail: string,
   updates: { displayName?: string; preferences?: Record<string, unknown> }
-): Promise<Response> {
+) {
   try {
     // Get current user profile for change tracking
     const user = await env.DB.prepare(`
@@ -146,7 +146,7 @@ export async function updateUserAvatar(
   userId: string,
   userEmail: string,
   avatarData: { avatarSeed?: string; avatarStyle?: string; avatarOptions?: Record<string, string> }
-): Promise<Response> {
+) {
   try {
     console.log('📝 Received avatar data:', avatarData);
 
@@ -224,7 +224,7 @@ export async function generateAvatarData(
   env: Env,
   userEmail: string,
   userId?: string
-): Promise<Response> {
+) {
   try {
     const newSeed = generateAvatarSeed(userEmail);
     const avatarStyle = 'avataaars'; // Default style
@@ -265,7 +265,7 @@ export async function regenerateAvatarSeed(
   env: Env,
   userId: string,
   userEmail: string
-): Promise<Response> {
+) {
   return generateAvatarData(env, userEmail, userId);
 }
 
@@ -277,7 +277,7 @@ export async function deactivateUser(
   userId: string,
   userEmail: string,
   reason: string = 'user_request'
-): Promise<Response> {
+) {
   try {
     await env.DB.prepare(`
       UPDATE users

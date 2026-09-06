@@ -26,7 +26,7 @@ export async function createGroup(
     description?: string;
     allowChange?: boolean;
   }
-): Promise<Response> {
+) {
   try {
     if (!groupData.groupName) {
       return errorResponse('INVALID_INPUT', 'Group name is required');
@@ -117,7 +117,7 @@ export async function batchCreateGroups(
     allowChange?: boolean;
     namePrefix?: string;
   }
-): Promise<Response> {
+) {
   try {
     const { groupCount, allowChange = true, namePrefix = '學生分組' } = params;
 
@@ -253,7 +253,7 @@ export async function getGroup(
   userEmail: string,
   projectId: string,
   groupId: string
-): Promise<Response> {
+) {
   try {
     // Check access
     const hasAccess = await checkGroupAccess(env, userEmail, projectId, groupId);
@@ -329,7 +329,7 @@ export async function updateGroup(
     description?: string;
     allowChange?: boolean;
   }
-): Promise<Response> {
+) {
   try {
     // Check permissions
     const isAdmin = await checkGlobalPermission(env, userEmail, 'system_admin');
@@ -457,7 +457,7 @@ export async function deleteGroup(
   userEmail: string,
   projectId: string,
   groupId: string
-): Promise<Response> {
+) {
   try {
     // Check permissions
     const hasManagePermission = await hasProjectPermission(env, userEmail, projectId, 'manage');
@@ -603,7 +603,7 @@ export async function batchUpdateGroupStatus(
   projectId: string,
   groupIds: string[],
   status: 'active' | 'inactive'
-): Promise<Response> {
+) {
   try {
     // Validate inputs
     if (!groupIds || groupIds.length === 0) {
@@ -705,7 +705,7 @@ export async function batchUpdateGroupAllowChange(
   projectId: string,
   groupIds: string[],
   allowChange: boolean
-): Promise<Response> {
+) {
   try {
     // Validate inputs
     if (!groupIds || groupIds.length === 0) {

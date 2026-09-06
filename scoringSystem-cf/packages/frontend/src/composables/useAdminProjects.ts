@@ -103,7 +103,7 @@ export function useAdminProjects(options?: UseAdminProjectsOptions): UseQueryRet
         if (statusVal) queryParams.status = statusVal
       }
 
-      const httpResponse = await rpcClient.projects.list.$post({ json: queryParams })
+      const httpResponse = await rpcClient.api.projects.list.$post({ json: queryParams })
       const response = await httpResponse.json() as AdminProjectsResponse
 
       if (!response.success) {

@@ -46,7 +46,7 @@ interface InvitationListRow {
 export async function getUserInvitations(
   env: Env,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     const userId = await env.DB.prepare(`
       SELECT userId FROM users WHERE userEmail = ?
@@ -96,7 +96,7 @@ export async function deactivateInvitation(
   env: Env,
   invitationId: string,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     const invitation = await env.DB.prepare(`
       SELECT i.*, u.userEmail as creatorEmail
@@ -151,7 +151,7 @@ export async function reactivateInvitation(
   env: Env,
   invitationId: string,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     const invitation = await env.DB.prepare(`
       SELECT i.*, u.userEmail as creatorEmail

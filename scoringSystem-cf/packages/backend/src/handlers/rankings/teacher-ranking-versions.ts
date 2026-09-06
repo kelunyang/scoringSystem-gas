@@ -27,7 +27,7 @@ interface RankingVersion {
   };
 }
 
-interface VersionsResponse {
+export interface VersionsResponse {
   versions: RankingVersion[];
   latestVersion?: RankingVersion;
 }
@@ -42,7 +42,7 @@ export async function getTeacherRankingVersions(
   projectId: string,
   stageId: string,
   rankingType: 'submission' | 'comment'
-): Promise<Response> {
+) {
   try {
     console.log(`📚 [getTeacherRankingVersions] Fetching ${rankingType} versions for teacher ${userEmail} in stage ${stageId}`);
 

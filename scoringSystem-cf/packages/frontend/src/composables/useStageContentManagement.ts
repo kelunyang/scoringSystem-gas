@@ -91,7 +91,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
       // Vue 3 Best Practice: rpcClient automatically handles authentication
       console.log(`📡 調用 API: getProjectContent(${projectId}, ${stageId}, ${contentType}, includeSubmitted: true)`)
 
-      const httpResponse = await rpcClient.projects.content.$post({
+      const httpResponse = await rpcClient.api.projects.content.$post({
         json: {
           projectId,
           stageId,
@@ -168,7 +168,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
       // 使用 /api/comments/stage 獲取完整評論數據（包含 reactions 和 canBeVoted）
       // 使用 dedupRequest 防止重複請求
       const response = await dedupRequest(dedupKey, async () => {
-        const httpResponse = await rpcClient.comments.stage.$post({
+        const httpResponse = await rpcClient.api.comments.stage.$post({
           json: {
             projectId,
             stageId,
@@ -222,7 +222,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
         groupId: groupData.groupId
       })
 
-      const httpResponse = await rpcClient.submissions['participation-status'].$post({
+      const httpResponse = await rpcClient.api.submissions['participation-status'].$post({
         json: {
           projectId,
           stageId,
@@ -515,7 +515,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
 
     const loadPromises = stages.map(async (stage) => {
       try {
-        const httpResponse = await rpcClient.settlement['stage-rankings'].$post({
+        const httpResponse = await rpcClient.api.settlement['stage-rankings'].$post({
           json: {
             projectId: projectId,
             stageId: stage.id || stage.stageId
@@ -691,7 +691,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
 
         console.log(`📊 [DEBUG] 調用結算排名API: /settlement/stage-rankings`)
 
-        const httpResponse = await rpcClient.settlement['stage-rankings'].$post({
+        const httpResponse = await rpcClient.api.settlement['stage-rankings'].$post({
           json: {
             projectId: projectId,
             stageId: stage.id

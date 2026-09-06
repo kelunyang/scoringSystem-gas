@@ -23,7 +23,7 @@ export async function submitGroupRanking(
     /** 提交的成果排名，一定是陣列（zod schema 已驗證）。 */
     rankingData: SubmissionRankingEntry[];
   }
-): Promise<Response> {
+) {
   const { userEmail } = context;
   const { projectId, stageId, rankingData } = requestData;
 

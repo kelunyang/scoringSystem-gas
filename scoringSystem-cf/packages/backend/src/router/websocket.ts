@@ -8,7 +8,7 @@ import type { Env } from '../types';
 import { verifyToken } from '../handlers/auth/jwt';
 import { errorResponse } from '../utils/response';
 
-const router = new Hono<{ Bindings: Env }>();
+const router = new Hono<{ Bindings: Env }>()
 
 /**
  * WebSocket upgrade endpoint
@@ -17,7 +17,7 @@ const router = new Hono<{ Bindings: Env }>();
  * Accepts WebSocket upgrade requests with JWT authentication.
  * Routes the connection to the user's NotificationHub Durable Object.
  */
-router.get('/', async (c) => {
+  .get('/', async (c) => {
   // Check if this is a WebSocket upgrade request
   const upgradeHeader = c.req.header('Upgrade');
   if (upgradeHeader !== 'websocket') {
@@ -60,7 +60,7 @@ router.get('/', async (c) => {
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
-});
+})
 
 /**
  * WebSocket status endpoint
@@ -68,7 +68,7 @@ router.get('/', async (c) => {
  *
  * Returns the health status of the WebSocket service.
  */
-router.get('/status', async (c) => {
+  .get('/status', async (c) => {
   return c.json({
     success: true,
     data: {

@@ -94,7 +94,7 @@ export function useGroupMembers() {
         return
       }
 
-      const httpResponse = await rpcClient.projects.viewers.list.$post({
+      const httpResponse = await rpcClient.api.projects.viewers.list.$post({
         json: {
           projectId: projectId
         }
@@ -169,7 +169,7 @@ export function useGroupMembers() {
   const loadProjectGroupMembersInline = async (projectId: string, groupId: string): Promise<void> => {
     loadingProjectGroupMembers.value.add(groupId)
     try {
-      const httpResponse = await rpcClient.groups.details.$post({
+      const httpResponse = await rpcClient.api.groups.details.$post({
         json: {
           projectId: projectId,
           groupId: groupId
@@ -290,7 +290,7 @@ export function useGroupMembers() {
       addingMember.value = true
 
       // Use batch API instead of individual requests
-      const httpResponse = await rpcClient.groups['batch-add-members'].$post({
+      const httpResponse = await rpcClient.api.groups['batch-add-members'].$post({
         json: {
           projectId: projectId,
           groupId: groupId,
@@ -376,7 +376,7 @@ export function useGroupMembers() {
     try {
       removingMemberEmail.value = member.userEmail
 
-      const httpResponse = await rpcClient.groups.removeMember.$post({
+      const httpResponse = await rpcClient.api.groups.removeMember.$post({
         json: {
           projectId: projectId,
           groupId: groupId,

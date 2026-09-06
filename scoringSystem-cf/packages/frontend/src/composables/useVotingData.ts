@@ -165,7 +165,7 @@ export function useVotingData(
   const versionsQuery = useQuery({
     queryKey: computed(() => ['submissionVersions', projectIdRef.value, stageIdRef.value, groupIdRef.value]),
     queryFn: async () => {
-      const httpResponse = await rpcClient.submissions.versions.$post({
+      const httpResponse = await rpcClient.api.submissions.versions.$post({
         json: {
           projectId: projectIdRef.value,
           stageId: stageIdRef.value,
@@ -189,7 +189,7 @@ export function useVotingData(
   const votingHistoryQuery = useQuery({
     queryKey: computed(() => ['votingHistory', projectIdRef.value, stageIdRef.value, groupIdRef.value]),
     queryFn: async () => {
-      const httpResponse = await rpcClient.submissions['voting-history'].$post({
+      const httpResponse = await rpcClient.api.submissions['voting-history'].$post({
         json: {
           projectId: projectIdRef.value,
           stageId: stageIdRef.value,
@@ -214,7 +214,7 @@ export function useVotingData(
 
   const voteMutation = useMutation({
     mutationFn: async ({ agree }: { agree: boolean }) => {
-      const httpResponse = await rpcClient.submissions['confirm-participation'].$post({
+      const httpResponse = await rpcClient.api.submissions['confirm-participation'].$post({
         json: {
           projectId: projectIdRef.value,
           stageId: stageIdRef.value,

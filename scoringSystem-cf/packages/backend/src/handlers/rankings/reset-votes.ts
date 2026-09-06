@@ -34,7 +34,7 @@ export async function resetProposalVotes(
     proposalId: string;
     reason?: string;
   }
-): Promise<Response> {
+) {
   const { userEmail } = context;
   const { proposalId, reason } = requestData;
 

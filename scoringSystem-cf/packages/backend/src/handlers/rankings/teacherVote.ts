@@ -38,7 +38,7 @@ export async function submitTeacherComprehensiveVote(
   projectId: string,
   stageId: string,
   requestData: ComprehensiveVoteRequest
-): Promise<Response> {
+) {
   try {
     const { rankings } = requestData;
     const now = Date.now();

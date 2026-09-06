@@ -12,12 +12,12 @@ import type { Env } from '../types';
 
 import { Hono } from 'hono'
 
-const ipRouter = new Hono<{ Bindings: Env }>();
+const ipRouter = new Hono<{ Bindings: Env }>()
 
 /**
  * GET /ip - Get client IP and geolocation
  */
-ipRouter.get('/', (c) => {
+  .get('/', (c) => {
   const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For') || 'unknown';
   const country = c.req.header('CF-IPCountry') || 'unknown';
   const city = c.req.header('CF-IPCity') || 'unknown';

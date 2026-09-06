@@ -11,10 +11,10 @@ import type { Env } from '../types';
 import { authMiddleware } from '../middleware/auth';
 import { requireSystemAdmin } from '../middleware/permissions';
 
-const maintenanceRouter = new Hono<{ Bindings: Env }>();
+const maintenanceRouter = new Hono<{ Bindings: Env }>()
 
 // All maintenance routes require system admin permission
-maintenanceRouter.use('*', authMiddleware, requireSystemAdmin);
+  .use('*', authMiddleware, requireSystemAdmin);
 
 
 

@@ -287,7 +287,7 @@ export async function executeNotificationPatrol(
     websocket?: WebSocket; // Optional WebSocket for real-time progress updates
     userId?: string; // User ID who triggered the execution
   }
-): Promise<Response> {
+) {
   const startTime = Date.now();
   const websocket = options?.websocket;
 

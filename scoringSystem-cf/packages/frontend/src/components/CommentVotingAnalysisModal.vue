@@ -435,19 +435,19 @@ const loadCommentAnalysis = async (): Promise<void> => {
     if (props.isSettled) {
       // 結算後模式：載入結算結果數據
       const [stageHttpResponse, settlementHttpResponse, commentVotingHttpResponse] = await Promise.all([
-        rpcClient.stages.get.$post({
+        rpcClient.api.stages.get.$post({
           json: {
             projectId: props.projectId,
             stageId: props.stageId
           }
         }),
-        rpcClient.settlement['comment-rankings'].$post({
+        rpcClient.api.settlement['comment-rankings'].$post({
           json: {
             projectId: props.projectId,
             stageId: props.stageId
           }
         }),
-        rpcClient.scoring['comment-voting-data'].$post({
+        rpcClient.api.scoring['comment-voting-data'].$post({
           json: {
             stageId: props.stageId
           }
@@ -503,12 +503,12 @@ const loadCommentAnalysis = async (): Promise<void> => {
     } else {
       // 實時計算模式：載入評論投票數據並即時計算
       const [commentVotingHttpResponse, stageHttpResponse] = await Promise.all([
-        rpcClient.scoring['comment-voting-data'].$post({
+        rpcClient.api.scoring['comment-voting-data'].$post({
           json: {
             stageId: props.stageId
           }
         }),
-        rpcClient.stages.get.$post({
+        rpcClient.api.stages.get.$post({
           json: {
             projectId: props.projectId,
             stageId: props.stageId

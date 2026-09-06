@@ -31,7 +31,7 @@ interface SysLogRow {
   relatedEntities: string | null;
 }
 
-export async function getSystemStats(env: Env, userEmail?: string): Promise<Response> {
+export async function getSystemStats(env: Env, userEmail?: string) {
   try {
     // Get user statistics
     const userStats = await env.DB.prepare(`
@@ -125,7 +125,7 @@ export async function getSystemLogs(
     limit?: number;
     offset?: number;
   } = {}
-): Promise<Response> {
+) {
   try {
     const {
       level,
@@ -297,7 +297,7 @@ export async function getSystemLogs(
 /**
  * Get log statistics
  */
-export async function getLogStatistics(env: Env): Promise<Response> {
+export async function getLogStatistics(env: Env) {
   try {
     // Get log counts by level
     const levelStats = await env.DB.prepare(`
@@ -347,7 +347,7 @@ export async function getEntityDetails(
     entityId: string;
   },
   userEmail?: string
-): Promise<Response> {
+) {
   try {
     const { entityType, entityId } = params;
 

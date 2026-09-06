@@ -456,7 +456,7 @@ const loadProjectGroups = async () => {
 
   try {
     loading.value = true
-    const httpResponse = await rpcClient.groups.list.$post({
+    const httpResponse = await rpcClient.api.groups.list.$post({
       json: {
         projectId: selectedProjectId.value,
         includeInactive: showInactive.value
@@ -534,7 +534,7 @@ const updateGroup = async () => {
   try {
     updating.value = true
 
-    const httpResponse = await rpcClient.groups.update.$post({
+    const httpResponse = await rpcClient.api.groups.update.$post({
       json: {
         projectId: selectedProjectId.value,
         groupId: editForm.groupId,
@@ -584,7 +584,7 @@ const confirmDeactivateGroup = async () => {
   try {
     deactivatingGroup.value = true
 
-    const httpResponse = await rpcClient.groups.deactivate.$post({
+    const httpResponse = await rpcClient.api.groups.deactivate.$post({
       json: {
         projectId: selectedProjectId.value,
         groupId: pendingDeactivateGroup.value.groupId
@@ -613,7 +613,7 @@ const cancelDeactivateGroup = () => {
 
 const activateGroup = async (group: ProjectGroup) => {
   try {
-    const httpResponse = await rpcClient.groups.activate.$post({
+    const httpResponse = await rpcClient.api.groups.activate.$post({
       json: {
         projectId: selectedProjectId.value,
         groupId: group.groupId
@@ -635,7 +635,7 @@ const updateGroupAllowChange = async ({ groupId, allowChange }: { groupId: strin
   try {
     updatingGroupId.value = groupId
 
-    const httpResponse = await rpcClient.groups.update.$post({
+    const httpResponse = await rpcClient.api.groups.update.$post({
       json: {
         projectId: selectedProjectId.value,
         groupId: groupId,
@@ -687,7 +687,7 @@ const createBatchGroups = async (payload: { groupCount: number; allowChange: boo
     console.log('🚀 [GroupManagement] Calling batch-create API...')
 
     // 使用新的批量創建 API 端點
-    const httpResponse = await rpcClient.groups['batch-create'].$post({
+    const httpResponse = await rpcClient.api.groups['batch-create'].$post({
       json: {
         projectId: selectedProjectId.value,
         groupCount: groupCount,
@@ -736,7 +736,7 @@ const saveProjectGroup = async () => {
 
     if (isEdit) {
       // Update existing group
-      const httpResponse = await rpcClient.groups.update.$post({
+      const httpResponse = await rpcClient.api.groups.update.$post({
         json: {
           projectId: selectedProjectId.value,
           groupId: projectGroupForm.groupId,
@@ -756,7 +756,7 @@ const saveProjectGroup = async () => {
       }
     } else {
       // Create new group
-      const httpResponse = await rpcClient.groups.create.$post({
+      const httpResponse = await rpcClient.api.groups.create.$post({
         json: {
           projectId: selectedProjectId.value,
           groupData: {
@@ -958,7 +958,7 @@ const batchDeactivateProjectGroups = async () => {
 
   try {
     const promises = Array.from(selectedProjectGroups).map(groupId =>
-      rpcClient.groups.deactivate.$post({
+      rpcClient.api.groups.deactivate.$post({
         json: {
           projectId: selectedProjectId.value,
           groupId
@@ -986,7 +986,7 @@ const batchActivateProjectGroups = async () => {
 
   try {
     const promises = Array.from(selectedProjectGroups).map(groupId =>
-      rpcClient.groups.activate.$post({
+      rpcClient.api.groups.activate.$post({
         json: {
           projectId: selectedProjectId.value,
           groupId
@@ -1014,7 +1014,7 @@ const batchLockProjectGroups = async () => {
 
   try {
     const promises = Array.from(selectedProjectGroups).map(groupId =>
-      rpcClient.groups.update.$post({
+      rpcClient.api.groups.update.$post({
         json: {
           projectId: selectedProjectId.value,
           groupId,
@@ -1043,7 +1043,7 @@ const batchUnlockProjectGroups = async () => {
 
   try {
     const promises = Array.from(selectedProjectGroups).map(groupId =>
-      rpcClient.groups.update.$post({
+      rpcClient.api.groups.update.$post({
         json: {
           projectId: selectedProjectId.value,
           groupId,
@@ -1149,7 +1149,7 @@ const toggleGlobalGroupExpansion = async (group: GlobalGroup) => {
 const loadProjectGroupMembersInline = async (groupId: string) => {
   // Note: Loading state is now managed by useExpandable composable
   try {
-    const httpResponse = await rpcClient.groups.details.$post({
+    const httpResponse = await rpcClient.api.groups.details.$post({
       json: {
         projectId: selectedProjectId.value,
         groupId: groupId
@@ -1223,7 +1223,7 @@ const loadUngroupedMembers = async () => {
 
   try {
     loadingUngroupedMembers.value = true
-    const httpResponse = await rpcClient.projects.viewers['mark-unassigned'].$post({
+    const httpResponse = await rpcClient.api.projects.viewers['mark-unassigned'].$post({
       json: {
         projectId: selectedProjectId.value
       }
@@ -1250,7 +1250,7 @@ const loadAllUsers = async () => {
     }
 
     // 獲取專案的 member 角色使用者（從 project_viewers 表）
-    const httpResponse = await rpcClient.projects.viewers.list.$post({
+    const httpResponse = await rpcClient.api.projects.viewers.list.$post({
       json: {
         projectId: selectedProjectId.value
       }
@@ -1308,7 +1308,7 @@ const addSelectedMembersToProjectGroup = async (group: ProjectGroup) => {
     addingMember.value = true
 
     // Use batch API instead of individual requests
-    const httpResponse = await rpcClient.groups['batch-add-members'].$post({
+    const httpResponse = await rpcClient.api.groups['batch-add-members'].$post({
       json: {
         projectId: selectedProjectId.value,
         groupId: group.groupId,
@@ -1380,7 +1380,7 @@ const removeMemberFromProjectGroup = async ({ member, group }: { member: GroupMe
   try {
     removingMemberEmail.value = member.userEmail
 
-    const httpResponse = await rpcClient.groups['remove-member'].$post({
+    const httpResponse = await rpcClient.api.groups['remove-member'].$post({
       json: {
         projectId: selectedProjectId.value,
         groupId: group.groupId,
@@ -1452,7 +1452,7 @@ const confirmRemoveMembers = async () => {
       // Project Groups batch remove
       const userEmails = pendingRemoveMembers.value.map(m => m.userEmail)
 
-      const httpResponse = await rpcClient.groups['batch-remove-members'].$post({
+      const httpResponse = await rpcClient.api.groups['batch-remove-members'].$post({
         json: {
           projectId: selectedProjectId.value,
           groupId: pendingRemoveGroup.value.groupId,
@@ -1517,7 +1517,7 @@ const updateMemberRole = async ({ member, group, newRole }: { member: GroupMembe
   try {
     updatingMemberEmail.value = member.userEmail
 
-    const httpResponse = await rpcClient.groups['update-member-role'].$post({
+    const httpResponse = await rpcClient.api.groups['update-member-role'].$post({
       json: {
         projectId: selectedProjectId.value,
         groupId: group.groupId,
@@ -1574,7 +1574,7 @@ const confirmBatchUpdateRoles = async (updates: Array<{ userEmail: string; newRo
   try {
     updatingRoles.value = true
 
-    const httpResponse = await rpcClient.groups['batch-update-roles'].$post({
+    const httpResponse = await rpcClient.api.groups['batch-update-roles'].$post({
       json: {
         projectId: selectedProjectId.value,
         groupId: pendingUpdateGroup.value.groupId,
@@ -1640,7 +1640,7 @@ const loadProjectViewers = async (projectId: string) => {
   console.log('🔍 [loadProjectViewers] Starting for projectId:', projectId)
   loadingViewers.value = true
   try {
-    const httpResponse = await rpcClient.projects.viewers.list.$post({
+    const httpResponse = await rpcClient.api.projects.viewers.list.$post({
       json: { projectId }
     })
     const response = await httpResponse.json()
@@ -1692,7 +1692,7 @@ const searchUsers = async (payload: { searchText: string; role: ViewerRole } | s
 
     for (const query of searchQueries) {
       try {
-        const httpResponse = await rpcClient.users.search.$post({
+        const httpResponse = await rpcClient.api.users.search.$post({
           json: { query, limit: 50 }
         })
         const response = await httpResponse.json()
@@ -1762,7 +1762,7 @@ const addSelectedViewers = async (payload: { users: SelectedUser[]; role: Viewer
     loadingViewers.value = true
 
     // Use batch API instead of individual requests
-    const httpResponse = await rpcClient.projects.viewers['add-batch'].$post({
+    const httpResponse = await rpcClient.api.projects.viewers['add-batch'].$post({
       json: {
         projectId: selectedProjectForViewers.value.projectId,
         viewers: users.map(u => ({
@@ -1816,7 +1816,7 @@ const updateViewerRole = async ({ userEmail, newRole }: { userEmail: string; new
   }
 
   try {
-    const httpResponse = await rpcClient.projects.viewers['update-role'].$post({
+    const httpResponse = await rpcClient.api.projects.viewers['update-role'].$post({
       json: {
         projectId: selectedProjectForViewers.value.projectId,
         userEmail: userEmail,
@@ -1844,7 +1844,7 @@ const removeViewer = async (userEmail: string) => {
   }
 
   try {
-    const httpResponse = await rpcClient.projects.viewers.remove.$post({
+    const httpResponse = await rpcClient.api.projects.viewers.remove.$post({
       json: {
         projectId: selectedProjectForViewers.value.projectId,
         userEmail: userEmail
@@ -1887,7 +1887,7 @@ const batchUpdateRoles = async (payload: { users: string[]; newRole: ViewerRole 
     loadingViewers.value = true
 
     // Use batch API for better performance
-    const httpResponse = await rpcClient.projects.viewers['update-roles-batch'].$post({
+    const httpResponse = await rpcClient.api.projects.viewers['update-roles-batch'].$post({
       json: {
         projectId: selectedProjectForViewers.value.projectId,
         userEmails,
@@ -1936,7 +1936,7 @@ const batchRemoveViewers = async (userEmails: string[]) => {
     loadingViewers.value = true
 
     // Use batch API for better performance
-    const httpResponse = await rpcClient.projects.viewers['remove-batch'].$post({
+    const httpResponse = await rpcClient.api.projects.viewers['remove-batch'].$post({
       json: {
         projectId: selectedProjectForViewers.value.projectId,
         userEmails
@@ -1983,7 +1983,7 @@ const refreshGroups = () => {
 const loadProjects = async () => {
   try {
     loadingProjectsList.value = true
-    const httpResponse = await rpcClient.projects.list.$post({
+    const httpResponse = await rpcClient.api.projects.list.$post({
       json: {}
     })
     const response = await httpResponse.json()

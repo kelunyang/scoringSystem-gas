@@ -276,7 +276,7 @@ async function loadEventContext(event: Event, eventKey: string): Promise<void> {
     } else {
       // For activity events, fetch full details
       if (event.entityType === 'submission' && event.entityId) {
-        const httpResponse = await rpcClient.submissions.details.$post({
+        const httpResponse = await rpcClient.api.submissions.details.$post({
           json: {
             projectId: event.projectId!,
             submissionId: event.entityId
@@ -285,7 +285,7 @@ async function loadEventContext(event: Event, eventKey: string): Promise<void> {
         const response = await httpResponse.json()
         context = response.success ? response.data : { error: response.error }
       } else if (event.entityType === 'comment' && event.entityId) {
-        const httpResponse = await rpcClient.comments.details.$post({
+        const httpResponse = await rpcClient.api.comments.details.$post({
           json: {
             projectId: event.projectId!,
             commentId: event.entityId

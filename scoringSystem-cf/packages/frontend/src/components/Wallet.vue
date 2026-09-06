@@ -834,7 +834,7 @@ async function loadStageGrowth() {
   loadingStageGrowth.value = true
 
   try {
-    const httpResponse = await rpcClient.wallets['stage-growth'].$post({
+    const httpResponse = await rpcClient.api.wallets['stage-growth'].$post({
       json: {
         projectId: selectedProjectId.value,
         targetUserEmail: selectedUserEmail.value || props.user?.userEmail
@@ -868,7 +868,7 @@ async function loadStageGrowth() {
  */
 async function loadProjectStages() {
   try {
-    const httpResponse = await rpcClient.stages.list.$post({
+    const httpResponse = await rpcClient.api.stages.list.$post({
       json: {
         projectId: selectedProjectId.value
       }
@@ -919,7 +919,7 @@ async function handleExportProjectGrades() {
     exportingGrades.value = true
 
     // 呼叫後端 API（傳入 zeroScoreThreshold 以統一成績計算邏輯）
-    const httpResponse = await rpcClient.wallets.export.$post({
+    const httpResponse = await rpcClient.api.wallets.export.$post({
       json: {
         projectId: selectedProjectId.value,
         zeroScoreThreshold: zeroScoreThreshold.value

@@ -135,7 +135,7 @@ export function useSystemStats(
   } = useQuery({
     queryKey: ['admin', 'stats', 'invitations'],
     queryFn: async () => {
-      const httpResponse = await rpcClient.invitations.list.$post({
+      const httpResponse = await rpcClient.api.invitations.list.$post({
         json: {}
       })
 

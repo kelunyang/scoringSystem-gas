@@ -21,7 +21,7 @@ export async function generateInvitationCode(
   validDays: number = 7,
   defaultTags: string[] = [],
   defaultGlobalGroups: string[] = []
-): Promise<Response> {
+) {
   try {
     console.log(`[Generate] Starting invitation generation for: ${targetEmail}`);
 
@@ -224,7 +224,7 @@ export async function generateBatchInvitationCodes(
   validDays: number = 7,
   defaultTags: string[] = [],
   defaultGlobalGroups: string[] = []
-): Promise<Response> {
+) {
   try {
     if (!targetEmails || !Array.isArray(targetEmails) || targetEmails.length === 0) {
       return errorResponse('INVALID_INPUT', 'Target emails array is required');

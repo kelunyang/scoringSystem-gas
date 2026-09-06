@@ -151,7 +151,7 @@ async function submitReply() {
   try {
     submitting.value = true
 
-    const httpResponse = await rpcClient.comments.create.$post({
+    const httpResponse = await rpcClient.api.comments.create.$post({
       json: {
         projectId: props.projectId,
         commentData: {

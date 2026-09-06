@@ -51,16 +51,16 @@ import {
 import { errorResponse } from '../utils/response';
 
 
-const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
+const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
 // Apply authentication middleware to all routes
-app.use('*', authMiddleware);
+  .use('*', authMiddleware)
 
 /**
  * Submit a deliverable
  * Body: { projectId, stageId, submissionData: { content, authors?, participationProposal? } }
  */
-app.post(
+  .post(
   '/submit',
   requireActiveStage,
   zValidator('json', SubmitDeliverableRequestSchema),
@@ -84,13 +84,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * List stage submissions
  * Body: { projectId, stageId, options?: { includeWithdrawn?, groupId? } }
  */
-app.post(
+  .post(
   '/list',
   zValidator('json', ListSubmissionsRequestSchema),
   async (c) => {
@@ -113,13 +113,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get submission details
  * Body: { projectId, submissionId }
  */
-app.post(
+  .post(
   '/details',
   zValidator('json', GetSubmissionDetailsRequestSchema),
   async (c) => {
@@ -141,14 +141,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get per-group intra-group consensus (approval) status for a stage.
  * Used by ranking/voting drawers to warn about groups that cannot vote.
  * Body: { projectId, stageId }
  */
-app.post(
+  .post(
   '/stage-consensus-status',
   zValidator('json', ListSubmissionsRequestSchema),
   async (c) => {
@@ -162,14 +162,14 @@ app.post(
 
     return await getStageConsensusStatus(c.env, body.projectId, body.stageId);
   }
-);
+)
 
 
 /**
  * Delete submission (same group members can delete, only in active stage)
  * Body: { projectId, submissionId }
  */
-app.post(
+  .post(
   '/delete',
   requireActiveStage,
   zValidator('json', DeleteSubmissionRequestSchema),
@@ -192,13 +192,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get submission versions
  * Body: { projectId, stageId, options?: { groupId?, includeWithdrawn? } }
  */
-app.post(
+  .post(
   '/versions',
   zValidator('json', GetSubmissionVersionsRequestSchema),
   async (c) => {
@@ -221,14 +221,14 @@ app.post(
 
     return response;
   }
-);
+)
 
 
 /**
  * Restore submission version (alias for /versions/restore)
  * POST /submissions/restore
  */
-app.post(
+  .post(
   '/restore',
   zValidator('json', RestoreSubmissionVersionRequestSchema),
   async (c) => {
@@ -245,13 +245,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get participation confirmations (approval votes)
  * Body: { projectId, stageId, submissionId }
  */
-app.post(
+  .post(
   '/participation-status',
   zValidator('json', GetParticipationStatusRequestSchema),
   async (c) => {
@@ -288,13 +288,13 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Get voting history for a group in a stage
  * Body: { projectId, stageId, groupId? }
  */
-app.post(
+  .post(
   '/voting-history',
   zValidator('json', GetVotingHistoryRequestSchema),
   async (c) => {
@@ -317,7 +317,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Vote on participation proposal (confirm participation)
@@ -327,7 +327,7 @@ app.post(
  * Backend automatically finds the latest 'submitted' submission for user's group.
  * Users can ONLY vote on their own group's submissions.
  */
-app.post(
+  .post(
   '/confirm-participation',
   requireActiveStage,
   zValidator('json', ConfirmParticipationRequestSchema),
@@ -351,7 +351,7 @@ app.post(
 
     return response;
   }
-);
+)
 
 /**
  * Force withdraw submission (teacher only)
@@ -363,7 +363,7 @@ app.post(
  * - withdrawnBy is set to 'teacher' literal (not teacher's email)
  * - Full details stored in eventlogs.metadata
  */
-app.post(
+  .post(
   '/force-withdraw',
   zValidator('json', ForceWithdrawSubmissionRequestSchema),
   async (c) => {

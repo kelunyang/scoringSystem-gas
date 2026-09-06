@@ -7,7 +7,7 @@ import { Env } from '../../types';
 import { successResponse, errorResponse } from '../../utils/response';
 import { logGlobalOperation } from '../../utils/logging';
 
-interface SuspiciousLogin {
+export interface SuspiciousLogin {
   userEmail: string;
   reason: string;
   failedCount?: number;
@@ -27,7 +27,7 @@ export async function checkSuspiciousLogins(
   env: Env,
   userEmail: string,
   timeWindowHours: number = 24
-): Promise<Response> {
+) {
   try {
     const suspicious: SuspiciousLogin[] = [];
     const timeWindowMs = timeWindowHours * 60 * 60 * 1000;

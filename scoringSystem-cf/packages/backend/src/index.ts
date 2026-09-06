@@ -4,6 +4,8 @@
  */
 
 import { Hono } from 'hono';
+// SudoWriteBlockedError：全域錯誤處理要靠它分辨 sudo 唯讀攔截
+import { SudoWriteBlockedError } from './utils/sudo-db-proxy';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { HTTPException } from 'hono/http-exception';
@@ -41,7 +43,7 @@ import loginEventsQueue from './queues/login-events-consumer';
 import type { LoginEvent } from './queues/login-events-producer';
 import aiRankingQueue from './queues/ai-ranking-consumer';
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Env }>()
 
 /**
  * Global middleware
@@ -49,22 +51,22 @@ const app = new Hono<{ Bindings: Env }>();
 
 // CORS - Allow cross-origin requests
 // Security: Use explicit origin whitelist instead of '*' when credentials: true
-app.use('*', cors({
+  .use('*', cors({
   origin: ['https://scoring.kelunyang.online', 'http://localhost:5173', 'http://localhost:8787'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization', 'X-Session-Id', 'X-Sudo-As', 'X-Sudo-Project'],
   exposeHeaders: ['Content-Length', 'X-Request-Id', 'X-New-Token'],
   maxAge: 86400,
   credentials: true
-}));
+}))
 
 // Logger - Log all requests
-app.use('*', logger());
+  .use('*', logger())
 
 /**
  * Root endpoint with database status
  */
-app.get('/', async (c) => {
+  .get('/', async (c) => {
   try {
     // Check database initialization
     let dbInitialized = false;
@@ -110,9 +112,9 @@ app.get('/', async (c) => {
       timestamp: Date.now()
     }, 500);
   }
-});
+})
 
-app.get('/health', async (c) => {
+  .get('/health', async (c) => {
   try {
     // Check if database is initialized
     let dbInitialized = false;
@@ -151,12 +153,12 @@ app.get('/health', async (c) => {
       timestamp: Date.now()
     }, 500);
   }
-});
+})
 
 /**
  * API version endpoint
  */
-app.get('/api', (c) => {
+  .get('/api', (c) => {
   return c.json({
     version: '1.0.0',
     endpoints: {
@@ -180,7 +182,7 @@ app.get('/api', (c) => {
       announcements: '/api/announcements'
     }
   });
-});
+})
 
 /**
  * Mount routers
@@ -188,68 +190,68 @@ app.get('/api', (c) => {
  */
 
 // Authentication routes (COMPLETED) - Using /api prefix to avoid conflict with frontend routes
-app.route('/api/auth', authRouter);
+  .route('/api/auth', authRouter)
 
 // Admin routes (COMPLETED) - mounted at /api/admin to avoid conflict with frontend /admin route
 // NOTE: Registered BEFORE /users to ensure /api/admin/users/* matches before /users/*
-app.route('/api/admin', adminRouter);
+  .route('/api/admin', adminRouter)
 
 // System management routes (COMPLETED) - Using /api prefix to match frontend RPC client
-app.route('/api/system', systemRouter);
+  .route('/api/system', systemRouter)
 
 // User management routes (COMPLETED)
-app.route('/api/users', usersRouter);
+  .route('/api/users', usersRouter)
 
 // Invitation routes (COMPLETED)
-app.route('/api/invitations', invitationsRouter);
+  .route('/api/invitations', invitationsRouter)
 
 // Project management routes (COMPLETED)
-app.route('/api/projects', projectsRouter);
+  .route('/api/projects', projectsRouter)
 
 // Group management routes (COMPLETED)
-app.route('/api/groups', groupsRouter);
+  .route('/api/groups', groupsRouter)
 
 // Stage management routes (COMPLETED)
-app.route('/api/stages', stagesRouter);
+  .route('/api/stages', stagesRouter)
 
 // Submission management routes (COMPLETED)
-app.route('/api/submissions', submissionsRouter);
+  .route('/api/submissions', submissionsRouter)
 
 // Wallet management routes (COMPLETED)
-app.route('/api/wallets', walletsRouter);
+  .route('/api/wallets', walletsRouter)
 
 // Comment management routes (COMPLETED)
-app.route('/api/comments', commentsRouter);
+  .route('/api/comments', commentsRouter)
 
 // Scoring routes (COMPLETED)
-app.route('/api/scoring', scoringRouter);
+  .route('/api/scoring', scoringRouter)
 
 // Rankings routes (COMPLETED)
-app.route('/api/rankings', rankingsRouter);
+  .route('/api/rankings', rankingsRouter)
 
 // DISABLED: Tag management routes - tags system has been disabled
 // app.route('/tags', tagsRouter);
 
 // Activity logs routes (COMPLETED) - renamed from eventlogs to avoid ad blocker interference
-app.route('/api/activity', activityRouter);
+  .route('/api/activity', activityRouter)
 
 // Notification routes (COMPLETED)
-app.route('/api/notifications', notificationsRouter);
+  .route('/api/notifications', notificationsRouter)
 
 // Settlement routes (COMPLETED)
-app.route('/api/settlement', settlementRouter);
+  .route('/api/settlement', settlementRouter)
 
 // Maintenance routes (COMPLETED - admin only)
-app.route('/api/maintenance', maintenanceRouter);
+  .route('/api/maintenance', maintenanceRouter)
 
 // IP detection routes (for frontend - no auth required)
-app.route('/api/ip', ipRouter);
+  .route('/api/ip', ipRouter)
 
 // Announcements routes (public + admin)
-app.route('/api/announcements', announcementsRouter);
+  .route('/api/announcements', announcementsRouter)
 
 // WebSocket routes (real-time notifications)
-app.route('/ws', websocketRouter);
+  .route('/ws', websocketRouter);
 
 /**
  * 404 handler
@@ -264,9 +266,6 @@ app.notFound((c) => {
     }
   }, 404);
 });
-
-// Import SudoWriteBlockedError for special handling
-import { SudoWriteBlockedError } from './utils/sudo-db-proxy';
 
 /**
  * Global error handler
@@ -322,7 +321,7 @@ app.onError((err, c) => {
  * - queue: Queue message handler (routes to appropriate consumer)
  */
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     // Create a mutable copy of env so auth middleware can swap DB with sudo-safe proxy
     // This allows session maintenance to work before sudo mode is activated
     const mutableEnv = { ...env };

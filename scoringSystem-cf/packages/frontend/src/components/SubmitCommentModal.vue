@@ -816,7 +816,7 @@ async function submitComment() {
       群組Mentions: groupMentions.value.length
     })
 
-    const httpResponse = await rpcClient.comments.create.$post({
+    const httpResponse = await rpcClient.api.comments.create.$post({
       json: {
         projectId: props.projectId,
         commentData: {

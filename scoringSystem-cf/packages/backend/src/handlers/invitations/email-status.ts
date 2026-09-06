@@ -48,7 +48,7 @@ export async function getInvitationEmailStatus(
   env: Env,
   userEmail: string,
   invitationCodes: string[]
-): Promise<Response> {
+) {
   try {
     // Validate input
     if (!Array.isArray(invitationCodes) || invitationCodes.length === 0) {

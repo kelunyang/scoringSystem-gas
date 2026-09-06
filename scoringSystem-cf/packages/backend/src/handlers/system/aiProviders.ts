@@ -26,7 +26,7 @@ import {
  * @param env - Cloudflare Workers environment
  * @returns List of AI providers
  */
-export async function listAIProviders(env: Env): Promise<Response> {
+export async function listAIProviders(env: Env) {
   try {
     const providers = await getAIProvidersPublic(env.KV);
 
@@ -58,7 +58,7 @@ export async function createAIProvider(
     apiKey: string;
     enabled: boolean;
   }
-): Promise<Response> {
+) {
   try {
     // Validate required fields
     if (!data.name || !data.baseUrl || !data.model || !data.apiKey) {
@@ -120,7 +120,7 @@ export async function updateAIProviderHandler(
     apiKey: string;
     enabled: boolean;
   }>
-): Promise<Response> {
+) {
   try {
     if (!providerId) {
       return errorResponse(
@@ -179,7 +179,7 @@ export async function updateAIProviderHandler(
 export async function deleteAIProviderHandler(
   env: Env,
   providerId: string
-): Promise<Response> {
+) {
   try {
     if (!providerId) {
       return errorResponse(
@@ -215,7 +215,7 @@ export async function deleteAIProviderHandler(
  * @param env - Cloudflare Workers environment
  * @returns Prompt configuration with defaults
  */
-export async function getAIPromptConfig(env: Env): Promise<Response> {
+export async function getAIPromptConfig(env: Env) {
   try {
     const config = await getAIRankingPromptConfig(env.KV);
 
@@ -246,7 +246,7 @@ export async function getAIPromptConfig(env: Env): Promise<Response> {
 export async function updateAIPromptConfig(
   env: Env,
   data: Partial<AIRankingPromptConfig>
-): Promise<Response> {
+) {
   try {
     // Get existing config
     const existingConfig = await getAIRankingPromptConfig(env.KV);
@@ -282,7 +282,7 @@ export async function updateAIPromptConfig(
 export async function testAIProviderHandler(
   env: Env,
   providerId: string
-): Promise<Response> {
+) {
   try {
     if (!providerId) {
       return errorResponse(

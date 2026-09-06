@@ -22,7 +22,7 @@ export async function listAllNotifications(
     limit?: number;
     offset?: number;
   } = {}
-): Promise<Response> {
+) {
   try {
     // Check if user is Global PM
     const globalPMCheck = await env.DB.prepare(`
@@ -127,7 +127,7 @@ export async function sendSingleNotification(
   env: Env,
   userEmail: string,
   notificationId: string
-): Promise<Response> {
+) {
   try {
     // Check if user is Global PM
     const globalPMCheck = await env.DB.prepare(`
@@ -209,7 +209,7 @@ export async function sendBatchNotifications(
     isRead?: boolean;
     limit?: number;
   } = {}
-): Promise<Response> {
+) {
   try {
     // Check if user is Global PM
     const globalPMCheck = await env.DB.prepare(`
@@ -335,7 +335,7 @@ export async function deleteNotificationAdmin(
   env: Env,
   userEmail: string,
   notificationId: string
-): Promise<Response> {
+) {
   try {
     // Check if user is Global PM
     const globalPMCheck = await env.DB.prepare(`
@@ -399,7 +399,7 @@ export async function getPendingEmailNotifications(
     endDate?: number;
     notificationType?: string;
   } = {}
-): Promise<Response> {
+) {
   try {
     // Check if user is Global PM
     const globalPMCheck = await env.DB.prepare(`
@@ -504,7 +504,7 @@ export async function getPendingEmailNotifications(
 export async function getNotificationPatrolStatistics(
   env: Env,
   userEmail: string
-): Promise<Response> {
+) {
   try {
     // Check if user is Global PM
     const globalPMCheck = await env.DB.prepare(`

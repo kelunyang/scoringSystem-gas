@@ -186,7 +186,7 @@ async function confirmClearVotes() {
   isProcessing.value = true
   try {
     const clearToActive = extendActiveHours.value > 0
-    const httpResponse = await rpcClient.scoring['clear-stage-votes'].$post({
+    const httpResponse = await rpcClient.api.scoring['clear-stage-votes'].$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,

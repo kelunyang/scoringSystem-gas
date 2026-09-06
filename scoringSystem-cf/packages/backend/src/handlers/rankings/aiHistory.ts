@@ -29,7 +29,7 @@ export async function getAIRankingHistory(
     rankingType?: 'submission' | 'comment';
     limit?: number;
   }
-): Promise<Response> {
+) {
   try {
     const { projectId, stageId, rankingType, limit = 20 } = data;
 
@@ -92,7 +92,7 @@ export async function getAIRankingDetail(
     projectId: string;
     callId: string;
   }
-): Promise<Response> {
+) {
   try {
     const { projectId, callId } = data;
 

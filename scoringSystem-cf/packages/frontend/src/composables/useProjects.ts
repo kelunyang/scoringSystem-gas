@@ -71,7 +71,7 @@ export function useProjects(): UseQueryReturnType<Project[], Error> {
     queryKey: ['projects'],
     queryFn: async (): Promise<Project[]> => {
       console.log('🔍 useProjects queryFn executing')
-      const httpResponse = await rpcClient.projects.list.$post({
+      const httpResponse = await rpcClient.api.projects.list.$post({
         json: { filters: {} }
       })
       const response = await httpResponse.json() as ApiResponse<{ projects: Project[] }>
@@ -115,7 +115,7 @@ export function useProjectsWithStages(): UseQueryReturnType<ProjectWithStages[],
     queryKey: ['projects', 'withStages'],
     queryFn: async (): Promise<ProjectWithStages[]> => {
       console.log('🔍 useProjectsWithStages queryFn executing')
-      const httpResponse = await rpcClient.projects['list-with-stages'].$post({
+      const httpResponse = await rpcClient.api.projects['list-with-stages'].$post({
         json: { filters: {} }
       })
       const response = await httpResponse.json() as ApiResponse<ProjectWithStages[] | { projects: ProjectWithStages[] }>
@@ -158,7 +158,7 @@ export function useCreateProject() {
 
   return useMutation({
     mutationFn: async (projectData: CreateProjectData): Promise<Project> => {
-      const httpResponse = await rpcClient.projects.create.$post({
+      const httpResponse = await rpcClient.api.projects.create.$post({
         json: { projectData }
       })
       const response = await httpResponse.json() as ApiResponse<Project>
@@ -191,7 +191,7 @@ export function useUpdateProject() {
 
   return useMutation({
     mutationFn: async ({ projectId, updates }: { projectId: string; updates: UpdateProjectData }): Promise<Project> => {
-      const httpResponse = await rpcClient.projects.update.$post({
+      const httpResponse = await rpcClient.api.projects.update.$post({
         json: { projectId, updates }
       })
       const response = await httpResponse.json() as ApiResponse<Project>

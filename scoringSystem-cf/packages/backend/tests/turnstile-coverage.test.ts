@@ -35,7 +35,9 @@ function schemasWithTurnstile(): Set<string> {
 /** Every auth route, with the schema it validates and whether it verifies. */
 function authRoutes(): Array<{ path: string; schema: string; verifies: boolean }> {
   const src = readFileSync(ROUTER, 'utf-8')
-  const starts = [...src.matchAll(/^authRouter\.(?:post|get)\(\s*\n?\s*'([^']+)'/gm)]
+  // 路由是串接式的（`  .post(`），不是 `authRouter.post(`——
+  // Hono 的 RPC 型別推導要求鏈式註冊，見 issue.md #011。
+  const starts = [...src.matchAll(/^\s*\.(?:post|get)\(\s*\n?\s*'([^']+)'/gm)]
 
   return starts.flatMap((m, i) => {
     const from = m.index! + m[0].length

@@ -126,7 +126,7 @@ async function confirmResume() {
 
   isProcessing.value = true
   try {
-    const httpResponse = await rpcClient.stages.resume.$post({
+    const httpResponse = await rpcClient.api.stages.resume.$post({
       json: {
         projectId: props.projectId!,
         stageId: props.stageId!

@@ -41,7 +41,7 @@ export async function getUserTransactions(
   dateEnd?: number,
   searchDescription?: string,
   searchUser?: string
-): Promise<Response> {
+) {
   try {
     const queryEmail = targetUserEmail; // Don't fallback to userEmail
 
@@ -229,7 +229,7 @@ export async function awardPoints(
   relatedId?: string,
   settlementId?: string,
   stageId?: string
-): Promise<Response> {
+) {
   try {
     // Strengthen number validation (fix Linus HIGH #3)
     if (typeof amount !== 'number' || !isFinite(amount) || amount === 0) {
@@ -353,7 +353,7 @@ export async function reverseTransaction(
   projectId: string,
   transactionId: string,
   reason: string
-): Promise<Response> {
+) {
   try {
     // Get original transaction
     const originalTxn = await env.DB.prepare(`

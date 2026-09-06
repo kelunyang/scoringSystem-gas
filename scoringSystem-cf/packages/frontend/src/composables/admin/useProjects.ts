@@ -156,7 +156,7 @@ export function useCreateProject(): UseMutationReturnType<any, Error, CreateProj
 
   return useMutation({
     mutationFn: async ({ projectData }: CreateProjectParams) => {
-      const httpResponse = await rpcClient.projects.create.$post({
+      const httpResponse = await rpcClient.api.projects.create.$post({
         json: { projectData }
       })
       const response = await httpResponse.json() as any
@@ -185,7 +185,7 @@ export function useUpdateProject(): UseMutationReturnType<any, Error, UpdateProj
 
   return useMutation({
     mutationFn: async ({ projectId, updates }: UpdateProjectParams) => {
-      const httpResponse = await rpcClient.projects.update.$post({
+      const httpResponse = await rpcClient.api.projects.update.$post({
         json: { projectId, updates }
       })
       const response = await httpResponse.json() as any
@@ -219,7 +219,7 @@ export function useUpdateProject(): UseMutationReturnType<any, Error, UpdateProj
 export function useUpdateScoringConfig(): UseMutationReturnType<any, Error, UpdateScoringConfigParams, unknown> {
   return useMutation({
     mutationFn: async ({ projectId, config }: UpdateScoringConfigParams) => {
-      const httpResponse = await rpcClient.projects[':projectId']['scoring-config'].$put({
+      const httpResponse = await rpcClient.api.projects[':projectId']['scoring-config'].$put({
         param: { projectId },
         json: config
       })
@@ -243,7 +243,7 @@ export function useCloneProject(): UseMutationReturnType<any, Error, CloneProjec
 
   return useMutation({
     mutationFn: async (params: CloneProjectParams) => {
-      const httpResponse = await rpcClient.projects.clone.$post({
+      const httpResponse = await rpcClient.api.projects.clone.$post({
         json: params
       })
       const response = await httpResponse.json() as any
@@ -274,7 +274,7 @@ export function useCloneProject(): UseMutationReturnType<any, Error, CloneProjec
 export function useListProjectViewers(): UseMutationReturnType<any, Error, { projectId: string }, unknown> {
   return useMutation({
     mutationFn: async ({ projectId }: { projectId: string }) => {
-      const httpResponse = await rpcClient.projects.viewers.list.$post({
+      const httpResponse = await rpcClient.api.projects.viewers.list.$post({
         json: { projectId }
       })
       const response = await httpResponse.json() as any
@@ -294,7 +294,7 @@ export function useListProjectViewers(): UseMutationReturnType<any, Error, { pro
 export function useAddViewersBatch(): UseMutationReturnType<any, Error, AddViewersBatchParams, unknown> {
   return useMutation({
     mutationFn: async ({ projectId, viewers }: AddViewersBatchParams) => {
-      const httpResponse = await rpcClient.projects.viewers['add-batch'].$post({
+      const httpResponse = await rpcClient.api.projects.viewers['add-batch'].$post({
         json: { projectId, viewers }
       })
       const response = await httpResponse.json() as any
@@ -318,7 +318,7 @@ export function useAddViewersBatch(): UseMutationReturnType<any, Error, AddViewe
 export function useAddViewer(): UseMutationReturnType<any, Error, AddSingleViewerParams, unknown> {
   return useMutation({
     mutationFn: async ({ projectId, userEmail, role }: AddSingleViewerParams) => {
-      const httpResponse = await rpcClient.projects.viewers.add.$post({
+      const httpResponse = await rpcClient.api.projects.viewers.add.$post({
         json: { projectId, userEmail, role }
       })
       const response = await httpResponse.json() as any
@@ -344,7 +344,7 @@ export function useAddViewer(): UseMutationReturnType<any, Error, AddSingleViewe
 export function useUpdateViewerRole(): UseMutationReturnType<any, Error, UpdateViewerRoleParams, unknown> {
   return useMutation({
     mutationFn: async ({ projectId, userEmail, role }: UpdateViewerRoleParams) => {
-      const httpResponse = await rpcClient.projects.viewers['update-role'].$post({
+      const httpResponse = await rpcClient.api.projects.viewers['update-role'].$post({
         json: { projectId, userEmail, role }
       })
       const response = await httpResponse.json() as any
@@ -370,7 +370,7 @@ export function useUpdateViewerRole(): UseMutationReturnType<any, Error, UpdateV
 export function useRemoveViewer(): UseMutationReturnType<any, Error, RemoveViewerParams, unknown> {
   return useMutation({
     mutationFn: async ({ projectId, userEmail }: RemoveViewerParams) => {
-      const httpResponse = await rpcClient.projects.viewers.remove.$post({
+      const httpResponse = await rpcClient.api.projects.viewers.remove.$post({
         json: { projectId, userEmail }
       })
       const response = await httpResponse.json() as any
@@ -397,7 +397,7 @@ export function useRemoveViewer(): UseMutationReturnType<any, Error, RemoveViewe
 export function useBatchUpdateViewerRoles(): UseMutationReturnType<any, Error, BatchUpdateViewerRolesParams, unknown> {
   return useMutation({
     mutationFn: async ({ projectId, userEmails, role }: BatchUpdateViewerRolesParams) => {
-      const httpResponse = await rpcClient.projects.viewers['update-roles-batch'].$post({
+      const httpResponse = await rpcClient.api.projects.viewers['update-roles-batch'].$post({
         json: { projectId, userEmails, role }
       })
       const response = await httpResponse.json() as any
@@ -422,7 +422,7 @@ export function useBatchUpdateViewerRoles(): UseMutationReturnType<any, Error, B
 export function useBatchRemoveViewers(): UseMutationReturnType<any, Error, BatchRemoveViewersParams, unknown> {
   return useMutation({
     mutationFn: async ({ projectId, userEmails }: BatchRemoveViewersParams) => {
-      const httpResponse = await rpcClient.projects.viewers['remove-batch'].$post({
+      const httpResponse = await rpcClient.api.projects.viewers['remove-batch'].$post({
         json: { projectId, userEmails }
       })
       const response = await httpResponse.json() as any
@@ -450,7 +450,7 @@ export function useBatchRemoveViewers(): UseMutationReturnType<any, Error, Batch
 export function useSearchUsers(): UseMutationReturnType<any, Error, { query: string; limit?: number }, unknown> {
   return useMutation({
     mutationFn: async ({ query, limit = 50 }: { query: string; limit?: number }) => {
-      const httpResponse = await rpcClient.users.search.$post({
+      const httpResponse = await rpcClient.api.users.search.$post({
         json: { query, limit }
       })
       const response = await httpResponse.json() as any
@@ -474,7 +474,7 @@ export function useSearchUsers(): UseMutationReturnType<any, Error, { query: str
 export function useListStages(): UseMutationReturnType<any, Error, { projectId: string; includeArchived?: boolean }, unknown> {
   return useMutation({
     mutationFn: async ({ projectId, includeArchived = false }: { projectId: string; includeArchived?: boolean }) => {
-      const httpResponse = await rpcClient.stages.list.$post({
+      const httpResponse = await rpcClient.api.stages.list.$post({
         json: { projectId, includeArchived }
       })
       const response = await httpResponse.json() as any
@@ -494,7 +494,7 @@ export function useListStages(): UseMutationReturnType<any, Error, { projectId: 
 export function useGetStage(): UseMutationReturnType<any, Error, GetStageParams, unknown> {
   return useMutation({
     mutationFn: async ({ projectId, stageId }: GetStageParams) => {
-      const httpResponse = await rpcClient.stages.get.$post({
+      const httpResponse = await rpcClient.api.stages.get.$post({
         json: { projectId, stageId }
       })
       const response = await httpResponse.json() as any
@@ -514,7 +514,7 @@ export function useGetStage(): UseMutationReturnType<any, Error, GetStageParams,
 export function useCreateStage(): UseMutationReturnType<any, Error, CreateStageParams, unknown> {
   return useMutation({
     mutationFn: async ({ projectId, stageData }: CreateStageParams) => {
-      const httpResponse = await rpcClient.stages.create.$post({
+      const httpResponse = await rpcClient.api.stages.create.$post({
         json: { projectId, stageData }
       })
       const response = await httpResponse.json() as any
@@ -540,7 +540,7 @@ export function useCreateStage(): UseMutationReturnType<any, Error, CreateStageP
 export function useUpdateStage(): UseMutationReturnType<any, Error, UpdateStageParams, unknown> {
   return useMutation({
     mutationFn: async ({ projectId, stageId, updates }: UpdateStageParams) => {
-      const httpResponse = await rpcClient.stages.update.$post({
+      const httpResponse = await rpcClient.api.stages.update.$post({
         json: { projectId, stageId, updates }
       })
       const response = await httpResponse.json() as any
@@ -566,7 +566,7 @@ export function useUpdateStage(): UseMutationReturnType<any, Error, UpdateStageP
 export function useUpdateStageOrder(): UseMutationReturnType<any, Error, UpdateStageParams, unknown> {
   return useMutation({
     mutationFn: async ({ projectId, stageId, updates }: UpdateStageParams) => {
-      const httpResponse = await rpcClient.stages.update.$post({
+      const httpResponse = await rpcClient.api.stages.update.$post({
         json: { projectId, stageId, updates }
       })
       const response = await httpResponse.json() as any
@@ -587,7 +587,7 @@ export function useUpdateStageOrder(): UseMutationReturnType<any, Error, UpdateS
 export function useCheckVotingLock(): UseMutationReturnType<any, Error, CheckVotingLockParams, unknown> {
   return useMutation({
     mutationFn: async ({ projectId, stageId }: CheckVotingLockParams) => {
-      const httpResponse = await rpcClient.stages['check-voting-lock'].$post({
+      const httpResponse = await rpcClient.api.stages['check-voting-lock'].$post({
         json: { projectId, stageId }
       })
       const response = await httpResponse.json() as any
@@ -609,7 +609,7 @@ export function useCloneStageToProjects(): UseMutationReturnType<any, Error, Clo
 
   return useMutation({
     mutationFn: async ({ sourceProjectId, stageId, newStageName, targetProjectIds }: CloneStageParams) => {
-      const httpResponse = await rpcClient.stages['clone-to-projects'].$post({
+      const httpResponse = await rpcClient.api.stages['clone-to-projects'].$post({
         json: { sourceProjectId, stageId, newStageName, targetProjectIds }
       })
       const response = await httpResponse.json() as any

@@ -18,7 +18,7 @@ export async function withdrawRankingProposal(
   requestData: {
     proposalId: string;
   }
-): Promise<Response> {
+) {
   const { userEmail } = context;
   const { proposalId } = requestData;
 

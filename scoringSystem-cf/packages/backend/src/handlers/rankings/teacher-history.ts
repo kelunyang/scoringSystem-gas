@@ -17,7 +17,7 @@ interface VoteHistorySummary {
   createdTime: number;
 }
 
-interface TeacherVoteHistoryResponse {
+export interface TeacherVoteHistoryResponse {
   displayName: string;
   submissionRanking: VoteHistorySummary | null;
   commentRanking: VoteHistorySummary | null;
@@ -31,7 +31,7 @@ export async function getTeacherVoteHistory(
   userEmail: string,
   projectId: string,
   stageId: string
-): Promise<Response> {
+) {
   try {
     console.log(`🎓 [getTeacherVoteHistory] Starting: projectId=${projectId}, stageId=${stageId}, userEmail=${userEmail}`);
 

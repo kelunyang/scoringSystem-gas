@@ -28,7 +28,7 @@ import { isSudoWriteBlocked } from '../../utils/sudo-db-proxy';
  * @param env - Cloudflare Workers environment
  * @returns List of enabled AI providers
  */
-export async function getAIProvidersForRanking(env: Env): Promise<Response> {
+export async function getAIProvidersForRanking(env: Env) {
   try {
     const providers = await getEnabledAIProviders(env.KV);
 
@@ -68,7 +68,7 @@ export async function submitAIRankingSuggestion(
     items: AIRankingItem[];
     customPrompt?: string;
   }
-): Promise<Response> {
+) {
   try {
     const { projectId, stageId, rankingType, providerId, items, customPrompt } = data;
 
@@ -198,7 +198,7 @@ export async function submitBTRankingSuggestion(
     customPrompt?: string;
     pairsPerItem?: number;
   }
-): Promise<Response> {
+) {
   try {
     const { projectId, stageId, rankingType, providerId, items, customPrompt, pairsPerItem = 3 } = data;
 
@@ -348,7 +348,7 @@ export async function submitMultiAgentRankingSuggestion(
     items: AIRankingItem[];
     customPrompt?: string;
   }
-): Promise<Response> {
+) {
   try {
     const { projectId, stageId, rankingType, providerIds, items, customPrompt } = data;
 

@@ -326,7 +326,7 @@ async function loadPreviewData(): Promise<void> {
 
       try {
         // Get settlement history first
-        const historyHttpResponse = await rpcClient.settlement.history.$post({
+        const historyHttpResponse = await rpcClient.api.settlement.history.$post({
           json: {
             projectId: projectId,
             filters: { stageId: props.stage.stageId, status: 'active' }
@@ -349,7 +349,7 @@ async function loadPreviewData(): Promise<void> {
         const settlement = historyResponse.data.settlements[0]
 
         // Get detailed preview from new API
-        const previewHttpResponse = await rpcClient.settlement['reverse-preview'].$post({
+        const previewHttpResponse = await rpcClient.api.settlement['reverse-preview'].$post({
           json: {
             projectId: projectId,
             settlementId: settlement.settlementId
@@ -416,7 +416,7 @@ async function confirmReverseSettlement(): Promise<void> {
           })
 
           const clearToActive = extendActiveHours.value > 0
-          const clearHttpResponse = await rpcClient.scoring['clear-stage-votes'].$post({
+          const clearHttpResponse = await rpcClient.api.scoring['clear-stage-votes'].$post({
             json: {
               projectId: projectId,
               stageId: props.stage.stageId,
@@ -459,7 +459,7 @@ async function confirmReverseSettlement(): Promise<void> {
           reason: reverseReason.value
         })
 
-        const reverseHttpResponse = await rpcClient.settlement.reverse.$post({
+        const reverseHttpResponse = await rpcClient.api.settlement.reverse.$post({
           json: {
             projectId: projectId,
             settlementId: reversePreviewData.value.settlementId,
