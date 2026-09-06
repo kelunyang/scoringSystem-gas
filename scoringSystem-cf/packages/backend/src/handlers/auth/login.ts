@@ -13,7 +13,6 @@ import { passwordChangeCutoff } from '../../utils/password-revocation';
 import { generateToken } from './jwt';
 import { getConfigValue } from '../../utils/config';
 import { errorResponse, successResponse, ERROR_CODES } from '../../utils/response';
-import type { ApiResponse } from '../../utils/response';
 import { parseJSON } from '../../utils/json';
 import { logGlobalOperation } from '../../utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
@@ -65,7 +64,7 @@ export async function logoutUser(
   env: Env,
   userId: string,
   ipAddress: string | null = null
-): Promise<ApiResponse> {
+) {
   try {
     const db = env.DB;
 
@@ -77,7 +76,7 @@ export async function logoutUser(
 
     if (!user) {
       return {
-        success: false,
+        success: false as const,
         error: {
           code: ERROR_CODES.USER_NOT_FOUND,
           message: 'User not found'
@@ -101,13 +100,13 @@ export async function logoutUser(
     );
 
     return {
-      success: true,
+      success: true as const,
       data: { message: 'Logged out successfully' }
     };
   } catch (error) {
     console.error('Logout error:', error);
     return {
-      success: false,
+      success: false as const,
       error: {
         code: ERROR_CODES.INTERNAL_ERROR,
         message: 'An error occurred during logout'
@@ -222,7 +221,7 @@ export async function changePassword(
   oldPassword: string,
   newPassword: string,
   ipAddress: string | null = null
-): Promise<ApiResponse> {
+) {
   const db = env.DB;
   try {
     console.log('[changePassword] Starting password change for userId:', userId);
@@ -235,7 +234,7 @@ export async function changePassword(
     if (!validation.valid) {
       console.log('[changePassword] Password validation failed:', validation.errors);
       return {
-        success: false,
+        success: false as const,
         error: {
           code: ERROR_CODES.VALIDATION_ERROR,
           message: validation.errors.join(', ')
@@ -253,7 +252,7 @@ export async function changePassword(
     if (!user) {
       console.log('[changePassword] User not found');
       return {
-        success: false,
+        success: false as const,
         error: {
           code: ERROR_CODES.USER_NOT_FOUND,
           message: 'User not found'
@@ -271,7 +270,7 @@ export async function changePassword(
     if (!isValid) {
       console.log('[changePassword] Old password verification failed');
       return {
-        success: false,
+        success: false as const,
         error: {
           code: ERROR_CODES.INVALID_CREDENTIALS,
           message: 'Current password is incorrect'
@@ -347,7 +346,7 @@ export async function changePassword(
 
     console.log('[changePassword] Password changed successfully');
     return {
-      success: true,
+      success: true as const,
       data: {
         message: 'Password changed successfully',
         sessionId: newSessionId
@@ -356,7 +355,7 @@ export async function changePassword(
   } catch (error) {
     console.error('[changePassword] Error occurred:', error);
     return {
-      success: false,
+      success: false as const,
       error: {
         code: ERROR_CODES.INTERNAL_ERROR,
         message: 'An error occurred while changing password'

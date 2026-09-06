@@ -22,9 +22,10 @@ export interface Transaction {
 
 export interface Person {
   userEmail?: string
-  avatarSeed?: string
-  avatarStyle?: string
-  avatarOptions?: string | Record<string, unknown>
+  // 這三欄在 users 表可為 NULL，型別要照實說
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | Record<string, unknown> | null
 }
 
 /** 這個函式從階段物件讀到的欄位；其餘欄位原樣保留 */

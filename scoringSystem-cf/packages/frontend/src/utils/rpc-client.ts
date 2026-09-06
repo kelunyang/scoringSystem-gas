@@ -20,44 +20,11 @@ function getApiBaseUrl(): string {
 }
 
 /**
- * 確保 URL 路徑包含 /api 前綴
- * 處理前端代碼混用 rpcClient.api.* 和 rpcClient.api.projects.* 的情況
- */
-function ensureApiPrefix(url: string | URL | Request): string | URL | Request {
-  if (typeof url === 'string') {
-    // 檢查是否已經有 /api 前綴
-    const urlObj = new URL(url, window.location.origin);
-    if (!urlObj.pathname.startsWith('/api/') && !urlObj.pathname.startsWith('/api')) {
-      // 加上 /api 前綴
-      urlObj.pathname = '/api' + urlObj.pathname;
-      return urlObj.toString();
-    }
-    return url;
-  }
-  if (url instanceof URL) {
-    if (!url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api')) {
-      url.pathname = '/api' + url.pathname;
-    }
-    return url;
-  }
-  if (url instanceof Request) {
-    const reqUrl = new URL(url.url);
-    if (!reqUrl.pathname.startsWith('/api/') && !reqUrl.pathname.startsWith('/api')) {
-      reqUrl.pathname = '/api' + reqUrl.pathname;
-      return new Request(reqUrl.toString(), url);
-    }
-  }
-  return url;
-}
-
-/**
- * Custom fetch wrapper with token renewal support and API prefix handling
+ * Custom fetch wrapper with token renewal support
  * Intercepts responses to check for X-New-Token header
  */
 const fetchWithTokenRenewal: typeof fetch = async (input, init) => {
-  // 確保 URL 有 /api 前綴（處理混用問題）
-  const normalizedInput = ensureApiPrefix(input);
-  const response = await fetch(normalizedInput, init);
+  const response = await fetch(input, init);
 
   // ✅ Check for X-New-Token header (sliding expiration)
   const newToken = response.headers.get('X-New-Token');
@@ -102,11 +69,10 @@ function getSudoHeaders(): Record<string, string> {
 /**
  * Create RPC client
  *
- * NOTE: Due to Hono RPC type limitations (route types are lost in declaration files),
- * the client is cast to `any`. Runtime type safety is maintained through:
- * - Zod validation on backend
- * - TanStack Query for data fetching
- * - Manual type annotations where needed in consuming code
+ * 型別由 backend 的 AppType 推導，端點路徑、request body、response
+ * 形狀都會被檢查。前提是 backend 的 router 全部用鏈式註冊
+ * （`new Hono().post(...).post(...)`）——改成敘述式會讓 schema 退化成
+ * BlankSchema，這裡就整個失去型別。見 plan/issue.md #011。
  *
  * ✅ Includes automatic token renewal via X-New-Token header
  * ✅ Includes automatic sudo headers when in sudo mode

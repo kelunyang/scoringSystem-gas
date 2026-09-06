@@ -251,7 +251,8 @@ interface StageProposalSummary {
 export interface Props {
   stage: ExtendedStage
   currentUserGroupId: string | null
-  projectGroups: Group[]
+  /** /projects/core 回傳的組（沒有 isActive，這個元件也不讀它） */
+  projectGroups: Array<Omit<Group, 'isActive' | 'status'> & { isActive?: number; status?: string }>
   groupApprovalVotesCache: Map<string, GroupVotingData>
   projectUserGroups: UserGroupRecord[]
   projectUsers: ProjectUserInfo[]

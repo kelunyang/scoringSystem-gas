@@ -26,8 +26,7 @@ import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import type { LogStatistics } from '@repo/shared/types/admin'
 import type {
   SystemStats,
-  InvitationStats,
-  InvitationCode
+  InvitationStats
 } from '@/types/admin-stats'
 
 /**
@@ -146,16 +145,19 @@ export function useSystemStats(
         throw new Error(apiErrorMessage(errorOf(response)) || '無法載入邀請碼統計數據')
       }
 
-      const invitations = response.data as InvitationCode[]
+      // 直接用端點推導出的形狀，不要轉型成 shared 的 InvitationCode——
+      // 這個端點回的欄位名（invitationId/invitationCode）和它對不上。
+      const invitations = response.data
       const now = Date.now()
 
       // 計算各種狀態的邀請碼數量
       const stats: InvitationStats = {
         total: invitations.length,
+        // expiryTime 為 null 代表永不過期
         active: invitations.filter(
-          (i) => i.status === 'active' && i.expiryTime > now
+          (i) => i.status === 'active' && (i.expiryTime === null || i.expiryTime > now)
         ).length,
-        expired: invitations.filter((i) => i.expiryTime <= now).length,
+        expired: invitations.filter((i) => i.expiryTime !== null && i.expiryTime <= now).length,
         used: invitations.filter((i) => i.status === 'used').length
       }
 

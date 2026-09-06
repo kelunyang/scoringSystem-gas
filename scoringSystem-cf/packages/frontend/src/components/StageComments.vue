@@ -304,6 +304,7 @@ import { getNumericPermissionLevel, type PermissionLevel } from '@/composables/u
 import { useInfiniteStageComments, flattenInfiniteComments, getInfiniteCommentsTotal, getInfiniteVotingEligible } from '@/composables/useProjectDetail'
 import { rpcClient } from '@/utils/rpc-client'
 import { apiErrorMessage, errorOf } from '@/utils/api-types'
+import type { ApiData } from '@/utils/api-types'
 import { generateAvatarUrl } from '@/utils/walletHelpers'
 import type { Comment } from '@/types'
 
@@ -311,46 +312,43 @@ import type { Comment } from '@/types'
 interface ReactionStat {
   type: string
   count: number
-  users?: string[]
+  /** 後端放的是 displayName，使用者沒設暱稱時會是 null */
+  users?: Array<string | null>
 }
 
 /** 可回覆/被提及的使用者（AvatarGroup 也吃這個形狀） */
 interface ReplyUser {
   userEmail: string
-  [key: string]: unknown
+  displayName?: string
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | null
+  role?: string
 }
 
 /** 後端回覆原始資料 */
-interface RawReply {
-  commentId?: string
-  id?: string
-  content: string
-  createdTime?: string | number
-  authorEmail?: string
-  author?: string
-  authorName?: string
-  displayName?: string
-  authorAvatarSeed?: string
-  authorAvatarStyle?: string
-  authorAvatarOptions?: string | Record<string, unknown>
-  mentionedUsers?: string[]
-  mentionedGroups?: string[]
-}
-
 /**
  * 階段評論的後端原始資料。
  * shared 的 Comment 實體缺少本組件用到的擴充欄位（authorRole、reactions、
  * replyUsers…），且 mentionedUsers/Groups 可能是 JSON 字串，故以 Omit + 交集擴充。
  */
-type RawStageComment = Omit<Comment, 'mentionedUsers' | 'mentionedGroups'> & {
+/**
+ * 從 /comments/stage 拿到的評論。基底改用端點推導的形狀而不是
+ * shared 的 `Comment`——後端回的是巢狀評論（帶 replies），欄位與
+ * 可空性都和 `Comment` 對不上。
+ */
+type RawStageComment = Omit<
+  ApiData<typeof rpcClient.api.comments.stage.$post>['comments'][number],
+  'mentionedUsers' | 'mentionedGroups' | 'replies'
+> & {
   authorRole?: string | null
   authorName?: string
-  authorAvatarSeed?: string
-  authorAvatarStyle?: string
-  authorAvatarOptions?: string | Record<string, unknown>
+  authorAvatarSeed?: string | null
+  authorAvatarStyle?: string | null
+  authorAvatarOptions?: string | Record<string, unknown> | null
   mentionedUsers?: string | string[]
   mentionedGroups?: string | string[]
-  replies?: RawReply[]
+  replies?: RawStageComment[]
   voteCount?: number
   hasVoted?: boolean
   rank?: number | null
@@ -373,9 +371,9 @@ interface ProcessedReply {
   timestamp: string
   author: string
   authorName: string
-  avatarSeed?: string
-  avatarStyle?: string
-  avatarOptions?: string | Record<string, unknown>
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | Record<string, unknown> | null
   mentionedUsers: string[]
   mentionedGroups: string[]
 }
@@ -388,9 +386,9 @@ interface ProcessedComment {
   timestamp: string
   author: string
   authorName: string
-  avatarSeed?: string
-  avatarStyle?: string
-  avatarOptions?: string | Record<string, unknown>
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | Record<string, unknown> | null
   authorRole: string | null
   mentionedUsers: string[]
   mentionedGroups: string[]
@@ -537,6 +535,18 @@ function convertGroupIdsToNames(groupIds: string[]) {
   })
 }
 
+/** mentionedUsers/Groups 可能是 JSON 字串，統一成陣列 */
+function toStringArray(value: string | string[] | undefined): string[] {
+  if (!value) return []
+  if (Array.isArray(value)) return value
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed as string[] : []
+  } catch {
+    return []
+  }
+}
+
 function processCommentsData(raw: RawStageComment[]): ProcessedComment[] {
   if (!raw || !Array.isArray(raw)) {
     return []
@@ -571,16 +581,16 @@ function processCommentsData(raw: RawStageComment[]): ProcessedComment[] {
     let replies: ProcessedReply[] = []
     if (comment.replies && Array.isArray(comment.replies)) {
       replies = comment.replies.map((reply): ProcessedReply => ({
-        id: reply.commentId || reply.id || '',
+        id: reply.commentId,
         content: reply.content,
         timestamp: formatTime(reply.createdTime),
-        author: reply.authorEmail || reply.author || '',
-        authorName: reply.authorName || reply.displayName || (reply.authorEmail || reply.author || '').split('@')[0],
+        author: reply.authorEmail,
+        authorName: reply.authorName || reply.authorEmail.split('@')[0],
         avatarSeed: reply.authorAvatarSeed,
         avatarStyle: reply.authorAvatarStyle,
         avatarOptions: reply.authorAvatarOptions,
-        mentionedUsers: reply.mentionedUsers || [],
-        mentionedGroups: reply.mentionedGroups || []
+        mentionedUsers: toStringArray(reply.mentionedUsers),
+        mentionedGroups: toStringArray(reply.mentionedGroups)
       }))
     }
 
@@ -588,12 +598,12 @@ function processCommentsData(raw: RawStageComment[]): ProcessedComment[] {
     const isTeacherComment = comment.authorRole === 'teacher'
 
     return {
-      id: comment.commentId || comment.id || '',
-      commentId: comment.commentId || comment.id || '', // 確保有commentId供回復使用
+      id: comment.commentId,
+      commentId: comment.commentId, // 確保有commentId供回復使用
       content: comment.content,
       timestamp: formatTime(comment.createdTime),
-      author: comment.authorEmail || comment.author || '',
-      authorName: comment.authorName || comment.authorEmail || comment.author || '',
+      author: comment.authorEmail,
+      authorName: comment.authorName || comment.authorEmail,
       avatarSeed: comment.authorAvatarSeed,
       avatarStyle: comment.authorAvatarStyle,
       avatarOptions: comment.authorAvatarOptions,
@@ -927,9 +937,9 @@ async function removeReaction(comment: ProcessedComment) {
 function getAuthorAvatarUrl(author: {
   author?: string
   authorEmail?: string
-  avatarSeed?: string
-  avatarStyle?: string
-  avatarOptions?: string | Record<string, unknown>
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | Record<string, unknown> | null
 }) {
   if (author.avatarSeed && author.avatarStyle) {
     return generateAvatarUrl({
@@ -980,7 +990,7 @@ function togglePinAuthor(authorEmail: string) {
 // 監聽 rawComments 變化，處理評論並載入排名
 watch(rawComments, async (newComments) => {
   if (newComments && newComments.length > 0) {
-    processedComments.value = processCommentsData(newComments as RawStageComment[])
+    processedComments.value = processCommentsData(newComments)
     // 載入排名資料
     await loadCommentRankings()
   } else if (newComments && newComments.length === 0) {

@@ -310,9 +310,9 @@ export interface User {
   createdTime?: number
   lastLoginTime?: number
   avatarSeed?: string | null
-  avatarStyle?: string
+  avatarStyle?: string | null
   // 父層（UserManagement）實際傳入 JSON 字串，AvatarEditor 內部再解析
-  avatarOptions?: string | Record<string, unknown>
+  avatarOptions?: string | Record<string, unknown> | null
 }
 
 /**

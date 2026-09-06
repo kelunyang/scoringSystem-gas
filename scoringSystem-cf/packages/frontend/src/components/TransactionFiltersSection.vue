@@ -204,7 +204,11 @@ export interface Props {
 
   // User selection
   selectedUserEmail: string | null
-  projectUsers: User[]
+  /**
+   * 這裡只讀 userEmail／displayName——來源是 /projects/core，
+   * 欄位比 shared 的 User 少。
+   */
+  projectUsers: Array<{ userEmail: string; displayName?: string | null }>
 
   // Export state
   exportingGrades: boolean

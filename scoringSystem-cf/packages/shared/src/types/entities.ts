@@ -289,7 +289,7 @@ export interface Stage {
   proposals?: RankingProposal[];
   title?: string; // Stage title (alternative to stageName)
   settledTime?: number; // Settlement timestamp
-  updatedAt?: number; // Last update timestamp
+  updatedAt?: number | null; // Last update timestamp（DB 欄位可為 NULL）
   shortTitle?: string; // Short title for UI
   originalStatus?: string; // Original status before changes
   name?: string; // Alias for stageName

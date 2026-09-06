@@ -372,7 +372,7 @@ export async function getReversePreview(
     // Get stage info
     const stage = await env.DB.prepare(`
       SELECT stageName FROM stages WHERE stageId = ? AND projectId = ?
-    `).bind(settlement.stageId, projectId).first();
+    `).bind(settlement.stageId, projectId).first<{ stageName: string }>();
 
     return successResponse({
       settlementId: settlementId,

@@ -18,7 +18,15 @@ import { apiErrorCode, apiErrorMessage } from '@/utils/api-types'
  * Extended Stage type for frontend use with additional UI state
  * Using intersection type to avoid property type conflicts
  */
-export type ExtendedStage = Omit<Stage, 'viewMode'> & {
+/**
+ * 前端用的階段。
+ *
+ * `settings` 與 `lastModifiedTime` 改成選填：資料來源是 `/stages/list`，
+ * 那個端點不回傳這兩個欄位，宣告成必填是在說謊。
+ */
+export type ExtendedStage = Omit<Stage, 'viewMode' | 'settings' | 'lastModifiedTime'> & {
+  settings?: string
+  lastModifiedTime?: number | null
   id: string
   title: string
   reportReward: number

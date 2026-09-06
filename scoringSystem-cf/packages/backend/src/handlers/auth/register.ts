@@ -7,7 +7,6 @@ import { hashPassword, validatePasswordStrength } from './password';
 import { generateToken } from './jwt';
 import { generateUserId } from '../../utils/id-generator';
 import { ERROR_CODES, isUniqueConstraintViolation } from '../../utils/response';
-import type { ApiResponse } from '../../utils/response';
 import { safeJsonStringify } from '../../utils/json';
 import { logGlobalOperation } from '../../utils/logging';
 import { getUserGlobalPermissions } from '../../utils/permissions';
