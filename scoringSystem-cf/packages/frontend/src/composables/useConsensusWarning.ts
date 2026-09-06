@@ -62,7 +62,7 @@ export function useConsensusWarning() {
     // 只在有提交的階段顯示警告
     const hasSubmitted = hasCurrentGroupSubmitted(stage)
     console.log('📝 [shouldShowConsensusWarning] 檢查是否已提交:', hasSubmitted)
-    if (!hasSubmitted) {
+    if (!hasSubmitted?.submitted) {
       console.log('❌ [shouldShowConsensusWarning] 尚未提交，不顯示警告')
       return false
     }
@@ -269,7 +269,7 @@ export function useConsensusWarning() {
     }
 
     // 當前組尚未提交
-    return !hasCurrentGroupSubmitted(stage)
+    return !hasCurrentGroupSubmitted(stage)?.submitted
   }
 
   /**
@@ -290,7 +290,7 @@ export function useConsensusWarning() {
     }
 
     // 只在有提交的階段顯示成功
-    if (!hasCurrentGroupSubmitted(stage)) {
+    if (!hasCurrentGroupSubmitted(stage)?.submitted) {
       return false
     }
 

@@ -4,6 +4,48 @@
 > 新坑往上加，讓最近的教訓最先被看到。
 
 ---
+## 2026-09-06 ｜ 回呼傳的是物件，接的人當布林用，於是警告從來沒出現過
+
+**症狀**：專案階段列表上的「本組尚未提交報告」警告從來不顯示。
+沒有錯誤，沒有 log，看起來就像設計上不打算顯示。
+
+**根因**：`ProjectDetail.hasCurrentGroupSubmitted(stage)` 回傳的是
+
+```ts
+{ submitted: boolean, approved: boolean, groupData: Group | null }
+```
+
+而 `useConsensusWarning` 把這個函式當成「回傳布林」的回呼在用：
+
+```ts
+// composables/useConsensusWarning.ts
+return !hasCurrentGroupSubmitted(stage)          // 物件恆為 truthy → 恆為 false
+if (!hasCurrentGroupSubmitted(stage)) return false   // 同上，這個 guard 從不成立
+```
+
+三處受影響：`shouldShowNotSubmittedWarning`（整個功能失效）、
+`shouldShowConsensusWarning` 與 `shouldShowConsensusSuccess`
+（「尚未提交」的提前退出從不成立，靠後面的 `groupData` 檢查兜住，
+所以症狀比較輕，但邏輯已經不是原本寫的那樣）。
+
+**為什麼型別檢查抓不到**：那兩個回呼參數本來標成 `any`。
+標成 `any` 之後，`!fn(stage)` 是合法的，`fn(stage).submitted` 也是合法的，
+兩種寫法都不會有人抗議。改成如實的 `GroupSubmissionStatus` 之後，
+TypeScript 仍然不會報錯（`!obj` 本來就合法），**是人在寫型別的時候看出來的**。
+
+**教訓與防護**：
+
+1. **回呼參數標 `any` 等於放棄整個呼叫協議。** 不只是回傳值沒型別，
+   連「呼叫端和實作端對這個函式的理解是否一致」都沒有人檢查。
+   這個 codebase 裡的 composable 大量互相傳函式，是重災區。
+2. **`!someObject` 不會被任何預設規則擋下來。** 如果在意這類問題，
+   `@typescript-eslint/no-unnecessary-condition` 是唯一會抓到的東西
+   （需要 type-aware linting，目前沒開）。
+3. **新增了 `composables/__tests__/useConsensusWarning.test.ts`**，
+   直接餵入 `{ submitted: false, ... }` 與 `{ submitted: true, ... }`，
+   確認三個函式各自的判斷。修之前 8 個測試裡有 3 個失敗。
+
+---
 ## 2026-09-06 ｜ 權限檢查讀錯一層，於是整段收窄邏輯從來沒跑過
 
 **症狀**：無。專案裡任何一位組員，都可以透過「看事件記錄背後那筆成果」
