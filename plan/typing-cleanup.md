@@ -1,8 +1,15 @@
 # 型別清理計畫（`any` 收斂）
 
-> **這份文件是給「沒有上下文的新 session」看的。** 起草於 2026-09-05，
-> 承接同日那輪底層安全檢查（見 [issue.md](issue.md) #010 與 [pitfalls.md](pitfalls.md)）。
-> 開工前請先讀「動手之前必讀」那一節，它記錄了三個會讓你做白工的陷阱。
+> **這份文件是給「沒有上下文的新 session」看的。**
+> 起草 2026-09-05，2026-09-06 大幅更新。
+>
+> **接手的話，照這個順序讀：**
+> 1. 本節下方的「現況」——知道還剩什麼
+> 2. 「動手之前必讀」——三個會讓你做白工的陷阱，其中兩個是量測工具本身失效
+> 3. [issue.md](issue.md) **#011**——它決定剩下那批要怎麼做，**開工前一定要讀**
+> 4. [pitfalls.md](pitfalls.md) 2026-09-06 的四條——這輪踩到的坑
+>
+> 承接 2026-09-05 那輪底層安全檢查（[issue.md](issue.md) #010）。
 
 ---
 
@@ -11,14 +18,14 @@
 ```
 pnpm type-check   通過（含 vue-tsc）
 pnpm test         398 passed / 0 skipped
-pnpm lint         0 error, 909 warning
+pnpm lint         0 error, 878 warning
 ```
 
 | 套件 | any | 起點 |
 |------|-----|------|
 | backend | **0** | 460 |
 | shared | **0** | 22（原記為 0，因為沒被 lint 掃到）|
-| frontend | 832 | 888 |
+| frontend | 801 | 888 |
 
 frontend 另有 77 個非 any 的 warning（`vue/no-required-prop-with-default` 28、
 `vue/require-default-prop` 22、`vue/no-template-shadow` 13、`vue/no-v-html` 12、
@@ -32,7 +39,9 @@ frontend 另有 77 個非 any 的 warning（`vue/no-required-prop-with-default` 
 | 2 `catch (e: any)` | ✅ 全庫 46 → 0 |
 | 3 backend handler | ✅ 460 → 0 |
 | 5 shared | ✅ 22 → 0 |
-| 4 frontend 元件 | 進行中 |
+| 4 frontend 元件 | **未做**（801 處，見下） |
+
+2026-09-06 那輪共 22 個 commit，範圍 `b7b7b60..ec8d832`。
 
 ### 過程中找到並修好的 bug
 
@@ -159,21 +168,77 @@ D1 查詢結果幾乎都是 `(row: any)`。這裡是實際會出錯的地方—�
 
 D1 的 `.first<T>()` / `.all<T>()` 支援泛型，優先用它而不是事後斷言。
 
-### 批次 4：frontend 元件｜ 最大宗，價值最低
+### 批次 4：frontend 元件（未做，801 處）
 
-這是唯一還沒做的一批（832 處）。批次 1〜3、5 的經驗：
+**開工前先讀 [issue.md](issue.md) #011。** 它會決定你這一批要怎麼做。
+
+#### 801 處分成兩半，性質完全不同
+
+用「這個檔案有沒有碰 `rpcClient` / `fetchWithAuth` / `adminApi`」切開：
+
+| 類別 | 檔案數 | any 數 |
+|------|-------|-------|
+| 會碰 API 回應 | 48 | **389** |
+| 純前端狀態 | 68 | **412** |
+
+**那 389 處清了會長回來。** 它們的型別來源是 `rpcClient`，而
+`frontend/src/types/backend.d.ts` 裡 `AppType = any`——整個 RPC 層
+本來就沒有型別。在 #011 有結論之前動它們，等於用手寫型別去描述
+一個沒人驗證的契約，和批次 1 刪掉的 `types/api.ts` 是同一種東西。
+
+**那 412 處可以現在做。** 它們是元件內部狀態、圖表資料、
+UI 輔助函式，型別由前端自己決定，不依賴後端契約。
+
+#### 建議順序
+
+1. 先讀 #011，決定 RPC 型別要不要處理、走哪條路
+2. 不論 #011 怎麼決定，都可以先做那 412 處「純前端狀態」
+3. #011 有結論之後再回來處理 389 處 API 邊界
+
+#### 目前 any 最多的檔案
+
+| 檔案 | any | 碰 API？ |
+|------|-----|---------|
+| `components/ProjectDetail.vue` | 56 | 是 |
+| `composables/admin/useProjects.ts` | 38 | 是 |
+| `components/TeacherVoteModal.vue` | 32 | 是 |
+| `components/GroupSubmissionApprovalModal.vue` | 26 | 是 |
+| `components/StageGroupSubmissions.vue` | 25 | **否** |
+| `composables/useModalManager.ts` | 22 | 是 |
+| `components/charts/WalletLadder.vue` | 21 | **否** |
+| `components/shared/AwardPointsDrawer.vue` | 20 | 是 |
+| `components/charts/StageGrowthChart.vue` | 18 | **否** |
+| `components/shared/ContributionChart/AllGroupsChart.vue` | 18 | **否** |
+
+重跑這份分類：
+
+```bash
+cd scoringSystem-cf/packages/frontend
+pnpm exec eslint . -f json | python3 -c '
+import sys,json
+from collections import Counter
+d=json.load(sys.stdin); c=Counter()
+for f in d:
+    n=sum(1 for m in f["messages"] if m.get("ruleId")=="@typescript-eslint/no-explicit-any")
+    if n: c[f["filePath"].split("/src/")[-1]]=n
+for k,v in c.most_common(20): print(f"{v:4} {k}")
+print("---", sum(c.values()), "／", len(c))'
+```
+
+#### 前面四批累積的作法
 
 - **先找跨檔案的重複模式，不要一開始就逐檔掃。**
-  最大的幾筆收穫都來自「某個型別已經存在，只是沒接上」。
-- **`.all<T>()` 泛型優先於事後斷言**，型別寫在查詢旁邊。
-- **一個查詢一個型別。** 同一張表的兩個查詢 SELECT 的欄位不同時，
-  共用一個型別就是說謊（D1 泛型不會驗證欄位）。用 `Omit<>` 或分開寫。
+  最大的幾筆收穫都來自「某個型別已經存在，只是沒接上」——
+  `HonoVariables`、`Threat`、`ProjectInfo`、`DurableObjectNamespace`
+  都是這樣。整輪批次 3 裡，「補一個 import」比「寫一個新型別」更常見。
+- **注意被 `/* */` 註解掉的死碼。** lint 照樣把它算進 any 統計，
+  批次 3 有三處是這樣（都是已停用的 tags 系統）。刪掉即可。
 - **函式簽章說謊時，改簽章而不是在呼叫端轉型。**
   `updateUserProfile`、`createGlobalGroup`、`validateCommentEligibility`
-  都是這一類。
-
-**注意**：`ProjectDetail.vue` 曾有使用者未提交的改動，2026-09-06 確認已提交。
-動它之前仍請先 `git status --short`。
+  都是宣告成必填、實際可能收到 undefined，而函式自己有擋。
+- **驗證函式回傳 `{ valid: boolean; data?: T }` 時改成判別聯集**，
+  呼叫端就不必再檢查一次或加 `!`。
+- **`ref<any>` 先看賦值來源**，多半能直接用既有型別。
 
 ### ~~批次 5：`packages/shared`~~ ✅ 已完成 2026-09-06
 
@@ -181,6 +246,42 @@ D1 的 `.first<T>()` / `.all<T>()` 支援泛型，優先用它而不是事後斷
 而那些 handler 當時自己還是 `any`，先定就是猜。等 handler 定完型再回頭，
 形狀是查出來的。新增了 GroupVotingData、ParticipationProposal、
 RankingDisplayData、EventResourceData。
+
+---
+
+## ⚠ 這輪的修復還沒部署
+
+2026-09-06 的 22 個 commit 全部只在 `main` 分支上，**沒有部署**。
+其中有三項是行為變更，不是純型別：
+
+1. **API 錯誤回應的形狀變了**——112 處 router 守衛從
+   `{ error: '字串', errorCode }` 改成 `{ error: { code, message } }`。
+   前後端必須一起部署，不能只部署一邊。
+2. **115 個錯誤碼的 HTTP 狀態碼變了**（多數從 500 改成 400/403/404）。
+   如果有任何監控或告警是看 5xx 比率的，數字會明顯下降——那是修好了，不是壞了。
+3. **事件資源端點的權限收窄開始真的生效**。在此之前任何組員都能看到
+   專案內任何一份成果；修好之後組員只看得到自己的、組長只看得到自己組的。
+   **如果有人已經習慣看得到，這會像是「壞掉」，但那才是原本設計的行為。**
+
+部署指令見 [CLAUDE.md](../.claude/CLAUDE.md)「遠端部署」節。
+schema 沒有變更，不需要跑 migration。
+
+---
+
+## 這輪新增的守門測試（別讓它們失效）
+
+| 測試 | 擋什麼 |
+|------|--------|
+| `backend/tests/error-response-shape.test.ts` | 手寫 `error: '字串'` 的回應；錯誤碼漏進 `HTTP_STATUS_BY_ERROR_CODE` 對照表 |
+| `backend/tests/handlers/comments/user-reaction.test.ts` | `getStageComments` 與 `getAllStagesComments` 的 `userReaction` 分歧 |
+| `backend/tests/handlers/eventlogs/resource-details.test.ts` | 事件資源端點的權限收窄失效；評論路徑的 SQL 欄位名 |
+
+後兩者跑真的 in-memory SQLite ＋ 完整 migrations
+（`createSqliteD1(schema())`，schema 由 `migrations/*.sql` 依序串起來）。
+**要寫新的 handler 行為測試，直接抄 `user-reaction.test.ts` 的 seed 段落**——
+資料表欄位和你以為的不一樣（`users` 沒有 `createdTime`、
+`submissions` 是 `contentMarkdown` 不是 `content`、
+`projectviewers.assignedBy` 是 NOT NULL），照抄可以省掉來回試。
 
 ---
 
