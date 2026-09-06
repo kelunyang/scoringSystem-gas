@@ -29,19 +29,20 @@ export interface NormalizedTransaction {
   id: string
   transactionId: string
   points: number
-  description: string
+  /** 後端的 transactions.source，可為 null */
+  description: string | null
   stage: number
-  stageId?: string
-  stageName?: string
-  stageOrder?: number
+  stageId?: string | null
+  stageName?: string | null
+  stageOrder?: number | null
   timestamp: number
-  createdAt: number
   transactionType: string
-  settlementId?: string
-  relatedSubmissionId?: string
-  relatedCommentId?: string
-  relatedTransactionId?: string
-  displayName?: string
+  settlementId?: string | null
+  relatedSubmissionId?: string | null
+  relatedCommentId?: string | null
+  /** JSON 字串；撤銷交易的 originalTransactionId 在裡面 */
+  metadata?: string | null
+  displayName?: string | null
   userEmail?: string
 }
 
@@ -102,6 +103,17 @@ interface WalletDataResult {
  */
 function getValue<T>(value: T | Ref<T>): T {
   return unref(value) as T
+}
+
+/**
+ * queryFn 只在 `enabled` 為真時才會被呼叫，而 enabled 都檢查過 projectId。
+ * 型別上看不出這層保證，所以這裡明講一次：真的拿不到就是程式有問題。
+ */
+function requireProjectId(projectId: string | null | undefined): string {
+  if (!projectId) {
+    throw new Error('缺少 projectId：這個查詢應該在 enabled 為 false 時就不執行')
+  }
+  return projectId
 }
 
 /**
@@ -172,7 +184,7 @@ export function useWalletTransactions(
 
       const httpResponse = await rpcClient.api.wallets.transactions.$post({
         json: {
-          projectId: pid,
+          projectId: requireProjectId(pid),
           targetUserEmail: uid,
           limit,
           offset,
@@ -181,6 +193,11 @@ export function useWalletTransactions(
       })
       const response = await httpResponse.json()
 
+      if (!response.success) {
+        debugLog('✅ [useWalletTransactions] API response: 失敗', response.error)
+        throw new Error(response.error?.message || '載入交易記錄失敗')
+      }
+
       debugLog('✅ [useWalletTransactions] API response:', {
         success: response.success,
         transactionCount: response.data?.transactions?.length || 0,
@@ -188,14 +205,10 @@ export function useWalletTransactions(
         hasMore: response.data?.hasMore || false
       })
 
-      if (!response.success) {
-        throw new Error(response.error?.message || '載入交易記錄失敗')
-      }
-
       const rawTransactions = response.data.transactions || []
 
       // Normalize transactions to match expected structure
-      const normalizedTransactions = rawTransactions.map((t: any) => ({
+      const normalizedTransactions = rawTransactions.map(t => ({
         id: t.transactionId,              // Add 'id' for compatibility
         transactionId: t.transactionId,
         points: t.amount,                 // Map 'amount' to 'points'
@@ -208,10 +221,10 @@ export function useWalletTransactions(
         settlementId: t.settlementId,     // Settlement ID for reversal and detail view
         relatedSubmissionId: t.relatedSubmissionId,
         relatedCommentId: t.relatedCommentId,
-        relatedTransactionId: t.relatedTransactionId,
+        metadata: t.metadata,
         displayName: t.displayName,       // User display name from users table
         userEmail: t.userEmail            // User email for filtering
-      })).sort((a: NormalizedTransaction, b: NormalizedTransaction) => b.timestamp - a.timestamp)
+      })).sort((a, b) => b.timestamp - a.timestamp)
 
       return {
         transactions: normalizedTransactions,
@@ -285,7 +298,7 @@ export function useInfiniteWalletTransactions(
 
       const httpResponse = await rpcClient.api.wallets.transactions.$post({
         json: {
-          projectId: getValue(projectId),
+          projectId: requireProjectId(getValue(projectId)),
           targetUserEmail: getValue(userId),
           limit,
           offset: pageParam,
@@ -301,7 +314,7 @@ export function useInfiniteWalletTransactions(
       const rawTransactions = response.data.transactions || []
 
       // Normalize transactions to match expected structure
-      const normalizedTransactions = rawTransactions.map((t: any) => ({
+      const normalizedTransactions = rawTransactions.map(t => ({
         id: t.transactionId,
         transactionId: t.transactionId,
         points: t.amount,
@@ -315,10 +328,10 @@ export function useInfiniteWalletTransactions(
         settlementId: t.settlementId,
         relatedSubmissionId: t.relatedSubmissionId,
         relatedCommentId: t.relatedCommentId,
-        relatedTransactionId: t.relatedTransactionId,
+        metadata: t.metadata,
         displayName: t.displayName,
         userEmail: t.userEmail
-      })).sort((a: NormalizedTransaction, b: NormalizedTransaction) => b.timestamp - a.timestamp)
+      })).sort((a, b) => b.timestamp - a.timestamp)
 
       debugLog('✅ [useInfiniteWalletTransactions] API response:', {
         transactionCount: normalizedTransactions.length,
@@ -370,7 +383,7 @@ export function useWalletLeaderboard(
     queryFn: async (): Promise<WalletLadderData> => {
       const httpResponse = await rpcClient.api.wallets['project-ladder'].$post({
         json: {
-          projectId: getValue(projectId)
+          projectId: requireProjectId(getValue(projectId))
         }
       })
       const response = await httpResponse.json()
@@ -413,9 +426,12 @@ export function useWalletProjectStages(
       getValue(projectId)
     ]),
     queryFn: async (): Promise<Stage[]> => {
-      const httpResponse = await rpcClient.api.projects.get.$post({
+      // 用 /projects/core 而不是 /projects/get：後者不回傳 stages
+      // （handlers/projects/manage.ts 的 getProject），這裡原本讀
+      // response.data.stages 永遠是 undefined，所以階段清單一直是空的。
+      const httpResponse = await rpcClient.api.projects.core.$post({
         json: {
-          projectId: getValue(projectId)
+          projectId: requireProjectId(getValue(projectId))
         }
       })
       const response = await httpResponse.json()
@@ -425,7 +441,7 @@ export function useWalletProjectStages(
       }
 
       const stages = response.data?.stages || []
-      return stages.sort((a: Stage, b: Stage) => (a.stageOrder || 0) - (b.stageOrder || 0))
+      return [...stages].sort((a, b) => (a.stageOrder || 0) - (b.stageOrder || 0))
     },
     enabled: isEnabled,
     staleTime: 1000 * 60 * 5 // 5 minutes cache (stages don't change often)
@@ -483,7 +499,7 @@ export function useWalletData(
     queryFn: async (): Promise<User[]> => {
       const httpResponse = await rpcClient.api.projects.core.$post({
         json: {
-          projectId: getValue(projectId)
+          projectId: requireProjectId(getValue(projectId))
         }
       })
       const response = await httpResponse.json()

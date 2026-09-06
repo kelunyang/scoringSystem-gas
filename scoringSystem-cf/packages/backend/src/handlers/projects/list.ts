@@ -10,6 +10,7 @@ import { checkIsTeacherOrObserver } from '@utils/permissions';
 import { getEffectiveScoringConfig } from '../../utils/scoring-config';
 import type { SqlBindValue } from '../../types';
 import type { GroupRow, UserGroupRow } from '@db/rows';
+import type { Stage } from '@repo/shared';
 
 // extractParticipants function removed - no longer needed
 // participationProposal is now returned directly with masked percentages for non-group members
@@ -299,7 +300,7 @@ export async function getProjectCore(
       SELECT * FROM stages_with_status
       WHERE projectId = ? AND archivedTime IS NULL
       ORDER BY stageOrder
-    `).bind(projectId).all();
+    `).bind(projectId).all<Stage>();
 
     // Stage results are already in correct format with startTime/endTime
     const mappedStages = stages.results;

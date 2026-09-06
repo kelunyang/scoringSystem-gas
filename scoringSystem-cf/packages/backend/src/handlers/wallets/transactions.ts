@@ -23,6 +23,35 @@ import { logProjectOperation } from '@utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
 
 /**
+ * `getUserTransactions` 那句 SELECT 選出來的欄位。
+ *
+ * 注意這裡**沒有** `relatedTransactionId`——`transactions` 資料表根本沒有
+ * 這個欄位。撤銷是把原交易 ID 寫在 `metadata.originalTransactionId`
+ * （見 `reverseTransaction`）。
+ */
+interface TransactionListRow {
+  transactionId: string;
+  amount: number;
+  transactionType: string;
+  source: string | null;
+  timestamp: number;
+  stageId: string | null;
+  settlementId: string | null;
+  relatedSubmissionId: string | null;
+  relatedCommentId: string | null;
+  /** JSON 字串 */
+  metadata: string | null;
+  userEmail: string;
+  displayName: string | null;
+  avatarSeed: string | null;
+  avatarStyle: string | null;
+  avatarOptions: string | null;
+  stageName: string | null;
+  stageOrder: number | null;
+  runningBalance: number;
+}
+
+/**
  * Get user transaction history with pagination and running balance
  */
 export async function getUserTransactions(
@@ -173,7 +202,7 @@ export async function getUserTransactions(
 
     const transactions = await env.DB.prepare(transactionsQuery)
       .bind(...query.params, limit, offset)
-      .all();
+      .all<TransactionListRow>();
 
     const transactionList = transactions.results.map(t => ({
       transactionId: t.transactionId,

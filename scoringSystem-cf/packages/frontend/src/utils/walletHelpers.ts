@@ -40,7 +40,30 @@ export interface ReversalCheckTransaction {
   transactionId?: string
   id?: string
   transactionType?: string
-  relatedTransactionId?: string
+  /**
+   * 撤銷交易把原交易 ID 放在這裡（`metadata.originalTransactionId`）。
+   * 後端回的是 JSON 字串，但保留物件形態以防日後改成先解析。
+   */
+  metadata?: string | Record<string, unknown> | null
+}
+
+/** 從撤銷交易的 metadata 取出它撤銷的是哪一筆 */
+function originalTransactionIdOf(transaction: ReversalCheckTransaction): string | undefined {
+  const { metadata } = transaction
+  if (!metadata) return undefined
+
+  let parsed: unknown = metadata
+  if (typeof metadata === 'string') {
+    try {
+      parsed = JSON.parse(metadata)
+    } catch {
+      return undefined
+    }
+  }
+  if (!parsed || typeof parsed !== 'object') return undefined
+
+  const value = (parsed as Record<string, unknown>).originalTransactionId
+  return typeof value === 'string' ? value : undefined
 }
 
 /** 由 calculateStagesWithEarnings 補上的欄位 */
@@ -228,9 +251,12 @@ export function isTransactionReversed(
   }
 
   // 检查是否有对应的撤销记录
+  const targetId = transaction.transactionId || transaction.id
+  if (!targetId) return false
+
   return allTransactions.some(t =>
     t.transactionType === 'reversal' &&
-    t.relatedTransactionId === (transaction.transactionId || transaction.id)
+    originalTransactionIdOf(t) === targetId
   )
 }
 
