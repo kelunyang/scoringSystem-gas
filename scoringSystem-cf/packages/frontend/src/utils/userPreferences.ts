@@ -43,23 +43,23 @@ export interface UserPrefs {
 
   // 管理頁面過濾器
   /** 系統日誌過濾器 */
-  adminFilters_systemLogs?: Record<string, any>;
+  adminFilters_systemLogs?: Record<string, unknown>;
   /** 用戶管理過濾器 */
-  adminFilters_userManagement?: Record<string, any>;
+  adminFilters_userManagement?: Record<string, unknown>;
   /** 通知管理過濾器 */
-  adminFilters_notificationManagement?: Record<string, any>;
+  adminFilters_notificationManagement?: Record<string, unknown>;
   /** Email 記錄過濾器 */
-  adminFilters_emailLogsManagement?: Record<string, any>;
+  adminFilters_emailLogsManagement?: Record<string, unknown>;
   /** 全域群組管理過濾器 */
-  adminFilters_globalGroupManagement?: Record<string, any>;
+  adminFilters_globalGroupManagement?: Record<string, unknown>;
   /** 專案群組管理過濾器 */
-  adminFilters_projectGroupManagement?: Record<string, any>;
+  adminFilters_projectGroupManagement?: Record<string, unknown>;
   /** 事件日誌過濾器 */
-  adminFilters_eventLogViewer?: Record<string, any>;
+  adminFilters_eventLogViewer?: Record<string, unknown>;
   /** 專案管理過濾器 */
-  adminFilters_projectManagement?: Record<string, any>;
+  adminFilters_projectManagement?: Record<string, unknown>;
   /** AI 服務日誌過濾器 */
-  adminFilters_aiServiceLogsManagement?: Record<string, any>;
+  adminFilters_aiServiceLogsManagement?: Record<string, unknown>;
 }
 
 /**
@@ -122,7 +122,7 @@ const PREF_KEYS = {
  * 偏好快取，減少 JSON 解析次數
  * 結構：{ key: { userId: value } }
  */
-const prefsCache: Record<string, Record<string, any>> = {};
+const prefsCache: Record<string, Record<string, unknown>> = {};
 
 /**
  * 防抖計時器映射
@@ -139,7 +139,7 @@ const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
  * @param key localStorage key
  * @returns 用戶 ID 到值的映射
  */
-function safeLoadPrefKey(key: string): Record<string, any> {
+function safeLoadPrefKey(key: string): Record<string, unknown> {
   // 如果有快取，直接返回
   if (prefsCache[key]) {
     return prefsCache[key];
@@ -180,7 +180,7 @@ function safeLoadPrefKey(key: string): Record<string, any> {
  */
 function debouncedSavePrefKey(
   key: string,
-  data: Record<string, any>,
+  data: Record<string, unknown>,
   immediate = false
 ): void {
   // 清除之前的計時器
@@ -226,7 +226,7 @@ export function getUserPreferences(userId: string): UserPrefs {
     const userValue = allUsersData[userId];
 
     if (userValue !== undefined) {
-      (prefs as any)[prefName] = userValue;
+      (prefs as Record<string, unknown>)[prefName] = userValue;
     }
   }
 
@@ -239,10 +239,10 @@ export function getUserPreferences(userId: string): UserPrefs {
  * @param key 偏好欄位名稱
  * @param value 偏好值
  */
-export function setUserPreference(
+export function setUserPreference<K extends keyof UserPrefs>(
   userId: string,
-  key: keyof UserPrefs,
-  value: any
+  key: K,
+  value: UserPrefs[K]
 ): void {
   const storageKey = PREF_KEYS[key];
   if (!storageKey) {

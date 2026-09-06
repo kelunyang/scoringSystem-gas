@@ -28,7 +28,10 @@ interface ParticipationChange {
 interface GroupMember {
   userEmail?: string
   email?: string
-  [key: string]: any
+  displayName?: string
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | null
 }
 
 export interface Props {
@@ -140,8 +143,9 @@ function renderChart(): void {
       })
 
       // 構建堆疊數據結構
-      const oldStackData: Array<any> = []
-      const newStackData: Array<any> = []
+      type StackSegment = ParticipationChange & { x0: number; x1: number; percent: number; version: 'old' | 'new' }
+      const oldStackData: StackSegment[] = []
+      const newStackData: StackSegment[] = []
       let oldX = 0
       let newX = 0
 
@@ -244,7 +248,7 @@ function renderChart(): void {
               .style('width', '100%')
               .style('height', '100%')
               .html(`
-                <img src="${generateMemberAvatarUrl(member as any)}"
+                <img src="${generateMemberAvatarUrl(member)}"
                      alt="${d.displayName}"
                      style="width: 100%; height: 100%; border-radius: 4px; border: 2px solid white; object-fit: cover;">
               `)
@@ -284,7 +288,7 @@ function renderChart(): void {
               .style('width', '100%')
               .style('height', '100%')
               .html(`
-                <img src="${generateMemberAvatarUrl(member as any)}"
+                <img src="${generateMemberAvatarUrl(member)}"
                      alt="${d.displayName}"
                      style="width: 100%; height: 100%; border-radius: 4px; border: 2px solid white; object-fit: cover;">
               `)

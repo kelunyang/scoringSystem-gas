@@ -9,6 +9,25 @@
 import type { Stage, Group } from '@/types'
 import type { ExtendedStage } from './useStageContentManagement'
 
+/** 共識檢查會讀到的群組資料形狀 */
+export interface ConsensusGroupData {
+  submissionId?: string
+  submission?: {
+    participationProposal?: string | Record<string, number> | null
+  }
+  participationProposal?: string | Record<string, number> | null
+  votingData?: {
+    votes?: Array<{ voterEmail?: string }>
+  } | null
+}
+
+/** 呼叫端的「本組是否已提交」回傳值（注意：是物件，不是布林） */
+export interface GroupSubmissionStatus {
+  submitted: boolean
+  approved: boolean
+  groupData?: unknown
+}
+
 /**
  * 共識警告 composable
  * @returns {Object} 共識警告相關函數
@@ -23,7 +42,11 @@ export function useConsensusWarning() {
    * @param {Function} getCurrentGroupData - 獲取當前組數據的函數
    * @returns {boolean}
    */
-  function shouldShowConsensusWarning(stage: Stage | ExtendedStage, hasCurrentGroupSubmitted: any, getCurrentGroupData: any) {
+  function shouldShowConsensusWarning<S extends Stage | ExtendedStage>(
+    stage: S,
+    hasCurrentGroupSubmitted: (stage: S) => GroupSubmissionStatus,
+    getCurrentGroupData: (stage: S) => ConsensusGroupData | null | undefined
+  ) {
     console.log('🔍 [shouldShowConsensusWarning] 開始檢查', {
       stageId: stage.id,
       stageName: stage.name,
@@ -96,7 +119,7 @@ export function useConsensusWarning() {
    * @param {Object} groupData - 群組數據
    * @returns {boolean}
    */
-  function hasGroupConsensusIssue(stage: Stage | ExtendedStage, groupData: any) {
+  function hasGroupConsensusIssue(stage: Stage | ExtendedStage, groupData: ConsensusGroupData) {
     try {
       console.log('🔍 [hasGroupConsensusIssue] 開始檢查群組共識')
 
@@ -125,7 +148,7 @@ export function useConsensusWarning() {
 
       // votingData.votes 是陣列，需要轉換為已投票的 email 列表
       const votedMembers = Array.isArray(votingData.votes)
-        ? votingData.votes.map((v: any) => v.voterEmail)
+        ? votingData.votes.map(v => v.voterEmail)
         : []
 
       console.log('✅ [hasGroupConsensusIssue] votedMembers:', votedMembers)
@@ -180,7 +203,7 @@ export function useConsensusWarning() {
    * @param {Object} groupData - 群組數據
    * @returns {string}
    */
-  function getConsensusWarningDescription(stage: Stage, groupData: any) {
+  function getConsensusWarningDescription(stage: Stage, groupData: ConsensusGroupData) {
     // 使用組內投票狀態的警告文本
     if (groupData) {
       const warningText = getGroupConsensusWarningText(groupData)
@@ -198,7 +221,7 @@ export function useConsensusWarning() {
    * @param {Object} groupData - 群組數據
    * @returns {string}
    */
-  function getGroupConsensusWarningText(groupData: any) {
+  function getGroupConsensusWarningText(groupData: ConsensusGroupData) {
     try {
       const submissionData = groupData.submission || groupData
       const participationProposal = typeof submissionData.participationProposal === 'string'
@@ -212,7 +235,7 @@ export function useConsensusWarning() {
       const votingData = groupData.votingData || {}
       // votingData.votes 是陣列，需要轉換為已投票的 email 列表
       const votedMembers = Array.isArray(votingData.votes)
-        ? votingData.votes.map((v: any) => v.voterEmail)
+        ? votingData.votes.map(v => v.voterEmail)
         : []
 
       const notVotedMembers = proposedParticipants.filter(email =>
@@ -236,7 +259,10 @@ export function useConsensusWarning() {
    * @param {Function} hasCurrentGroupSubmitted - 檢查當前組是否已提交的函數
    * @returns {boolean}
    */
-  function shouldShowNotSubmittedWarning(stage: Stage | ExtendedStage, hasCurrentGroupSubmitted: any) {
+  function shouldShowNotSubmittedWarning<S extends Stage | ExtendedStage>(
+    stage: S,
+    hasCurrentGroupSubmitted: (stage: S) => GroupSubmissionStatus
+  ) {
     // 只在 active 階段顯示
     if (stage.status !== 'active') {
       return false
@@ -253,7 +279,11 @@ export function useConsensusWarning() {
    * @param {Function} getCurrentGroupData - 獲取當前組數據的函數
    * @returns {boolean}
    */
-  function shouldShowConsensusSuccess(stage: Stage | ExtendedStage, hasCurrentGroupSubmitted: any, getCurrentGroupData: any) {
+  function shouldShowConsensusSuccess<S extends Stage | ExtendedStage>(
+    stage: S,
+    hasCurrentGroupSubmitted: (stage: S) => GroupSubmissionStatus,
+    getCurrentGroupData: (stage: S) => ConsensusGroupData | null | undefined
+  ) {
     // 只在 active 階段顯示
     if (stage.status !== 'active') {
       return false

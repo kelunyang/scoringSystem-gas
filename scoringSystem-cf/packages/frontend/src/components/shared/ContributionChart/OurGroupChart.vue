@@ -18,15 +18,18 @@ import { useD3Chart } from '@/composables/useD3Chart'
 import { usePointCalculation } from '@/composables/usePointCalculation'
 import { useAvatar } from '@/composables/useAvatar'
 import { useChargingAnimation, type ChargingUnit } from '@/composables/useChargingAnimation'
+import type { AvatarCustomOptions } from '@/types/auth'
 
 export interface Member {
   email: string
   displayName?: string
-  points: number
+  // 未達 100% 時父層會直接傳原始成員，那時還沒有 points
+  points?: number
   contribution: number  // Percentage (0-100)
-  avatarSeed?: string
-  avatarStyle?: string
-  avatarOptions?: Record<string, any>
+  // 後端這三個欄位可能是 null；avatarOptions 在 runtime 是 JSON 字串
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | AvatarCustomOptions | null
 }
 
 export interface Props {
@@ -135,7 +138,7 @@ function renderChart(): void {
         .attr('height', height)
 
       // 創建個人權重方塊 (stack bar)
-      const blocks: Array<{ person: any; position: number; blockIndex: number; totalBlocks: number }> = []
+      const blocks: Array<{ person: (typeof ourGroupData)[number]; position: number; blockIndex: number; totalBlocks: number }> = []
       let blockPos = 0
 
       ourGroupData.forEach(person => {

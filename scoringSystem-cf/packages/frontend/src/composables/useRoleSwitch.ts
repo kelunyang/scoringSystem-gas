@@ -1,15 +1,37 @@
 import { computed, watch, unref, type Ref, type ComputedRef } from 'vue'
-import type { Group } from '@/types'
 import type { PermissionLevel } from './useProjectPermissions'
 import { useRoleSelectionStore } from '@/stores/roleSelection'
-import { hasProjectAdminRole } from './useProjectAdminRole'
+import { hasProjectAdminRole, type ProjectAdminSubject } from './useProjectAdminRole'
 
 type MaybeRef<T> = T | Ref<T> | ComputedRef<T>
+
+/** 單一角色的顯示設定 */
+export interface RoleConfig {
+  label: string
+  icon: string
+  color: string
+  permissions: string[]
+}
+
+/** detectUserRoles 會從專案資料讀到的欄位 */
+export interface RoleDetectionProject {
+  project?: ProjectAdminSubject | null
+  viewerRole?: string | null
+  userGroups?: Array<{ userEmail?: string; isActive?: number; role?: string }>
+}
+
+/** detectUserRoles 會從使用者資料讀到的欄位 */
+export interface RoleDetectionUser {
+  userEmail?: string
+  email?: string
+  userId?: string
+  permissions?: string[]
+}
 
 /**
  * 角色配置常量
  */
-const ROLE_CONFIG = {
+const ROLE_CONFIG: Record<string, RoleConfig> = {
   admin: {
     label: '管理員',
     icon: 'fas fa-crown',
@@ -54,12 +76,15 @@ const ROLE_CONFIG = {
  * @param {Object} userData - 用户数据
  * @returns {Array} 角色数组，如 ['admin', 'teacher']
  */
-function detectUserRoles(projectData: any, userData: any) {
+function detectUserRoles(
+  projectData: RoleDetectionProject | null | undefined,
+  userData: RoleDetectionUser | null | undefined
+): string[] {
   if (!projectData || !userData) {
     return []
   }
 
-  const roles = []
+  const roles: string[] = []
   const userEmail = userData.userEmail || userData.email
 
   // Level 0 via the shared rule: system_admin, or this project's creator.
@@ -84,11 +109,11 @@ function detectUserRoles(projectData: any, userData: any) {
   // 检查 userGroups 角色
   if (projectData.userGroups && Array.isArray(projectData.userGroups)) {
     const userGroupRecords = projectData.userGroups.filter(
-      (ug: any) => ug.userEmail === userEmail && ug.isActive === 1
+      ug => ug.userEmail === userEmail && ug.isActive === 1
     )
 
-    const isLeader = userGroupRecords.some((g: Group) => g.role === 'leader')
-    const isMember = userGroupRecords.some((g: Group) => g.role === 'member')
+    const isLeader = userGroupRecords.some(g => g.role === 'leader')
+    const isMember = userGroupRecords.some(g => g.role === 'member')
 
     if (isLeader && !roles.includes('group_leader')) {
       roles.push('group_leader')
@@ -114,7 +139,11 @@ function detectUserRoles(projectData: any, userData: any) {
  * @param {Ref} projectData - 项目数据（响应式）
  * @param {Ref} userData - 用户数据（响应式）
  */
-export function useRoleSwitch(projectIdInput: MaybeRef<string | null>, projectData: any, userData: any) {
+export function useRoleSwitch(
+  projectIdInput: MaybeRef<string | null>,
+  projectData: Ref<RoleDetectionProject | null | undefined> | ComputedRef<RoleDetectionProject | null | undefined>,
+  userData: Ref<RoleDetectionUser | null | undefined> | ComputedRef<RoleDetectionUser | null | undefined>
+) {
   // Use Pinia store for shared role state
   const roleStore = useRoleSelectionStore()
 
@@ -184,7 +213,7 @@ export function useRoleSwitch(projectIdInput: MaybeRef<string | null>, projectDa
   }, { immediate: true })
 
   // 切换角色 - now uses store
-  const switchRole = (newRole: any) => {
+  const switchRole = (newRole: string) => {
     const pid = getProjectId()
     if (!pid) return
 
@@ -197,8 +226,8 @@ export function useRoleSwitch(projectIdInput: MaybeRef<string | null>, projectDa
   }
 
   // 获取角色配置
-  const getRoleConfig = (role: any) => {
-    return (ROLE_CONFIG as any)[role] || {
+  const getRoleConfig = (role: string): RoleConfig => {
+    return ROLE_CONFIG[role] || {
       label: role,
       icon: 'fas fa-question',
       color: '#909399',
@@ -207,22 +236,22 @@ export function useRoleSwitch(projectIdInput: MaybeRef<string | null>, projectDa
   }
 
   // 获取角色标签
-  const getRoleLabel = (role: any) => {
+  const getRoleLabel = (role: string) => {
     return getRoleConfig(role).label
   }
 
   // 获取角色图标
-  const getRoleIcon = (role: any) => {
+  const getRoleIcon = (role: string) => {
     return getRoleConfig(role).icon
   }
 
   // 获取角色颜色
-  const getRoleColor = (role: any) => {
+  const getRoleColor = (role: string) => {
     return getRoleConfig(role).color
   }
 
   // 获取角色权限列表
-  const getRolePermissions = (role: any) => {
+  const getRolePermissions = (role: string) => {
     return getRoleConfig(role).permissions
   }
 

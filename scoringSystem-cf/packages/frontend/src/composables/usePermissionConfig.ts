@@ -9,6 +9,46 @@ import { computed } from 'vue'
 import { usePermissions } from './usePermissions'
 import permissionConfig from '@/config/permissionConfig.json'
 
+/** 一條權限規則：需要哪些權限、用 AND 還是 OR */
+export interface PermissionRule {
+  required?: string[]
+  logic?: string
+  customCheck?: boolean
+}
+
+/** 分頁（tab）設定 */
+export interface TabConfig {
+  order?: number
+  permissions?: PermissionRule
+  [key: string]: unknown
+}
+
+/** 一個區塊（section）的設定 */
+export interface SectionConfig {
+  tabs?: Record<string, TabConfig>
+  accessPermissions?: PermissionRule
+  features?: Record<string, { permissions: PermissionRule }>
+}
+
+/**
+ * permissionConfig.json 的形狀。
+ *
+ * JSON 匯入推導出來的是每個字面值的精確型別，無法用變數當索引，
+ * 所以在這裡宣告一次它的實際結構，其餘程式碼都走這個具型別的視圖。
+ */
+interface PermissionConfigFile {
+  navigation: { items: Record<string, { permissions?: PermissionRule }> }
+  [section: string]: unknown
+}
+
+const typedConfig = permissionConfig as PermissionConfigFile
+
+/** 取出某個區塊的設定 */
+function getSection(section: string): SectionConfig | undefined {
+  const value = typedConfig[section]
+  return value && typeof value === 'object' ? (value as SectionConfig) : undefined
+}
+
 /**
  * Main permission configuration composable
  *
@@ -28,10 +68,10 @@ export function usePermissionConfig() {
    * @param {Object} config - Permission config object with { required: [], logic: 'AND'|'OR' }
    * @returns {null | boolean} Tri-state: null (loading), true (visible), false (hidden)
    */
-  function checkPermissionConfig(config: any) {
-    if (!config || !config.required) return true
+  function checkPermissionConfig(rule: PermissionRule | undefined) {
+    if (!rule || !rule.required) return true
 
-    const { required, logic = 'OR' } = config
+    const { required, logic = 'OR' } = rule
 
     // No permissions required
     if (required.length === 0) return true
@@ -53,8 +93,8 @@ export function usePermissionConfig() {
    * const showAdmin = canShowNav('admin')
    * // Use in template: v-if="showAdmin === true"
    */
-  function canShowNav(navKey: any) {
-    const navItem = (permissionConfig.navigation.items as any)[navKey]
+  function canShowNav(navKey: string) {
+    const navItem = typedConfig.navigation.items[navKey]
     if (!navItem) return false
 
     return checkPermissionConfig(navItem.permissions)
@@ -85,15 +125,15 @@ export function usePermissionConfig() {
    * @example
    * const adminTabs = getVisibleTabs('systemAdmin')
    */
-  function getVisibleTabs(section: any) {
+  function getVisibleTabs(section: string): TabConfig[] {
     if (isLoading.value) return []
 
-    const sectionConfig = (permissionConfig as any)[section]
+    const sectionConfig = getSection(section)
     if (!sectionConfig || !sectionConfig.tabs) return []
 
     return Object.values(sectionConfig.tabs)
-      .filter(tab => checkPermissionConfig((tab as any).permissions) === true)
-      .sort((a: any, b: any) => a.order - b.order)
+      .filter(tab => checkPermissionConfig(tab.permissions) === true)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
   }
 
   /**
@@ -105,8 +145,8 @@ export function usePermissionConfig() {
    * @example
    * const canAccessAdmin = canAccessSection('systemAdmin')
    */
-  function canAccessSection(section: any) {
-    const sectionConfig = (permissionConfig as any)[section]
+  function canAccessSection(section: string) {
+    const sectionConfig = getSection(section)
     if (!sectionConfig) return false
 
     // Check if section has access permissions defined
@@ -129,8 +169,8 @@ export function usePermissionConfig() {
    * @example
    * const canManageStages = canShowFeature('projectDetail', 'manageStages')
    */
-  function canShowFeature(section: any, featureKey: any) {
-    const sectionConfig = (permissionConfig as any)[section]
+  function canShowFeature(section: string, featureKey: string) {
+    const sectionConfig = getSection(section)
     if (!sectionConfig || !sectionConfig.features) return false
 
     const feature = sectionConfig.features[featureKey]
@@ -179,7 +219,7 @@ export function usePermissionConfig() {
  * @example
  * const adminTabs = useVisibleTabs('systemAdmin')
  */
-export function useVisibleTabs(section: any) {
+export function useVisibleTabs(section: string) {
   const { getVisibleTabs } = usePermissionConfig()
   return computed(() => getVisibleTabs(section))
 }

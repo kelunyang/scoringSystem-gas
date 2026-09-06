@@ -10,13 +10,42 @@ import { computed, type Ref } from 'vue'
 import type { User, Group } from '@/types'
 import { useSudoStore } from '@/stores/sudo'
 
+/** 成員與群組的對應記錄 */
+export interface GroupDataUserGroup {
+  groupId: string
+  userEmail: string
+  isActive?: boolean | number
+  role?: string
+  joinTime?: number | string
+}
+
+/** 這裡只讀使用者的顯示與頭像欄位 */
+export interface GroupDataUser {
+  userEmail: string
+  displayName?: string | null
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | null
+}
+
+/** 專案資料中這個 composable 會讀到的部分 */
+export interface GroupDataProject {
+  project?: { projectId?: string } | null
+  groups?: Group[]
+  userGroups?: GroupDataUserGroup[]
+  users?: GroupDataUser[]
+}
+
 /**
  * 群組數據處理 composable
  * @param {Ref<Object>} projectData - 專案數據 ref
  * @param {Ref<User>} user - 用戶數據 ref
  * @returns {Object} 群組相關計算函數
  */
-export function useGroupData(projectData: any, user: Ref<User>) {
+export function useGroupData(
+  projectData: Ref<GroupDataProject | null | undefined>,
+  user: Ref<User>
+) {
 
   /**
    * 取得當前用戶所屬的群組資訊
@@ -50,7 +79,7 @@ export function useGroupData(projectData: any, user: Ref<User>) {
     const groups = projectData.value.groups || []
 
     // 找到當前用戶（或 sudo target）的群組成員記錄（isActive=true）
-    const userGroupRecord = userGroups.find((ug: any) =>
+    const userGroupRecord = userGroups.find(ug =>
       ug.userEmail === effectiveEmail && ug.isActive
     )
 
@@ -72,17 +101,18 @@ export function useGroupData(projectData: any, user: Ref<User>) {
 
     // 取得該群組的所有成員
     const groupMembers = userGroups
-      .filter((ug: any) => ug.groupId === group.groupId && ug.isActive)
-      .map((ug: any) => {
+      .filter(ug => ug.groupId === group.groupId && ug.isActive)
+      .map(ug => {
         // 從 users 表獲取真正的 displayName 和 avatar 資訊
-        const user = projectData.value.users?.find((u: any) => u.userEmail === ug.userEmail)
+        const user = projectData.value?.users?.find(u => u.userEmail === ug.userEmail)
         return {
           email: ug.userEmail,
           userEmail: ug.userEmail, // 兼容性
           displayName: user?.displayName || ug.userEmail.split('@')[0],
-          avatarSeed: user?.avatarSeed,
-          avatarStyle: user?.avatarStyle,
-          avatarOptions: user?.avatarOptions,
+          // 來源欄位可為 null，統一收斂成 undefined（消費端只判斷有無）
+          avatarSeed: user?.avatarSeed ?? undefined,
+          avatarStyle: user?.avatarStyle ?? undefined,
+          avatarOptions: user?.avatarOptions ?? undefined,
           role: ug.role,
           joinTime: ug.joinTime
         }
@@ -122,10 +152,10 @@ export function useGroupData(projectData: any, user: Ref<User>) {
 
     // 找到群組成員
     const members = projectData.value.userGroups
-      .filter((ug: any) => ug.groupId === groupId && ug.isActive)
-      .map((ug: any) => {
+      .filter(ug => ug.groupId === groupId && ug.isActive)
+      .map(ug => {
         // 從 users 資料中找到對應的使用者，取得 displayName
-        const user = projectData.value.users?.find((u: any) => u.userEmail === ug.userEmail)
+        const user = projectData.value?.users?.find(u => u.userEmail === ug.userEmail)
         return user?.displayName || ug.userEmail.split('@')[0]
       })
 
@@ -133,7 +163,8 @@ export function useGroupData(projectData: any, user: Ref<User>) {
 
     return {
       memberNames: members,
-      groupName: group.groupName || group.name
+      // groups 表沒有 name 欄位（0001_init_schema.sql:149），原本的 || group.name 是死碼
+      groupName: group.groupName
     }
   }
 
@@ -154,7 +185,7 @@ export function useGroupData(projectData: any, user: Ref<User>) {
    * @param {Array<string>} memberNames - 成員名稱陣列
    * @returns {string} 格式化後的名稱字串
    */
-  function formatMemberNames(memberNames: any) {
+  function formatMemberNames(memberNames: string[] | null | undefined) {
     if (!memberNames || memberNames.length === 0) {
       return '無成員'
     }
@@ -204,7 +235,7 @@ export function useGroupData(projectData: any, user: Ref<User>) {
 
     if (!effectiveEmail) return null
 
-    return projectData.value.userGroups.find((ug: any) =>
+    return projectData.value.userGroups.find(ug =>
       ug.userEmail === effectiveEmail && ug.isActive
     )
   }

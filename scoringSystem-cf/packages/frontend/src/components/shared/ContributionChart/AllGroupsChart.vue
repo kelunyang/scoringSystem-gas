@@ -15,7 +15,7 @@ import { ref, watch, nextTick, onMounted } from 'vue'
 import type { Ref } from 'vue'
 import * as d3 from 'd3'
 import { useD3Chart } from '@/composables/useD3Chart'
-import { usePointCalculation } from '@/composables/usePointCalculation'
+import { usePointCalculation, type ScoringMember } from '@/composables/usePointCalculation'
 import { useChargingAnimation, type ChargingUnit } from '@/composables/useChargingAnimation'
 import type { GroupClickData } from '@/types/components'
 
@@ -24,7 +24,11 @@ export interface Member {
   displayName?: string
   points: number
   finalWeight: number
-  [key: string]: any
+  contribution?: number
+  participationRatio?: number
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | null
 }
 
 export interface Group {
@@ -36,7 +40,7 @@ export interface Group {
 }
 
 export interface Props {
-  selectedMembers: any[]
+  selectedMembers: ScoringMember[]
   simulatedRank: number
   simulatedGroupCount: number
   reportReward?: number
@@ -146,7 +150,7 @@ function renderChart(): void {
           props.simulatedRank,
           props.reportReward,
           props.simulatedGroupCount,
-          props.allGroups as any,
+          props.allGroups,
           props.currentGroupId ?? null
         )
 
@@ -197,7 +201,8 @@ function renderChart(): void {
       allPeople.sort((a, b) => a.rank - b.rank || (a.displayName ?? '').localeCompare(b.displayName ?? ''))
 
       // 創建權重塊
-      const blocks: Array<{ person: typeof allPeople[0]; globalPosition: number; blockIndex: number; totalBlocks: number }> = []
+      type WeightBlock = { person: (typeof allPeople)[number]; globalPosition: number; blockIndex: number; totalBlocks: number }
+      const blocks: WeightBlock[] = []
       let globalPos = 0
 
       allPeople.forEach(person => {
@@ -268,12 +273,12 @@ function renderChart(): void {
           // 收集每個方塊的充能層元素（按位置順序）
           chargedElements.push(this as SVGRectElement)
         })
-        .on('mouseover', (event, d: any) => {
+        .on('mouseover', (event, d) => {
           // Highlight all blocks of the same rank
-          const sameRankBlocks = svg.selectAll('.weight-block')
-            .filter((block: any) => block.person.rank === d.person.rank)
+          const sameRankBlocks = svg.selectAll<SVGRectElement, WeightBlock>('.weight-block')
+            .filter(block => block.person.rank === d.person.rank)
 
-          sameRankBlocks.style('opacity', (block: any) => {
+          sameRankBlocks.style('opacity', block => {
               const baseOpacity = block.person.isCurrentGroup ? 1 : 0.8
               return selectedGroupRank.value === block.person.rank ? baseOpacity * 0.7 : Math.min(baseOpacity + 0.1, 1)
             })
@@ -287,7 +292,7 @@ function renderChart(): void {
                 const rect = this as SVGRectElement
                 const height = parseFloat(rect.getAttribute('height') || '0')
                 return `translate(0, ${-height * 0.1}) scale(1, 1.2)`
-              } as any)
+              })
               .style('filter', 'brightness(1.1)')
           }
 
@@ -302,12 +307,12 @@ function renderChart(): void {
             .style('left', (event.pageX + 10) + 'px')
             .style('top', (event.pageY - 28) + 'px')
         })
-        .on('mouseout', (event, d: any) => {
+        .on('mouseout', (event, d) => {
           // Restore original opacity for all blocks of the same rank
-          const sameRankBlocks = svg.selectAll('.weight-block')
-            .filter((block: any) => block.person.rank === d.person.rank)
+          const sameRankBlocks = svg.selectAll<SVGRectElement, WeightBlock>('.weight-block')
+            .filter(block => block.person.rank === d.person.rank)
 
-          sameRankBlocks.style('opacity', (block: any) => {
+          sameRankBlocks.style('opacity', block => {
               const baseOpacity = block.person.isCurrentGroup ? 1 : 0.8
               return selectedGroupRank.value === block.person.rank ? baseOpacity * 0.7 : baseOpacity
             })
@@ -323,13 +328,13 @@ function renderChart(): void {
 
           tooltip.style('opacity', 0)
         })
-        .on('click', (event, d: any) => {
+        .on('click', (event, d) => {
           // Set selected group rank for visual feedback
           selectedGroupRank.value = d.person.rank
 
           // Update all blocks opacity
-          svg.selectAll('.weight-block')
-            .style('opacity', (block: any) => {
+          svg.selectAll<SVGRectElement, WeightBlock>('.weight-block')
+            .style('opacity', block => {
               const baseOpacity = block.person.isCurrentGroup ? 1 : 0.8
               return selectedGroupRank.value === block.person.rank ? baseOpacity * 0.7 : baseOpacity
             })
@@ -343,8 +348,8 @@ function renderChart(): void {
             groupName: d.person.groupName,
             rank: d.person.rank,
             points: d.person.points,
-            members: (groupData?.members || []) as any,
-            allGroupMembers: groupMembers as any
+            members: groupData?.members || [],
+            allGroupMembers: groupMembers
           })
         })
 
@@ -409,8 +414,8 @@ function renderChart(): void {
                   groupName: firstPerson.groupName,
                   rank: rank,
                   points: rankPeople.reduce((sum, p) => sum + p.points, 0),
-                  members: (groupData?.members || []) as any,
-                  allGroupMembers: rankPeople as any
+                  members: groupData?.members || [],
+                  allGroupMembers: rankPeople
                 })
               })
 
@@ -495,8 +500,8 @@ function renderChart(): void {
                 groupName: group.groupName,
                 rank: group.rank,
                 points: group.people.reduce((sum, p) => sum + p.points, 0),
-                members: (groupData?.members || []) as any,
-                allGroupMembers: group.people as any
+                members: groupData?.members || [],
+                allGroupMembers: group.people
               })
             })
 

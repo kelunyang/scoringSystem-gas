@@ -13,11 +13,11 @@ import type { AvatarCustomOptions } from '@/types/auth'
 interface Member {
   /** 後端多數端點回傳的是 userEmail；少數轉換過的資料才有 email */
   userEmail?: string
-  email: string
+  email?: string
   displayName?: string
-  avatarSeed?: string
-  avatarStyle?: string
-  avatarOptions?: string | AvatarCustomOptions
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | AvatarCustomOptions | null
 }
 
 interface Vote {
@@ -51,6 +51,11 @@ interface AvatarReturn {
  * Avatar 生成 Composable
  * @returns Avatar 相關方法
  */
+/** 兩種欄位名都可能出現，取到哪個算哪個 */
+function memberEmail(member: Member | null | undefined): string {
+  return member?.email ?? member?.userEmail ?? ''
+}
+
 export function useAvatar(): AvatarReturn {
   // 追蹤每個成員的 avatar 錯誤狀態
   const avatarErrors = reactive<AvatarErrors>({})
@@ -79,11 +84,11 @@ export function useAvatar(): AvatarReturn {
    */
   function generateMemberAvatarUrl(member: Member): string {
     // 檢查是否已發生錯誤，或成員資料無效
-    if (!member || avatarErrors[member.email]) {
+    if (!member || avatarErrors[memberEmail(member)]) {
       return generateMemberInitialsAvatar(member)
     }
 
-    const seed = member.avatarSeed || member.email
+    const seed = member.avatarSeed || memberEmail(member)
     const style = member.avatarStyle || 'avataaars'
 
     // 解析 avatarOptions（可能是 JSON 字串或物件）

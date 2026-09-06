@@ -10,7 +10,75 @@
  */
 
 import { computed, type Ref } from 'vue'
-import type { Member } from '@/types'
+
+/** 參與計算的成員：這裡只讀得到的欄位 */
+export interface ScoringMember {
+  email?: string
+  displayName?: string
+  contribution?: number
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | null
+}
+
+/** 既有組裡的成員：比 ScoringMember 多一個已算好的參與比例 */
+export interface ScoringGroupMember extends ScoringMember {
+  participationRatio?: number
+}
+
+/** 呼叫端提供的既有組資訊（用來模擬其他組） */
+export interface ScoringGroup {
+  groupId: string
+  groupName?: string
+  rank?: number
+  status?: string
+  memberCount?: number
+  members?: ScoringGroupMember[]
+}
+
+/** 內部用：一個排名位置上的一個角色 */
+interface TeamRole {
+  name?: string
+  ratio: number
+  isCurrentUser: boolean
+}
+
+/** calculateScoring 的單筆結果（只含我們組） */
+export interface MemberScoring {
+  email: string
+  displayName?: string
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | null
+  contribution: number
+  participationRatio: number
+  baseWeightUnits: number
+  rankMultiplier: number
+  finalWeight: number
+  globalMinRatio: number
+  targetRank: number
+  points: number
+}
+
+/** calculateAllGroupsScoring 產出的成員 */
+export interface ScoredMember {
+  email: string
+  displayName?: string
+  participationRatio: number
+  baseWeightUnits: number
+  rankMultiplier: number
+  finalWeight: number
+  points: number
+}
+
+/** calculateAllGroupsScoring 產出的組 */
+export interface ScoredGroup {
+  rank: number
+  isCurrentGroup: boolean
+  groupId: string
+  groupName: string
+  members: ScoredMember[]
+}
 
 /**
  * Point calculation options
@@ -97,13 +165,13 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
    * @returns {Array} 成員點數分配結果
    */
   function calculateScoring(
-    selectedMembers: any,
+    selectedMembers: ScoringMember[] | null | undefined,
     targetRank = 1,
     totalStagePoints = 100,
     groupCount = 4,
-    allGroups: any[] = [],
+    allGroups: ScoringGroup[] = [],
     currentGroupId: string | null = null
-  ) {
+  ): MemberScoring[] {
     // ===== 輸入驗證 =====
     if (!selectedMembers || selectedMembers.length === 0) {
       console.warn('calculateScoring: 沒有選中的成員')
@@ -124,12 +192,12 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
     const rankWeights = calculateRankWeights(groupCount)
 
     // 構建所有組的數據（包括我們組和其他組）
-    const allTeamRoles: Record<number, any[]> = {}
+    const allTeamRoles: Record<number, TeamRole[]> = {}
 
     // 1. 我們組 - 放在指定排名位置，使用實際貢獻度分配
-    allTeamRoles[targetRank] = selectedMembers.map((member: Member) => ({
+    allTeamRoles[targetRank] = selectedMembers.map(member => ({
       name: member.displayName,
-      ratio: member.contribution,
+      ratio: member.contribution ?? 0,
       isCurrentUser: true
     }))
 
@@ -140,7 +208,7 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
     }
     let rankIndex = 0
 
-    allGroups.forEach((group: any) => {
+    allGroups.forEach(group => {
       if (group.groupId !== currentGroupId && group.status === 'active' && rankIndex < otherRanks.length) {
         const rank = otherRanks[rankIndex]
         const memberCount = group.memberCount || group.members?.length || 3 // 預設3人
@@ -177,7 +245,7 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
     const allRatios = []
     for (const rankKey in allTeamRoles) {
       if (allTeamRoles[rankKey] && allTeamRoles[rankKey].length > 0) {
-        allTeamRoles[rankKey].forEach((role: any) => {
+        allTeamRoles[rankKey].forEach(role => {
           if (role.ratio > 0) allRatios.push(role.ratio)
         })
       }
@@ -190,17 +258,18 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
     const globalMinRatio = 5
 
     // 計算我們組的數據
-    const scoringData = selectedMembers.map((member: Member) => {
-      const participationRatio = member.contribution
+    const scoringData: MemberScoring[] = selectedMembers.map(member => {
+      // 未填貢獻度視為 0：底下的權重計算本來就這樣處理
+      const participationRatio = member.contribution ?? 0
 
       // 基礎權重單位 = 個人比例 / 全域最小比例
-      const baseWeightUnits = (participationRatio ?? 0) / globalMinRatio
+      const baseWeightUnits = participationRatio / globalMinRatio
 
       // 實際權重 = 基礎權重 × 排名倍率
       const finalWeight = baseWeightUnits * rankWeights[targetRank]
 
       return {
-        email: member.email,
+        email: member.email ?? '',
         displayName: member.displayName,
         avatarSeed: member.avatarSeed,
         avatarStyle: member.avatarStyle,
@@ -220,7 +289,7 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
     const allPeople: Array<{ finalWeight: number }> = []
     for (const rankKey in allTeamRoles) {
       const rankWeight = rankWeights[rankKey]
-      allTeamRoles[rankKey].forEach((role: any) => {
+      allTeamRoles[rankKey].forEach(role => {
         const baseWeightUnits = role.ratio / globalMinRatio
         const finalWeight = baseWeightUnits * rankWeight
         allPeople.push({ finalWeight })
@@ -232,18 +301,18 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
     // ===== 除零保護 =====
     if (totalWeight === 0 || !isFinite(totalWeight)) {
       console.error('calculateScoring: totalWeight 無效', totalWeight)
-      return scoringData.map((item: any) => ({ ...item, points: 0 }))
+      return scoringData.map(item => ({ ...item, points: 0 }))
     }
 
     const pointsPerWeight = totalStagePoints / totalWeight
 
     // 分配我們組的實際點數
-    scoringData.forEach((item: any) => {
+    scoringData.forEach(item => {
       item.points = item.finalWeight * pointsPerWeight
     })
 
     // 按得分降序排序並返回
-    return scoringData.sort((a: any, b: any) => b.points - a.points)
+    return scoringData.sort((a, b) => b.points - a.points)
   }
 
   /**
@@ -257,27 +326,27 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
    * @returns {Array} 所有組的點數分配結果
    */
   function calculateAllGroupsScoring(
-    selectedMembers: any,
+    selectedMembers: ScoringMember[],
     targetRank = 1,
     totalStagePoints = 100,
     groupCount = 4,
-    allGroups: any[] = [],
+    allGroups: ScoringGroup[] = [],
     currentGroupId: string | null | undefined = null
-  ) {
+  ): ScoredGroup[] {
     // 計算排名權重
     const rankWeights = calculateRankWeights(groupCount)
 
     // 構建所有組的數據
-    const allGroupsData: Array<any> = []
+    const allGroupsData: ScoredGroup[] = []
 
     // 1. 添加我們組（在指定排名）
-    const ourGroupMembers = selectedMembers.map((member: Member) => {
-      const participationRatio = member.contribution
-      const baseWeightUnits = (participationRatio ?? 0) / 5 // 統一使用5%作為基準
+    const ourGroupMembers: ScoredMember[] = selectedMembers.map(member => {
+      const participationRatio = member.contribution ?? 0
+      const baseWeightUnits = participationRatio / 5 // 統一使用5%作為基準
       const finalWeight = baseWeightUnits * rankWeights[targetRank]
 
       return {
-        email: member.email,
+        email: member.email ?? '',
         displayName: member.displayName,
         participationRatio: participationRatio,
         baseWeightUnits: baseWeightUnits,
@@ -296,7 +365,7 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
       // Try to find the group that contains these members
       const firstMemberEmail = selectedMembers[0]?.email
       currentGroupData = allGroups.find(g =>
-        g.members && g.members.some((m: Member) => m.email === firstMemberEmail)
+        g.members && g.members.some(m => m.email === firstMemberEmail)
       )
       actualGroupId = currentGroupData?.groupId ?? null
     }
@@ -339,13 +408,13 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
           return
         }
 
-        const members = []
+        const members: ScoredMember[] = []
 
         // ✅ FIX: Use real member data from group.members if available
         if (group.members && Array.isArray(group.members) && group.members.length > 0) {
           // Use real member data with actual names and contributions
-          group.members.forEach((member: any, i: number) => {
-            const contribution = member.contribution || member.participationRatio || Math.floor(100 / group.members.length)
+          group.members.forEach((member, i) => {
+            const contribution = member.contribution || member.participationRatio || Math.floor(100 / group.members!.length)
             const baseWeightUnits = contribution / 5
             const finalWeight = baseWeightUnits * rankWeights[rank]
 
@@ -406,7 +475,7 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
       }
 
       if (rank <= groupCount) {
-        const members: Array<any> = []
+        const members: ScoredMember[] = []
         // 預設3人組，均分
         const contributions = [35, 35, 30] // 總和100%，都是5%的倍數
 
@@ -440,8 +509,8 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
     // 計算總權重和分配點數
     let totalWeight = 0
     allGroupsData.forEach(group => {
-      group.members.forEach((member: Member) => {
-        totalWeight += (member.finalWeight ?? 0)
+      group.members.forEach(member => {
+        totalWeight += member.finalWeight
       })
     })
 
@@ -449,8 +518,8 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
 
     // 分配點數
     allGroupsData.forEach(group => {
-      group.members.forEach((member: Member) => {
-        member.points = (member.finalWeight ?? 0) * pointsPerWeight
+      group.members.forEach(member => {
+        member.points = member.finalWeight * pointsPerWeight
       })
     })
 
@@ -465,7 +534,7 @@ export function usePointCalculation(options: PointCalculationOptions = {}) {
    * @param {Number} rank - 排名
    * @returns {String} 顏色代碼
    */
-  function getRankColor(rank: any) {
+  function getRankColor(rank: number) {
     const baseColors = [
       '#8FD460', // 檸檬薄荷 (Scheme K Primary) - 第1名
       '#4FBFDB', // 晴空藍 (Scheme K Info) - 第2名
