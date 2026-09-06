@@ -5,6 +5,7 @@
 
 import { ref, computed } from 'vue';
 import { rpcClient } from '@/utils/rpc-client';
+import { errorOf, apiErrorMessage } from '@/utils/api-types';
 import { apiClient } from '@/utils/api';
 import type { Ref, ComputedRef } from 'vue';
 import type { RegisterData, InvitationVerificationResponse } from '../../types/auth';
@@ -108,16 +109,17 @@ export function useRegister(): UseRegisterReturn {
         }
       });
 
-      const response: InvitationVerificationResponse = await httpResponse.json();
+      const response = await httpResponse.json();
 
       if (response.success) {
         invitationVerified.value = true;
-        targetEmail.value = response.data.targetEmail;
+        targetEmail.value = response.data.targetEmail ?? undefined;
         verifiedInvitationCode.value = invitationCode.trim();
-        availableTags.value = response.data.availableTags || [];
+        // availableTags 不在這個端點的回傳裡（tags 系統已停用），原本永遠是 []
+        availableTags.value = [];
         return true;
       } else {
-        errorMessage.value = response.error?.message || '邀請碼驗證失敗';
+        errorMessage.value = apiErrorMessage(errorOf(response)) || '邀請碼驗證失敗';
         return false;
       }
     } catch (error) {
@@ -156,7 +158,7 @@ export function useRegister(): UseRegisterReturn {
         }
       });
 
-      const response: InvitationVerificationResponse = await httpResponse.json();
+      const response = await httpResponse.json();
 
       if (response.success) {
         invitationStatus.value = 'valid';
@@ -237,7 +239,7 @@ export function useRegister(): UseRegisterReturn {
         registrationComplete.value = true;
         return true;
       } else {
-        errorMessage.value = response.error?.message || '註冊失敗';
+        errorMessage.value = apiErrorMessage(errorOf(response)) || '註冊失敗';
         return false;
       }
     } catch (error) {

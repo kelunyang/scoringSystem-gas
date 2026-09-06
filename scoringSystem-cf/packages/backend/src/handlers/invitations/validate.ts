@@ -11,6 +11,20 @@ import { logGlobalOperation } from '../../utils/logging';
 /**
  * Verify invitation code for a specific email (step 1 of registration)
  */
+/** `invitation_codes_with_status` VIEW 的一列（這裡 SELECT *） */
+interface InvitationCodeRow {
+  invitationId: string;
+  invitationCode: string;
+  targetEmail: string | null;
+  expiryTime: number;
+  createdBy: string;
+  status: string;
+  /** JSON 字串 */
+  defaultTags: string | null;
+  /** JSON 字串 */
+  defaultGlobalGroups: string | null;
+}
+
 export async function verifyInvitationCode(
   env: Env,
   invitationCode: string,
@@ -53,7 +67,7 @@ export async function verifyInvitationCode(
       FROM invitation_codes_with_status
       WHERE invitationCode = ?
         AND status = 'active'
-    `).bind(formattedCode).first();
+    `).bind(formattedCode).first<InvitationCodeRow>();
 
     console.log('[Verify] Database query result:', invitation ? 'Found' : 'Not found');
     if (invitation) {

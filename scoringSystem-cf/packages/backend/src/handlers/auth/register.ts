@@ -47,7 +47,7 @@ export async function registerUser(
   data: RegistrationData,
   jwtSecret: string,
   sessionTimeout: number = 86400000
-): Promise<ApiResponse> {
+) {
   const db = env.DB;
   try {
     // Sanitize and validate input
@@ -57,7 +57,7 @@ export async function registerUser(
     const validation = validateRegistrationInput(sanitized);
     if (!validation.valid) {
       return {
-        success: false,
+        success: false as const,
         error: {
           code: ERROR_CODES.VALIDATION_ERROR,
           message: validation.error
@@ -69,7 +69,7 @@ export async function registerUser(
     const passwordValidation = validatePasswordStrength(sanitized.password);
     if (!passwordValidation.valid) {
       return {
-        success: false,
+        success: false as const,
         error: {
           code: ERROR_CODES.VALIDATION_ERROR,
           message: passwordValidation.errors.join(', ')
@@ -86,7 +86,7 @@ export async function registerUser(
 
     if (!invitationValidation.valid) {
       return {
-        success: false,
+        success: false as const,
         error: {
           code: ERROR_CODES.INVALID_INVITATION_CODE,
           message: invitationValidation.error
@@ -103,7 +103,7 @@ export async function registerUser(
     const emailExists = await checkEmailExists(db, sanitized.userEmail);
     if (emailExists) {
       return {
-        success: false,
+        success: false as const,
         error: {
           code: ERROR_CODES.EMAIL_TAKEN,
           message: 'Email is already registered'
@@ -169,7 +169,7 @@ export async function registerUser(
       // Handle UNIQUE constraint violation (race condition)
       if (isUniqueConstraintViolation(insertError, 'userEmail')) {
         return {
-          success: false,
+          success: false as const,
           error: {
             code: ERROR_CODES.EMAIL_TAKEN,
             message: 'Email is already registered'
@@ -248,7 +248,7 @@ export async function registerUser(
 
     // Return success with token
     return {
-      success: true,
+      success: true as const,
       data: {
         sessionId: token,
         user: {
@@ -272,7 +272,7 @@ export async function registerUser(
       error: error
     });
     return {
-      success: false,
+      success: false as const,
       error: {
         code: ERROR_CODES.INTERNAL_ERROR,
         message: 'An error occurred during registration. Please try again.'
@@ -481,12 +481,12 @@ async function checkEmailExists(
 export async function checkEmailAvailability(
   db: D1Database,
   email: string
-): Promise<ApiResponse> {
+) {
   try {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return {
-        success: false,
+        success: false as const,
         error: {
           code: ERROR_CODES.VALIDATION_ERROR,
           message: 'Invalid email format'
@@ -497,7 +497,7 @@ export async function checkEmailAvailability(
     const exists = await checkEmailExists(db, email);
 
     return {
-      success: true,
+      success: true as const,
       data: {
         userEmail: email,
         available: !exists
@@ -506,7 +506,7 @@ export async function checkEmailAvailability(
   } catch (error) {
     console.error('Check email availability error:', error);
     return {
-      success: false,
+      success: false as const,
       error: {
         code: ERROR_CODES.INTERNAL_ERROR,
         message: 'Failed to check email availability'

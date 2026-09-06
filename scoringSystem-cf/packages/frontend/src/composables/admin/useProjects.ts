@@ -14,6 +14,7 @@ import type { UseMutationReturnType } from '@tanstack/vue-query'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
 import { rpcClient } from '@/utils/rpc-client'
+import type { ApiInput } from '@/utils/api-types'
 
 // ============================================================================
 // Types
@@ -67,9 +68,15 @@ interface CloneProjectParams {
 }
 
 // Viewer types
+/**
+ * 專案觀看者的角色，取自 API schema 而不是自己寫 string——
+ * 後端只收 teacher／observer／member 三個值。
+ */
+export type ViewerRole = ApiInput<typeof rpcClient.api.projects.viewers.add.$post>['role']
+
 interface ViewerEntry {
   userEmail: string
-  role: string
+  role: ViewerRole
 }
 
 interface AddViewersBatchParams {
@@ -80,13 +87,13 @@ interface AddViewersBatchParams {
 interface AddSingleViewerParams {
   projectId: string
   userEmail: string
-  role: string
+  role: ViewerRole
 }
 
 interface UpdateViewerRoleParams {
   projectId: string
   userEmail: string
-  role: string
+  role: ViewerRole
 }
 
 interface RemoveViewerParams {
@@ -97,7 +104,7 @@ interface RemoveViewerParams {
 interface BatchUpdateViewerRolesParams {
   projectId: string
   userEmails: string[]
-  role: string
+  role: ViewerRole
 }
 
 interface BatchRemoveViewersParams {
@@ -106,15 +113,8 @@ interface BatchRemoveViewersParams {
 }
 
 // Stage types
-interface StageData {
-  stageName: string
-  description?: string
-  startTime: number
-  endTime: number
-  reportRewardPool?: number
-  commentRewardPool?: number
-  stageOrder?: number
-}
+/** 建立階段的請求形狀，從端點的 schema 推導 */
+type StageData = ApiInput<typeof rpcClient.api.stages.create.$post>['stageData']
 
 interface CreateStageParams {
   projectId: string
@@ -124,7 +124,7 @@ interface CreateStageParams {
 interface UpdateStageParams {
   projectId: string
   stageId: string
-  updates: Partial<StageData> & { status?: string }
+  updates: ApiInput<typeof rpcClient.api.stages.update.$post>['updates']
 }
 
 interface GetStageParams {

@@ -12,6 +12,7 @@
 
 import { Hono } from 'hono'
 import { z } from 'zod'
+import { zValidator } from '@hono/zod-validator'
 import { HTTPException } from 'hono/http-exception'
 import type { Context } from 'hono'
 import type { SqlBindValue } from '@/types'
@@ -75,7 +76,7 @@ export const scoringConfigRouter = new Hono<{ Bindings: Env }>()
 // Get effective scoring configuration for a project
 // ============================================================================
 
-scoringConfigRouter.get('/:projectId/scoring-config', async (c: Context<{ Bindings: Env }>) => {
+  .get('/:projectId/scoring-config', async (c: Context<{ Bindings: Env }>) => {
   try {
     const { projectId } = c.req.param()
 
@@ -115,7 +116,9 @@ scoringConfigRouter.get('/:projectId/scoring-config', async (c: Context<{ Bindin
 // Update project-level scoring configuration
 // ============================================================================
 
-scoringConfigRouter.put('/:projectId/scoring-config', async (c: Context<{ Bindings: Env }>) => {
+  // 用 zValidator 而不是在 handler 裡自己 parse：RPC 的請求型別是從
+  // validator 推導的，手動 parse 等於契約上沒有宣告 body，前端傳什麼都不會被檢查。
+  .put('/:projectId/scoring-config', zValidator('json', updateProjectConfigSchema), async (c) => {
   try {
     const { projectId } = c.req.param()
 
@@ -124,9 +127,7 @@ scoringConfigRouter.put('/:projectId/scoring-config', async (c: Context<{ Bindin
       throw new HTTPException(400, { message: 'Invalid project ID format' })
     }
 
-    // Parse and validate request body
-    const body = await c.req.json()
-    const validated = updateProjectConfigSchema.parse(body)
+    const validated = c.req.valid('json')
 
     // Additional validation for weight sum
     if (validated.studentRankingWeight !== undefined && validated.teacherRankingWeight !== undefined) {
@@ -226,7 +227,7 @@ scoringConfigRouter.put('/:projectId/scoring-config', async (c: Context<{ Bindin
 // Get system KV defaults (used for new project creation drawer)
 // ============================================================================
 
-scoringConfigRouter.get('/system/scoring-defaults', async (c: Context<{ Bindings: Env }>) => {
+  .get('/system/scoring-defaults', async (c: Context<{ Bindings: Env }>) => {
   try {
     const defaults = await getSystemScoringDefaults(c.env.KV, c.env)
 
@@ -245,7 +246,7 @@ scoringConfigRouter.get('/system/scoring-defaults', async (c: Context<{ Bindings
 // Update system KV defaults (admin only - should add permission check)
 // ============================================================================
 
-scoringConfigRouter.put('/system/scoring-defaults', async (c: Context<{ Bindings: Env }>) => {
+  .put('/system/scoring-defaults', async (c: Context<{ Bindings: Env }>) => {
   try {
     // Parse and validate request body
     const body = await c.req.json()

@@ -418,14 +418,15 @@ export function getHttpStatus(errorCode: string): number {
  * // Error response with custom status
  * return jsonResponse(errorResponse('CUSTOM', 'Custom error'), 418);
  */
-export function jsonResponse(
-  response: ApiResponse,
+export function jsonResponse<R extends ApiResponse<unknown>>(
+  response: R,
   statusOverride?: number
-): Response {
+): JsonResponse<R | ApiErrorResponse> {
   // Handle invalid response objects
+  let body: ApiResponse<unknown> = response;
   if (!response || typeof response !== 'object') {
     console.error('Invalid response object passed to jsonResponse:', response);
-    response = {
+    body = {
       success: false,
       error: {
         code: ERROR_CODES.INTERNAL_ERROR,
@@ -434,14 +435,14 @@ export function jsonResponse(
     };
   }
 
-  const status = statusOverride || (response.success ? 200 : getHttpStatus(response.error?.code || ERROR_CODES.INTERNAL_ERROR));
+  const status = statusOverride || (body.success ? 200 : getHttpStatus(body.error?.code || ERROR_CODES.INTERNAL_ERROR));
 
-  return new Response(JSON.stringify(response), {
+  return new Response(JSON.stringify(body), {
     status,
     headers: {
       'Content-Type': 'application/json'
     }
-  });
+  }) as JsonResponse<R | ApiErrorResponse>;
 }
 
 /**
