@@ -2,6 +2,16 @@ import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { rpcClient } from '@/utils/rpc-client'
 import { apiErrorMessage, errorOf } from '@/utils/api-types'
+import type { ApiData } from '@/utils/api-types'
+
+/** 專案存取者清單的一列 */
+type ProjectViewer = ApiData<typeof rpcClient.api.projects.viewers.list.$post>[number]
+
+/** 使用者搜尋結果的一列 */
+type SearchedUser = ApiData<typeof rpcClient.api.users.search.$post>[number]
+
+/** 存取者角色（shared/src/schemas/projects.ts:147） */
+type ViewerRole = 'teacher' | 'observer' | 'member'
 
 /**
  * Composable for managing project viewers (access control)
@@ -9,12 +19,12 @@ import { apiErrorMessage, errorOf } from '@/utils/api-types'
  */
 export function useProjectViewers() {
   // State
-  const projectViewers = ref<any[]>([])
+  const projectViewers = ref<ProjectViewer[]>([])
   const loadingViewers = ref(false)
   const searchingUsers = ref(false)
-  const searchResults = ref<any[]>([])
-  const selectedUsers = ref<any[]>([])
-  const selectedViewers = ref<any[]>([])
+  const searchResults = ref<SearchedUser[]>([])
+  const selectedUsers = ref<string[]>([])
+  const selectedViewers = ref<string[]>([])
 
   /**
    * Load project viewers for a specific project
@@ -51,7 +61,7 @@ export function useProjectViewers() {
    * Search for users by query (supports multiple lines)
    * @param {string} searchText - Search query text
    */
-  const searchUsers = async (searchText: any) => {
+  const searchUsers = async (searchText: string) => {
     if (!searchText.trim()) {
       ElMessage.warning('請輸入搜尋內容')
       return
@@ -63,8 +73,8 @@ export function useProjectViewers() {
       // 按行分割搜尋文字，支援多行輸入
       const searchQueries = searchText
         .split('\n')
-        .map((line: any) => line.trim())
-        .filter((line: any) => line.length > 0)
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
 
       if (searchQueries.length === 0) {
         ElMessage.warning('請輸入搜尋內容')
@@ -73,8 +83,8 @@ export function useProjectViewers() {
       }
 
       // 對每一行執行搜尋
-      const allResults = []
-      const errors = []
+      const allResults: SearchedUser[] = []
+      const errors: string[] = []
 
       for (const query of searchQueries) {
         try {
@@ -95,8 +105,8 @@ export function useProjectViewers() {
       }
 
       // 去重（基於 userEmail）
-      const uniqueResults = []
-      const seenEmails = new Set()
+      const uniqueResults: SearchedUser[] = []
+      const seenEmails = new Set<string>()
 
       for (const user of allResults) {
         if (!seenEmails.has(user.userEmail)) {
@@ -138,7 +148,12 @@ export function useProjectViewers() {
    * @param {string} role - Role to assign (teacher/observer/member)
    * @param {Function} onSuccess - Callback function on success
    */
-  const addSelectedViewers = async (projectId: string, userEmails: any, role: any, onSuccess: any) => {
+  const addSelectedViewers = async (
+    projectId: string,
+    userEmails: string[],
+    role: ViewerRole,
+    onSuccess?: () => void
+  ) => {
     if (userEmails.length === 0) {
       ElMessage.warning('請選擇要新增的使用者')
       return
@@ -226,7 +241,7 @@ export function useProjectViewers() {
    * @param {string} userEmail - User email
    * @param {string} newRole - New role
    */
-  const updateViewerRole = async (projectId: string, userEmail: string, newRole: any) => {
+  const updateViewerRole = async (projectId: string, userEmail: string, newRole: ViewerRole) => {
     if (!projectId) {
       ElMessage.error('未選擇專案')
       return
@@ -294,7 +309,7 @@ export function useProjectViewers() {
    * @param {Array<string>} userEmails - Array of user emails
    * @param {string} newRole - New role
    */
-  const batchUpdateRoles = async (projectId: string, userEmails: any, newRole: any) => {
+  const batchUpdateRoles = async (projectId: string, userEmails: string[], newRole: ViewerRole) => {
     if (userEmails.length === 0) {
       ElMessage.warning('請選擇要更新的存取者')
       return
@@ -359,7 +374,7 @@ export function useProjectViewers() {
    * @param {string} projectId - Project ID
    * @param {Array<string>} userEmails - Array of user emails
    */
-  const batchRemoveViewers = async (projectId: string, userEmails: any) => {
+  const batchRemoveViewers = async (projectId: string, userEmails: string[]) => {
     if (userEmails.length === 0) {
       ElMessage.warning('請選擇要刪除的存取者')
       return

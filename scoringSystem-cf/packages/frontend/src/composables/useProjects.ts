@@ -13,17 +13,25 @@ import { useQuery, useMutation, useQueryClient, type UseQueryReturnType } from '
 import { computed, type ComputedRef } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { apiErrorMessage, errorOf } from '@/utils/api-types'
+import type { ApiData } from '@/utils/api-types'
 import { ElMessage } from 'element-plus'
 import { useCurrentUser } from './useAuth'
-import type { Project, Stage } from '@/types'
+import type { Project } from '@/types'
 import type { ApiResponse } from '@/types'
 
 /**
  * Project with stages (extended type)
  */
-export interface ProjectWithStages extends Project {
-  stages?: Stage[]
-}
+/**
+ * `/projects/list-with-stages` 回的一個專案。
+ *
+ * 從端點推導，不再寫成 `extends Project`——那個實體型別有
+ * creatorId / creationTime / settings / lastActivityTime，這個端點都不回。
+ * 依呼叫者身分還會分成一般使用者與管理員兩種形狀（後端的
+ * ProjectWithDetails | AdminProjectListItem）。
+ */
+export type ProjectWithStages =
+  ApiData<typeof rpcClient.api.projects['list-with-stages']['$post']>['projects'][number]
 
 /**
  * Create project data
@@ -119,25 +127,16 @@ export function useProjectsWithStages(): UseQueryReturnType<ProjectWithStages[],
       const httpResponse = await rpcClient.api.projects['list-with-stages'].$post({
         json: { filters: {} }
       })
-      const response = await httpResponse.json() as ApiResponse<ProjectWithStages[] | { projects: ProjectWithStages[] }>
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '載入專案列表失敗')
       }
 
-      // Backend returns either:
-      // - Old format: { success: true, data: ProjectWithStages[] }
-      // - New format: { success: true, data: { projects: ProjectWithStages[], totalCount: n, ... } }
-      let projects: ProjectWithStages[]
-      if (Array.isArray(response.data)) {
-        // Old format: data is directly an array
-        projects = response.data
-      } else if (response.data && Array.isArray((response.data as any).projects)) {
-        // New format: data is an object with projects array
-        projects = (response.data as any).projects
-      } else {
-        projects = []
-      }
+      // 端點固定回 { projects, totalCount, limit, offset }
+      // （handlers/projects/list.ts:244），原本那條「舊格式是純陣列」的
+      // 分支永遠不會成立
+      const projects = response.data.projects
 
       console.log('🔍 useProjectsWithStages queryFn result:', { projects, count: projects.length })
 

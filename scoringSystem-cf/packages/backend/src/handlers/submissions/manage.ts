@@ -33,7 +33,7 @@ interface GroupSubmissionRow {
 }
 
 /** submissionapprovalvotes JOIN users 的一列。 */
-interface ApprovalVoteRow {
+export interface ApprovalVoteRow {
   voteId: string;
   submissionId: string;
   voterEmail: string;
@@ -797,6 +797,19 @@ export async function deleteSubmission(
  * Get participation confirmations (approval votes) for a submission
  * Used for group self-governance voting on participation proposals
  */
+/** submissionapprovalvotes JOIN users 的一列 */
+export interface ApprovalVoteRow {
+  voteId: string;
+  voterEmail: string;
+  agree: number;
+  comment: string | null;
+  createdTime: number;
+  voterDisplayName: string | null;
+  voterAvatarSeed: string | null;
+  voterAvatarStyle: string | null;
+  voterAvatarOptions: string | null;
+}
+
 export async function getParticipationConfirmations(
   env: Env,
   userEmail: string,
@@ -869,7 +882,7 @@ export async function getParticipationConfirmations(
       LEFT JOIN users u ON v.voterEmail = u.userEmail
       WHERE v.projectId = ? AND v.submissionId = ?
       ORDER BY v.createdTime ASC
-    `).bind(projectId, submissionId).all();
+    `).bind(projectId, submissionId).all<ApprovalVoteRow>();
 
     console.log('📊 [getParticipationConfirmations] Votes query result:', {
       hasResults: !!votes.results,

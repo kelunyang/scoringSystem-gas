@@ -12,6 +12,7 @@ export type {
   GlobalGroup,
   Member,
   Group,
+  GroupVotingData,
   Stage,
   StageSettings,
   Submission,

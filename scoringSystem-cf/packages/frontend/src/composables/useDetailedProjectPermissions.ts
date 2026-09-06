@@ -19,8 +19,19 @@
  * - Eliminates code duplication between components
  */
 
-import type { Project } from '@/types'
 import { hasProjectAdminRole } from './useProjectAdminRole'
+
+/**
+ * calculateProjectPermissions 從專案身上真正讀到的欄位。
+ * 呼叫端傳的是 /projects/list-with-stages 的清單項目（不是 Project 實體），
+ * 那個形狀沒有 creatorId / settings 之類的欄位。
+ */
+export interface PermissionProject {
+  createdBy?: string | null
+  viewerRole?: 'teacher' | 'observer' | 'member' | null
+  userGroups?: Array<{ groupId: string; role: string }>
+  groups?: Array<{ groupId: string; allowChange?: boolean }>
+}
 
 /**
  * Calculate permissions for a single project object
@@ -34,7 +45,7 @@ import { hasProjectAdminRole } from './useProjectAdminRole'
  * @returns {Object} Permissions object
  */
 export function calculateProjectPermissions(
-  project: Project,
+  project: PermissionProject,
   globalPermissions: string[] = [],
   currentUserId?: string | null
 ) {
@@ -61,7 +72,7 @@ export function calculateProjectPermissions(
   const hasGlobalAdmin = hasProjectAdminRole(
     globalPermissions,
     currentUserId,
-    project as { createdBy?: string | null }
+    project
   )
 
   if (hasGlobalAdmin) {

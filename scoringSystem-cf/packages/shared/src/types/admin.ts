@@ -417,20 +417,31 @@ export interface ResendBatchEmailsRequest {
 // Notification Types
 // ============================================================================
 
+/**
+ * 管理端通知清單的一列。欄位對照 notifications 資料表
+ * （migrations/0001_init_schema.sql:518），端點回的是 `SELECT *`。
+ * 原本宣告的 userId / message / isRead: boolean 資料表都沒有。
+ */
 export interface Notification {
   notificationId: string
-  userId: string
+  targetUserEmail: string
+  type: string
   title: string
-  message: string
-  type: 'info' | 'warning' | 'error' | 'success'
-  isRead: boolean
+  content: string | null
+  projectId: string | null
+  isRead: number
+  isDeleted: number
+  emailSent: number
   createdTime: number
-  /** 通知自帶的額外資料，只會序列化存起來。 */
-  metadata?: Record<string, unknown>
+  readTime: number | null
+  emailSentTime: number | null
+  /** DB 存的是 JSON 字串 */
+  metadata: string | null
 }
 
+/** 對照 ListAllNotificationsRequestSchema（schemas/admin.ts:379） */
 export interface NotificationListRequest {
-  userId?: string
+  targetUserEmail?: string
   isRead?: boolean
   type?: string
   limit?: number
@@ -439,8 +450,8 @@ export interface NotificationListRequest {
 
 export interface NotificationListResponse {
   notifications: Notification[]
-  total: number
-  unreadCount: number
+  /** 後端回的欄位名是 totalCount（handlers/notifications/admin.ts:112） */
+  totalCount: number
 }
 
 export interface NotificationStatisticsResponse {
@@ -449,22 +460,23 @@ export interface NotificationStatisticsResponse {
   byType: Record<string, number>
 }
 
+/**
+ * 對照 SendSingleNotificationRequestSchema（schemas/admin.ts:392）。
+ * 這個端點是「把已存在的通知寄成 email」，不是建立新通知。
+ */
 export interface SendNotificationRequest {
-  userId: string
-  title: string
-  message: string
-  type: 'info' | 'warning' | 'error' | 'success'
-  /** 通知自帶的額外資料，只會序列化存起來。 */
-  metadata?: Record<string, unknown>
+  notificationId: string
 }
 
+/**
+ * 對照 SendBatchNotificationsRequestSchema（schemas/admin.ts:402）。
+ * 注意它收的是**篩選條件**而不是通知 ID 清單——見 plan/issue.md #014。
+ */
 export interface SendBatchNotificationsRequest {
-  userIds: string[]
-  title: string
-  message: string
-  type: 'info' | 'warning' | 'error' | 'success'
-  /** 通知自帶的額外資料，只會序列化存起來。 */
-  metadata?: Record<string, unknown>
+  targetUserEmail?: string
+  type?: string
+  isRead?: boolean
+  limit?: number
 }
 
 export interface DeleteNotificationRequest {

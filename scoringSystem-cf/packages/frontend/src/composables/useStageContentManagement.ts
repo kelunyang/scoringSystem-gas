@@ -6,11 +6,11 @@
  * 負責階段報告、評論的加載與更新
  */
 
-import { computed } from 'vue'
+import { computed, type Ref } from 'vue'
 import { handleError, getErrorMessage } from '@/utils/errorHandler'
 import { rpcClient } from '@/utils/rpc-client'
 import { dedupRequest } from '@/utils/request-dedup'
-import type { Stage, Group, Submission } from '@/types'
+import type { Stage, Group, GroupVotingData } from '@/types'
 import type { StageListItem } from './useProjectDetail'
 import { apiErrorCode, apiErrorMessage } from '@/utils/api-types'
 import type { ApiData } from '@/utils/api-types'
@@ -20,6 +20,18 @@ import type { ApiData } from '@/utils/api-types'
  * （帶 replies / reactions / canBeVoted），和 shared 的 `Comment` 對不上。
  */
 export type StageThreadedComment = ApiData<typeof rpcClient.api.comments.stage.$post>['comments'][number]
+
+/** /projects/content 回的一筆成果提交 */
+type ProjectContentSubmission = NonNullable<
+  ApiData<typeof rpcClient.api.projects.content.$post>['submissions']
+>[number]
+
+/** useStageContentManagement 從專案資料上讀到的部分 */
+export interface StageContentProject {
+  groups?: Array<{ groupId: string; groupName?: string; name?: string }>
+  userGroups?: Array<{ groupId: string; userEmail: string; isActive?: number; role?: string }>
+  users?: Array<{ userEmail: string; displayName?: string | null }>
+}
 
 /**
  * Extended Stage type for frontend use with additional UI state
@@ -52,11 +64,14 @@ export type ExtendedStage = Omit<Stage, 'viewMode' | 'settings' | 'lastModifiedT
 
 /**
  * 階段內容管理 composable
- * @param {Ref<Object>} projectData - 專案數據 ref
- * @param {Ref<Object>} userData - 用戶數據 ref
- * @returns {Object} 階段內容管理函數
+ * @param projectData - 專案數據 ref（只讀 groups / userGroups / users）
+ * @param userData - 用戶數據 ref（只讀 userEmail）
+ * @returns 階段內容管理函數
  */
-export function useStageContentManagement(projectData: any, userData: any) {
+export function useStageContentManagement(
+  projectData: Ref<StageContentProject | null | undefined>,
+  userData: Ref<{ email?: string; userEmail?: string } | null | undefined>
+) {
   console.log('🔧 [useStageContentManagement] composable 初始化')
 
   /**
@@ -84,7 +99,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
     }
 
     // 只返回當前登入用戶的 active 組別
-    const groups = projectData.value.userGroups.filter((ug: any) =>
+    const groups = projectData.value.userGroups.filter(ug =>
       ug.isActive && ug.userEmail === currentUserEmail
     )
 
@@ -228,7 +243,11 @@ export function useStageContentManagement(projectData: any, userData: any) {
    * @param {string} stageId - 階段 ID
    * @param {Object} groupData - 群組數據
    */
-  async function loadGroupVotingData(projectId: string, stageId: string, groupData: any) {
+  async function loadGroupVotingData(
+    projectId: string,
+    stageId: string,
+    groupData: { groupId: string; submissionId?: string; votingData?: GroupVotingData | null }
+  ) {
     if (!groupData.submissionId) {
       console.log(`⏭️ 群組 ${groupData.groupId} 沒有 submissionId，跳過載入投票數據`)
       return
@@ -897,7 +916,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
    * @param {Array} submissions - 提交記錄陣列
    * @returns {Array} 群組陣列
    */
-  function processSubmissionsToGroups(submissions: any) {
+  function processSubmissionsToGroups(submissions: ProjectContentSubmission[] | null | undefined) {
     if (!submissions || !Array.isArray(submissions)) {
       console.log('❌ processSubmissionsToGroups: 無效的 submissions 數據', submissions)
       return []
@@ -933,23 +952,22 @@ export function useStageContentManagement(projectData: any, userData: any) {
           participationProposal: submission.participationProposal || {},  // ✅ 保留此字段，確保有預設值
           submissionStatus: getSubmissionStatus(submission),
           status: submission.status,  // ✅ 從 submissions_with_status VIEW 獲取的狀態
-          reportContent: submission.contentMarkdown || submission.content || '',
+          reportContent: submission.contentMarkdown || '',
           showReport: false,
-          settlementRank: submission.settlementRank || '-',
-          voteRank: submission.voteRank || '-',
-          teacherRank: submission.teacherRank || '-',
+          // 三個名次不在 /projects/content 的回應裡，稍後由
+          // loadStageRankings 從 /rankings/stage-rankings 補上
+          settlementRank: '-',
+          voteRank: '-',
+          teacherRank: '-',
           submissionId: submission.submissionId,
-          submittedAt: submission.submitTime || submission.submittedAt || 0,
-          submitTime: submission.submitTime || submission.submittedAt || 0,
-          rankingsLoading: !submission.voteRank && !submission.teacherRank,
-          votingData: null as any // Will be loaded later if user is a group member
+          submittedAt: submission.submitTime || 0,
+          submitTime: submission.submitTime || 0,
+          rankingsLoading: true,
+          votingData: null as GroupVotingData | null // Will be loaded later if user is a group member
         }
 
         console.log(`✅ 創建群組數據:`, groupData)
-        console.log(`🔍 [useStageContentManagement] 組別 ${groupInfo.groupName || groupId} 排名數據詳情:`, {
-          voteRank: submission.voteRank,
-          teacherRank: submission.teacherRank,
-          settlementRank: submission.settlementRank,
+        console.log(`🔍 [useStageContentManagement] 組別 ${groupInfo.groupName || groupId} 提交數據:`, {
           原始submission數據: {
             submissionId: submission.submissionId,
             groupId: submission.groupId,
@@ -965,7 +983,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
       } else {
         // ✅ 防禦性代碼：如果已存在，比較時間，保留最新的
         const existing = groupMap.get(groupId)
-        const currentTime = submission.submitTime || submission.submittedAt || 0
+        const currentTime = submission.submitTime || 0
         const existingTime = existing.submitTime || 0
 
         if (currentTime > existingTime) {
@@ -980,15 +998,16 @@ export function useStageContentManagement(projectData: any, userData: any) {
             participationProposal: submission.participationProposal || {},
             submissionStatus: getSubmissionStatus(submission),
             status: submission.status,  // ✅ 從 submissions_with_status VIEW 獲取的狀態
-            reportContent: submission.contentMarkdown || submission.content || '',
+            reportContent: submission.contentMarkdown || '',
             showReport: false,
-            settlementRank: submission.settlementRank || '-',
-            voteRank: submission.voteRank || '-',
-            teacherRank: submission.teacherRank || '-',
+            // 同上：名次稍後由 loadStageRankings 補上
+            settlementRank: '-',
+            voteRank: '-',
+            teacherRank: '-',
             submissionId: submission.submissionId,
             submittedAt: currentTime,
             submitTime: currentTime,
-            rankingsLoading: !submission.voteRank && !submission.teacherRank
+            rankingsLoading: true
           }
 
           groupMap.set(groupId, groupData)
@@ -1015,21 +1034,21 @@ export function useStageContentManagement(projectData: any, userData: any) {
     }
 
     // 找到群組資訊
-    const group = projectData.value.groups.find((g: Group) => g.groupId === groupId)
+    const group = projectData.value.groups.find(g => g.groupId === groupId)
     if (!group) {
       console.warn('⚠️ getGroupInfo: 找不到群組', {
         groupId,
-        availableGroups: projectData.value.groups.map((g: Group) => g.groupId)
+        availableGroups: projectData.value.groups.map(g => g.groupId)
       })
       return { memberNames: [] }
     }
 
     // 找到群組成員
     const members = projectData.value.userGroups
-      .filter((ug: any) => ug.groupId === groupId && ug.isActive)
-      .map((ug: any) => {
+      .filter(ug => ug.groupId === groupId && ug.isActive)
+      .map(ug => {
         // 從 users 資料中找到對應的使用者，取得 displayName
-        const user = projectData.value.users?.find((u: any) => u.userEmail === ug.userEmail)
+        const user = projectData.value?.users?.find(u => u.userEmail === ug.userEmail)
         return user?.displayName || ug.userEmail.split('@')[0]
       })
 
@@ -1046,7 +1065,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
    * @param {Object} submission - 提交記錄
    * @returns {Object} 狀態對象
    */
-  function getSubmissionStatus(submission: Submission) {
+  function getSubmissionStatus(submission: { submitTime?: number; submissionTime?: number; deadline?: number }) {
     const submittedTime = submission.submitTime || submission.submissionTime
     if (!submittedTime) {
       return { type: 'not-submitted', text: '未提交' }

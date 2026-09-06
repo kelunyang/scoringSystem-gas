@@ -112,9 +112,10 @@ export interface Event {
   projectName?: string
   ipAddress?: string
   reason?: string
-  context?: any
+  /** 事件的原始 context，形狀依 action 而異，畫面上只做 JSON 呈現 */
+  context?: unknown
   date?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /**

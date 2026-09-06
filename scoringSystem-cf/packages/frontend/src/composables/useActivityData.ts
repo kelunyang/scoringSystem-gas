@@ -31,7 +31,7 @@ export interface ActivityEvent {
   ipAddress?: string
   reason?: string
   date?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export interface ActivityData {

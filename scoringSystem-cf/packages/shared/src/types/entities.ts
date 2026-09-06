@@ -236,7 +236,8 @@ export interface Group {
   teacherRankData?: RankingDisplayData | null;
   finalSettlementRank?: number | null;
   earnedPoints?: number | null;
-  memberNames?: string | string[];
+  /** 前端一律裝成員顯示名的陣列；後端存的 JSON 字串在 handler 就 parse 掉了 */
+  memberNames?: string[];
   reportContent?: string;
   participationPercentages?: Record<string, number>;
   submittedAt?: number;

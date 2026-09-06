@@ -16,26 +16,6 @@ import { apiErrorMessage, errorOf } from '@/utils/api-types'
 
 // ===== 类型定义 =====
 
-export interface SubmissionVersion {
-  submissionId: string
-  stageId: string
-  groupId: string
-  contentMarkdown: string
-  actualAuthors: string[]
-  participationProposal: Record<string, number>  // email -> ratio (0-1)
-  submitTime: string
-  status: 'submitted' | 'approved' | 'withdrawn'
-  updatedAt: string
-  withdrawnTime?: string
-  withdrawnBy?: string
-  groupName: string
-  submitterEmail: string
-  submitterDisplayName: string
-  submitterAvatarSeed?: string
-  submitterAvatarStyle?: string
-  submitterAvatarOptions?: string
-}
-
 export interface VotingHistoryVersion {
   submissionId: string
   status: 'submitted' | 'approved' | 'withdrawn'
@@ -69,32 +49,6 @@ export interface VoteRecord {
   voterAvatarOptions?: string
   agree: boolean
   createdTime: string
-}
-
-export interface VersionsResponse {
-  success: boolean
-  data?: {
-    versions: SubmissionVersion[]
-    metadata?: {
-      totalVersions: number
-      activeVersion?: string
-    }
-  }
-  error?: {
-    message: string
-  }
-}
-
-export interface VotingHistoryResponse {
-  success: boolean
-  data?: {
-    groupId: string
-    stageId: string
-    versions: VotingHistoryVersion[]
-  }
-  error?: {
-    message: string
-  }
 }
 
 export interface VoteSubmitResponse {

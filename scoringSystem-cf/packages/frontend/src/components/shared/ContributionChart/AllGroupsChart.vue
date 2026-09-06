@@ -15,7 +15,7 @@ import { ref, watch, nextTick, onMounted } from 'vue'
 import type { Ref } from 'vue'
 import * as d3 from 'd3'
 import { useD3Chart } from '@/composables/useD3Chart'
-import { usePointCalculation, type ScoringMember } from '@/composables/usePointCalculation'
+import { usePointCalculation, type ScoringMember, type ScoringGroup } from '@/composables/usePointCalculation'
 import { useChargingAnimation, type ChargingUnit } from '@/composables/useChargingAnimation'
 import type { GroupClickData } from '@/types/components'
 
@@ -44,7 +44,13 @@ export interface Props {
   simulatedRank: number
   simulatedGroupCount: number
   reportReward?: number
-  allGroups?: Group[]
+  /**
+   * 兩種模式共用這個 prop：
+   * - 結算模式（selectedMembers 空）：已算好的 `Group[]`，直接畫。
+   * - 模擬模式：只當作「還有哪些組」的參考，交給 calculateAllGroupsScoring，
+   *   此時呼叫端傳的是 /projects/core 的組（沒有 rank / members）。
+   */
+  allGroups?: Array<Group | ScoringGroup>
   currentGroupId?: string | null
   totalProjectGroups: number
   currentGroupLabel?: string
@@ -142,7 +148,8 @@ function renderChart(): void {
           chartContainer.value.appendChild(emptyState)
           return
         }
-        allGroupsData = props.allGroups as Group[]  // Use pre-calculated settlement data
+        // 結算模式的呼叫端傳的一定是算好的 Group[]（帶 rank 與 members）
+        allGroupsData = props.allGroups as Group[]
       } else {
         // Simulation mode: calculate scoring from selectedMembers
         allGroupsData = calculateAllGroupsScoring(
@@ -341,14 +348,15 @@ function renderChart(): void {
 
           // Find all members of this group
           const groupMembers = allPeople.filter(p => p.rank === d.person.rank)
-          const groupData = props.allGroups.find(g => g.groupId === d.person.groupId)
 
           emit('group-click', {
             groupId: d.person.groupId,
             groupName: d.person.groupName,
             rank: d.person.rank,
             points: d.person.points,
-            members: groupData?.members || [],
+            // 從已展開的 allPeople 取，欄位齊全；原本讀 props.allGroups
+            // 的成員在模擬模式下形狀是不完整的
+            members: allPeople.filter(p => p.groupId === d.person.groupId),
             allGroupMembers: groupMembers
           })
         })
@@ -407,14 +415,13 @@ function renderChart(): void {
               .on('click', () => {
                 // Get the first person from this rank to extract group info
                 const firstPerson = rankPeople[0]
-                const groupData = props.allGroups.find(g => g.groupId === firstPerson.groupId)
 
                 emit('group-click', {
                   groupId: firstPerson.groupId,
                   groupName: firstPerson.groupName,
                   rank: rank,
                   points: rankPeople.reduce((sum, p) => sum + p.points, 0),
-                  members: groupData?.members || [],
+                  members: allPeople.filter(p => p.groupId === firstPerson.groupId),
                   allGroupMembers: rankPeople
                 })
               })
@@ -493,14 +500,13 @@ function renderChart(): void {
             .append('title')
             .text(group.groupName)
             .on('click', () => {
-              const groupData = props.allGroups.find(g => g.groupId === group.groupId)
-
               emit('group-click', {
                 groupId: group.groupId,
                 groupName: group.groupName,
                 rank: group.rank,
                 points: group.people.reduce((sum, p) => sum + p.points, 0),
-                members: groupData?.members || [],
+                // 同上：用已展開的資料，不讀形狀不完整的 props.allGroups
+                members: group.people,
                 allGroupMembers: group.people
               })
             })

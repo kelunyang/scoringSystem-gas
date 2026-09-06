@@ -17,22 +17,31 @@ import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'
 import { useCurrentUser } from '@/composables/useAuth'
 import { apiErrorMessage, errorOf } from '@/utils/api-types'
+import type { SendBatchNotificationsRequest } from '@repo/shared/types/admin'
 
 // ============================================================================
 // Types
 // ============================================================================
 
+/**
+ * 管理端看到的通知。欄位對照 notifications 資料表
+ * （migrations/0001_init_schema.sql:518），端點是 `SELECT *`。
+ * 原本這裡寫的是 userId / message / createdAt，資料表沒有那些欄位。
+ */
 export interface AdminNotification {
   notificationId: string
-  userId: string
-  displayName?: string
+  targetUserEmail: string
+  type: string
   title: string
-  message: string
-  type: 'info' | 'success' | 'warning' | 'error'
-  isRead: boolean
-  createdAt: number
-  readAt?: number
-  metadata?: Record<string, unknown>
+  content: string | null
+  projectId: string | null
+  isRead: number
+  isDeleted: number
+  emailSent: number
+  createdTime: number
+  readTime: number | null
+  emailSentTime: number | null
+  metadata: string | null
 }
 
 export interface NotificationFilters {
@@ -120,13 +129,13 @@ export function useAdminNotifications(
       if (filters.startTime) queryParams.startTime = filters.startTime
       if (filters.endTime) queryParams.endTime = filters.endTime
 
-      const response = await adminApi.notifications.list(queryParams as any)
+      const response = await adminApi.notifications.list(queryParams)
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '載入通知列表失敗')
       }
 
-      const data = response.data as any
+      const data = response.data
       const notifications = data?.notifications || []
       const totalCount = data?.totalCount || 0
       const currentOffset = pageParam as number
@@ -195,7 +204,7 @@ export function useDeleteNotification(): UseMutationReturnType<
 
   return useMutation({
     mutationFn: async ({ notificationId }: DeleteNotificationParams) => {
-      const response = await adminApi.notifications.delete({ notificationId } as any)
+      const response = await adminApi.notifications.delete({ notificationId })
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '刪除通知失敗')
@@ -229,7 +238,7 @@ export function useSendNotificationEmail(): UseMutationReturnType<
 
   return useMutation({
     mutationFn: async ({ notificationId }: SendNotificationEmailParams) => {
-      const response = await adminApi.notifications.sendSingle({ notificationId } as any)
+      const response = await adminApi.notifications.sendSingle({ notificationId })
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '發送郵件失敗')
@@ -269,7 +278,12 @@ export function useSendBatchNotificationEmails(): UseMutationReturnType<
 
   return useMutation({
     mutationFn: async ({ notificationIds }: SendBatchNotificationEmailsParams) => {
-      const response = await adminApi.notifications.sendBatch({ notificationIds } as any)
+      // TODO(plan/issue.md #014)：send-batch 端點收的是篩選條件，不是通知 ID
+      // 清單。這裡送的 notificationIds 會被 Zod 剝掉，實際上會依「無篩選」
+      // 寄出一整批。行為修正需要改端點，先保留現狀並標記。
+      const response = await adminApi.notifications.sendBatch(
+        { notificationIds } as unknown as SendBatchNotificationsRequest
+      )
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '批量發送郵件失敗')

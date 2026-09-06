@@ -95,7 +95,7 @@ export function useAIProviders(): UseQueryReturnType<AIProvidersResponse, Error>
       const httpResponse = await rpcClient.api.system['ai-providers'].list.$post({
         json: {}
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '載入 AI 服務列表失敗')
@@ -130,13 +130,13 @@ export function useCreateAIProvider(): UseMutationReturnType<
       const httpResponse = await rpcClient.api.system['ai-providers'].create.$post({
         json: params
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '新增 AI 服務失敗')
       }
 
-      return response.data as AIProviderPublic
+      return response.data.provider
     },
     onSuccess: () => {
       ElMessage.success('AI 服務已新增')
@@ -170,13 +170,13 @@ export function useUpdateAIProvider(): UseMutationReturnType<
       const httpResponse = await rpcClient.api.system['ai-providers'].update.$post({
         json: params
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '更新 AI 服務失敗')
       }
 
-      return response.data as AIProviderPublic
+      return response.data.provider
     },
     onSuccess: (_data, variables) => {
       // Only show message for non-toggle updates
@@ -213,13 +213,13 @@ export function useToggleAIProvider(): UseMutationReturnType<
       const httpResponse = await rpcClient.api.system['ai-providers'].update.$post({
         json: params
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '更新 AI 服務狀態失敗')
       }
 
-      return response.data as AIProviderPublic
+      return response.data.provider
     },
     onSuccess: (_data, variables) => {
       ElMessage.success(`AI 服務已${variables.enabled ? '啟用' : '停用'}`)
@@ -253,7 +253,7 @@ export function useDeleteAIProvider(): UseMutationReturnType<
       const httpResponse = await rpcClient.api.system['ai-providers'].delete.$post({
         json: { providerId }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '刪除 AI 服務失敗')
@@ -289,7 +289,7 @@ export function useTestAIProvider(): UseMutationReturnType<
       const httpResponse = await rpcClient.api.system['ai-providers'].test.$post({
         json: { providerId }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '連線測試失敗')
@@ -323,7 +323,7 @@ export function useAIPrompts(): UseQueryReturnType<AIPromptsConfig, Error> {
       const httpResponse = await rpcClient.api.system['ai-prompts'].get.$post({
         json: {}
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '載入 AI 評分標準失敗')
@@ -358,7 +358,7 @@ export function useUpdateAIPrompts(): UseMutationReturnType<
       const httpResponse = await rpcClient.api.system['ai-prompts'].update.$post({
         json: params
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '儲存 AI 評分標準失敗')

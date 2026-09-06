@@ -29,7 +29,7 @@
             clearable
             style="width: 200px;"
           >
-            <el-option label="全部群組" :value="null as any" />
+            <el-option label="全部群組" :value="''" />
             <el-option
               v-for="group in availableGroups"
               :key="group.groupId"
@@ -69,34 +69,34 @@
         <div class="user-list">
           <div
             v-for="user in filteredUsers"
-            :key="(user as any).userEmail"
+            :key="user.userEmail"
             class="user-item"
-            @click="toggleUser((user as any).userEmail)"
+            @click="toggleUser(user.userEmail)"
           >
             <el-checkbox
-              :model-value="selectedUsers.includes((user as any).userEmail)"
-              @click.stop="toggleUser((user as any).userEmail)"
+              :model-value="selectedUsers.includes(user.userEmail)"
+              @click.stop="toggleUser(user.userEmail)"
             />
 
             <div class="user-avatar">
               <img
-                v-if="(user as any).avatarSeed"
+                v-if="user.avatarSeed"
                 :src="generateAvatarUrl(user)"
-                :alt="(user as any).displayName"
+                :alt="user.displayName ?? user.userEmail"
               />
               <i v-else class="fas fa-user-circle default-avatar"></i>
             </div>
 
             <div class="user-info">
-              <div class="user-name">{{ (user as any).displayName || (user as any).userEmail }}</div>
-              <div class="user-email">{{ (user as any).userEmail }}</div>
+              <div class="user-name">{{ user.displayName || user.userEmail }}</div>
+              <div class="user-email">{{ user.userEmail }}</div>
               <div class="user-groups">
                 <span
-                  v-for="group in getUserGroups((user as any).userEmail)"
-                  :key="(group as any).groupId"
+                  v-for="group in getUserGroups(user.userEmail)"
+                  :key="group.groupId"
                   class="group-tag"
                 >
-                  {{ (group as any).groupName }}
+                  {{ group.groupName }}
                 </span>
               </div>
             </div>
@@ -152,9 +152,9 @@
           >
             <el-option
               v-for="stage in stages"
-              :key="(stage as any).stageId"
-              :label="`${(stage as any).stageName} (階段 ${(stage as any).stageOrder})`"
-              :value="(stage as any).stageId"
+              :key="stage.stageId"
+              :label="`${stage.stageName} (階段 ${stage.stageOrder})`"
+              :value="stage.stageId"
             />
           </el-select>
         </div>
@@ -227,8 +227,10 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { CheckboxValueType } from 'element-plus'
 import { rpcClient } from '@/utils/rpc-client'
 import { apiErrorMessage, errorOf } from '@/utils/api-types'
+import type { ApiData } from '@/utils/api-types'
 import { generateAvatarUrl } from '@/utils/walletHelpers'
 import { getErrorMessage } from '@/utils/errorHandler'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
@@ -238,31 +240,21 @@ import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 // Drawer Breadcrumb
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 
-const props = defineProps({
-  visible: {
-    type: Boolean,
-    required: true
-  },
-  projectId: {
-    type: String,
-    required: true
-  },
-  projectUsers: {
-    type: Array,
-    default: () => []
-  },
-  projectGroups: {
-    type: Array,
-    default: () => []
-  },
-  userGroups: {
-    type: Array,
-    default: () => []
-  },
-  stages: {
-    type: Array,
-    default: () => []
-  }
+/** 資料都來自 /projects/core，型別從端點推導 */
+type ProjectCore = ApiData<typeof rpcClient.api.projects.core.$post>
+
+const props = withDefaults(defineProps<{
+  visible: boolean
+  projectId: string
+  projectUsers?: ProjectCore['users']
+  projectGroups?: ProjectCore['groups']
+  userGroups?: ProjectCore['userGroups']
+  stages?: Array<{ stageId: string; stageName: string; stageOrder: number }>
+}>(), {
+  projectUsers: () => [],
+  projectGroups: () => [],
+  userGroups: () => [],
+  stages: () => []
 })
 
 const emit = defineEmits(['update:visible', 'success'])
@@ -274,7 +266,7 @@ const drawerVisible = computed({
 })
 
 // Filter states
-const selectedGroupFilter = ref(null)
+const selectedGroupFilter = ref('')
 const searchText = ref('')
 
 // Selection states
@@ -298,8 +290,8 @@ const submitProgress = computed(() => {
 // Available groups (unique groups from userGroups)
 const availableGroups = computed(() => {
   const groupMap = new Map()
-  ;(props.userGroups as any[]).forEach((ug: any) => {
-    const group = (props.projectGroups as any[]).find((g: any) => g.groupId === ug.groupId)
+  props.userGroups.forEach(ug => {
+    const group = props.projectGroups.find(g => g.groupId === ug.groupId)
     if (group && !groupMap.has(group.groupId)) {
       groupMap.set(group.groupId, group)
     }
@@ -309,20 +301,20 @@ const availableGroups = computed(() => {
 
 // Filtered users based on group and search
 const filteredUsers = computed(() => {
-  let users = props.projectUsers as any[]
+  let users: ProjectCore['users'] = [...props.projectUsers]
 
   // Filter by group
   if (selectedGroupFilter.value) {
-    const usersInGroup = (props.userGroups as any[])
-      .filter((ug: any) => ug.groupId === selectedGroupFilter.value)
-      .map((ug: any) => ug.userEmail)
-    users = users.filter((u: any) => usersInGroup.includes(u.userEmail))
+    const usersInGroup = props.userGroups
+      .filter(ug => ug.groupId === selectedGroupFilter.value)
+      .map(ug => ug.userEmail)
+    users = users.filter(u => usersInGroup.includes(u.userEmail))
   }
 
   // Filter by search text
   if (searchText.value.trim()) {
     const search = searchText.value.trim().toLowerCase()
-    users = users.filter((u: any) =>
+    users = users.filter(u =>
       (u.displayName || '').toLowerCase().includes(search) ||
       (u.userEmail || '').toLowerCase().includes(search)
     )
@@ -333,11 +325,11 @@ const filteredUsers = computed(() => {
 
 // Get user's groups
 function getUserGroups(userEmail: string) {
-  const userGroupIds = (props.userGroups as any[])
-    .filter((ug: any) => ug.userEmail === userEmail)
-    .map((ug: any) => ug.groupId)
+  const userGroupIds = props.userGroups
+    .filter(ug => ug.userEmail === userEmail)
+    .map(ug => ug.groupId)
 
-  return (props.projectGroups as any[]).filter((g: any) => userGroupIds.includes(g.groupId))
+  return props.projectGroups.filter(g => userGroupIds.includes(g.groupId))
 }
 
 // Selection logic
@@ -347,9 +339,9 @@ const isIndeterminate = computed(() => {
   return selected > 0 && selected < total
 })
 
-function handleSelectAll(val: any) {
+function handleSelectAll(val: CheckboxValueType) {
   if (val) {
-    selectedUsers.value = (filteredUsers.value as any[]).map((u: any) => u.userEmail)
+    selectedUsers.value = filteredUsers.value.map(u => u.userEmail)
   } else {
     selectedUsers.value = []
   }
@@ -367,7 +359,7 @@ function toggleUser(userEmail: string) {
 // Watch filtered users to update selectAll state
 watch(filteredUsers, () => {
   const allSelected = filteredUsers.value.length > 0 &&
-    (filteredUsers.value as any[]).every((u: any) => selectedUsers.value.includes(u.userEmail))
+    filteredUsers.value.every(u => selectedUsers.value.includes(u.userEmail))
   selectAll.value = allSelected
 })
 
@@ -398,7 +390,7 @@ function handleClose() {
   awardAmount.value = 0
   awardReason.value = ''
   selectedStageId.value = null
-  selectedGroupFilter.value = null
+  selectedGroupFilter.value = ''
   searchText.value = ''
   confirmText.value = ''
 

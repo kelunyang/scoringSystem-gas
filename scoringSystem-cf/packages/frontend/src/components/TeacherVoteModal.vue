@@ -63,7 +63,7 @@
               :enable-grouping="true"
               @update:items="updateSubmissionRankings"
             >
-              <template #default="{ item }: { item: any }">
+              <template #default="{ item }: { item: SubmissionWithRanking }">
                 <div class="group-info" :class="{ 'not-in-version': isSubmissionNotInLatestVersion(item) }">
                   <div class="group-header">
                     <div class="group-name">{{ item.groupName }}</div>
@@ -98,7 +98,7 @@
                 :simulated-rank="1"
                 :simulated-group-count="rankedSubmissions.length"
                 :report-reward="submissionReward"
-                :all-groups="rankedSubmissionsAsGroupsWithPoints as any"
+                :all-groups="rankedSubmissionsAsGroupsWithPoints"
                 :current-group-id="null"
                 :total-project-groups="rankedSubmissions.length"
               />
@@ -157,9 +157,9 @@
                 author: 'authorDisplayName',
                 timestamp: 'createdTime'
               }"
-              :author-display-fn="(item: any) => `${item.authorDisplayName}(${item.authorEmail})`"
+              :author-display-fn="(item: CommentWithRanking) => `${item.authorDisplayName}(${item.authorEmail})`"
               :initial-selected="rankedComments"
-              @update:selected="rankedComments = $event as any"
+              @update:selected="rankedComments = $event"
               @duplicate-detected="$message.warning('同作者的評論只能選一個送入排序')"
               @max-limit-reached="$message.warning(`最多只能選擇 ${dynamicMaxCommentSelections} 個評論`)"
             />
@@ -171,7 +171,7 @@
                 :simulated-rank="1"
                 :simulated-group-count="rankedComments.length"
                 :report-reward="commentReward"
-                :all-groups="rankedCommentsAsGroups as any"
+                :all-groups="rankedCommentsAsGroups"
                 :current-group-id="null"
                 :total-project-groups="rankedComments.length"
               />
@@ -194,7 +194,7 @@
               :left-items="latestCommentRankings"
               :right-items="selectedCommentVersionRankings"
               item-key="commentId"
-              :item-display-fn="(item: any) => `${item.authorDisplayName}(${item.authorEmail})`"
+              :item-display-fn="(item: CommentWithRanking) => `${item.authorDisplayName}(${item.authorEmail})`"
             />
           </div>
       </div>
@@ -294,6 +294,7 @@ import AllGroupsChart from './shared/ContributionChart/AllGroupsChart.vue'
 import AIRankingSuggestionDrawer from './common/AIRankingSuggestionDrawer.vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { apiErrorMessage, errorOf } from '@/utils/api-types'
+import type { ApiData } from '@/utils/api-types'
 import { getErrorMessage } from '@/utils/errorHandler'
 import { useAuth } from '@/composables/useAuth'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
@@ -320,18 +321,28 @@ interface Submission {
   groupId: string
   groupName: string
   memberNames: string[]
-  reportContent: string
+  /** 後端欄位是 contentMarkdown，可為 NULL */
+  reportContent?: string | null
   submitTime: string | number
   status: string
 }
 
+/** /comments/stage 回的原始評論 */
+type StageComment = ApiData<typeof rpcClient.api.comments.stage.$post>['comments'][number]
+
+/**
+ * 送進排名的評論。由 /comments/stage 的原始評論加工而來
+ * （authorName → authorDisplayName、mentionedGroups 換成組名）。
+ */
 interface Comment {
   commentId: string
   content: string
   authorDisplayName: string
   authorEmail: string
-  createdTime: string
+  createdTime: number
   mentionedGroups?: string[]
+  replies?: Array<{ content?: string }>
+  reactions?: Array<{ type: string; count: number; users?: Array<string | null> }>
 }
 
 interface Version {
@@ -362,6 +373,7 @@ interface Group {
   groupId: string
   groupName?: string
   name?: string
+  memberNames?: string[]
 }
 
 interface Member {
@@ -374,6 +386,7 @@ interface GroupData {
   groupId: string
   groupName: string
   status: string
+  rank: number
   memberCount: number
   members: Array<{
     email: string
@@ -382,7 +395,6 @@ interface GroupData {
     contribution: number
     finalWeight: number
   }>
-  rank?: number
 }
 
 interface SubmissionWithRanking extends Submission {
@@ -409,8 +421,6 @@ export interface Props {
   currentUserGroupId?: string | null  // Current user's group ID
   // 優化：從父組件傳入已快取的數據，避免冗餘 API 調用
   cachedProjectGroups?: Group[]  // 專案組別（替代 projects.core API）
-  cachedSubmissions?: any[]      // 已批准的成果（替代 projects.content API）
-  cachedComments?: any[]         // 階段評論（替代 comments.stage API）
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -421,14 +431,12 @@ const props = withDefaults(defineProps<Props>(), {
   commentReward: 500,
   submissionReward: 1000,
   currentUserGroupId: null,
-  cachedProjectGroups: () => [],
-  cachedSubmissions: () => [],
-  cachedComments: () => []
+  cachedProjectGroups: () => []
 })
 
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void
-  (e: 'teacher-ranking-submitted', data: { success: boolean; type: string; data: any; needRefresh: boolean }): void
+  (e: 'teacher-ranking-submitted', data: { success: boolean; type: string; data: unknown; needRefresh: boolean }): void
 }>()
 
 // Vue 3 Best Practice: Use unified useAuth() composable
@@ -447,7 +455,7 @@ const tabOptions = [
 ]
 
 // 成果排名數據
-const rankedSubmissions: Ref<Submission[]> = ref([])
+const rankedSubmissions: Ref<SubmissionWithRanking[]> = ref([])
 const submissionVersions: Ref<Version[]> = ref([])
 const selectedSubmissionVersionId: Ref<string> = ref('')
 const latestSubmissionRankings: Ref<SubmissionWithRanking[]> = ref([])
@@ -456,7 +464,7 @@ const submittingSubmissions: Ref<boolean> = ref(false)
 const loadedSubmissionVersionId: Ref<string | null> = ref(null)
 
 // 評論排名數據
-const rankedComments: Ref<Comment[]> = ref([])
+const rankedComments: Ref<CommentWithRanking[]> = ref([])
 const allCommentsForRanking: Ref<Comment[]> = ref([])
 const commentVersions: Ref<Version[]> = ref([])
 const selectedCommentVersionId: Ref<string> = ref('')
@@ -533,8 +541,8 @@ const selectedSubmissionVersionRankings = computed((): SubmissionWithRanking[] =
     return {
       submissionId: ranking.targetId,
       groupId: ranking.groupId || '',
-      groupName: (ranking as any).groupName || submission?.groupName || `組別 ${ranking.groupId?.slice(-4)}`,
-      memberNames: (ranking as any).memberNames || submission?.memberNames || [],
+      groupName: ranking.groupName || submission?.groupName || `組別 ${ranking.groupId?.slice(-4)}`,
+      memberNames: ranking.memberNames || submission?.memberNames || [],
       reportContent: submission?.reportContent || '',
       submitTime: submission?.submitTime || '',
       status: submission?.status || '',
@@ -562,7 +570,7 @@ const selectedCommentVersionRankings = computed((): CommentWithRanking[] => {
       authorEmail: ranking.authorEmail || '',
       authorDisplayName: comment?.authorDisplayName || ranking.authorEmail || '',
       content: comment?.content || '',
-      createdTime: comment?.createdTime || '',
+      createdTime: comment?.createdTime ?? 0,
       mentionedGroups: comment?.mentionedGroups || [],
       rank: ranking.rank
     }
@@ -583,9 +591,12 @@ const teacherSelectedAuthorMembers = computed((): Member[] => {
 
 // 將教師排名的評論轉換為「組」資料
 const rankedCommentsAsGroups = computed((): GroupData[] => {
-  return rankedComments.value.map(comment => ({
+  // rank 是必要的：AllGroupsChart 拿它排序與上色，少了它會算出 NaN。
+  // 原本這裡沒給，只是被 `as any` 蓋住了。
+  return rankedComments.value.map((comment, index) => ({
     groupId: comment.authorEmail,
     groupName: comment.authorDisplayName,
+    rank: comment.rank ?? index + 1,
     status: 'active',
     memberCount: 1,
     members: [{
@@ -607,7 +618,7 @@ const commentReward = computed((): number => {
 const rankedSubmissionsAsGroups = computed(() => {
   const globalMinRatio = 5  // 統一基準單位 (5%)
 
-  return rankedSubmissions.value.map((submission: any, idx) => {
+  return rankedSubmissions.value.map((submission, idx) => {
     // 同名群組共用同一 dense rank，預覽點數時亦反映平手
     const rank = typeof submission.rank === 'number' ? submission.rank : idx + 1
     const memberNames = submission.memberNames || []
@@ -648,7 +659,7 @@ const rankedSubmissionsAsGroups = computed(() => {
 
 // 預計算點數分配（Settlement Mode）
 const rankedSubmissionsAsGroupsWithPoints = computed(() => {
-  const groups = rankedSubmissionsAsGroups.value as any[]
+  const groups = rankedSubmissionsAsGroups.value
   if (groups.length === 0) return []
 
   const groupCount = groups.length
@@ -656,8 +667,8 @@ const rankedSubmissionsAsGroupsWithPoints = computed(() => {
 
   // Calculate total weight
   let totalWeight = 0
-  groups.forEach((group: any) => {
-    group.members.forEach((member: any) => {
+  groups.forEach(group => {
+    group.members.forEach(member => {
       const finalWeight = member.baseWeightUnits * (rankWeights[group.rank] || 1)
       totalWeight += finalWeight
     })
@@ -671,9 +682,9 @@ const rankedSubmissionsAsGroupsWithPoints = computed(() => {
   const pointsPerWeight = submissionReward.value / totalWeight
 
   // Assign points and weights to all members
-  return groups.map((group: any) => ({
+  return groups.map(group => ({
     ...group,
-    members: group.members.map((member: any) => ({
+    members: group.members.map(member => ({
       ...member,
       rankMultiplier: rankWeights[group.rank] || 1,
       finalWeight: member.baseWeightUnits * (rankWeights[group.rank] || 1),
@@ -706,20 +717,27 @@ const submissionItemsForAI = computed(() => {
 })
 
 // AI 輔助建議：評論項目列表（包含完整 replies 和 reactions）
+/** 取某種 reaction 的按讚者名單，濾掉沒有暱稱的（後端給 null） */
+function reactionUsers(comment: Comment, type: string): string[] {
+  const users = comment.reactions?.find(r => r.type === type)?.users || []
+  return users.filter((u): u is string => typeof u === 'string')
+}
+
 // 傳入所有有效評論（canBeVoted=true），讓 AI 自行挑選和排名
 const commentItemsForAI = computed(() => {
-  return allCommentsForRanking.value.map((comment: any) => ({
+  return allCommentsForRanking.value.map((comment) => ({
     id: comment.commentId,
     content: comment.content || '',
     label: `${comment.authorDisplayName}(${comment.authorEmail})`,
     metadata: {
       authorName: comment.authorDisplayName,
       // Full reply content array
-      replies: comment.replies?.map((r: any) => r.content || r) || [],
+      replies: comment.replies?.map(r => r.content || '') || [],
       // Detailed reaction user lists
+      // users 裡的 null 是沒設暱稱的使用者，餵給 AI 沒有意義，先濾掉
       reactions: {
-        helpful: comment.reactions?.find((r: any) => r.type === 'helpful')?.users || [],
-        disagreed: comment.reactions?.find((r: any) => r.type === 'disagreed')?.users || []
+        helpful: reactionUsers(comment, 'helpful'),
+        disagreed: reactionUsers(comment, 'disagreed')
       }
     }
   }))
@@ -798,8 +816,8 @@ function loadSubmissionRankingsToEditor(version: Version): void {
       return {
         submissionId: ranking.targetId,
         groupId: ranking.groupId || '',
-        groupName: (ranking as any).groupName || '',
-        memberNames: (ranking as any).memberNames || [],
+        groupName: ranking.groupName || '',
+        memberNames: ranking.memberNames || [],
         reportContent: '',
         submitTime: '',
         status: ''
@@ -838,7 +856,7 @@ function loadCommentRankingsToEditor(version: Version): void {
         authorEmail: ranking.authorEmail || '',
         authorDisplayName: ranking.authorEmail || '',
         content: '',
-        createdTime: '',
+        createdTime: 0,
         mentionedGroups: []
       }
     })
@@ -874,8 +892,8 @@ async function loadVersionHistory(autoEnterPreview: boolean = false): Promise<vo
         latestSubmissionRankings.value = latestVersion.rankings.map(ranking => ({
           submissionId: ranking.targetId,
           groupId: ranking.groupId || '',
-          groupName: (ranking as any).groupName || '',
-          memberNames: (ranking as any).memberNames || [],
+          groupName: ranking.groupName || '',
+          memberNames: ranking.memberNames || [],
           reportContent: '',
           submitTime: '',
           status: '',
@@ -913,7 +931,7 @@ async function loadVersionHistory(autoEnterPreview: boolean = false): Promise<vo
             authorEmail: ranking.authorEmail || '',
             authorDisplayName: comment?.authorDisplayName || ranking.authorEmail || '',
             content: comment?.content || '',
-            createdTime: comment?.createdTime || '',
+            createdTime: comment?.createdTime ?? 0,
             mentionedGroups: comment?.mentionedGroups || [],
             rank: ranking.rank
           }
@@ -1092,7 +1110,7 @@ const latestVersionSubmissionIds = computed(
  * （例如清空投票後新通過組內共識的組，被補進可投票名單但尚未排入此版本）
  * 僅在「唯讀檢視模式」標記；一旦回到可編輯（重新投票）模式就不標記，因為使用者正在設定新排名。
  */
-function isSubmissionNotInLatestVersion(item: any): boolean {
+function isSubmissionNotInLatestVersion(item: { submissionId?: string } | null | undefined): boolean {
   return (
     (isSubmissionPreviewMode.value || isViewingOldSubmissionVersion.value) &&
     latestSubmissionRankings.value.length > 0 &&
@@ -1155,14 +1173,14 @@ async function loadTeacherVoteData(): Promise<void> {
       console.log('📊 [TeacherVoteModal] 從 API 載入提交數量:', submissionsResponse.data.submissions?.length || 0)
 
       rankedSubmissions.value = (submissionsResponse.data.submissions || [])
-        .map((sub: any) => {
+        .map(sub => {
           let groupName = sub.groupName
           let memberNames = sub.memberNames || []
 
           if (!groupName) {
             const group = props.stageGroups.find(g => g.groupId === sub.groupId)
             groupName = group?.groupName || 'Unknown Group'
-            memberNames = (group as any)?.memberNames || []
+            memberNames = group?.memberNames || []
           }
 
           return {
@@ -1175,7 +1193,7 @@ async function loadTeacherVoteData(): Promise<void> {
             status: sub.status
           }
         })
-        .sort((a: Submission, b: Submission) => {
+        .sort((a, b) => {
           const aTime = typeof a.submitTime === 'number' ? a.submitTime : 0
           const bTime = typeof b.submitTime === 'number' ? b.submitTime : 0
           return bTime - aTime
@@ -1186,7 +1204,7 @@ async function loadTeacherVoteData(): Promise<void> {
 
     // ===== 3. 載入評論數據 =====
     // 投票需要完整數據，始終調用 API（不依賴父組件可能被分頁的快取數據）
-    let commentsToProcess: any[] = []
+    let commentsToProcess: StageComment[] = []
 
     const httpResponse2 = await rpcClient.api.comments.stage.$post({
       json: {
@@ -1209,8 +1227,8 @@ async function loadTeacherVoteData(): Promise<void> {
       // 使用後端計算的 canBeVoted 欄位過濾
       // canBeVoted 包含所有資格檢查：非回覆、有 mention、作者是 group member、有 helpful reaction
       const validComments = commentsToProcess
-        .filter((comment: any) => comment.canBeVoted === true)
-        .map((comment: any) => {
+        .filter(comment => comment.canBeVoted === true)
+        .map(comment => {
           // 將 mentionedGroups ID 轉換為顯示名稱
           let mentionedGroups: string[] = []
           let mentionedGroupNames: string[]
@@ -1249,7 +1267,7 @@ async function loadTeacherVoteData(): Promise<void> {
             mentionedGroups: mentionedGroupNames
           }
         })
-        .sort((a: any, b: any) => b.createdTime - a.createdTime)
+        .sort((a, b) => b.createdTime - a.createdTime)
 
       allCommentsForRanking.value = [...validComments]
       rankedComments.value = []
@@ -1283,7 +1301,7 @@ function formatGroupMembers(group: Submission): string {
   return names
 }
 
-function formatSubmissionTime(timestamp: string): string {
+function formatSubmissionTime(timestamp: string | number): string {
   if (!timestamp) return ''
   return new Date(timestamp).toLocaleDateString('zh-TW') + ' ' +
          new Date(timestamp).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
@@ -1301,7 +1319,7 @@ async function submitSubmissionRankings(): Promise<void> {
   try {
     submittingSubmissions.value = true
 
-    const submissionRankings = rankedSubmissions.value.map((submission: any, index) => ({
+    const submissionRankings = rankedSubmissions.value.map((submission, index) => ({
       type: 'submission' as const,
       targetId: submission.submissionId,
       groupId: submission.groupId,

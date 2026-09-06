@@ -71,6 +71,7 @@ import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { rpcClient } from '@/utils/rpc-client'
 import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
+import type { ReplyCommentTarget } from '@/composables/useModalManager'
 import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 
 import { getErrorMessage } from '@/utils/errorHandler'
@@ -80,27 +81,19 @@ const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 // Props
 export interface Props {
   visible: boolean
-  originalComment: any | null
+  originalComment: ReplyCommentTarget | null
   projectId: string
   stageId: string
-  projectGroups?: any[]
-  projectUsers?: any[]
-  stageSubmissions?: any[]
-  currentUser?: any
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  originalComment: null,
-  projectGroups: () => [],
-  projectUsers: () => [],
-  stageSubmissions: () => [],
-  currentUser: null
+  originalComment: null
 })
 
 // Emits
 const emit = defineEmits<{
   'update:visible': [value: boolean]
-  'reply-submitted': [data: { success: boolean; data?: any; error?: any }]
+  'reply-submitted': [data: { success: boolean }]
 }>()
 
 // DrawerAlerts composable
@@ -158,17 +151,14 @@ async function submitReply() {
         commentData: {
           stageId: props.stageId,
           content: content.value.trim(),
-          parentCommentId: props.originalComment.commentId
+          parentCommentId: props.originalComment?.commentId ?? ''
         }
       }
     })
     const response = await httpResponse.json()
 
     if (response.success) {
-      emit('reply-submitted', {
-        success: true,
-        data: response.data
-      })
+      emit('reply-submitted', { success: true })
       ElMessage.success('回覆提交成功')
 
       // 延遲關閉drawer，確保父組件有時間處理
@@ -176,10 +166,7 @@ async function submitReply() {
         handleClose()
       }, 100)
     } else {
-      emit('reply-submitted', {
-        success: false,
-        error: response.error
-      })
+      emit('reply-submitted', { success: false })
       throw new Error(apiErrorMessage(errorOf(response)) || '回覆失敗')
     }
   } catch (error) {

@@ -33,10 +33,10 @@
           :versions="allVersions"
           :current-version-id="currentVersionId"
           version-id-key="submissionId"
-          created-time-key="submitTime"
-          display-name-key="submitterDisplayName"
-          :format-title-fn="(version: any, index: number) =>
-            index === allVersions.length - 1 ? '最終版本' : formatVersionStepTime(version.submitTime)"
+          created-time-key="submittedTime"
+          display-name-key="submitterName"
+          :format-title-fn="(version: SubmissionVersion, index: number) =>
+            index === allVersions.length - 1 ? '最終版本' : formatVersionStepTime(version.submittedTime)"
           @version-change="handleVersionChange"
         >
           <template #description="{ version }">
@@ -75,7 +75,7 @@
             版本差異比較
           </h3>
           <div class="submission-meta">
-            <span>舊版本 ({{ formatVersionStepTime(currentVersionData?.submitTime) }}) vs 最終版本</span>
+            <span>舊版本 ({{ formatVersionStepTime(currentVersionData?.submittedTime) }}) vs 最終版本</span>
             <span>提交者: {{ getSubmitterDisplayName(currentVersionData) }}</span>
           </div>
         </div>
@@ -139,7 +139,7 @@
                 舊版本參與度分配比較
               </h3>
               <div class="submission-meta">
-                <span>舊版本時間: {{ formatVersionStepTime(currentVersionData?.submitTime) }}</span>
+                <span>舊版本時間: {{ formatVersionStepTime(currentVersionData?.submittedTime) }}</span>
               </div>
             </div>
 
@@ -525,10 +525,10 @@
       groupName: allGroups?.find(g => g.groupId === currentGroupId)?.groupName || '我們組',
       finalRank: simulatedRank,
       totalGroups: simulatedGroupCount,
-      allocatedPoints: chartSelectedMembers.reduce((sum: number, m: any) => sum + (m.points || 0), 0),
-      members: chartSelectedMembers.map((m: any) => ({
+      allocatedPoints: chartSelectedMembers.reduce((sum, m) => sum + (m.points || 0), 0),
+      members: chartSelectedMembers.map(m => ({
         email: m.email,
-        displayName: m.displayName,
+        displayName: m.displayName ?? m.email,
         contribution: m.contribution,
         points: m.points || 0
       }))
@@ -574,6 +574,27 @@ import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { apiErrorCode, apiErrorMessage, errorOf } from '@/utils/api-types'
 import { getErrorMessage } from '@/utils/errorHandler'
+import type { ApiData } from '@/utils/api-types'
+import type { ModalGroupMember, ModalSubmissionData } from '@/composables/useModalManager'
+
+/** 投票送出後回報給父層的結果（ProjectDetail 讀 data.votingSummary） */
+interface GroupApprovalVotePayload {
+  success: boolean
+  data: {
+    votingSummary: {
+      isApproved: boolean
+      agreeVotes: number
+      totalMembers: number
+    }
+  }
+}
+
+/** /submissions/versions 回的一個版本 */
+type SubmissionVersion = ApiData<typeof rpcClient.api.submissions.versions.$post>['versions'][number]
+
+type ProjectCore = ApiData<typeof rpcClient.api.projects.core.$post>
+type ProjectCoreUsers = ProjectCore['users']
+type ProjectCoreGroups = ProjectCore['groups']
 
 // 註冊 markdown 語言以支援語法高亮
 hljs.registerLanguage('markdown', markdown)
@@ -588,15 +609,15 @@ export interface Props {
   submissionId: string
   projectTitle?: string
   stageTitle?: string
-  groupMembers?: any[]
-  submissionData?: any
+  groupMembers?: ModalGroupMember[]
+  submissionData?: ModalSubmissionData
   stageReward?: number
   totalProjectGroups: number
   totalActiveGroups?: number
-  user?: any
-  projectUsers?: any[]
+  user?: { userEmail?: string } | null
+  projectUsers?: ProjectCoreUsers
   currentGroupId?: string
-  allGroups?: any[]
+  allGroups?: ProjectCoreGroups
   stageDescription?: string
   readOnly?: boolean
 }
@@ -620,7 +641,7 @@ const props = withDefaults(defineProps<Props>(), {
  */
 const emit = defineEmits<{
   'update:visible': [value: boolean]
-  'vote-submitted': [data: any]
+  'vote-submitted': [data: GroupApprovalVotePayload]
   'submission-deleted': []
   'submission-restored': []
 }>()
@@ -694,10 +715,10 @@ const votingData = computed(() => {
   const currentUserVote = votes.find(v => v.voterEmail === currentUserEmail) || null
 
   // ✅ 從 votesSummary 讀取統計值（後端 voting-history API 結構）
-  const summary = (data as any).votesSummary || {}
+  const summary = data.votesSummary
   const totalMembers = Number(data.totalMembers) || 0
-  const agreeVotes = Number(summary.agreeVotes) || 0
-  const totalVotes = Number(summary.totalVotes) || 0
+  const agreeVotes = Number(summary?.agreeVotes) || 0
+  const totalVotes = Number(summary?.totalVotes) || 0
 
   return {
     votes: votes.map(v => ({ ...v })),
@@ -715,7 +736,7 @@ const votingData = computed(() => {
 // 版本相關
 const selectedVersion = ref('') // 當前選中的版本ID
 const currentVersionId = ref('') // 當前活躍版本ID
-const currentVersionData = ref<any>(null) // 當前版本詳細資料
+const currentVersionData = ref<SubmissionVersion | null>(null) // 當前版本詳細資料
 const showRestoreDialog = ref(false)
 const restoreConfirmText = ref('')
 const restoring = ref(false)
@@ -837,16 +858,16 @@ const finalVersionData = computed(() => {
 
 const diffHtml = computed(() => {
   // 支持 contentMarkdown (useVotingData API) 和 content (舊版 API) 兩種字段名
-  const oldVersion = currentVersionData.value as any
-  const newVersion = finalVersionData.value as any
-  const oldContent = oldVersion?.contentMarkdown || oldVersion?.content || ''
-  const newContent = newVersion?.contentMarkdown || newVersion?.content || ''
+  const oldVersion = currentVersionData.value
+  const newVersion = finalVersionData.value
+  const oldContent = oldVersion?.content || ''
+  const newContent = newVersion?.content || ''
 
   console.log('[DEBUG] diffHtml computing:', {
     oldVersionId: oldVersion?.submissionId,
     newVersionId: newVersion?.submissionId,
-    oldHasContentMarkdown: !!oldVersion?.contentMarkdown,
-    newHasContentMarkdown: !!newVersion?.contentMarkdown,
+    oldHasContent: !!oldVersion?.content,
+    newHasContent: !!newVersion?.content,
     oldContentLength: oldContent.length,
     newContentLength: newContent.length,
     isSameContent: oldContent === newContent
@@ -882,23 +903,19 @@ const isFinalVersionApproved = computed(() => {
   return finalVersion && finalVersion.status === 'approved'
 })
 
-const finalVersionContentMarkdown = computed(() => {
-  // 支持 contentMarkdown (useVotingData API) 和 content (舊版 API) 兩種字段名
-  const version = finalVersionData.value as any
-  return version?.contentMarkdown || version?.content || ''
-})
+const finalVersionContentMarkdown = computed(() => finalVersionData.value?.content || '')
 
 // ✅ Phase 3 优化：使用 composable 提供的投票数据
 const currentSubmissionVotingData = computed(() => {
   // 如果有指定 submissionId，查找对应的投票数据
   if (props.submissionId) {
     const version = votingDataComposable.votingHistory.value.find(
-      (v: any) => v.submissionId === props.submissionId
+      v => v.submissionId === props.submissionId
     )
     if (version) {
       return {
         ...version,
-        participationProposal: currentVersionData.value?.participationProposal || {}
+        participationProposal: proposalOf(currentVersionData.value) || {}
       }
     }
   }
@@ -907,7 +924,7 @@ const currentSubmissionVotingData = computed(() => {
   if (votingDataComposable.currentVersionVotingData.value) {
     return {
       ...votingDataComposable.currentVersionVotingData.value,
-      participationProposal: currentVersionData.value?.participationProposal || {}
+      participationProposal: proposalOf(currentVersionData.value) || {}
     }
   }
 
@@ -918,7 +935,7 @@ const currentSubmissionVotingData = computed(() => {
 const participationChanges = computed(() => {
   if (!isViewingOldVersion.value) return []
 
-  const oldProposal = currentVersionData.value?.participationProposal || {}
+  const oldProposal = proposalOf(currentVersionData.value) || {}
   const newProposal = proposalOf(finalVersionData.value) || {}
 
   // 合併所有出現過的成員
@@ -947,18 +964,18 @@ const activeParticipationProposal = computed(() => {
     currentVersionData: currentVersionData.value,
     finalVersionData: finalVersionData.value,
     submissionData: props.submissionData,
-    currentProposal: currentVersionData.value?.participationProposal,
-    currentPercentages: (currentVersionData.value as any)?.participationPercentages,
+    currentProposal: proposalOf(currentVersionData.value),
+    currentPercentages: proposalOf(currentVersionData.value),
     finalProposal: proposalOf(finalVersionData.value),
-    finalPercentages: (finalVersionData.value as any)?.participationPercentages,
+    finalPercentages: proposalOf(finalVersionData.value),
     submissionProposal: props.submissionData?.participationProposal,
     submissionPercentages: props.submissionData?.participationPercentages
   })
 
-  // 如果正在查看特定版本（包括舊版本），使用該版本的數據
-  // 支持 participationProposal 和 participationPercentages 兩種字段名
-  const currentProposal = currentVersionData.value?.participationProposal
-                       || currentVersionData.value?.participationPercentages
+  // 如果正在查看特定版本（包括舊版本），使用該版本的數據。
+  // 端點的欄位就叫 participationProposal，原本還有一條讀
+  // participationPercentages 的後備——那個名字只存在於 props.submissionData。
+  const currentProposal = proposalOf(currentVersionData.value)
 
   if (currentProposal && typeof currentProposal === 'object' && Object.keys(currentProposal).length > 0) {
     console.log('✅ 使用 currentVersionData 的參與度數據:', currentProposal)
@@ -967,7 +984,7 @@ const activeParticipationProposal = computed(() => {
 
   // 否則使用最終版本的數據
   const finalProposal = proposalOf(finalVersionData.value)
-                     || (finalVersionData.value as any)?.participationPercentages
+                     || proposalOf(finalVersionData.value)
 
   if (finalProposal && typeof finalProposal === 'object' && Object.keys(finalProposal).length > 0) {
     console.log('✅ 使用 finalVersionData 的參與度數據:', finalProposal)
@@ -984,8 +1001,8 @@ const activeParticipationProposal = computed(() => {
   }
 
   // 備用方案：如果都沒有參與度數據，嘗試從 participants 或 actualAuthors 構建均分數據
-  const participants = (finalVersionData.value as any)?.participants
-                    || (currentVersionData.value as any)?.participants
+  const participants = finalVersionData.value?.participants
+                    || currentVersionData.value?.participants
                     || finalVersionData.value?.actualAuthors
                     || currentVersionData.value?.actualAuthors
 
@@ -1054,14 +1071,17 @@ const chartSelectedMembers = computed(() => {
       : participationSource
 
     const selectedMembers = Object.entries(participationProposal).map(([email, percentage]: [string, any]) => {
-      const member = props.groupMembers.find(m => (m.userEmail || m.email) === email) || {}
+      const member = props.groupMembers.find(m => (m.userEmail || m.email) === email)
       return {
         email,
-        displayName: member.displayName || email.split('@')[0],
-        avatarSeed: member.avatarSeed,
-        avatarStyle: member.avatarStyle,
-        avatarOptions: member.avatarOptions,
+        displayName: member?.displayName || email.split('@')[0],
+        avatarSeed: member?.avatarSeed,
+        avatarStyle: member?.avatarStyle,
+        avatarOptions: member?.avatarOptions,
         contribution: percentage * 100,
+        // 下面若百分比不足 100 會直接回傳這份沒算過點數的清單，
+        // 補 0 讓兩條分支的形狀一致
+        points: 0,
         selected: true
       }
     })
@@ -1080,7 +1100,7 @@ const chartSelectedMembers = computed(() => {
       simulatedRank.value,
       props.stageReward,
       simulatedGroupCount.value,
-      (props.allGroups || []) as any[],
+      props.allGroups || [],
       props.currentGroupId || null
     )
 
@@ -1093,7 +1113,7 @@ const chartSelectedMembers = computed(() => {
 
 // 計算總百分比用於圖表組件
 const totalPercentage = computed(() => {
-  return chartSelectedMembers.value.reduce((sum: number, m: any) => sum + m.contribution, 0)
+  return chartSelectedMembers.value.reduce((sum, m) => sum + m.contribution, 0)
 })
 
 // 構建 Tsum-Tsum 圖表所需的數據結構（只有支持票）
@@ -1103,9 +1123,9 @@ const tsumTsumVoteData = computed(() => {
 
   const voteData: Record<string, any> = {}
 
-  votingHistory.forEach((version: any) => {
+  votingHistory.forEach(version => {
     voteData[version.submissionId] = {
-      support: version.votes.filter((v: any) => v.agree === 1 || v.agree === true),
+      support: version.votes.filter(v => v.agree === 1),
       oppose: [] // 共識制不顯示反對票
     }
   })
@@ -1118,8 +1138,8 @@ const tsumTsumVersionLabels = computed(() => {
   const versions = votingDataComposable.versions.value
   if (!versions) return []
 
-  return versions.map((v: any, i: number) =>
-    i === versions.length - 1 ? '最終版本' : formatVersionStepTime(v.submitTime)
+  return versions.map((v, i) =>
+    i === versions.length - 1 ? '最終版本' : formatVersionStepTime(v.submittedTime)
   )
 })
 
@@ -1464,7 +1484,7 @@ function getUserVoteStatus() {
   return votingData.value.currentUserVote.agree ? '贊成' : '反對'
 }
 
-function formatDateTime(timestamp: number | string | undefined) {
+function formatDateTime(timestamp: number | string | null | undefined) {
   if (!timestamp) return ''
   const date = new Date(timestamp)
   return date.toLocaleString('zh-TW', {
@@ -1488,12 +1508,12 @@ function formatVersionStepTime(timestamp: number | string | undefined) {
   }).replace(/\//g, '/').replace(/,/g, '')
 }
 
-function getSubmitterDisplayName(versionData: any) {
+function getSubmitterDisplayName(versionData: SubmissionVersion | null | undefined) {
   if (!versionData) return ''
   return versionData.submitterName || versionData.submitter?.split('@')[0] || '未知用戶'
 }
 
-function getVersionStatusText(version: any) {
+function getVersionStatusText(version: SubmissionVersion | null | undefined) {
   if (!version) return ''
 
   if (version.status === 'withdrawn') {

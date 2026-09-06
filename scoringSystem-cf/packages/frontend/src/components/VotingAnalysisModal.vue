@@ -195,7 +195,7 @@ v-for="candidate in candidateGroups"
             :simulated-rank="1"
             :simulated-group-count="candidateGroups.length"
             :report-reward="stageRewardPool"
-            :all-groups="allGroupsChartData as any"
+            :all-groups="allGroupsChartData"
             :current-group-id="null"
             :total-project-groups="candidateGroups.length"
             :current-group-label="''"
@@ -230,7 +230,7 @@ v-for="candidate in candidateGroups"
           </el-button>
 
           <OurGroupChart
-            :members="(selectedGroup.members || []) as any"
+            :members="selectedGroup.members || []"
             :group-name="selectedGroup.groupName"
             :rank="selectedGroup.finalRank"
             :total-points="selectedGroup.allocatedScore"

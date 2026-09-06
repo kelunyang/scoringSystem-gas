@@ -354,7 +354,8 @@ interface AIItem {
 interface HistoryRecord {
   callId: string
   userEmail: string
-  serviceType: 'ranking_direct' | 'ranking_bt' | 'ranking_multi_agent'
+  /** 端點會回所有服務類型，不只排名那三種 */
+  serviceType: 'ranking_direct' | 'ranking_bt' | 'ranking_multi_agent' | 'summary' | 'translation' | 'feedback'
   providerName: string
   model: string
   itemCount?: number
@@ -541,7 +542,7 @@ async function loadProviders(): Promise<void> {
     const httpResponse = await rpcClient.api.rankings['ai-providers'].$post({
       json: { projectId: props.projectId }
     })
-    const response = await httpResponse.json() as any
+    const response = await httpResponse.json()
 
     if (response.success && response.data?.providers) {
       availableProviders.value = response.data.providers
@@ -569,7 +570,7 @@ async function loadHistory(): Promise<void> {
         limit: 20
       }
     })
-    const response = await httpResponse.json() as any
+    const response = await httpResponse.json()
 
     if (response.success && response.data?.records) {
       history.value = response.data.records

@@ -78,7 +78,7 @@
                 <span v-if="!option.isGroup" class="mention-group">{{ option.groupNames.join('、') }}</span>
                 <span v-if="!option.isGroup && option.groupInfo" class="voting-tip">@用戶將自動標記所屬群組</span>
                 <span v-if="option.isGroup" class="group-mention-hint">
-                  點選將 @全組 {{ option.participantEmails.length }} 位成員
+                  點選將 @全組 {{ option.participantEmails?.length ?? 0 }} 位成員
                 </span>
               </div>
             </template>
@@ -109,7 +109,7 @@
           :simulated-group-count="dynamicMaxCommentSelections"
           :report-reward="commentReward"
           :all-groups="hypotheticalGroups"
-          :current-group-id="currentUser.userEmail"
+          :current-group-id="currentUser?.userEmail ?? null"
           :total-project-groups="dynamicMaxCommentSelections"
         />
 
@@ -241,6 +241,47 @@ import MdEditorWrapper from './MdEditorWrapper.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { rpcClient } from '@/utils/rpc-client'
 import { apiErrorMessage, errorOf } from '@/utils/api-types'
+import type { ApiData } from '@/utils/api-types'
+
+type ProjectCore = ApiData<typeof rpcClient.api.projects.core.$post>
+
+/**
+ * 點數預覽圖用的「假設作者組」（一人一組）。
+ * members 用 AllGroupsChart 的 Member 形狀——原本放的是純 email 字串，
+ * 被 `as any` 蓋住；圖表會去讀 member.points / finalWeight。
+ */
+interface HypotheticalGroup {
+  groupId: string
+  groupName: string
+  rank: number
+  status: string
+  memberCount: number
+  members: Array<{ email: string; displayName?: string; points: number; finalWeight: number }>
+}
+
+/** @mention 下拉選單裡的「某組所有人」 */
+interface MentionGroupOption {
+  isGroup: true
+  name: string
+  displayName: string
+  userEmail: null
+  groupId: string
+  groupInfo: { groupId: string; groupName: string }
+  groupNames: string[]
+  participantEmails: string[]
+}
+
+/** @mention 下拉選單裡的單一使用者 */
+interface MentionUserOption {
+  isGroup: false
+  name: string
+  displayName?: string | null
+  userEmail: string
+  groupInfo?: { groupId: string; groupName: string } | null
+  groupNames: string[]
+}
+
+type MentionOption = MentionGroupOption | MentionUserOption
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 
 // Drawer Breadcrumb
@@ -258,11 +299,12 @@ export interface Props {
   reportReward?: number
   projectTitle?: string
   stageTitle?: string
-  availableGroups?: any[]
-  availableUsers?: any[]
-  userGroups?: any[]
-  currentUser?: any
-  stageSubmissions?: any[]
+  availableGroups?: ProjectCore['groups']
+  availableUsers?: ProjectCore['users']
+  userGroups?: ProjectCore['userGroups']
+  currentUser?: { userEmail?: string; displayName?: string | null } | null
+  /** 由 ProjectDetail 的 extractStageParticipants 組出來 */
+  stageSubmissions?: Array<{ groupId: string; groupName?: string; participants: string[] }>
   userEmailToDisplayName?: Record<string, string>
   stageDescription?: string
   prefillMentionGroup?: {
@@ -389,17 +431,23 @@ const currentAuthorMembers = computed(() => {
 })
 
 // Computed - hypotheticalGroups
-const hypotheticalGroups = computed(() => {
-  const groups: any[] = []
+const hypotheticalGroups = computed((): HypotheticalGroup[] => {
+  const groups: HypotheticalGroup[] = []
 
   // 當前作者
   if (props.currentUser?.userEmail) {
     groups.push({
       groupId: props.currentUser.userEmail,
       groupName: props.currentUser.displayName || props.currentUser.userEmail,
+      rank: 1,
       status: 'active',
       memberCount: 1,
-      members: [props.currentUser.userEmail]
+      members: [{
+        email: props.currentUser.userEmail,
+        displayName: props.currentUser.displayName || props.currentUser.userEmail,
+        points: 0,
+        finalWeight: 0
+      }]
     })
   }
 
@@ -407,25 +455,27 @@ const hypotheticalGroups = computed(() => {
   groups.push({
     groupId: 'hypothetical_author_1',
     groupName: '其他作者A',
+    rank: 2,
     status: 'active',
     memberCount: 1,
-    members: ['hypothetical_1']
+    members: [{ email: 'hypothetical_1', displayName: '其他作者A', points: 0, finalWeight: 0 }]
   })
 
   groups.push({
     groupId: 'hypothetical_author_2',
     groupName: '其他作者B',
+    rank: 3,
     status: 'active',
     memberCount: 1,
-    members: ['hypothetical_2']
+    members: [{ email: 'hypothetical_2', displayName: '其他作者B', points: 0, finalWeight: 0 }]
   })
 
   return groups
 })
 
 // Computed - filteredUsers (complex logic for mention dropdown)
-const filteredUsers = computed(() => {
-  const options: any[] = []
+const filteredUsers = computed((): MentionOption[] => {
+  const options: MentionOption[] = []
 
   // 獲取當前用戶的email和所屬群組
   const currentUserEmail = props.currentUser?.userEmail
@@ -452,7 +502,7 @@ const filteredUsers = computed(() => {
   groupParticipantsMap.forEach((participants, groupId) => {
     const groupInfo = props.availableGroups.find(g => g.groupId === groupId)
     if (groupInfo && participants.length > 0) {
-      const groupName = groupInfo.groupName || groupInfo.name || '未命名組'
+      const groupName = groupInfo.groupName || '未命名組'
       options.push({
         name: `${groupName} 所有人`,
         displayName: `${groupName} 所有人`,
@@ -497,9 +547,7 @@ const filteredUsers = computed(() => {
     }
 
     // 從 availableUsers 中找到對應的用戶資料
-    const userFromAvailable = props.availableUsers.find(u =>
-      (u.userEmail || u.email) === email
-    )
+    const userFromAvailable = props.availableUsers.find(u => u.userEmail === email)
 
     if (userFromAvailable) {
       options.push({
@@ -708,7 +756,7 @@ function handleKeydown(event: KeyboardEvent) {
   }
 }
 
-function selectMention(user: any) {
+function selectMention(user: MentionOption) {
   if (!editorRef.value) return
 
   // 檢查是否為自己或同組成員
@@ -870,7 +918,7 @@ function getUserGroupInfo(userEmail: string) {
 
   return {
     groupId: group.groupId,
-    groupName: group.groupName || group.name
+    groupName: group.groupName
   }
 }
 

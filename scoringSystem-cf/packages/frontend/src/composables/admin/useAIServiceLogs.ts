@@ -114,13 +114,13 @@ export function useAIServiceLogs(
       if (filters.startTime) queryParams.startTime = filters.startTime
       if (filters.endTime) queryParams.endTime = filters.endTime
 
-      const response = await adminApi.aiServiceLogs.query(queryParams as any)
+      const response = await adminApi.aiServiceLogs.query(queryParams)
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '載入 AI 服務日誌失敗')
       }
 
-      const data = response.data as any
+      const data = response.data
       const logs = data?.logs || []
       const totalCount = data?.totalCount || 0
       const currentOffset = pageParam as number

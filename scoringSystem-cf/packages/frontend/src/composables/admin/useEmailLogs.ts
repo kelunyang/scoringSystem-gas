@@ -114,13 +114,13 @@ export function useEmailLogs(
       if (filters.startTime) queryParams.startTime = filters.startTime
       if (filters.endTime) queryParams.endTime = filters.endTime
 
-      const response = await adminApi.emailLogs.query(queryParams as any)
+      const response = await adminApi.emailLogs.query(queryParams)
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '載入郵件日誌失敗')
       }
 
-      const data = response.data as any
+      const data = response.data
       const logs = data?.logs || []
       const totalCount = data?.totalCount || 0
       const currentOffset = pageParam as number
@@ -185,7 +185,7 @@ export function useResendEmail(): UseMutationReturnType<void, Error, ResendEmail
 
   return useMutation({
     mutationFn: async ({ logId }: ResendEmailParams) => {
-      const response = await adminApi.emailLogs.resendSingle({ logId } as any)
+      const response = await adminApi.emailLogs.resendSingle({ logId })
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '重新發送郵件失敗')
@@ -224,7 +224,7 @@ export function useBatchResendEmails(): UseMutationReturnType<
 
   return useMutation({
     mutationFn: async ({ logIds }: BatchResendParams) => {
-      const response = await adminApi.emailLogs.resendBatch({ logIds } as any)
+      const response = await adminApi.emailLogs.resendBatch({ logIds })
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '批量重新發送郵件失敗')

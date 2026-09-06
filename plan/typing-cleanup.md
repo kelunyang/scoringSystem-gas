@@ -1,24 +1,18 @@
 # 型別清理計畫（`any` 收斂）
 
-> **這份文件是給「沒有上下文的新 session」看的。**
-> 起草 2026-09-05，2026-09-06 兩輪大幅更新。
+> **狀態：完成（2026-09-07）。** 三個套件的 `any` 全部歸零。
+> 起草 2026-09-05，2026-09-06 兩輪，2026-09-07 收尾（含 #011）。
 >
-> **接手的話，照這個順序讀：**
-> 1. 本節下方的「現況」——知道還剩什麼
-> 2. 「動手之前必讀」——四個會讓你做白工的陷阱
-> 3. [issue.md](issue.md) **#011**——剩下的 381 處全部卡在這裡，
->    已經有實測結論與三條路的取捨表，**這是使用者要做的架構決策**
-> 4. [pitfalls.md](pitfalls.md) 2026-09-06 的六條——兩輪踩到的坑
->
-> 承接 2026-09-05 那輪底層安全檢查（[issue.md](issue.md) #010）。
+> 這份文件保留下來當紀錄。要接續處理的東西在
+> [issue.md](issue.md) #013 / #014（過程中發現、但需要產品決策的兩個 bug）。
 
 ---
 
-## 現況（2026-09-06 第二輪後，已驗證）
+## 現況（2026-09-07，已驗證）
 
 ```
-pnpm type-check   通過（含 vue-tsc）
-pnpm test         406 passed / 0 skipped
+pnpm type-check   通過（backend + shared + frontend/vue-tsc）
+pnpm test         419 passed / 0 failed
 pnpm lint         0 error
 pnpm --filter @repo/frontend build   成功
 ```
@@ -26,19 +20,36 @@ pnpm --filter @repo/frontend build   成功
 | 套件 | any | 起點 |
 |------|-----|------|
 | backend | **0** | 460 |
-| shared | **0** | 22（原記為 0，因為沒被 lint 掃到）|
-| frontend | 382 | 888 |
+| shared | **0** | 22 |
+| frontend | **0** | 348 |
 
-frontend 剩下的 382 處：**381 處在 API 邊界（48 檔），1 處是
-`AppType = any` 本身**。純前端狀態那 412 處已經歸零。
-API 邊界那批卡在 [issue.md](issue.md) **#011**，那裡已經有實測結論
-與三條路的取捨表，**要不要投入是架構決策，不該由清理順手決定**。
+**關於數字**：2026-09-06 那輪記的 frontend 起點是 888／剩 382，
+那是用寬鬆的 `grep -c` 量的——它會把註解與散文裡的 "any"（例如
+「has any valid comment」）一起算進去。改用「只算型別位置、且跳過
+註解行」的量法重測，同一個起點 commit（`4ecdada`）是 **348**。
+上面這張表用的是後者。
 
-frontend 另有 77 個非 any 的 warning（`vue/no-required-prop-with-default` 28、
-`vue/require-default-prop` 22、`vue/no-template-shadow` 13、`vue/no-v-html` 12、
-`vue/multi-word-component-names` 2），與本計畫無關，可另案處理。
+### #011 已解決
 
-### 已完成的批次
+`rpcClient` 從 `hc<AppType>()` 被降級成 `any` 的根因不是
+「`.d.ts` 產出時掉了路由 schema」（原註解如此宣稱），而是
+**router 用敘述式註冊**（`app.post(...)` 一行一行寫）。
+Hono 的型別是靠鏈式呼叫累積的，敘述式會讓 schema 退化成 `BlankSchema`。
+
+把 22 個 router 全部改成鏈式（`new Hono().post(...).post(...)`）之後，
+`hc<AppType>()` 的推導就正常了。同時處理的還有兩層：
+
+1. **回應信封**：`successResponse()` 原本回裸 `Response`，型別資訊在
+   這裡被吃掉。改成 Hono 官方的
+   `interface JsonResponse<T, S> extends Response, TypedResponse<T, S, 'json'>`。
+2. **handler 資料型別**：`.first()` / `.all()` 沒帶泛型時每一列都是
+   `Record<string, unknown>`。前端真的會讀到的那些端點都補上了 row 型別。
+
+**維持這個狀態的前提**：backend 的 router 必須維持鏈式註冊。
+改回敘述式會讓前端整片失去型別，而且**不會有任何編譯錯誤**——
+只會安靜地退回 `any`。
+
+### 已完成的批次### 已完成的批次
 
 | 批次 | 狀態 |
 |------|------|
@@ -47,7 +58,7 @@ frontend 另有 77 個非 any 的 warning（`vue/no-required-prop-with-default` 
 | 3 backend handler | ✅ 460 → 0 |
 | 5 shared | ✅ 22 → 0 |
 | 4a frontend 純前端狀態 | ✅ 2026-09-06 第二輪（412 → 0） |
-| 4b frontend API 邊界 | **未做**（381 處，卡在 #011） |
+| 4b frontend API 邊界 | ✅ 2026-09-07（打通 #011 後全部收斂） |
 
 2026-09-06 那輪共 22 個 commit，範圍 `b7b7b60..ec8d832`。
 

@@ -10,9 +10,10 @@ import type { ApiResponse } from '@/utils/api-helpers'
  */
 export interface GroupMemberData {
   userEmail: string
-  displayName?: string
-  avatarSeed?: string
-  avatarStyle?: string
+  // users 表這幾欄可為 NULL
+  displayName?: string | null
+  avatarSeed?: string | null
+  avatarStyle?: string | null
   role?: 'leader' | 'member'
   tags?: string[]
 }
@@ -45,14 +46,6 @@ export interface AvailableUser {
  */
 export interface GlobalGroupMembersResponse {
   members: GroupMemberData[]
-}
-
-/**
- * Project group details response
- */
-export interface ProjectGroupDetailsResponse {
-  members: GroupMemberData[]
-  groupInfo?: any
 }
 
 /**
@@ -176,7 +169,7 @@ export function useGroupMembers() {
           groupId: groupId
         }
       })
-      const response = await httpResponse.json() as ApiResponse<ProjectGroupDetailsResponse>
+      const response = await httpResponse.json()
 
       if (response.success) {
         projectGroupMembersMap.value.set(groupId, response.data.members || [])

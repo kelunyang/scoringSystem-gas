@@ -27,14 +27,67 @@ export interface AllGroupsRankedDetail {
   teacherRankedCount: number;
 }
 
+/** checkAllGroupsVoted 的 details */
+export interface AllGroupsVotedDetail {
+  totalGroups: number;
+  groupsWithSettledProposals: number;
+  groupsWithAllMembersVoted: number;
+  /** 只在有未完成的組時才帶 */
+  missingGroups?: Array<{
+    groupId: string;
+    groupName?: string;
+    passed: boolean;
+    reason: string;
+    totalMembers: number;
+    votedMembers: number;
+  }>;
+}
+
+/** checkAllProposalsApproved 的 details */
+export interface AllProposalsApprovedDetail {
+  totalProposals: number;
+  settledProposals: number;
+  agreedProposals: number;
+  disagreedProposals: number;
+  tieProposals: number;
+  tieProposalsCanReset: number;
+  tieProposalsUsedReset: number;
+  pendingProposals: number;
+  withdrawnProposals: number;
+  resetProposals: number;
+  /** 只在有未結算提案時才帶 */
+  unsettledProposals?: Array<{
+    groupId: string;
+    groupName: string | null;
+    status: string;
+    votingResult: string | null;
+    proposalId: string;
+    resetCount: number;
+  }>;
+}
+
+/** checkCommentRankings 的 details */
+export interface CommentRankingsDetail {
+  studentCommentRankings: number;
+  teacherCommentRankings: number;
+  totalCommentRankings: number;
+}
+
+/** 教師排名兩項檢查共用的 details */
+export interface TeacherRankingsDetail {
+  teachersWhoRanked: number;
+  totalTeachers: number;
+  totalRankings: number;
+}
+
 export interface ValidationResult {
   valid: boolean;
   checks: {
-    allGroupsVoted: ValidationCheckDetail;
-    allProposalsApproved: ValidationCheckDetail;
-    hasCommentRankings: ValidationCheckDetail;
-    hasTeacherSubmissionRankings: ValidationCheckDetail;
-    hasTeacherCommentRankings: ValidationCheckDetail;
+    allGroupsVoted: ValidationCheckDetail<AllGroupsVotedDetail>;
+    allProposalsApproved: ValidationCheckDetail<AllProposalsApprovedDetail>;
+    hasCommentRankings: ValidationCheckDetail<CommentRankingsDetail>;
+    hasTeacherSubmissionRankings: ValidationCheckDetail<TeacherRankingsDetail>;
+    hasTeacherCommentRankings: ValidationCheckDetail<TeacherRankingsDetail>;
     allGroupsRanked: ValidationCheckDetail<AllGroupsRankedDetail>;  // 新增：檢查所有組是否都收到排名
   };
   warnings: string[];
@@ -56,11 +109,38 @@ export async function validatePreSettlement(
   const result: ValidationResult = {
     valid: true,
     checks: {
-      allGroupsVoted: { passed: true, details: {} },
-      allProposalsApproved: { passed: true, details: {} },
-      hasCommentRankings: { passed: true, details: {} },
-      hasTeacherSubmissionRankings: { passed: true, details: {} },
-      hasTeacherCommentRankings: { passed: true, details: {} },
+      // 下面每一項都會被實際的檢查結果覆蓋，這裡只是初值
+      allGroupsVoted: {
+        passed: true,
+        details: { totalGroups: 0, groupsWithSettledProposals: 0, groupsWithAllMembersVoted: 0 },
+      },
+      allProposalsApproved: {
+        passed: true,
+        details: {
+          totalProposals: 0,
+          settledProposals: 0,
+          agreedProposals: 0,
+          disagreedProposals: 0,
+          tieProposals: 0,
+          tieProposalsCanReset: 0,
+          tieProposalsUsedReset: 0,
+          pendingProposals: 0,
+          withdrawnProposals: 0,
+          resetProposals: 0,
+        },
+      },
+      hasCommentRankings: {
+        passed: true,
+        details: { studentCommentRankings: 0, teacherCommentRankings: 0, totalCommentRankings: 0 },
+      },
+      hasTeacherSubmissionRankings: {
+        passed: true,
+        details: { teachersWhoRanked: 0, totalTeachers: 0, totalRankings: 0 },
+      },
+      hasTeacherCommentRankings: {
+        passed: true,
+        details: { teachersWhoRanked: 0, totalTeachers: 0, totalRankings: 0 },
+      },
       allGroupsRanked: {
         passed: true,
         details: {
@@ -169,7 +249,7 @@ async function checkAllGroupsVoted(
   env: Env,
   projectId: string,
   stageId: string
-): Promise<ValidationCheckDetail> {
+): Promise<ValidationCheckDetail<AllGroupsVotedDetail>> {
   // Get all active groups for this project
   const allGroupsResult = await env.DB.prepare(`
     SELECT DISTINCT g.groupId, g.groupName
@@ -269,7 +349,7 @@ async function checkAllProposalsApproved(
   env: Env,
   projectId: string,
   stageId: string
-): Promise<ValidationCheckDetail> {
+): Promise<ValidationCheckDetail<AllProposalsApprovedDetail>> {
   // Get only the latest proposal for each group using window function
   // Use VIEW for correct status and votingResult calculation
   const latestProposalsResult = await env.DB.prepare(`
@@ -370,7 +450,7 @@ async function checkCommentRankings(
   env: Env,
   projectId: string,
   stageId: string
-): Promise<ValidationCheckDetail> {
+): Promise<ValidationCheckDetail<CommentRankingsDetail>> {
   // Check student comment rankings (from commentrankingproposals)
   const studentCommentResult = await env.DB.prepare(`
     SELECT COUNT(*) as count
@@ -409,7 +489,7 @@ async function checkTeacherSubmissionRankings(
   env: Env,
   projectId: string,
   stageId: string
-): Promise<ValidationCheckDetail> {
+): Promise<ValidationCheckDetail<TeacherRankingsDetail>> {
   // Get total teachers for this project
   const totalTeachersResult = await env.DB.prepare(`
     SELECT COUNT(DISTINCT userEmail) as count
@@ -446,7 +526,7 @@ async function checkTeacherCommentRankings(
   env: Env,
   projectId: string,
   stageId: string
-): Promise<ValidationCheckDetail> {
+): Promise<ValidationCheckDetail<TeacherRankingsDetail>> {
   // Get total teachers for this project
   const totalTeachersResult = await env.DB.prepare(`
     SELECT COUNT(DISTINCT userEmail) as count

@@ -323,14 +323,14 @@
 import { ref, reactive, computed, onMounted, shallowRef, watchEffect, unref, watch } from 'vue'
 import type { Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import ProjectCard from './ProjectCard.vue'
+import ProjectCard, { type ProjectCardProject } from './ProjectCard.vue'
 import TopBarUserControls from './TopBarUserControls.vue'
 import EventLogDrawer from './shared/EventLogDrawer.vue'
 import TutorialDrawer from './TutorialDrawer.vue'
 import RemoveMemberConfirmDrawer from '@/components/shared/RemoveMemberConfirmDrawer.vue'
 import AddMemberConfirmDrawer from '@/components/admin/group-management/shared/AddMemberConfirmDrawer.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
-import { useProjectsWithStages } from '@/composables/useProjects'
+import { useProjectsWithStages, type ProjectWithStages } from '@/composables/useProjects'
 import {
   useGroupMembers,
   useProjectGroups,
@@ -344,7 +344,7 @@ import { showSuccess, showWarning, handleError } from '@/utils/errorHandler'
 import { useBreadcrumb } from '@/composables/useBreadcrumb'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import { getAvatarUrl, generateInitialsAvatar } from '@/utils/avatar'
-import type { AuthUser, Project, Group, Member } from '@/types'
+import type { AuthUser, Group, Member } from '@/types'
 import type { GroupMember } from '@/composables/useGroupManagement'
 import type { PermissionFlags } from '@/composables/useProjectPermissions'
 import { apiErrorMessage, errorOf } from '@/utils/api-types'
@@ -366,7 +366,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 interface Emits {
-  (e: 'enter-project', project: Project): void
+  (e: 'enter-project', project: ProjectCardProject): void
   (e: 'user-command', command: string): void
 }
 
@@ -400,7 +400,8 @@ const searchQuery: Ref<string> = ref('')
 
 // 成員管理相關
 const memberManagementVisible: Ref<boolean> = ref(false)
-const selectedProject: Ref<Project | null> = ref(null)
+// 只讀 projectId
+const selectedProject: Ref<{ projectId: string } | null> = ref(null)
 const selectedGroupForManagement: Ref<Group | null> = ref(null)
 const selectedMembersToAdd: Ref<string[]> = ref([]) // 選中要加入的成員
 const addingMembers: Ref<boolean> = ref(false) // 批量加入狀態
@@ -423,7 +424,8 @@ const groupEditForm = reactive<GroupEditForm>({
 
 // 事件日志相關
 const showEventLogDrawer: Ref<boolean> = ref(false)
-const selectedProjectForLogs: Ref<Project | null> = ref(null)
+// 只餵給 EventLogDrawer，它只讀 projectId / projectName
+const selectedProjectForLogs: Ref<{ projectId: string; projectName: string } | null> = ref(null)
 
 // 移除成員相關
 const showRemoveMemberDrawer: Ref<boolean> = ref(false)
@@ -490,7 +492,8 @@ const filteredProjects = computed(() => {
 })
 
 // Type for project with calculated permissions
-interface ProjectWithPermissions extends Project {
+/** 清單項目加上算好的權限旗標。基底是端點回的形狀，不是 Project 實體 */
+type ProjectWithPermissions = ProjectWithStages & {
   permissions: PermissionFlags
 }
 
@@ -609,7 +612,7 @@ const hasGroupInfoChanges = computed(() => {
 // Methods
 // ========================================
 
-const enterProject = (project: Project) => {
+const enterProject = (project: ProjectCardProject) => {
   console.log('進入專案:', project)
   // 發送事件到父組件 App.vue
   emit('enter-project', project)
@@ -642,7 +645,7 @@ const loadUngroupedMembers = async (projectId: string) => {
   }
 }
 
-const openGroupMemberManagement = async (project: Project) => {
+const openGroupMemberManagement = async (project: ProjectCardProject) => {
   console.log('🔧 [DEBUG] Opening group management drawer - v2024.01.09')
 
   // ⭐ 從 projects.value 取得最新資料，避免使用 ProjectCard 傳入的舊物件參考
@@ -656,18 +659,27 @@ const openGroupMemberManagement = async (project: Project) => {
   }
 
   // 從 groups 找完整的 group 資料（包含 allowChange）
-  const fullGroup = (freshProject as any).groups?.find((g: any) => g.groupId === leaderUserGroup.groupId)
+  // freshProject 可能是 ProjectCard 傳回的精簡物件（沒有 groups），
+  // 只有從 projects.value 找到的那份才帶 groups
+  const fullGroup = 'groups' in freshProject
+    ? freshProject.groups?.find(g => g.groupId === leaderUserGroup.groupId)
+    : undefined
 
   // 合併資料：userGroups 的基本資訊 + groups 的 allowChange
   // userGroups 是關聯列（沒有 projectId／createdTime），這裡補齊成 Group
   const leaderGroup: Group = {
     ...(fullGroup ?? {}),
-    groupId: leaderUserGroup.groupId,
+    // groups 表的 status 沒有 CHECK 約束，Group 型別把它收成三個字面值
+    status: fullGroup?.status === 'inactive' || fullGroup?.status === 'approved'
+      ? fullGroup.status
+      : 'active',
+    groupId: leaderUserGroup.groupId ?? '',
     projectId: freshProject.projectId,
     groupName: leaderUserGroup.groupName ?? fullGroup?.groupName ?? '',
     createdTime: fullGroup?.createdTime ?? 0,
-    isActive: fullGroup?.isActive ?? 1,
-    role: leaderUserGroup.role,
+    // groups 表用的是 status 而不是 isActive
+    isActive: fullGroup?.status === 'active' ? 1 : 0,
+    role: leaderUserGroup.role ?? 'leader',
     allowChange: fullGroup?.allowChange ?? true,
     description: fullGroup?.description ?? ''
   }
@@ -724,14 +736,13 @@ const handleAddMembers = () => {
 
   // Build member objects for confirmation drawer with avatar info
   membersToAddForConfirmation.value = selectedMembersToAdd.value.map(email => {
-    const user = availableUsersForGroup.value.find(u => u.userEmail === email) as any
+    const user = availableUsersForGroup.value.find(u => u.userEmail === email)
     return {
       userEmail: email,
       displayName: user?.displayName || email,
       role: 'member',
       avatarSeed: user?.avatarSeed,
-      avatarStyle: user?.avatarStyle,
-      avatarOptions: user?.avatarOptions
+      avatarStyle: user?.avatarStyle
     } as Member
   })
   showAddMemberDrawer.value = true
@@ -965,7 +976,7 @@ const updateGroupInfo = async () => {
 }
 
 // 事件日志
-const openEventLogViewer = (project: Project) => {
+const openEventLogViewer = (project: ProjectCardProject) => {
   router.push(`/logs/${project.projectId}`)
 }
 

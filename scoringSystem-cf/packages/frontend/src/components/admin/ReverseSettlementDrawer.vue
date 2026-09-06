@@ -211,12 +211,12 @@ export interface Stage {
   stageName?: string
   status?: string
   projectId?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export interface Project {
   projectId: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export interface Participant {

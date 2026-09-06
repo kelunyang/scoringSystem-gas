@@ -211,7 +211,6 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { useWebSocketStore } from '../stores/websocket'
 import { useAuth, isDevMode } from '../composables/useAuth'
 import { usePermissions } from '../composables/usePermissions'
-import type { Project } from '@/types'
 import {
   getTokenRemainingTime,
   getSessionPercentage,
@@ -670,7 +669,7 @@ useIntervalFn(() => {
 // Methods
 // ========================================
 
-const enterProject = (project: Project) => {
+const enterProject = (project: { projectId: string }) => {
   console.log('進入專案:', project)
   router.push({
     name: 'projects-view',
@@ -760,16 +759,16 @@ const setupWebSocket = () => {
     console.log('WebSocket connected')
   })
 
-  websocket.on('disconnected', (data: any) => {
+  websocket.on('disconnected', (data) => {
     console.log('WebSocket disconnected:', data)
   })
 
-  websocket.on('permission_changed', (data: any) => {
+  websocket.on('permission_changed', (data) => {
     console.log('Permissions changed:', data)
     refreshUserData()
   })
 
-  websocket.on('account_disabled', (data: any) => {
+  websocket.on('account_disabled', (data) => {
     handleError(data.message || '您的帳號已被停用', {
       action: '帳號檢查',
       type: 'error'
@@ -777,12 +776,12 @@ const setupWebSocket = () => {
     logout()
   })
 
-  websocket.on('force_logout', (data: any) => {
+  websocket.on('force_logout', (data) => {
     showWarning(data.reason || '您已被強制登出')
     logout()
   })
 
-  websocket.on('system_announcement', (data: any) => {
+  websocket.on('system_announcement', (data) => {
     console.log('System announcement:', data)
     if (data.message) {
       showInfo(data.message)
@@ -794,13 +793,13 @@ const setupWebSocket = () => {
     refreshUserData()
   })
 
-  websocket.on('settlement_progress', (data: any) => {
+  websocket.on('settlement_progress', (data) => {
     console.log('Settlement progress update:', data)
     window.dispatchEvent(new CustomEvent('settlement-progress', { detail: data }))
   })
 
   // ⭐ 新增：監聽一般通知，根據類型自動刷新權限
-  websocket.on('notification', (data: any) => {
+  websocket.on('notification', (data) => {
     console.log('Received notification:', data)
 
     // 定義需要刷新權限的通知類型

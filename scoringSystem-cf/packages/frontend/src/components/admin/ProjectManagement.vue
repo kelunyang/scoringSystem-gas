@@ -1038,21 +1038,17 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch, inject, onBefor
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getStageStatusText, getStageStatusType } from '@/utils/stageStatus'
-import type { Project, Stage, User } from '@repo/shared'
+import type { Stage, User } from '@repo/shared'
 
 // Extended Project type with additional frontend-specific properties
-interface ExtendedProject extends Project {
-  createdBy?: string
-  createdTime?: number
-  lastModified?: number
+/**
+ * 管理端專案清單的一項。基底改用 /projects/list 推導的形狀——
+ * 原本寫成 `extends Project`，但那個實體型別有 creatorId /
+ * creationTime / settings / lastActivityTime，這個端點都不回。
+ */
+type ExtendedProject = Extract<AdminProject, { isCreator: boolean }> & {
   groupCount?: number
   memberCount?: number
-  scoreRangeMin?: number
-  scoreRangeMax?: number
-  studentRankingWeight?: number
-  teacherRankingWeight?: number
-  maxCommentSelections?: number
-  commentRewardPercentile?: number
 }
 
 // Viewer type for project viewer management
@@ -1107,7 +1103,7 @@ import ResumeStageDrawer from './ResumeStageDrawer.vue'
 import { useExpandable } from '@/composables/useExpandable'
 import { useAuth } from '@/composables/useAuth'
 import { useMediaQuery } from '@/composables/useMediaQuery'
-import { useAdminProjects } from '@/composables/useAdminProjects'
+import { useAdminProjects, type AdminProject } from '@/composables/useAdminProjects'
 import dayjs from 'dayjs'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import {
@@ -1173,8 +1169,11 @@ const updateStageOrderMutation = useUpdateStageOrder()
 const checkVotingLockMutation = useCheckVotingLock()
 
 // Create a computed ref for backwards compatibility with existing code
-// Cast to ExtendedProject[] for type compatibility with function parameters
-const projects = computed(() => (projectsQuery?.data?.value?.projects || []) as ExtendedProject[])
+// 端點依呼叫者身分回兩種形狀；這個頁面只有系統管理員進得來
+// （router 的 requiresAdmin），所以固定是管理員那一種
+const projects = computed(
+  () => (projectsQuery?.data?.value?.projects || []) as ExtendedProject[]
+)
 
 // Filter persistence
 const { filters, resetFilters } = useFilterPersistence('projectManagement', {
@@ -1873,7 +1872,7 @@ const openEventLogViewer = (project: ExtendedProject) => {
 }
 
 // Viewer Management Functions
-const handleViewerCommand = (command: string, project: Project | ExtendedProject) => {
+const handleViewerCommand = (command: string, project: ExtendedProject) => {
   if (command === 'settings') {
     openViewerManagement(project)
   } else if (command === 'groups') {
@@ -2846,7 +2845,7 @@ const focusStageInGantt = (stage: Stage, projectId: string) => {
 }
 
 // Open clone project drawer
-const openCloneProjectDrawer = (project: Project | ExtendedProject) => {
+const openCloneProjectDrawer = (project: ExtendedProject) => {
   selectedProjectForClone.value = project as ExtendedProject
   showCloneProjectDrawer.value = true
 }
@@ -2923,7 +2922,7 @@ const handleResumeStageConfirmed = () => {
 }
 
 // 為專案列表中的空階段打開階段編輯器
-const openCreateStageForProject = async (project: Project | ExtendedProject) => {
+const openCreateStageForProject = async (project: ExtendedProject) => {
   console.log('=== openCreateStageForProject called ===')
   console.log('Project:', project)
 

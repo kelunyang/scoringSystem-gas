@@ -25,11 +25,12 @@ function getApiBaseUrl(): string {
  * @param options - Fetch options (method, body, signal for AbortController, etc.)
  * @returns Parsed JSON response
  */
-export async function fetchWithAuth<T = any>(
+export async function fetchWithAuth<T = unknown>(
   url: string,
   options: {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
-    body?: any
+    /** 會被 JSON.stringify，形狀由呼叫端決定 */
+    body?: unknown
     headers?: Record<string, string>
     signal?: AbortSignal
   } = {}

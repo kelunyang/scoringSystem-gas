@@ -546,7 +546,7 @@ const ladderData = computed(() => {
   if (!response || !response.walletData || response.walletData.length === 0) return null
 
   // 從專案設定獲取分數範圍，使用 API 返回值或 65-95 作為備用值
-  const projectData = projectCoreQuery.data?.value?.project as any
+  const projectData = projectCoreQuery.data?.value?.project
   const scoreRangeMin = response.scoreRangeMin ?? projectData?.scoreRangeMin ?? 65
   const scoreRangeMax = response.scoreRangeMax ?? projectData?.scoreRangeMax ?? 95
 
@@ -1009,7 +1009,7 @@ function handleSettlementCommand(command: string, transaction: NormalizedTransac
   }
 
   // 從 projectCoreQuery 獲取 maxCommentSelections（必需欄位，無預設值）
-  const projectData = projectCoreQuery.data?.value?.project as any
+  const projectData = projectCoreQuery.data?.value?.project
   if (projectData?.maxCommentSelections === undefined || projectData?.maxCommentSelections === null) {
     showWarning('無法載入專案評論配置')
     return

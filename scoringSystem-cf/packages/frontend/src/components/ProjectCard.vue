@@ -178,7 +178,8 @@ export interface ProjectCardProject {
   projectId: string
   projectName?: string
   description?: string | null
-  stages?: CardStage[]
+  /** 後端在沒有階段時回 null */
+  stages?: CardStage[] | null
   milestones?: CardMilestone[]
   permissions?: {
     canEnter?: boolean
@@ -186,7 +187,13 @@ export interface ProjectCardProject {
     canViewLogs?: boolean
     permissionLevel?: string
   }
-  userGroups?: Array<{ groupId?: string }>
+  userGroups?: Array<{
+    groupId?: string
+    groupName?: string
+    role?: string
+    userEmail?: string
+    isActive?: number
+  }>
   groupMembers?: GroupMemberInfo[]
 }
 

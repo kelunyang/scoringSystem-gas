@@ -192,7 +192,7 @@
 
           <!-- 使用共享組件 -->
           <OurGroupChart
-            :members="membersWithPoints as any"
+            :members="membersWithPoints"
             :simulated-rank="simulatedRank"
             :simulated-group-count="simulatedGroupCount"
             :report-reward="reportReward"
@@ -254,10 +254,10 @@
         groupName: availableGroups?.find(g => g.groupId === selectedGroup)?.groupName || '我們組',
         finalRank: simulatedRank,
         totalGroups: simulatedGroupCount,
-        allocatedPoints: membersWithPoints.reduce((sum: number, m: any) => sum + (m.points || 0), 0),
-        members: membersWithPoints.map((m: any) => ({
+        allocatedPoints: membersWithPoints.reduce((sum, m) => sum + (m.points || 0), 0),
+        members: membersWithPoints.map(m => ({
           email: m.email,
-          displayName: m.displayName,
+          displayName: m.displayName ?? m.email,
           contribution: m.contribution,
           points: m.points || 0
         }))
@@ -320,6 +320,9 @@ interface GroupMember {
 /** 歷史版本的形狀從端點推導（見 plan/issue.md #011） */
 type HistoricalVersion = ApiData<typeof rpcClient.api.submissions.versions.$post>['versions'][number]
 
+/** /projects/core 回的組（父層直接把 projectData.groups 傳進來） */
+type ProjectCoreGroups = ApiData<typeof rpcClient.api.projects.core.$post>['groups']
+
 interface CurrentGroup {
   groupId: string
   members: Array<{
@@ -339,10 +342,10 @@ export interface Props {
   projectTitle?: string
   stageTitle?: string
   reportReward?: number
-  availableGroups?: any[]
+  availableGroups?: ProjectCoreGroups
   currentUserEmail?: string
   currentGroup?: CurrentGroup
-  allGroups?: any[]
+  allGroups?: ProjectCoreGroups
   projectId: string
   totalActiveGroups: number
   totalProjectGroups: number
@@ -370,7 +373,7 @@ const props = withDefaults(defineProps<Props>(), {
 // Emits
 interface Emits {
   (e: 'update:visible', value: boolean): void
-  (e: 'submit', data: { success: boolean; submissionId?: string; [key: string]: any }): void
+  (e: 'submit', data: { success: boolean; submissionId?: string }): void
 }
 
 const emit = defineEmits<Emits>()
@@ -475,8 +478,8 @@ const membersWithPoints = computed(() => {
     simulatedRank.value,
     props.reportReward,
     simulatedGroupCount.value,
-    (props.allGroups || []) as any,
-    (props.currentGroup?.groupId || null) as any
+    props.allGroups || [],
+    props.currentGroup?.groupId || null
   )
 
   return result
@@ -494,8 +497,8 @@ const allGroupsDataCalculated = computed(() => {
     simulatedRank.value,
     props.reportReward,
     simulatedGroupCount.value,
-    (props.allGroups || []) as any,
-    (props.currentGroup?.groupId || null) as any
+    props.allGroups || [],
+    props.currentGroup?.groupId || null
   )
 
   return result

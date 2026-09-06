@@ -160,7 +160,7 @@ export function useCreateProject(): UseMutationReturnType<any, Error, CreateProj
       const httpResponse = await rpcClient.api.projects.create.$post({
         json: { projectData }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '創建專案失敗')
@@ -189,7 +189,7 @@ export function useUpdateProject(): UseMutationReturnType<any, Error, UpdateProj
       const httpResponse = await rpcClient.api.projects.update.$post({
         json: { projectId, updates }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '更新專案失敗')
@@ -224,13 +224,14 @@ export function useUpdateScoringConfig(): UseMutationReturnType<any, Error, Upda
         param: { projectId },
         json: config
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '更新評分配置失敗')
       }
 
-      return response.data
+      // 沒有任何欄位變更時後端只回 message，不帶 data
+      return 'data' in response ? response.data : undefined
     }
     // No success message - handled by parent operation
   })
@@ -247,7 +248,7 @@ export function useCloneProject(): UseMutationReturnType<any, Error, CloneProjec
       const httpResponse = await rpcClient.api.projects.clone.$post({
         json: params
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '複製專案失敗')
@@ -278,7 +279,7 @@ export function useListProjectViewers(): UseMutationReturnType<any, Error, { pro
       const httpResponse = await rpcClient.api.projects.viewers.list.$post({
         json: { projectId }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '載入存取者清單失敗')
@@ -298,7 +299,7 @@ export function useAddViewersBatch(): UseMutationReturnType<any, Error, AddViewe
       const httpResponse = await rpcClient.api.projects.viewers['add-batch'].$post({
         json: { projectId, viewers }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '新增存取者失敗')
@@ -322,7 +323,7 @@ export function useAddViewer(): UseMutationReturnType<any, Error, AddSingleViewe
       const httpResponse = await rpcClient.api.projects.viewers.add.$post({
         json: { projectId, userEmail, role }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '新增存取者失敗')
@@ -348,7 +349,7 @@ export function useUpdateViewerRole(): UseMutationReturnType<any, Error, UpdateV
       const httpResponse = await rpcClient.api.projects.viewers['update-role'].$post({
         json: { projectId, userEmail, role }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '更新角色失敗')
@@ -374,7 +375,7 @@ export function useRemoveViewer(): UseMutationReturnType<any, Error, RemoveViewe
       const httpResponse = await rpcClient.api.projects.viewers.remove.$post({
         json: { projectId, userEmail }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '移除存取者失敗')
@@ -401,7 +402,7 @@ export function useBatchUpdateViewerRoles(): UseMutationReturnType<any, Error, B
       const httpResponse = await rpcClient.api.projects.viewers['update-roles-batch'].$post({
         json: { projectId, userEmails, role }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '批次轉換角色失敗')
@@ -426,7 +427,7 @@ export function useBatchRemoveViewers(): UseMutationReturnType<any, Error, Batch
       const httpResponse = await rpcClient.api.projects.viewers['remove-batch'].$post({
         json: { projectId, userEmails }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '批次刪除存取者失敗')
@@ -454,7 +455,7 @@ export function useSearchUsers(): UseMutationReturnType<any, Error, { query: str
       const httpResponse = await rpcClient.api.users.search.$post({
         json: { query, limit }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '搜尋用戶失敗')
@@ -478,7 +479,7 @@ export function useListStages(): UseMutationReturnType<any, Error, { projectId: 
       const httpResponse = await rpcClient.api.stages.list.$post({
         json: { projectId, includeArchived }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '載入階段列表失敗')
@@ -498,7 +499,7 @@ export function useGetStage(): UseMutationReturnType<any, Error, GetStageParams,
       const httpResponse = await rpcClient.api.stages.get.$post({
         json: { projectId, stageId }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '載入階段詳情失敗')
@@ -518,7 +519,7 @@ export function useCreateStage(): UseMutationReturnType<any, Error, CreateStageP
       const httpResponse = await rpcClient.api.stages.create.$post({
         json: { projectId, stageData }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '創建階段失敗')
@@ -544,7 +545,7 @@ export function useUpdateStage(): UseMutationReturnType<any, Error, UpdateStageP
       const httpResponse = await rpcClient.api.stages.update.$post({
         json: { projectId, stageId, updates }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '更新階段失敗')
@@ -570,7 +571,7 @@ export function useUpdateStageOrder(): UseMutationReturnType<any, Error, UpdateS
       const httpResponse = await rpcClient.api.stages.update.$post({
         json: { projectId, stageId, updates }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '更新階段順序失敗')
@@ -591,7 +592,7 @@ export function useCheckVotingLock(): UseMutationReturnType<any, Error, CheckVot
       const httpResponse = await rpcClient.api.stages['check-voting-lock'].$post({
         json: { projectId, stageId }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '檢查投票狀態失敗')
@@ -613,7 +614,7 @@ export function useCloneStageToProjects(): UseMutationReturnType<any, Error, Clo
       const httpResponse = await rpcClient.api.stages['clone-to-projects'].$post({
         json: { sourceProjectId, stageId, newStageName, targetProjectIds }
       })
-      const response = await httpResponse.json() as any
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '複製階段失敗')
@@ -622,7 +623,7 @@ export function useCloneStageToProjects(): UseMutationReturnType<any, Error, Clo
       return response.data
     },
     onSuccess: (data) => {
-      const count = data?.totalCloned || data?.successCount || 0
+      const count = data?.totalCloned || 0
       ElMessage.success(`成功複製階段到 ${count} 個專案`)
       queryClient.invalidateQueries({ queryKey: ['admin', 'projects'] })
     },

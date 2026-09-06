@@ -18,8 +18,8 @@ import { computed, unref } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { apiErrorMessage, errorOf, type ApiData } from '@/utils/api-types'
 import { useCurrentUser } from './useAuth'
-import { useProjectsWithStages } from './useProjects'
-import type { Stage, Project } from '@/types'
+import { useProjectsWithStages, type ProjectWithStages } from './useProjects'
+import type { Stage } from '@/types'
 import { debugLog } from '@/utils/debug'
 
 /**
@@ -89,7 +89,7 @@ export interface WalletLadderData {
  * Combined wallet data result
  */
 interface WalletDataResult {
-  projects: ComputedRef<Project[]>
+  projects: ComputedRef<ProjectWithStages[]>
   projectsLoading: Ref<boolean>
   projectsError: Ref<boolean>
   stages: ComputedRef<Stage[]>
@@ -414,7 +414,7 @@ export function useWalletLeaderboard(
  * @returns Query result
  */
 export function useWalletProjectStages(
-  projectId: Ref<string> | string
+  projectId: Ref<string | null> | string | null
 ): UseQueryReturnType<Stage[], Error> {
   const userQuery = useCurrentUser()
 
@@ -485,7 +485,7 @@ export function useWalletData(
   const projectsQuery = useProjectsWithStages()
 
   // Project-specific queries (only when projectId exists)
-  const stagesQuery = useWalletProjectStages(projectId as any)
+  const stagesQuery = useWalletProjectStages(projectId)
 
   // Users query (only when projectId exists AND user has permission)
   const shouldLoadUsers = computed(() => {

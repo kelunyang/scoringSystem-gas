@@ -145,7 +145,7 @@
             :simulated-rank="1"
             :simulated-group-count="settlementReportRankingsData.length"
             :report-reward="settlementProgress.reportRewardPool || 1000"
-            :all-groups="settlementReportRankingsData as any"
+            :all-groups="settlementReportRankingsData"
             :current-group-id="null"
             :total-project-groups="settlementReportRankingsData.length"
             :current-group-label="''"
@@ -255,7 +255,7 @@
               :simulated-rank="1"
               :simulated-group-count="settlementCommentRankingsData.length"
               :report-reward="settlementProgress.commentRewardPool || 500"
-              :all-groups="settlementCommentRankingsData as any"
+              :all-groups="settlementCommentRankingsData"
               :current-group-id="null"
               :total-project-groups="settlementCommentRankingsData.length"
               :current-group-label="''"
@@ -335,6 +335,8 @@ export interface Stage {
   stageId: string
   stageName: string
   projectId?: string
+  reportRewardPool?: number
+  commentRewardPool?: number
 }
 
 export interface SettlementProgress {
@@ -364,25 +366,10 @@ export interface SettlementDetails {
   authorNames?: Record<string, string>
   groupMembers?: Record<string, string[]>
   weightedScores?: Record<string, number>
-  [key: string]: any // Allow additional properties
 }
 
-export interface ValidationCheck {
-  passed: boolean
-  details: any
-}
-
-export interface Validation {
-  valid: boolean
-  message?: string
-  checks: {
-    allGroupsVoted: ValidationCheck
-    allProposalsApproved: ValidationCheck
-    hasCommentRankings: ValidationCheck
-    hasTeacherSubmissionRankings: ValidationCheck
-    hasTeacherCommentRankings: ValidationCheck
-  }
-}
+/** /scoring/validate-settlement 的回應。形狀直接從端點推導，不再手寫。 */
+export type Validation = ApiData<typeof rpcClient.api.scoring['validate-settlement']['$post']>
 
 export interface Transaction {
   userEmail: string
@@ -393,7 +380,7 @@ export interface Transaction {
   metadata?: string | Record<string, any>
   avatarSeed?: string
   avatarStyle?: string
-  avatarOptions?: any
+  avatarOptions?: string | Record<string, unknown> | null
 }
 
 export interface Member {
@@ -822,7 +809,7 @@ function buildValidationWarningMessage(validation: Validation): string {
     if (details.missingGroups && details.missingGroups.length > 0) {
       html += `&nbsp;&nbsp;• <strong>未完成組別明細：</strong>`
       html += `<ul style="margin: 5px 0; padding-left: 20px;">`
-      details.missingGroups.forEach((group: any) => {
+      details.missingGroups.forEach(group => {
         const percentage = group.totalMembers > 0
           ? Math.round((group.votedMembers / group.totalMembers) * 100)
           : 0
@@ -880,7 +867,7 @@ function buildValidationWarningMessage(validation: Validation): string {
     if (details.unsettledProposals && details.unsettledProposals.length > 0) {
       html += `&nbsp;&nbsp;• <strong>未結算組別明細：</strong>`
       html += `<ul style="margin: 5px 0; padding-left: 20px;">`
-      details.unsettledProposals.forEach((proposal: any) => {
+      details.unsettledProposals.forEach(proposal => {
         html += `<li><strong>${proposal.groupName}</strong> `
 
         if (proposal.status === 'settled') {
@@ -975,8 +962,8 @@ async function settleStage(stage: Stage, forceSettle = false): Promise<void> {
     settlementProgress.projectId = projectId
     settlementProgress.stageId = stage.stageId
     settlementProgress.stageName = stage.stageName
-    settlementProgress.reportRewardPool = (stage as any).reportRewardPool || 0
-    settlementProgress.commentRewardPool = (stage as any).commentRewardPool || 0
+    settlementProgress.reportRewardPool = stage.reportRewardPool || 0
+    settlementProgress.commentRewardPool = stage.commentRewardPool || 0
     settlementProgress.step = 'validating'
     settlementProgress.progress = 0
     settlementProgress.message = '檢查資料完整性中...'
@@ -1031,7 +1018,7 @@ async function settleStage(stage: Stage, forceSettle = false): Promise<void> {
       // HTTP response 作為 fallback：若 WebSocket 已更新則不重複處理
       // cast：WebSocket 可能已在 await 期間將狀態改為 'completed'，TS 無法推斷
       if ((settlementStatus.value as SettlementStatus) !== 'completed') {
-        const data = response.data as any
+        const data = response.data
         settlementProgress.step = 'completed'
         settlementProgress.progress = 100
         settlementProgress.message = '結算完成！'

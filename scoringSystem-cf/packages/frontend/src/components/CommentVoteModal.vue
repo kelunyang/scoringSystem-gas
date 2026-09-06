@@ -70,7 +70,7 @@
           version-id-key="proposalId"
           created-time-key="createdTime"
           display-name-key="authorEmail"
-          :format-title-fn="(_version: any, index: number) =>
+          :format-title-fn="(_version: unknown, index: number) =>
             index === proposalVersions.length - 1
               ? '最新版本'
               : `版本 ${index + 1}`"
@@ -98,8 +98,8 @@
           author: 'author',
           timestamp: 'timestamp'
         }"
-        :author-display-fn="(item: any) => `${item.author}(${item.authorEmail})`"
-        :initial-selected="selectedComments as any"
+        :author-display-fn="(item: Comment) => `${item.author}(${item.authorEmail})`"
+        :initial-selected="selectedComments"
           @update:selected="selectedComments = $event as Comment[]"
           @duplicate-detected="warning('同作者的評論只能選一個送入排序')"
           @max-limit-reached="$message.warning(`最多只能選擇 ${dynamicMaxSelections} 個評論`)"
@@ -131,7 +131,7 @@
         :right-items="currentProposalComments"
         item-key="id"
         item-label="author"
-        :item-display-fn="(item: any) => `${item.author}(${item.authorEmail})`"
+        :item-display-fn="(item: Comment) => `${item.author}(${item.authorEmail})`"
       />
 
       <!-- 操作按鈕 -->
@@ -204,13 +204,40 @@ const isSudoMode = computed(() => props.readOnly || sudoStore.isActive)
 
 // ========== Type Definitions ==========
 
+/**
+ * 一則評論在點數圖上被當成「一人一組」。
+ * 形狀對齊 AllGroupsChart 的 Group（結算模式會直接拿去畫）。
+ */
+interface CommentGroup {
+  groupId: string
+  groupName: string
+  rank: number
+  status: string
+  memberCount: number
+  members: Array<{
+    email: string
+    displayName: string
+    points: number
+    contribution: number
+    finalWeight: number
+    rank: number
+  }>
+}
+
+/** rankingproposals.rankingData 解析後的一項（評論排名） */
+interface CommentRankingItem {
+  commentId: string
+  rank: number
+}
+
 interface Comment {
   id: string
   content: string
   fullContent: string
   author: string
   authorEmail: string
-  timestamp: string
+  /** 端點回的是毫秒時間戳；預設的示範資料是格式化過的字串 */
+  timestamp: string | number
 }
 
 /** 投票資格與提案版本的形狀從端點推導（見 plan/issue.md #011） */
@@ -252,7 +279,6 @@ export interface Props {
   commentReward?: number  // Comment reward points (default: 500)
   user?: User | null
   comments?: Comment[]
-  stageComments?: any[]  // 從父組件傳入的原始評論列表（避免重複 API 呼叫）
   readOnly?: boolean
 }
 
@@ -301,13 +327,12 @@ const props = withDefaults(defineProps<Props>(), {
       fullContent: '建議在未來版本中加入更多的功能擴展，提升整體的實用價值，讓產品更具競爭力。'
     }
   ],
-  stageComments: () => [],
   readOnly: false
 })
 
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void
-  (e: 'vote-submitted', data: { success: boolean; data: any; rankedComments: Comment[] }): void
+  (e: 'vote-submitted', data: { success: boolean; data: unknown; rankedComments: Comment[] }): void
 }>()
 
 // Vue 3 Best Practice: Use unified useAuth() composable
@@ -431,8 +456,8 @@ const currentSelectedAuthorMembers = computed((): Member[] => {
 })
 
 // 將所有選中的評論轉換為「組」資料（含当前用户评论和虚拟评论）
-const allCommentsAsGroups = computed((): any[] => {
-  const groups: any[] = []
+const allCommentsAsGroups = computed((): CommentGroup[] => {
+  const groups: CommentGroup[] = []
   let currentRank = 1
 
   // 计算排名权重
@@ -642,10 +667,10 @@ async function loadStageComments(): Promise<void> {
       console.log('📋 [CommentVoteModal Debug] First comment sample:', allCommentsData[0])
 
       // 檢查有多少評論有 mention（Groups 或 Users）
-      const withMentions = allCommentsData.filter((c: any) => c.mentionedGroups || c.mentionedUsers)
+      const withMentions = allCommentsData.filter(c => c.mentionedGroups || c.mentionedUsers)
       console.log('🏷️  [CommentVoteModal Debug] Comments with mentions:', withMentions.length)
       console.log('🏷️  [CommentVoteModal Debug] mention samples:',
-        withMentions.slice(0, 3).map((c: any) => ({
+        withMentions.slice(0, 3).map(c => ({
           id: c.commentId,
           mentionedGroups: c.mentionedGroups,
           mentionedUsers: c.mentionedUsers,
@@ -657,8 +682,8 @@ async function loadStageComments(): Promise<void> {
       // 轉換為投票需要的格式 - 只顯示符合投票資格的評論
       // 使用後端計算的 canBeVoted 欄位（包含所有資格檢查：非回覆、有 mention、作者是 group member、有 helpful reaction）
       const comments = response.data.comments
-        .filter((comment: any) => comment.canBeVoted === true)
-        .map((comment: any) => ({
+        .filter(comment => comment.canBeVoted === true)
+        .map(comment => ({
           id: comment.commentId,
           content: comment.content.substring(0, 50) + (comment.content.length > 50 ? '...' : ''),
           fullContent: comment.content,
@@ -858,17 +883,17 @@ async function loadProposalData(proposalId: string, loadToEditor: boolean = fals
 
   try {
     // Parse ranking data
-    const rankingData = JSON.parse(proposal.rankingData)
+    const rankingData: CommentRankingItem[] = JSON.parse(proposal.rankingData)
 
-    // Enrich with full comment details
-    const loadedComments = rankingData.map((item: any) => {
-      const comment = allCommentsMap.value.get(item.commentId)
-      return {
-        ...comment,
-        id: item.commentId,
-        rank: item.rank
-      }
-    }).filter((c: any) => c.id).sort((a: any, b: any) => a.rank - b.rank)
+    // Enrich with full comment details.
+    // 找不到對應評論的排名項直接略過——原本會產出只有 id/rank 的空殼，
+    // 畫面上是一列沒有內容也沒有作者的評論。
+    const loadedComments = rankingData
+      .flatMap(item => {
+        const comment = allCommentsMap.value.get(item.commentId)
+        return comment ? [{ ...comment, id: item.commentId, rank: item.rank }] : []
+      })
+      .sort((a, b) => a.rank - b.rank)
 
     currentProposalComments.value = loadedComments
 
@@ -910,15 +935,13 @@ async function loadLatestProposalComments(proposalId: string): Promise<void> {
   if (!proposal) return
 
   try {
-    const rankingData = JSON.parse(proposal.rankingData)
-    latestProposalComments.value = rankingData.map((item: any) => {
-      const comment = allCommentsMap.value.get(item.commentId)
-      return {
-        ...comment,
-        id: item.commentId,
-        rank: item.rank
-      }
-    }).filter((c: any) => c.id).sort((a: any, b: any) => a.rank - b.rank)
+    const rankingData: CommentRankingItem[] = JSON.parse(proposal.rankingData)
+    latestProposalComments.value = rankingData
+      .flatMap(item => {
+        const comment = allCommentsMap.value.get(item.commentId)
+        return comment ? [{ ...comment, id: item.commentId, rank: item.rank }] : []
+      })
+      .sort((a, b) => a.rank - b.rank)
   } catch (error) {
     console.error('Parse latest proposal data error:', error)
     latestProposalComments.value = []

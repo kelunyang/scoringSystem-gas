@@ -14,28 +14,14 @@ import { computed, type Ref } from 'vue'
 import type { ComputedRef } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { apiErrorMessage, errorOf } from '@/utils/api-types'
+import type { ApiData } from '@/utils/api-types'
 import { useAuth } from './useAuth'
 
-interface Project {
-  projectId: string
-  projectName: string
-  createdBy: string
-  createdTime: number
-  status: string
-  [key: string]: any
-}
-
-interface AdminProjectsResponse {
-  success: boolean
-  data?: Project[] | { projects: Project[]; totalCount: number; limit?: number; offset?: number }
-  error?: {
-    message: string
-    code?: string
-  }
-}
+/** /projects/list 回的一個專案（依呼叫者身分有兩種形狀） */
+export type AdminProject = ApiData<typeof rpcClient.api.projects.list.$post>['projects'][number]
 
 interface AdminProjectsResult {
-  projects: Project[]
+  projects: AdminProject[]
   totalCount: number
 }
 
@@ -105,24 +91,16 @@ export function useAdminProjects(options?: UseAdminProjectsOptions): UseQueryRet
       }
 
       const httpResponse = await rpcClient.api.projects.list.$post({ json: queryParams })
-      const response = await httpResponse.json() as AdminProjectsResponse
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '載入專案列表失敗')
       }
 
-      // Backend returns either:
-      // - Old format: data is directly an array
-      // - New format: data is { projects: [...], totalCount: n, ... }
-      if (Array.isArray(response.data)) {
-        return { projects: response.data, totalCount: response.data.length }
-      } else if (response.data && Array.isArray((response.data as any).projects)) {
-        return {
-          projects: (response.data as any).projects,
-          totalCount: (response.data as any).totalCount || (response.data as any).projects.length
-        }
-      } else {
-        return { projects: [], totalCount: 0 }
+      // 端點固定回 { projects, totalCount, ... }（handlers/projects/list.ts:244）
+      return {
+        projects: response.data.projects,
+        totalCount: response.data.totalCount ?? response.data.projects.length
       }
     },
     // Only fetch when user auth is successful

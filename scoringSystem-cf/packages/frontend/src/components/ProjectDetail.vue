@@ -133,7 +133,7 @@
             </el-col>
             <el-col :xs="12" :sm="8" :md="4">
               <!-- 文字值保留 el-statistic -->
-              <el-statistic title="評論獎勵模式" :value="(commentRewardModeText as any)" />
+              <el-statistic title="評論獎勵模式" :value="0" :formatter="() => commentRewardModeText" />
             </el-col>
             <el-col :xs="12" :sm="8" :md="4">
               <AnimatedStatistic title="百分制最小值" :value="scoreRangeMin" />
@@ -886,7 +886,6 @@
         :comment-reward-percentile="commentRewardPercentile"
         :comment-reward="currentModalStageCommentReward"
         :user="user"
-        :stage-comments="currentModalStageComments"
         :read-only="commentVoteReadOnly"
         @vote-submitted="handleCommentVoteSubmit"
       />
@@ -933,8 +932,6 @@
         :stage-title="currentModalStageTitle"
         :stage-groups="modalManager.currentModalStageGroups.value"
         :cached-project-groups="projectData?.groups || []"
-        :cached-submissions="currentModalStageSubmissions"
-        :cached-comments="currentModalStageComments"
         @teacher-ranking-submitted="handleTeacherVoteSubmit"
       />
 
@@ -960,8 +957,6 @@
         :project-id="projectId"
         :stage-id="modalManager.currentModalStageId.value"
         :original-comment="modalManager.currentReplyComment.value"
-        :project-groups="projectData?.groups || []"
-        :project-users="projectData?.users || []"
         @reply-submitted="handleReplySubmitted"
       />
 
@@ -1365,10 +1360,7 @@ const groupData = useGroupData(
 )
 
 // 階段內容管理（必須在 watch 之前初始化）
-const stageContent = useStageContentManagement(
-  projectData as unknown as Ref<ProjectDataWithGroups | null | undefined>,
-  computed(() => props.user) as unknown as Ref<UserDataWithPermissions | null | undefined>
-)
+const stageContent = useStageContentManagement(projectData, userRef)
 
 // Modal 管理
 const modalManager = useModalManager()
@@ -1780,37 +1772,6 @@ const currentModalStageValidCommentAuthors = computed(() => {
   const validComments = stage.comments.filter((c) => c.canBeVoted === true)
   const uniqueAuthors = new Set(validComments.map((c) => c.authorEmail))
   return uniqueAuthors.size
-})
-
-// 計算當前 modal 階段的評論列表（傳給 CommentVoteModal / TeacherVoteModal 避免重複 API 呼叫）
-const currentModalStageComments = computed(() => {
-  const stageId = modalManager.currentModalStageId.value
-  if (!stageId) return []
-  const stage = stages.value.find((s: ExtendedStage) => s.id === stageId) as ExtendedStage | undefined
-  return stage?.comments || []
-})
-
-// 計算當前 modal 階段的成果列表（傳給 TeacherVoteModal 避免重複 API 呼叫）
-// 從 stage.groups 中提取有效的成果提交數據
-const currentModalStageSubmissions = computed(() => {
-  const stageId = modalManager.currentModalStageId.value
-  if (!stageId) return []
-  const stage = stages.value.find((s: ExtendedStage) => s.id === stageId) as ExtendedStage | undefined
-  if (!stage?.groups) return []
-
-  // 提取有提交記錄的組別，轉換為 TeacherVoteModal 需要的格式
-  // 只包含已批准的成果，教師投票只能對已批准的成果進行排名
-  return stage.groups
-    .filter((g) => g.submissionId && g.status === 'approved')
-    .map((g) => ({
-      submissionId: g.submissionId,
-      groupId: g.groupId,
-      groupName: g.groupName,
-      memberNames: g.memberNames || [],
-      contentMarkdown: g.reportContent,
-      submitTime: g.submitTime,
-      status: g.status || 'approved'
-    }))
 })
 
 // ===== 工具函數 =====

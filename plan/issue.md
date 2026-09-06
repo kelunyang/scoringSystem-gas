@@ -15,6 +15,55 @@
 
 ## A. 未解決 Issues
 
+### #014 ｜ 通知「批次寄信」送出的 ID 會被丟掉，實際上是無條件寄一整批（2026-09-07）
+
+**症狀（推論，尚未在正式環境驗證）**：管理員在通知管理頁勾選幾筆通知、
+按下批次寄信，實際寄出的**不是勾選的那幾筆**，而是「沒有任何篩選條件」
+之下的一整批（上限 `MAX_BATCH_EMAIL_SIZE`）。
+
+**根因**：前後端對這個端點的認知不同。
+
+```ts
+// 前端 useAdminNotifications.ts：送通知 ID 清單
+adminApi.notifications.sendBatch({ notificationIds })
+```
+
+```ts
+// shared/src/schemas/admin.ts:402 — 端點收的是「篩選條件」
+export const SendBatchNotificationsRequestSchema = z.object({
+  targetUserEmail: z.string().email().optional(),
+  type: z.string().optional(),
+  isRead: z.boolean().optional(),
+  limit: z.number().int().positive().optional()
+});
+```
+
+Zod 預設會剝掉未宣告的欄位，所以 `notificationIds` 到不了 handler；
+handler 拿到空篩選，`handlers/notifications/admin.ts:236` 的查詢就退化成
+`SELECT * FROM notifications WHERE isDeleted = 0`。
+
+**為什麼一直沒被發現**：前端那一行原本寫成
+`adminApi.notifications.sendBatch({ notificationIds } as any)`——轉型把
+形狀不符擋掉了；而且 `@repo/shared/types/admin` 手寫的
+`SendBatchNotificationsRequest`（userIds/title/message/type）跟真正的
+Zod schema 也對不上，兩份宣告互相掩護。已把 shared 的型別改成對照
+schema，`as any` 換成 `as unknown as` 並在原處留下
+`TODO(plan/issue.md #014)`。
+
+**待決**：要修的是端點還是前端？
+- 若「勾選哪幾筆就寄哪幾筆」是正確需求 → schema 加 `notificationIds`，
+  handler 依 ID 查詢（建議，符合 UI 呈現的語意）。
+- 若這個按鈕本來就是「依篩選批次寄」→ 前端該送篩選條件，UI 也不該
+  讓使用者以為勾選有作用。
+
+**順帶修掉的同一批型別謊言**（已完成，不需再處理）：
+`Notification` 宣告了 `userId` / `message` / `createdAt` / `isRead: boolean`，
+但 notifications 資料表的欄位是 `targetUserEmail` / `content` /
+`createdTime` / `isRead INTEGER`；`NotificationListResponse.total`
+實際回的是 `totalCount`。畫面早就在讀正確的欄位名，只有型別在說謊。
+
+---
+
 ### #013 ｜ `TeacherRankingModal.vue` 整支是壞的，而且從 UI 進不去（2026-09-07）
 
 打開 RPC 型別推導之後才看見：這個元件呼叫的兩個端點都對不上契約。
@@ -70,99 +119,6 @@ SELECT status, COUNT(*) FROM stages GROUP BY status;
 
 確認只有 VIEW 那七個值（或該欄位確定不再被讀）之後再收窄，
 順便把 shared 的註解寫清楚它的唯一來源是 VIEW。
-
-### #011 ｜ RPC 型別：路由層已修好，回應資料層未完（2026-09-06）
-
-> **2026-09-06 下午更新**：根因查清、路由層已修復並合併到 main。
-> 剩下的是第三層（handler 的資料型別），前端接線暫存在
-> `wip/rpc-frontend-wiring` 分支，尚有 138 個型別錯誤。
-
----
-
-#### 根因（實測，與原註解說的不同）
-
-原註解把 `AppType = any` 歸給「TypeScript 產生 .d.ts 時 route schema
-會遺失」。**不是。** 真正的原因是路由用獨立述句註冊：
-
-```ts
-const app = new Hono();
-app.route('/api/auth', authRouter);   // ← 回傳值被丟掉
-```
-
-Hono 的 RPC 型別靠串接時累積在回傳值上，寫成述句時 `typeof app`
-永遠是 `Hono<Env, BlankSchema, "/">`。三個探針證實：述句式取
-`client.api` 得到 `unknown`；只串頂層也不行（sub-router 自己也是述句式）；
-全串接的最小例子則推導成功。
-
-#### 已完成（commit e4a0fe9、bc35c88）
-
-| 層 | 狀態 |
-|----|------|
-| **1. 路由 schema** | ✅ 22 個 router 共 267 個註冊改成串接式（純語法變換） |
-| **2. 回應信封** | ✅ `successResponse`／`errorResponse` 改回傳 `JsonResponse<T>`（Hono 官方的 `interface X extends Response, TypedResponse<T>` 模式），並移除 192 處會抹掉型別的 `: Promise<Response>` 標註 |
-| **3. handler 資料** | ❌ **未完**——見下 |
-
-`tsc --build` 11 秒，`dist/src/index.d.ts` 464K（schema 確實寫進去了）。
-探針確認端點路徑、請求 body、回應信封都推導得出來，
-不存在的端點會編譯失敗。
-
-#### 未完成：第三層是 handler 自己的資料沒型別
-
-接上型別之後前端冒出 158 個錯誤（現已降到 138），其中最大一類的根源是
-**D1 查詢沒帶泛型**：
-
-```ts
-const stage = await env.DB.prepare(`SELECT ...`).bind(...).first();
-//                                                          ^^^^^^^ Record<string, unknown>
-```
-
-於是 handler 回傳的每個欄位都是 `unknown`，前端拿到的還是沒有資訊。
-
-**全庫規模**：
-
-| | 無泛型 | 有泛型 |
-|---|---|---|
-| `.first()` | **366** | 72 |
-| `.all()` | **100** | 131 |
-
-已修兩處示範（`getStage`、兩個結算端點的空 rankings 分支），
-合計讓前端少 20 個錯誤。**照這個比例，把前端接起來大約需要處理
-20–30 個 handler 的 row 型別**，不是全部 466 個。
-
-#### 前端剩餘 138 個錯誤的分類
-
-| 數量 | 類別 | 處理方式 |
-|------|------|---------|
-| ~34 | 沒收窄判別聯集就讀 `.data`／`.error`（多半在 console.log） | `if (r.success)` 收窄 |
-| ~68 | 後端回 `unknown` / `{}` | 修對應 handler 的 row 型別 |
-| ~36 | 手寫的前端型別對不上真實契約 | 改用 `utils/api-types.ts` 的 `ApiData<>` 從端點推導 |
-
-最後一類是這整件事的重點：那些手寫介面（`ProjectGroup`、
-`NormalizedTransaction` 之類）當初是猜的，編譯得過、看起來合理，
-然後跟後端悄悄漂走。現在有契約了，**應該從端點推導而不是逐欄和解**。
-
-#### 順帶查清楚的事
-
-`ensureApiPrefix`（`utils/rpc-client.ts`）是個 runtime 補丁，
-在 URL 缺 `/api` 時補上——因為呼叫端混用 `rpcClient.projects.*` 和
-`rpcClient.api.projects.*`，而型別是 `any` 沒人發現。
-WIP 分支已把 178 處補成 `.api.*`；等前端接完，這個補丁可以刪掉
-（缺前綴會變成編譯錯誤）。
-
-#### 接手指引
-
-```bash
-git checkout wip/rpc-frontend-wiring
-cd scoringSystem-cf
-pnpm --filter @repo/backend build      # 前端型別檢查依賴 backend 的 .d.ts
-pnpm --filter @repo/frontend exec vue-tsc --noEmit -p tsconfig.json
-```
-
-一次修一個檔案，改完重跑。修後端 row 型別之後要重新
-`pnpm --filter @repo/backend build`，前端才看得到。
-
----
-
 
 ### #010 ｜ 底層系統檢查（2026-09-05）：認證流程、sudo、migrations、佇列 ｜ 大部分已修
 
@@ -1083,6 +1039,35 @@ Vue template 內只出現在字串裡的元件名，可能被誤判為死碼—�
 
 
 ## B. 已裁決的疑問（封存，勿重啟）
+
+### 2026-09-07 ｜ 前端的 `rpcClient` 為什麼是 `any`？→ backend router 用了敘述式註冊（原 #011，已修）
+
+**結論**：`rpcClient` 之所以被降級成 `any`，根因不是原註解宣稱的
+「`.d.ts` 產出時掉了路由 schema」，而是 **router 用敘述式註冊**。
+Hono 的 RPC 型別靠串接時累積在回傳值上，寫成獨立述句
+（`app.route('/api/auth', authRouter)`）時 `typeof app` 永遠是
+`Hono<Env, BlankSchema, "/">`。22 個 router 共 267 個註冊改成串接式之後，
+`hc<AppType>()` 的推導就正常了。
+
+**另外兩層也一併處理**：
+
+1. **回應信封**：`successResponse()` 原本回裸 `Response`，型別在這層被
+   吃掉。改成 Hono 官方的
+   `interface JsonResponse<T, S> extends Response, TypedResponse<T, S, 'json'>`，
+   並移除 192 處會抹掉型別的 `: Promise<Response>` 標註。
+2. **handler 資料**：`.first()` / `.all()` 沒帶泛型時每一列都是
+   `Record<string, unknown>`。前端真的會讀到的端點都補上了 row 型別。
+
+三個套件的 `any` 已全部歸零，細節見
+[typing-cleanup.md](typing-cleanup.md)。過程中照出來的契約落差記在
+本檔 #013 / #014。`utils/rpc-client.ts` 的 `ensureApiPrefix` runtime
+補丁也隨之刪除——178 個呼叫點都補上 `.api.` 之後，缺前綴會變成編譯錯誤。
+
+**維持這個狀態的前提**：backend 的 router 必須維持串接式註冊。
+改回述句式會讓前端整片失去型別，而且**不會有任何編譯錯誤**——
+只會安靜地退回 `any`。這一點已寫進 `utils/rpc-client.ts` 的註解。
+
+---
 
 ### 2026-09-05 ｜ 進度條為什麼要用 `@property` 註冊 CSS 變數？→ 不註冊就不可能平滑，`transition: all` 是假的
 

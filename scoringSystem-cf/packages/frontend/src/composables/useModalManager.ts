@@ -14,6 +14,34 @@ import type { ExtendedStage } from './useStageContentManagement'
 /** 開 Modal 時只會讀到階段的這幾個欄位 */
 type ModalStage = Pick<Stage, 'status' | 'groups'> & { id?: string }
 
+/**
+ * 組內確認 Modal 用的成員。由 ProjectDetail 從 userGroups + users
+ * 拼出來，points / finalWeight 由 calculateScoring 事後填入。
+ */
+export interface ModalGroupMember {
+  userEmail: string
+  /** OurGroupChart 讀的是 email，與 userEmail 同值 */
+  email: string
+  displayName: string
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | null
+  contribution: number
+  points: number
+  finalWeight: number
+}
+
+/** 組內確認 Modal 用的提交資料 */
+export interface ModalSubmissionData {
+  submissionId?: string
+  /** email → 百分比。沒有權限看數字時後端回 null */
+  participationPercentages?: Record<string, number | null>
+  participationProposal?: Record<string, number | null>
+  content?: string | null
+  submitTime?: number
+  participants?: string[]
+}
+
 /** 回覆評論 Modal 需要的原評論資訊 */
 export interface ReplyCommentTarget {
   commentId: string
@@ -60,8 +88,8 @@ export function useModalManager() {
   // ===== Modal 數據狀態 =====
   const currentModalStageId = ref<string>('')
   const currentModalSubmissionId = ref<string>('')
-  const currentModalGroupMembers = ref<unknown[]>([])
-  const currentModalSubmissionData = ref<Record<string, unknown>>({})
+  const currentModalGroupMembers = ref<ModalGroupMember[]>([])
+  const currentModalSubmissionData = ref<ModalSubmissionData>({})
   const currentModalStageGroups = ref<Group[]>([])
   const currentModalStageIsSettled = ref<boolean>(false)
   const currentModalVoteData = ref<ModalVoteData>({
@@ -188,8 +216,8 @@ export function useModalManager() {
    */
   function openGroupSubmissionApprovalModal(
     stage: ModalStage,
-    submissionData: Record<string, unknown> & { submissionId?: string },
-    groupMembers: unknown[]
+    submissionData: ModalSubmissionData,
+    groupMembers: ModalGroupMember[]
   ) {
     currentModalStageId.value = stage.id ?? ''
     currentModalSubmissionId.value = submissionData.submissionId ?? ''
