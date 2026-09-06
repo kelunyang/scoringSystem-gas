@@ -21,7 +21,7 @@ function getApiBaseUrl(): string {
 
 /**
  * 確保 URL 路徑包含 /api 前綴
- * 處理前端代碼混用 rpcClient.api.* 和 rpcClient.projects.* 的情況
+ * 處理前端代碼混用 rpcClient.api.* 和 rpcClient.api.projects.* 的情況
  */
 function ensureApiPrefix(url: string | URL | Request): string | URL | Request {
   if (typeof url === 'string') {
@@ -111,8 +111,7 @@ function getSudoHeaders(): Record<string, string> {
  * ✅ Includes automatic token renewal via X-New-Token header
  * ✅ Includes automatic sudo headers when in sudo mode
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const rpcClient: any = hc<AppType>(getApiBaseUrl(), {
+export const rpcClient = hc<AppType>(getApiBaseUrl(), {
   headers: () => {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json'

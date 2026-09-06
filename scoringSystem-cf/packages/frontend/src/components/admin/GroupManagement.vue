@@ -963,7 +963,7 @@ const batchDeactivateProjectGroups = async () => {
           projectId: selectedProjectId.value,
           groupId
         }
-      }).then((res: Response) => res.json())
+      }).then(res => res.json())
     )
 
     const results = await Promise.all(promises)
@@ -991,7 +991,7 @@ const batchActivateProjectGroups = async () => {
           projectId: selectedProjectId.value,
           groupId
         }
-      }).then((res: Response) => res.json())
+      }).then(res => res.json())
     )
 
     const results = await Promise.all(promises)
@@ -1020,7 +1020,7 @@ const batchLockProjectGroups = async () => {
           groupId,
           updates: { allowChange: false }
         }
-      }).then((res: Response) => res.json())
+      }).then(res => res.json())
     )
 
     const results = await Promise.all(promises)
@@ -1049,7 +1049,7 @@ const batchUnlockProjectGroups = async () => {
           groupId,
           updates: { allowChange: true }
         }
-      }).then((res: Response) => res.json())
+      }).then(res => res.json())
     )
 
     const results = await Promise.all(promises)

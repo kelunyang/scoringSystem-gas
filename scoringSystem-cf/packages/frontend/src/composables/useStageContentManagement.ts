@@ -701,10 +701,12 @@ export function useStageContentManagement(projectData: any, userData: any) {
 
         console.log(`📊 [DEBUG] ===== API 回應 =====`)
         console.log(`📊 [DEBUG] API success:`, settlementResponse.success)
-        console.log(`📊 [DEBUG] API data:`, settlementResponse.data)
-        console.log(`📊 [DEBUG] API settled:`, settlementResponse.data?.settled)
-        console.log(`📊 [DEBUG] API rankings keys:`, settlementResponse.data?.rankings ? Object.keys(settlementResponse.data.rankings) : [])
-        console.log(`📊 [DEBUG] API 完整 rankings 物件:`, settlementResponse.data?.rankings)
+        if (settlementResponse.success) {
+          console.log(`📊 [DEBUG] API data:`, settlementResponse.data)
+          console.log(`📊 [DEBUG] API settled:`, settlementResponse.data?.settled)
+          console.log(`📊 [DEBUG] API rankings keys:`, settlementResponse.data?.rankings ? Object.keys(settlementResponse.data.rankings) : [])
+          console.log(`📊 [DEBUG] API 完整 rankings 物件:`, settlementResponse.data?.rankings)
+        }
 
         if (settlementResponse.success && settlementResponse.data && settlementResponse.data.settled) {
           const settlementRankings = settlementResponse.data.rankings

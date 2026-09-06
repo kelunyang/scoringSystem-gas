@@ -24,6 +24,9 @@
       ],
       "@repo/shared/*": [
         "../shared/src/*"
+      ],
+      "@repo/backend": [
+        "../backend/dist/src/index.d.ts"
       ]
     },
     "types": [
@@ -44,6 +47,9 @@
   "references": [
     {
       "path": "../shared"
+    },
+    {
+      "path": "../backend"
     },
     {
       "path": "./tsconfig.node.json"
