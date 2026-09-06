@@ -1264,14 +1264,13 @@ const loadAllUsers = async () => {
     if (response.success) {
       // 過濾出 role='member' 的使用者
       allUsers.value = response.data
-        .filter((viewer: ProjectViewer) => viewer.role === 'member')
-        .map((viewer: ProjectViewer & { tags?: string[] }) => ({
+        .filter(viewer => viewer.role === 'member')
+        .map(viewer => ({
           userId: viewer.userEmail,
           userEmail: viewer.userEmail,
-          displayName: viewer.displayName,
+          displayName: viewer.displayName ?? '',
           avatarSeed: viewer.avatarSeed,
-          avatarStyle: viewer.avatarStyle,
-          tags: viewer.tags || []
+          avatarStyle: viewer.avatarStyle
         }))
     }
   } catch (error) {

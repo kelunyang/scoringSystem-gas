@@ -139,15 +139,16 @@ import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 
 export interface MemberWithChange {
   userEmail: string
-  displayName?: string
+  // 後端 users 表這幾個欄位可為 null
+  displayName?: string | null
   membershipId?: string
   role: 'member' | 'leader'  // For compatibility
   oldRole: 'member' | 'leader'  // Original role
   newRole: 'member' | 'leader'  // New role (after pending changes)
   joinTime?: number | string
-  avatarSeed?: string
-  avatarStyle?: string
-  avatarOptions?: string | Record<string, unknown>
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | Record<string, unknown> | null
 }
 
 export interface Props {

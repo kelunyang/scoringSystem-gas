@@ -102,6 +102,7 @@ interface Member {
   displayName?: string | null
   membershipId?: string
   role?: string
+  userId?: string
   joinTime?: number
   avatarSeed?: string | null
   avatarStyle?: string | null

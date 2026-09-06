@@ -4,6 +4,7 @@
  */
 
 import type { Env, SqlBindValue } from '@/types';
+import type { GroupMemberRow } from '@db/rows';
 import { successResponse, errorResponse } from '@utils/response';
 import { generateId } from '@utils/id-generator';
 import { hasGlobalPermission } from '@utils/permissions';
@@ -277,17 +278,7 @@ export async function getGroup(
       FROM usergroups pug
       JOIN users u ON pug.userEmail = u.userEmail
       WHERE pug.projectId = ? AND pug.groupId = ? AND pug.isActive = 1
-    `).bind(projectId, groupId).all<{
-      membershipId: string;
-      userId: string;
-      userEmail: string;
-      displayName: string;
-      role: string;
-      joinTime: number;
-      avatarSeed: string | null;
-      avatarStyle: string | null;
-      avatarOptions: string | null;
-    }>();
+    `).bind(projectId, groupId).all<GroupMemberRow>();
 
     return successResponse({
       groupId: group.groupId,

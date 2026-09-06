@@ -44,8 +44,12 @@ export type GroupMember = NonNullable<ProjectGroup['members']>[number]
 // ============================================================================
 
 export interface User {
+  userId?: string
   userEmail: string
   displayName: string
+  // 後端 users 表這兩個欄位可為 null
+  avatarSeed?: string | null
+  avatarStyle?: string | null
   disabled?: boolean
   isUngrouped?: boolean
 }

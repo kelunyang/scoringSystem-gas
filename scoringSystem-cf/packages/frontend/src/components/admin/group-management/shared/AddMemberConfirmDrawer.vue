@@ -119,11 +119,12 @@ import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 
 interface Member {
   userEmail: string
-  displayName?: string
+  // 後端 users 表這些欄位可為 null
+  displayName?: string | null
   role?: string
-  avatarSeed?: string
-  avatarStyle?: string
-  avatarOptions?: string | Record<string, unknown>
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | Record<string, unknown> | null
 }
 
 export interface Props {

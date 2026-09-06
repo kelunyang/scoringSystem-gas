@@ -39,12 +39,13 @@ export interface TransactionFilterOptions {
 /** 過濾器實際會讀到的交易欄位 */
 export interface FilterableTransaction {
   timestamp: number
-  stageId?: string
+  // 後端這些欄位可為 null
+  stageId?: string | null
   transactionType: Transaction['transactionType'] | string
   points: number
-  description?: string
+  description?: string | null
   userEmail?: string
-  displayName?: string
+  displayName?: string | null
 }
 
 export function useTransactionFilter<T extends FilterableTransaction>(

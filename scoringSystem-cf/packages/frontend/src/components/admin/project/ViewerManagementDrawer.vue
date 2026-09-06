@@ -395,7 +395,9 @@ export interface ProjectViewer {
   userEmail: string
   displayName?: string | null
   avatarSeed?: string | null
-  avatarStyle?: string
+  avatarStyle?: string | null
+  /** 後端回傳的 avatarOptions 形狀依來源而異 */
+  avatarOptions?: unknown
   role: string
 }
 

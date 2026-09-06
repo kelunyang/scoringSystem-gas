@@ -35,7 +35,18 @@ function generateTimestamp(): string {
  * @param transactions - 交易記錄列表
  * @returns CSV 內容
  */
-export function generateTransactionCSV(transactions: Transaction[]): string {
+/** 匯出 CSV 時實際會讀到的交易欄位 */
+export interface WalletCsvTransaction {
+  id: string
+  timestamp: number | string
+  points: number
+  transactionType?: string | null
+  description?: string | null
+  stage: number
+  stageName?: string | null
+}
+
+export function generateTransactionCSV(transactions: WalletCsvTransaction[]): string {
   if (!transactions || transactions.length === 0) {
     return ''
   }
@@ -100,7 +111,7 @@ export function downloadCSV(csvContent: string, fileName: string): void {
  * @param userDisplay - 用戶顯示名稱
  */
 export function exportWalletCSV(
-  transactions: Transaction[],
+  transactions: WalletCsvTransaction[],
   projectName: string,
   userDisplay: string
 ): void {

@@ -342,6 +342,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQueryClient } from '@tanstack/vue-query'
 import { rpcClient } from '@/utils/rpc-client'
+import { errorOf, apiErrorMessage, type ApiData } from '@/utils/api-types'
 import { handleError, showWarning, showSuccess } from '@/utils/errorHandler'
 import type { User } from '@/types'
 import TopBarUserControls from './TopBarUserControls.vue'
@@ -426,10 +427,8 @@ const selectedProjectDescription = ref('')
 const showProjectDescriptionDialog = ref(false)
 
 // ===== Type Definitions =====
-interface StageGrowthData {
-  topUser?: UserGrowthData | null
-  targetUser?: UserGrowthData | null
-}
+/** 階段成長資料的形狀從端點推導（見 plan/issue.md #011） */
+type StageGrowthData = ApiData<(typeof rpcClient.api.wallets)['stage-growth']['$post']>
 
 // ===== Coordinated Drawers =====
 // 使用 useCoordinatedDrawer 來管理抽屜協調（同時只能展開一個）
@@ -870,7 +869,7 @@ async function loadProjectStages() {
   try {
     const httpResponse = await rpcClient.api.stages.list.$post({
       json: {
-        projectId: selectedProjectId.value
+        projectId: selectedProjectId.value ?? ''
       }
     })
     const response = await httpResponse.json()
@@ -928,19 +927,18 @@ async function handleExportProjectGrades() {
     const response = await httpResponse.json()
 
     if (!response.success) {
-      handleError(response.error?.message || '匯出成績失敗')
+      handleError(apiErrorMessage(errorOf(response)) || '匯出成績失敗')
       return
     }
 
-    const data = response.data as { project: any; users: User[]; scoreRange: any }
-    const { project, users, scoreRange } = data
+    const { project, users, scoreRange } = response.data
     const projectName = project?.projectName || '專案'
 
     // 準備 CSV 資料
     const headers = ['學號/使用者ID', '姓名', 'Email', '總點數', '百分等級分數']
     const rows = [
       headers,
-      ...users.map((user: User) => {
+      ...users.map(user => {
         const gradeValue = user.grade ? (typeof user.grade === 'number' ? (user.grade as number).toFixed(2) : String(user.grade)) : '0.00'
         return [
           user.userId || '',

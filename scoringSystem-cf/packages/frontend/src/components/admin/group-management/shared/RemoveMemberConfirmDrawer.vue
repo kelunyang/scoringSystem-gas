@@ -89,7 +89,8 @@ import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 
 export interface Member {
   userEmail: string
-  displayName?: string
+  // 後端 users 表這些欄位可為 null
+  displayName?: string | null
   membershipId?: string
   role?: string
   joinTime?: number | string

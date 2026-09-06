@@ -226,14 +226,26 @@ export async function exportProjectWalletSummary(
       )
       GROUP BY u.userId, u.userEmail, u.displayName
       ORDER BY balance DESC
-    `).bind(projectId, projectId).all();
+    `).bind(projectId, projectId).all<{
+      userId: string;
+      userEmail: string;
+      displayName: string | null;
+      balance: number;
+      transactionCount: number;
+    }>();
 
     // Get project info including score range
     const project = await env.DB.prepare(`
       SELECT projectId, projectName, createdAt, scoreRangeMin, scoreRangeMax
       FROM projects
       WHERE projectId = ?
-    `).bind(projectId).first();
+    `).bind(projectId).first<{
+      projectId: string;
+      projectName: string;
+      createdAt: number | null;
+      scoreRangeMin: number | null;
+      scoreRangeMax: number | null;
+    }>();
 
     // Extract score range with defaults
     const scoreRangeMin = (project?.scoreRangeMin as number) || 65;
@@ -338,7 +350,7 @@ export async function getStageGrowthData(
       FROM stages
       WHERE projectId = ?
       ORDER BY stageOrder ASC
-    `).bind(projectId).all();
+    `).bind(projectId).all<{ stageId: string; stageName: string; stageOrder: number; endTime: number | null }>();
 
     if (!stages.results || stages.results.length === 0) {
       return successResponse({
@@ -361,7 +373,7 @@ export async function getStageGrowthData(
       GROUP BY u.userId, u.userEmail, u.displayName
       ORDER BY totalPoints DESC
       LIMIT 1
-    `).bind(projectId).first();
+    `).bind(projectId).first<{ userId: string; userEmail: string; displayName: string | null; totalPoints: number }>();
 
     if (!topUserQuery) {
       return successResponse({
@@ -375,12 +387,28 @@ export async function getStageGrowthData(
     const target = targetUserEmail || userEmail;
 
     // Helper function to calculate cumulative points for a user
+    /** 成長曲線用到的使用者欄位 */
+    interface GrowthUserRow {
+      userId: string;
+      userEmail: string;
+      displayName: string | null;
+    }
+
+    /** 成長曲線那句「每階段點數」查詢的欄位 */
+    interface GrowthStageRow {
+      stageId: string;
+      stageName: string;
+      stageOrder: number;
+      endTime: number | null;
+      stageTotal: number | null;
+    }
+
     const calculateUserGrowth = async (email: string) => {
       const user = await env.DB.prepare(`
         SELECT userId, userEmail, displayName
         FROM users
         WHERE userEmail = ?
-      `).bind(email).first();
+      `).bind(email).first<GrowthUserRow>();
 
       if (!user) {
         return null;
@@ -399,7 +427,7 @@ export async function getStageGrowthData(
         WHERE s.projectId = ?
         GROUP BY s.stageId, s.stageOrder
         ORDER BY s.stageOrder ASC
-      `).bind(projectId, user.userEmail, projectId).all();
+      `).bind(projectId, user.userEmail, projectId).all<GrowthStageRow>();
 
       // Build a map of stageOrder -> points for quick lookup
       const pointsByStageOrder = new Map<number, number>();

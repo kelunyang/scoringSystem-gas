@@ -38,14 +38,15 @@ import EmptyState from '@/components/shared/EmptyState.vue'
 
 /** 折線上的一個點：某階段結束時的累計點數 */
 interface GrowthPoint {
-  endTime: string | number
+  // 後端 stages.endTime 可為 null
+  endTime: string | number | null
   cumulativePoints: number
 }
 
 /** 一位使用者的成長曲線 */
 export interface UserGrowthData {
   stageGrowth: GrowthPoint[]
-  displayName?: string
+  displayName?: string | null
   totalPoints?: number
 }
 
