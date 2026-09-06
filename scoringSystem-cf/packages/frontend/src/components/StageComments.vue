@@ -306,7 +306,6 @@ import { rpcClient } from '@/utils/rpc-client'
 import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import type { ApiData } from '@/utils/api-types'
 import { generateAvatarUrl } from '@/utils/walletHelpers'
-import type { Comment } from '@/types'
 
 /** Reaction 統計項 */
 interface ReactionStat {

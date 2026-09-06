@@ -580,12 +580,6 @@ interface VoteData {
   [key: string]: unknown
 }
 
-interface User {
-  userEmail?: string
-  displayName?: string
-  [key: string]: unknown
-}
-
 interface UserGroupInfoProp {
   groupId?: string
   groupName?: string
@@ -596,19 +590,19 @@ interface UserGroupInfoProp {
 
 interface ProjectUser {
   userEmail: string
-  displayName?: string
-  avatarSeed?: string
-  avatarStyle?: string
-  avatarOptions?: Record<string, unknown>
-  [key: string]: unknown
+  // 以下欄位在 users 表都可為 NULL
+  displayName?: string | null
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | Record<string, unknown> | null
 }
 
 interface ProjectUserGroup {
   groupId: string
   userEmail: string
-  isActive?: boolean
+  /** usergroups.isActive 是 INTEGER（0/1），不是 boolean */
+  isActive?: number
   role?: string
-  [key: string]: unknown
 }
 
 // ============= Props & Emits =============
@@ -618,7 +612,8 @@ export interface Props {
   projectId: string
   stageId: string
   voteData?: VoteData
-  user?: User | null
+  /** 只用來取 userEmail（模板的 current-user-email） */
+  user?: { userEmail?: string } | null
   userGroupInfo?: UserGroupInfoProp | null
   projectUsers?: ProjectUser[]
   projectUserGroups?: ProjectUserGroup[]
@@ -868,9 +863,9 @@ const showTieReminderForMembers = computed(() => {
 interface GroupMember {
   userEmail: string
   displayName: string
-  avatarSeed?: string
-  avatarStyle?: string
-  avatarOptions?: Record<string, unknown>
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | Record<string, unknown> | null
   role: string
 }
 

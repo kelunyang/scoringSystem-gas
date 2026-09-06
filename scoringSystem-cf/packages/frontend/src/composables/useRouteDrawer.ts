@@ -30,11 +30,17 @@ export type DrawerAction =
 /**
  * Drawer configuration for validation
  */
+/** processDrawerFromUrl 從階段身上真正需要的欄位 */
+export interface RouteDrawerStage {
+  stageId: string
+  status?: Stage['status']
+}
+
 interface DrawerConfig {
   requiresStage: boolean          // 是否需要 stageId
   requiresExtraParam: boolean     // 是否需要額外參數
   extraParamName?: string         // 額外參數的名稱
-  permissionCheck?: (permissions: PermissionFlags, stage?: Stage) => boolean  // 權限檢查函數
+  permissionCheck?: (permissions: PermissionFlags, stage?: RouteDrawerStage) => boolean  // 權限檢查函數
 }
 
 /**
@@ -246,7 +252,8 @@ export function useRouteDrawer() {
    */
   const processDrawerFromUrl = (
     permissions: PermissionFlags,
-    stages: Stage[]
+    // 這裡只用 stageId 找階段、只讀 status 做權限判斷，不需要完整的 Stage
+    stages: RouteDrawerStage[]
   ): {
     action: DrawerAction
     stageId?: string

@@ -84,7 +84,7 @@ export function useCurrentUser(): UseQueryReturnType<AuthUser, Error> {
 
       // Call backend to validate session and get user data
       // RPC automatically includes Authorization header via rpc-client
-      const httpResponse = await (rpcClient.api.auth as any)['current-user'].$post({
+      const httpResponse = await rpcClient.api.auth['current-user'].$post({
         json: { sessionId: token }
       })
 

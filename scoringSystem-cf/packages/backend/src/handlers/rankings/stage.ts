@@ -156,18 +156,22 @@ type RankingEntryWithMeta = { rank: number } & Record<string, unknown>;
 /** 一組在某階段的提案統計，只有 teacher/observer 看得到。 */
 interface GroupProposalStats {
   versionCount: number;
-  latestStatus: string | null;
-  latestVotingResult: string | null;
+  /** 來自 rankingproposals_with_status VIEW，只會是這四個值 */
+  latestStatus: 'settled' | 'withdrawn' | 'reset' | 'pending' | null;
+  latestVotingResult: 'agree' | 'disagree' | 'tie' | 'no_votes' | null;
 }
 
 /**
  * 一組在某階段的所有排名資訊。
- * key 多數是排名種類（voteRank / teacherRank / settlementRank…），
- * 但 proposalStats 是例外——它裝的是統計而不是名次。
+ *
+ * 原本用的是 `[rankingType: string]` 索引簽章，害每個欄位都變成
+ * `RankingEntryWithMeta | GroupProposalStats` 的聯集，前端要讀 rank
+ * 就得轉型。實際上這裡只會出現下面三個 key。
  */
 export interface GroupRankings {
+  teacherRank?: RankingEntryWithMeta;
+  voteRank?: RankingEntryWithMeta;
   proposalStats?: GroupProposalStats;
-  [rankingType: string]: RankingEntryWithMeta | GroupProposalStats | undefined;
 }
 
 export async function getAllStagesRankings(
@@ -180,7 +184,8 @@ export async function getAllStagesRankings(
     console.log(`🚀 [getAllStagesRankings] Starting: projectId=${projectId}, stageCount=${stageIds.length}`);
 
     if (!stageIds.length) {
-      return successResponse({ stageRankings: {} });
+      const empty: Record<string, Record<string, GroupRankings>> = {};
+      return successResponse({ stageRankings: empty });
     }
 
     // Single permission check for all stages
@@ -405,8 +410,8 @@ export async function getAllStagesRankings(
       }
       stageRankings[stageId][groupId].proposalStats = {
         versionCount: stat.versionCount as number,
-        latestStatus: stat.latestStatus as string | null,
-        latestVotingResult: stat.latestVotingResult as string | null
+        latestStatus: stat.latestStatus as GroupProposalStats['latestStatus'],
+        latestVotingResult: stat.latestVotingResult as GroupProposalStats['latestVotingResult']
       };
     }
 
@@ -649,8 +654,8 @@ export async function getStageRankings(
         }
         rankings[groupId].proposalStats = {
           versionCount: stat.versionCount as number,
-          latestStatus: stat.latestStatus as string | null,
-          latestVotingResult: stat.latestVotingResult as string | null
+          latestStatus: stat.latestStatus as GroupProposalStats['latestStatus'],
+          latestVotingResult: stat.latestVotingResult as GroupProposalStats['latestVotingResult']
         };
         console.log(`📊 [getStageRankings] Group ${groupId} proposal stats:`, rankings[groupId].proposalStats);
       }

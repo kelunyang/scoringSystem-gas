@@ -353,6 +353,12 @@ export async function verifyEmailForReset(
   }
 }
 
+/** verifyCodeAndGetProjects 成功時的 data */
+export interface VerifyCodeResult {
+  verified: true;
+  projects: Array<{ projectId: string; projectName: string }>;
+}
+
 /**
  * Step 2: Verify 2FA code and return projects
  *
@@ -363,7 +369,7 @@ export async function verifyCodeAndGetProjects(
   env: Env,
   userEmail: string,
   verificationCode: string
-): Promise<ApiResponse> {
+): Promise<ApiResponse<VerifyCodeResult>> {
   try {
     // Validate email format
     if (!validateEmail(userEmail)) {

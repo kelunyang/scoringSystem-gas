@@ -7,7 +7,7 @@
  */
 
 import { computed, type Ref } from 'vue'
-import type { User, Group } from '@/types'
+import type { Group } from '@/types'
 import { useSudoStore } from '@/stores/sudo'
 import type { UserGroupRecord } from '@repo/shared'
 
@@ -21,6 +21,12 @@ export interface GroupDataUser {
 }
 
 /** 專案資料中這個 composable 會讀到的部分 */
+/** useGroupData 只從使用者身上讀這兩個欄位 */
+export interface GroupDataViewer {
+  email?: string
+  userEmail?: string
+}
+
 export interface GroupDataProject {
   project?: { projectId?: string } | null
   groups?: Group[]
@@ -31,12 +37,12 @@ export interface GroupDataProject {
 /**
  * 群組數據處理 composable
  * @param {Ref<Object>} projectData - 專案數據 ref
- * @param {Ref<User>} user - 用戶數據 ref
+ * @param user - 用戶數據 ref（這裡只讀 email / userEmail）
  * @returns {Object} 群組相關計算函數
  */
 export function useGroupData(
   projectData: Ref<GroupDataProject | null | undefined>,
-  user: Ref<User>
+  user: Ref<GroupDataViewer | null | undefined>
 ) {
 
   /**

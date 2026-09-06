@@ -19,7 +19,7 @@ import { rpcClient } from '@/utils/rpc-client'
 import { apiErrorMessage, errorOf, type ApiData } from '@/utils/api-types'
 import { useCurrentUser } from './useAuth'
 import { useProjectsWithStages } from './useProjects'
-import type { Stage, User, Project } from '@/types'
+import type { Stage, Project } from '@/types'
 import { debugLog } from '@/utils/debug'
 
 /**

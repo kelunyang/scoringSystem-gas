@@ -615,9 +615,14 @@ export interface RankingProposal {
   // Calculated fields (from rankingproposals_with_status VIEW)
   status: 'settled' | 'withdrawn' | 'reset' | 'pending';
   votingResult: 'agree' | 'disagree' | 'tie' | 'no_votes';
-  voteScore: number; // SUM(agree) where agree=1, disagree=-1
-  agreeVotes: number; // COUNT(agree = 1)
-  disagreeVotes: number; // COUNT(agree = -1)
+  /**
+   * 以下三欄只有直接讀 VIEW 的路徑會帶。
+   * /rankings/proposals 回的是 supportCount / opposeCount / totalVotes，
+   * 不含這三欄——宣告成必填是在說謊，前端也沒有任何地方讀它們。
+   */
+  voteScore?: number; // SUM(agree) where agree=1, disagree=-1
+  agreeVotes?: number; // COUNT(agree = 1)
+  disagreeVotes?: number; // COUNT(agree = -1)
   // Timestamp fields (source of truth for status)
   settleTime?: number | null;       // Settlement timestamp (highest priority)
   withdrawnTime?: number | null;    // Withdrawal timestamp
@@ -638,13 +643,18 @@ export interface RankingProposal {
 export interface ProposalVote {
   voteId: string;
   proposalId: string;
-  projectId: string;
+  /**
+   * projectId / groupId 只有直接讀 proposalvotes 資料表的路徑會帶。
+   * /rankings/proposals 的批次查詢沒有 SELECT 它們（proposalId 已足以分組），
+   * 前端也沒有任何地方讀，所以是選填。
+   */
+  projectId?: string;
   voterEmail: string;
-  voterDisplayName?: string; // Voter's display name (from JOIN)
-  voterAvatarSeed?: string;
-  voterAvatarStyle?: string;
-  voterAvatarOptions?: string;
-  groupId: string;
+  voterDisplayName?: string | null; // Voter's display name (from JOIN)
+  voterAvatarSeed?: string | null;
+  voterAvatarStyle?: string | null;
+  voterAvatarOptions?: string | null;
+  groupId?: string;
   agree: number; // 1 (support), -1 (oppose)
   timestamp: number;
   comment?: string | null;

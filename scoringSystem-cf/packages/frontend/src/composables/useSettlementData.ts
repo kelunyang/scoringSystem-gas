@@ -8,7 +8,7 @@
  * - useSettlementDetails() - Get settlement details
  */
 
-import type { Group, Member } from '@/types'
+import type { Group } from '@/types'
 
 // ===== Type Definitions =====
 

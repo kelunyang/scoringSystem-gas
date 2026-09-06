@@ -180,7 +180,7 @@ export function useMarkNotificationAsRead() {
     mutationFn: async (notificationId: string) => {
       console.log(`📬 [useNotifications] 標記通知為已讀: ${notificationId}`)
 
-      const httpResponse = await (rpcClient.api.notifications as any)['mark-read'].$post({
+      const httpResponse = await rpcClient.api.notifications['mark-read'].$post({
         json: {
           notificationId
         }
@@ -224,7 +224,7 @@ export function useMarkAllNotificationsAsRead() {
     mutationFn: async () => {
       console.log('📬 [useNotifications] 標記所有通知為已讀')
 
-      const httpResponse = await (rpcClient.api.notifications as any)['mark-all-read'].$post()
+      const httpResponse = await rpcClient.api.notifications['mark-all-read'].$post()
       const response = await httpResponse.json() as ApiResponse<any>
 
       if (!response.success) {

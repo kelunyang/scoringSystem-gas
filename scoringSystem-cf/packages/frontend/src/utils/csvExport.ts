@@ -8,16 +8,6 @@
 import { formatTime } from './walletHelpers'
 import { showSuccess, showWarning, handleError } from './errorHandler'
 
-interface Transaction {
-  timestamp: number
-  points: number
-  transactionType?: string
-  description?: string
-  stage: number
-  stageName?: string
-  id: string
-}
-
 // CSV 常量
 const CSV_BOM = '\uFEFF'
 const CSV_HEADERS = ['時間', '金額', '類型', '說明', '階段', '階段名稱', '交易ID']

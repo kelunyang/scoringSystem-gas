@@ -20,8 +20,6 @@ import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import type { ApiData, ApiInput } from '@/utils/api-types'
 import { useCurrentUser } from './useAuth'
 import { ElMessage } from 'element-plus'
-import type { Stage, Comment, User, Group } from '@/types'
-import type { UserGroupRecord } from '@repo/shared'
 
 /**
  * Project core data structure

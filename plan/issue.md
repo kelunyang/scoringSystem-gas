@@ -15,6 +15,32 @@
 
 ## A. 未解決 Issues
 
+### #013 ｜ `TeacherRankingModal.vue` 整支是壞的，而且從 UI 進不去（2026-09-07）
+
+打開 RPC 型別推導之後才看見：這個元件呼叫的兩個端點都對不上契約。
+
+| 呼叫 | 問題 |
+|------|------|
+| `/rankings/teacher-vote-history` | 送出多餘的 `rankingType`（schema 沒有，Zod 會剝掉），然後讀 `response.data.versions`——那個端點回的是 `{ displayName, submissionRanking, commentRanking }`，**沒有 versions**。版本歷史永遠是空陣列。 |
+| `/rankings/submit` | 這是「組排名提案」端點，不是教師排名；而且它要的欄位是 `rankingData`，元件送的是 `rankings`，會直接被 Zod 擋掉。 |
+
+**為什麼沒順手修**：這個元件**根本進不來**。
+`useModalManager.openTeacherRankingModal()` 沒有任何呼叫端
+（`grep -rn "openTeacherRankingModal" src/` 只有 useModalManager 自己
+和 `bak/` 底下的舊備份），`showTeacherRankingModal` 這個 ref 也沒有
+其他地方設成 true。教師排名實際走的是 `TeacherVoteModal.vue`，
+它用的是 `/rankings/teacher-ranking-versions` 與
+`/rankings/teacher-comprehensive-vote`，那條路是好的。
+
+修它等於改執行時行為（而且是改一段沒人跑得到的程式），所以目前在
+`TeacherRankingModal.vue` 那兩個呼叫上留了轉型＋`TODO(plan/issue.md #013)`。
+
+**待決**：這個元件要修好接回 UI，還是連同 `useModalManager` 裡的
+`showTeacherRankingModal` / `openTeacherRankingModal` 一起刪掉？
+若沒有「教師逐組拖曳排名」這個獨立需求，刪掉是比較誠實的選擇。
+
+---
+
 ### #012 ｜ shared 的 `Stage['status']` 含兩個後端不會產生的值（2026-09-06）
 
 **已修的部分**：`utils/stageStatus.ts` 的 `getStageStatusText()` 與

@@ -189,7 +189,7 @@
  */
 
 import { computed } from 'vue'
-import type { Transaction, User } from '@repo/shared'
+import type { Transaction } from '@repo/shared'
 import AdminFilterToolbar from './admin/shared/AdminFilterToolbar.vue'
 
 interface SelectOption {

@@ -91,3 +91,25 @@ export interface UserDisplayRow {
   avatarStyle: string | null;
   avatarOptions: string | null;
 }
+
+/** projects 表的一列（`SELECT *`）。欄位對照 migrations/0001_init_schema.sql:31 */
+export interface ProjectRow {
+  projectId: string;
+  projectName: string;
+  description: string | null;
+  totalStages: number;
+  currentStage: number;
+  status: string;
+  createdBy: string;
+  createdTime: number;
+  lastModified: number;
+  scoreRangeMin: number;
+  scoreRangeMax: number;
+  createdAt: number;
+  updatedAt: number;
+  /** 這四欄可為 NULL，代表「沿用全域預設」，由 effectiveConfig 三層回退補上 */
+  maxCommentSelections: number | null;
+  studentRankingWeight: number | null;
+  teacherRankingWeight: number | null;
+  commentRewardPercentile: number | null;
+}

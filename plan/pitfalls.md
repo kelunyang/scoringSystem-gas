@@ -4,6 +4,35 @@
 > 新坑往上加，讓最近的教訓最先被看到。
 
 ---
+## 2026-09-07 ｜ Turnstile 擋下請求時回的錯誤形狀跟全站不一樣，前端讀不到訊息
+
+**症狀**：Turnstile 驗證失敗時，前端只顯示通用的失敗訊息，
+拿不到後端給的原因（缺 token／驗證失敗／設定錯誤）。
+
+**根因**：`utils/turnstile.ts` 的 `verifyTurnstileMiddleware` 回的是
+
+```ts
+{ success: false, error: 'Missing Turnstile verification token', errorCode: 'MISSING_TURNSTILE_TOKEN' }
+```
+
+——`error` 是字串、code 放在平行的 `errorCode`。全站其他地方走的是
+`errorResponse()` 的 `{ error: { code, message } }`。前端的
+`apiErrorMessage(errorOf(response))` 讀的是 `error.message`，
+對字串型的 `error` 只會拿到 `undefined`，於是每次都退回預設文案。
+
+這個形狀之所以能活這麼久，是因為 11 個呼叫點都是
+`return c.json(turnstileError, 403)`——不經過 `errorResponse()`，
+所以守門測試 `tests/error-response-shape.test.ts`（它掃的是
+`errorResponse(...)` 的呼叫）掃不到它。
+
+**教訓與防護**：
+1. 「不經過共用函式的回應」正是形狀會走鐘的地方。守門測試若只掃
+   共用函式的呼叫點，就等於預設所有人都會用共用函式——那不成立。
+2. 這次是 RPC 型別推導把它照出來的：前端一旦真的拿到端點的
+   response 聯集型別，形狀不一致就會變成編譯錯誤，不再是執行期才發現。
+   這是把 `rpcClient` 從 `any` 改回 `hc<AppType>()` 的實際收益之一。
+
+---
 ## 2026-09-06 ｜ 同一個檔案裡兩份權限實作，被呼叫的那份是對的，另一份不是
 
 **症狀**：無（還沒爆）。`useDetailedProjectPermissions.ts` 裡有兩份

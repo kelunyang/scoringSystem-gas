@@ -24,8 +24,9 @@ interface RankingProposalRow {
   proposerEmail: string;
   /** RankingEntry[] 的 JSON 字串，部分路徑會先解析再往下傳。 */
   rankingData: string;
-  status: string;
-  votingResult: string | null;
+  /** VIEW 的 CASE 只會產出這四個值（migrations/0008_add_withdraw_reason.sql:53） */
+  status: 'settled' | 'withdrawn' | 'reset' | 'pending';
+  votingResult: 'agree' | 'disagree' | 'tie' | 'no_votes';
   supportCount: number;
   opposeCount: number;
   totalVotes: number;
@@ -207,12 +208,12 @@ export async function getStageRankingProposals(
     const userVotesResult = await env.DB.prepare(`
       SELECT proposalId, agree FROM proposalvotes
       WHERE proposalId IN (${proposalPlaceholders}) AND voterEmail = ?
-    `).bind(...proposalIds, userEmail).all();
+    `).bind(...proposalIds, userEmail).all<{ proposalId: string; agree: number }>();
 
     // Map user votes by proposalId
     const userVoteByProposal = new Map<string, number>();
     for (const uv of (userVotesResult.results || [])) {
-      userVoteByProposal.set(uv.proposalId as string, uv.agree as number);
+      userVoteByProposal.set(uv.proposalId, uv.agree);
     }
 
     // Batch Query 3: Get ALL approved submissions for this stage (for validation)
@@ -233,7 +234,7 @@ export async function getStageRankingProposals(
 
       // Get user vote from batch result
       const userAgree = userVoteByProposal.get(proposal.proposalId);
-      const userVote = typeof userAgree === 'number'
+      const userVote: 'support' | 'oppose' | null = typeof userAgree === 'number'
         ? (userAgree === 1 ? 'support' : userAgree === -1 ? 'oppose' : null)
         : null;
 

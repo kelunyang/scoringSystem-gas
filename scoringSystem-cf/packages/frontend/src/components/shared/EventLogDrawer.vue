@@ -31,14 +31,14 @@
 <script setup lang="ts">
 import EventLogViewer from '../EventLogViewer.vue'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
-import type { Project } from '@/types'
 
 // Drawer Breadcrumb
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 
 export interface Props {
   modelValue: boolean
-  project: Project | null
+  /** 這個抽屜只用得到專案 ID 與名稱 */
+  project: { projectId: string; projectName: string } | null
   userMode?: boolean
 }
 

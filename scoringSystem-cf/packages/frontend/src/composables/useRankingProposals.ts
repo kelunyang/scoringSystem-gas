@@ -188,7 +188,7 @@ export function useRankingProposals(
   const proposalsQuery = useQuery({
     queryKey: computed(() => ['rankings', 'proposals', getValue(projectId), getValue(stageId)]),
     queryFn: async (): Promise<ProposalsResponseData> => {
-      const httpResponse = await (rpcClient.api.rankings as any).proposals.$post({
+      const httpResponse = await rpcClient.api.rankings.proposals.$post({
         json: {
           projectId: getValue(projectId),
           stageId: getValue(stageId)
@@ -343,7 +343,7 @@ export function useRankingProposals(
   // ===== Mutation: Vote =====
   const voteMutation = useMutation({
     mutationFn: async ({ type }: { type: 'support' | 'oppose' }) => {
-      const httpResponse = await (rpcClient.api.rankings as any).vote.$post({
+      const httpResponse = await rpcClient.api.rankings.vote.$post({
         json: {
           projectId: getValue(projectId),
           proposalId: selectedVersionId.value,
@@ -371,7 +371,7 @@ export function useRankingProposals(
   // ===== Mutation: Submit Proposal =====
   const submitMutation = useMutation({
     mutationFn: async ({ rankingData }: { rankingData: RankingData[] }) => {
-      const httpResponse = await (rpcClient.api.rankings as any).submit.$post({
+      const httpResponse = await rpcClient.api.rankings.submit.$post({
         json: {
           projectId: getValue(projectId),
           stageId: getValue(stageId),
@@ -401,7 +401,7 @@ export function useRankingProposals(
   // ===== Mutation: Withdraw =====
   const withdrawMutation = useMutation({
     mutationFn: async () => {
-      const httpResponse = await (rpcClient.api.rankings as any).withdraw.$post({
+      const httpResponse = await rpcClient.api.rankings.withdraw.$post({
         json: { proposalId: selectedVersionId.value }
       })
       const response = await httpResponse.json()
@@ -425,7 +425,7 @@ export function useRankingProposals(
   // ===== Mutation: Reset Votes =====
   const resetMutation = useMutation({
     mutationFn: async ({ reason }: { reason?: string }) => {
-      const httpResponse = await (rpcClient.api.rankings as any)['reset-votes'].$post({
+      const httpResponse = await rpcClient.api.rankings['reset-votes'].$post({
         json: { proposalId: selectedVersionId.value, reason: reason || '' }
       })
       const response = await httpResponse.json()
@@ -467,10 +467,12 @@ export function useRankingProposals(
     isGroupsLoading: computed(() => groupsQuery.isLoading.value),
 
     // Mutations
-    vote: (type: 'support' | 'oppose') => voteMutation.mutateAsync({ type }),
-    submitProposal: (rankingData: RankingData[]) => submitMutation.mutateAsync({ rankingData }),
-    withdraw: () => withdrawMutation.mutateAsync(),
-    resetVotes: (reason?: string) => resetMutation.mutateAsync({ reason }),
+    // 呼叫端只 await、不讀回傳值，所以這裡把 mutateAsync 的結果丟掉，
+    // 讓實作與上面宣告的 Promise<void> 一致
+    vote: async (type: 'support' | 'oppose') => { await voteMutation.mutateAsync({ type }) },
+    submitProposal: async (rankingData: RankingData[]) => { await submitMutation.mutateAsync({ rankingData }) },
+    withdraw: async () => { await withdrawMutation.mutateAsync() },
+    resetVotes: async (reason?: string) => { await resetMutation.mutateAsync({ reason }) },
 
     // Mutation states
     isVoting: computed(() => voteMutation.isPending.value),

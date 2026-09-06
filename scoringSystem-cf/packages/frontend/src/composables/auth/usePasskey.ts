@@ -51,6 +51,21 @@ export interface UsePasskeyReturn {
 /**
  * Check if WebAuthn is supported in the current browser
  */
+/** 後端 schema 只收這五種 transport（shared/src/schemas/auth.ts:305） */
+const PASSKEY_TRANSPORTS = ['internal', 'hybrid', 'usb', 'ble', 'nfc'] as const;
+type PasskeyTransport = typeof PASSKEY_TRANSPORTS[number];
+
+/**
+ * getTransports() 回的是 string[]，可能含後端不認得的值（例如 'smart-card'），
+ * 過濾掉再送出；全被濾掉時退回瀏覽器最常見的兩種。
+ */
+function normalizeTransports(transports: string[] | undefined): PasskeyTransport[] {
+  const known = (transports || []).filter(
+    (t): t is PasskeyTransport => (PASSKEY_TRANSPORTS as readonly string[]).includes(t)
+  );
+  return known.length > 0 ? known : ['internal', 'hybrid'];
+}
+
 function checkWebAuthnSupport(): boolean {
   return !!(
     window.PublicKeyCredential &&
@@ -130,7 +145,7 @@ export function usePasskey(): UsePasskeyReturn {
     errorMessage.value = '';
 
     try {
-      const httpResponse = await (rpcClient.api.auth as any).passkey.status.$get();
+      const httpResponse = await rpcClient.api.auth.passkey.status.$get();
       const response = await httpResponse.json();
 
       if (response.success) {
@@ -163,7 +178,7 @@ export function usePasskey(): UsePasskeyReturn {
     try {
       // Step 1: Get registration options from server
       // attachment: 'platform' = 綁定這台電腦；'cross-platform' = 綁定手機（跳 QR）
-      const initResponse = await (rpcClient.api.auth as any).passkey['register-init'].$post({
+      const initResponse = await rpcClient.api.auth.passkey['register-init'].$post({
         json: attachment ? { attachment } : {}
       });
       const initResult = await initResponse.json();
@@ -208,15 +223,17 @@ export function usePasskey(): UsePasskeyReturn {
       const attestationResponse = credential.response as AuthenticatorAttestationResponse;
 
       // Step 3: Send credential to server for verification
-      const verifyResponse = await (rpcClient.api.auth as any).passkey['register-verify'].$post({
+      const verifyResponse = await rpcClient.api.auth.passkey['register-verify'].$post({
         json: {
           id: credential.id,
           rawId: arrayBufferToBase64Url(credential.rawId),
-          type: credential.type,
+          // WebAuthn 規範保證 PublicKeyCredential.type 是 'public-key'，
+          // 但 DOM 型別把它宣告成 string
+          type: 'public-key',
           response: {
             clientDataJSON: arrayBufferToBase64Url(attestationResponse.clientDataJSON),
             attestationObject: arrayBufferToBase64Url(attestationResponse.attestationObject),
-            transports: attestationResponse.getTransports?.() || ['internal', 'hybrid']
+            transports: normalizeTransports(attestationResponse.getTransports?.())
           },
           deviceName: deviceName || getDefaultDeviceName()
         }
@@ -253,7 +270,7 @@ export function usePasskey(): UsePasskeyReturn {
     errorMessage.value = '';
 
     try {
-      const httpResponse = await (rpcClient.api.auth as any).passkey.credentials[':credentialId'].$patch({
+      const httpResponse = await rpcClient.api.auth.passkey.credentials[':credentialId'].$patch({
         param: { credentialId },
         json: { deviceName }
       });
@@ -283,7 +300,7 @@ export function usePasskey(): UsePasskeyReturn {
     errorMessage.value = '';
 
     try {
-      const httpResponse = await (rpcClient.api.auth as any).passkey.credentials[':credentialId'].$delete({
+      const httpResponse = await rpcClient.api.auth.passkey.credentials[':credentialId'].$delete({
         param: { credentialId },
         json: { password }
       });
@@ -327,7 +344,7 @@ export function usePasskey(): UsePasskeyReturn {
     try {
       // Get authentication options from server
       // crossDevice: true = 使用你的手機登入（discoverable，跳 QR）
-      const initResponse = await (rpcClient.api.auth as any).passkey['auth-init'].$post({
+      const initResponse = await rpcClient.api.auth.passkey['auth-init'].$post({
         json: { userEmail, preAuthToken, crossDevice }
       });
       const initResult = await initResponse.json();
@@ -400,13 +417,14 @@ export function usePasskey(): UsePasskeyReturn {
     try {
       const assertionResponse = pendingCredential.response as AuthenticatorAssertionResponse;
 
-      const httpResponse = await (rpcClient.api.auth as any).passkey['auth-verify'].$post({
+      const httpResponse = await rpcClient.api.auth.passkey['auth-verify'].$post({
         json: {
           userEmail,
           preAuthToken,
           id: pendingCredential.id,
           rawId: arrayBufferToBase64Url(pendingCredential.rawId),
-          type: pendingCredential.type,
+          // 同上：規範保證是 'public-key'
+          type: 'public-key',
           response: {
             clientDataJSON: arrayBufferToBase64Url(assertionResponse.clientDataJSON),
             authenticatorData: arrayBufferToBase64Url(assertionResponse.authenticatorData),

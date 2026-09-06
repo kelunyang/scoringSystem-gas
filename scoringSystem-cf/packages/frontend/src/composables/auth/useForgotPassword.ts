@@ -7,7 +7,7 @@ import { ref, computed, onBeforeUnmount } from 'vue';
 import { rpcClient } from '@/utils/rpc-client'
 import { apiErrorCode, apiErrorMessage, errorOf } from '@/utils/api-types';
 import type { Ref, ComputedRef } from 'vue';
-import type { EmailVerificationResponse, Project } from '../../types/auth';
+import type { Project } from '../../types/auth';
 
 /** Server default; a 429 replaces it with the actual remaining wait. */
 const DEFAULT_RESEND_COOLDOWN_SECONDS = 60;
@@ -140,14 +140,14 @@ export function useForgotPassword(): UseForgotPasswordReturn {
     errorMessage.value = '';
 
     try {
-      const httpResponse = await (rpcClient.api.auth as any)['verify-email-for-reset'].$post({
+      const httpResponse = await rpcClient.api.auth['verify-email-for-reset'].$post({
         json: {
           userEmail: email.trim(),
           turnstileToken
         }
       });
 
-      const response: EmailVerificationResponse = await httpResponse.json();
+      const response = await httpResponse.json();
 
       if (response.success) {
         emailVerified.value = true;
@@ -181,7 +181,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
     errorMessage.value = '';
 
     try {
-      const httpResponse = await (rpcClient.api.auth as any)['password-reset-verify-code'].$post({
+      const httpResponse = await rpcClient.api.auth['password-reset-verify-code'].$post({
         json: {
           userEmail: userEmail.value.trim(),
           code: code.trim().toUpperCase(),
@@ -225,7 +225,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
     errorMessage.value = '';
 
     try {
-      const httpResponse = await (rpcClient.api.auth as any)['verify-email-for-reset'].$post({
+      const httpResponse = await rpcClient.api.auth['verify-email-for-reset'].$post({
         json: {
           userEmail: userEmail.value.trim(),
           turnstileToken
@@ -262,7 +262,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
     errorMessage.value = '';
 
     try {
-      const httpResponse = await (rpcClient.api.auth as any)['reset-password'].$post({
+      const httpResponse = await rpcClient.api.auth['reset-password'].$post({
         json: {
           userEmail: userEmail.value.trim(),
           selectedProjectIds: selectedProjectIds.value,

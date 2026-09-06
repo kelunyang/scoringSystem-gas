@@ -8,7 +8,7 @@ import { rpcClient } from '@/utils/rpc-client';
 import { errorOf, apiErrorMessage } from '@/utils/api-types';
 import { apiClient } from '@/utils/api';
 import type { Ref, ComputedRef } from 'vue';
-import type { RegisterData, InvitationVerificationResponse } from '../../types/auth';
+import type { RegisterData } from '../../types/auth';
 import { getErrorMessage } from '@/utils/errorHandler'
 
 export interface UseRegisterReturn {

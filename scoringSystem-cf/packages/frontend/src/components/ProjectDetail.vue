@@ -404,7 +404,7 @@
               <!-- 左側：狀態區域 -->
               <div class="stage-status-area">
                 <!-- 小螢幕：圖示 + 截斷標題 -->
-                <el-tooltip :content="getStatusTooltip(stage as any)" placement="top" class="mobile-status-icon">
+                <el-tooltip :content="getStatusTooltip(stage)" placement="top" class="mobile-status-icon">
                   <span class="status-icon" :class="`status-${stage.status}`">
                     <i :class="getStatusIcon(stage.status)"></i>
                   </span>
@@ -463,15 +463,15 @@
                     :refreshing="stage.refreshing"
                     :mention-count="stageMentionCounts.get(stage.id) || 0"
                     :disabled="isInitialLoading"
-                    @update:model-value="handleStageViewModeChange(stage as any, $event)"
-                    @refresh="refreshStageContent(stage as any)"
+                    @update:model-value="handleStageViewModeChange(stage, $event)"
+                    @refresh="refreshStageContent(stage)"
                   />
                   <!-- 階段時間軸切換按鈕 -->
                   <button
                     class="btn btn-timeline"
                     :disabled="isInitialLoading"
                     :title="stageTimelinesVisible.get(stage.id) ? '隱藏階段時間軸' : '顯示階段時間軸'"
-                    @click="toggleStageTimeline(stage as any)"
+                    @click="toggleStageTimeline(stage)"
                   >
                     <i class="fa fa-timeline"></i>
                   </button>
@@ -480,7 +480,7 @@
                     class="btn btn-info mobile-only"
                     :disabled="isInitialLoading"
                     title="檢視階段詳情與獎勵"
-                    @click="openStageDescriptionDrawer(stage as any)"
+                    @click="openStageDescriptionDrawer(stage)"
                   >
                     <i class="fa fa-info-circle"></i>
                   </button>
@@ -488,7 +488,7 @@
                   <el-dropdown
                     trigger="click"
                     :disabled="isInitialLoading"
-                    @command="handleHistoryViewCommand($event, stage as any)"
+                    @command="handleHistoryViewCommand($event, stage)"
                   >
                     <button
                       class="btn btn-timeline"
@@ -526,9 +526,9 @@
                     v-if="stage.status === 'active' && canSubmit"
                     class="btn btn-primary"
                     :disabled="isInitialLoading"
-                    @click="handleReportAction(stage as any)"
+                    @click="handleReportAction(stage)"
                   >
-                    {{ getReportButtonText(stage as any) }}
+                    {{ getReportButtonText(stage) }}
                   </button>
 
                   <!-- 張貼評論按鈕 -->
@@ -536,7 +536,7 @@
                     v-if="canComment && (stage.status === 'active' || canManageStages)"
                     class="btn btn-tertiary"
                     :disabled="isInitialLoading"
-                    @click="handleOpenSubmitCommentModal(stage as any)"
+                    @click="handleOpenSubmitCommentModal(stage)"
                   >
                     張貼評論
                   </button>
@@ -546,7 +546,7 @@
                     v-if="stage.status === 'voting' && canVote"
                     class="btn btn-secondary"
                     :disabled="isInitialLoading"
-                    @click="openVoteResultModal(stage as any)"
+                    @click="openVoteResultModal(stage)"
                   >
                     階段成果投票
                   </button>
@@ -556,7 +556,7 @@
                     v-if="stage.status === 'voting' && canTeacherVote"
                     class="btn btn-secondary"
                     :disabled="loadingTeacherVoteData || isInitialLoading"
-                    @click="modalManager.openTeacherVoteModal(stage as any)"
+                    @click="modalManager.openTeacherVoteModal(stage)"
                   >
                     <i v-if="loadingTeacherVoteData" class="fas fa-spinner fa-spin"></i>
                     {{ loadingTeacherVoteData ? '載入中...' : '教師投票' }}
@@ -567,7 +567,7 @@
                     v-if="stage.status === 'voting' && canVote && userHasValidCommentInStage(stage)"
                     class="btn btn-quaternary"
                     :disabled="isInitialLoading"
-                    @click="modalManager.openCommentVoteModal(stage as any)"
+                    @click="modalManager.openCommentVoteModal(stage)"
                   >
                     評論投票
                   </button>
@@ -577,7 +577,7 @@
                     v-if="stage.status === 'completed'"
                     trigger="click"
                     :disabled="loadingVotingAnalysis || isInitialLoading"
-                    @command="handleAnalysisCommand($event, stage as any)"
+                    @command="handleAnalysisCommand($event, stage)"
                   >
                     <button class="btn btn-dark" :disabled="loadingVotingAnalysis || isInitialLoading">
                       <i v-if="loadingVotingAnalysis" class="fas fa-spinner fa-spin"></i>
@@ -599,15 +599,15 @@
             </div>
 
             <!-- 第二行：操作按鈕（小螢幕專用） -->
-            <div v-if="hasActionButtons(stage as any)" class="stage-action-controls mobile-only">
+            <div v-if="hasActionButtons(stage)" class="stage-action-controls mobile-only">
               <!-- 提交報告按鈕 -->
               <button
                 v-if="stage.status === 'active' && canSubmit"
                 class="btn btn-primary"
                 :disabled="isInitialLoading"
-                @click="handleReportAction(stage as any)"
+                @click="handleReportAction(stage)"
               >
-                {{ getReportButtonText(stage as any) }}
+                {{ getReportButtonText(stage) }}
               </button>
 
               <!-- 張貼評論按鈕 -->
@@ -615,7 +615,7 @@
                 v-if="canComment && (stage.status === 'active' || canManageStages)"
                 class="btn btn-tertiary"
                 :disabled="isInitialLoading"
-                @click="handleOpenSubmitCommentModal(stage as any)"
+                @click="handleOpenSubmitCommentModal(stage)"
               >
                 張貼評論
               </button>
@@ -625,7 +625,7 @@
                 v-if="stage.status === 'voting' && canVote"
                 class="btn btn-secondary"
                 :disabled="isInitialLoading"
-                @click="openVoteResultModal(stage as any)"
+                @click="openVoteResultModal(stage)"
               >
                 成果投票
               </button>
@@ -635,7 +635,7 @@
                 v-if="stage.status === 'voting' && canTeacherVote"
                 class="btn btn-secondary"
                 :disabled="loadingTeacherVoteData || isInitialLoading"
-                @click="modalManager.openTeacherVoteModal(stage as any)"
+                @click="modalManager.openTeacherVoteModal(stage)"
               >
                 <i v-if="loadingTeacherVoteData" class="fas fa-spinner fa-spin"></i>
                 {{ loadingTeacherVoteData ? '載入中...' : '教師投票' }}
@@ -646,7 +646,7 @@
                 v-if="stage.status === 'voting' && canVote && userHasValidCommentInStage(stage)"
                 class="btn btn-quaternary"
                 :disabled="isInitialLoading"
-                @click="modalManager.openCommentVoteModal(stage as any)"
+                @click="modalManager.openCommentVoteModal(stage)"
               >
                 評論投票
               </button>
@@ -656,7 +656,7 @@
                 v-if="stage.status === 'completed'"
                 trigger="click"
                 :disabled="loadingVotingAnalysis || isInitialLoading"
-                @command="handleAnalysisCommand($event, stage as any)"
+                @command="handleAnalysisCommand($event, stage)"
               >
                 <button class="btn btn-dark" :disabled="loadingVotingAnalysis || isInitialLoading">
                   <i v-if="loadingVotingAnalysis" class="fas fa-spinner fa-spin"></i>
@@ -683,7 +683,7 @@
                 </div>
                 <StageGanttChart
                   v-else
-                  :stages="getStageGanttData(stage as any)"
+                  :stages="getStageGanttData(stage)"
                   :milestones="stageMilestonesData.get(stage.id) || []"
                   :enable-drag="false"
                   :show-minimap="false"
@@ -696,7 +696,7 @@
 
             <!-- 警告提示 -->
             <el-alert
-              v-if="shouldShowNotSubmittedWarning(stage as any)"
+              v-if="shouldShowNotSubmittedWarning(stage)"
               title="尚未提交成果"
               type="warning"
               description="貴組尚未提交本階段成果。請按階段右上角按鈕進行操作。"
@@ -707,10 +707,10 @@
 
             <!-- 投票未完成警告 -->
             <el-alert
-              v-else-if="shouldShowConsensusWarning(stage as any)"
-              :title="getConsensusWarningTitle(stage as any)"
+              v-else-if="shouldShowConsensusWarning(stage)"
+              :title="getConsensusWarningTitle(stage)"
               type="warning"
-              :description="getConsensusWarningDescription(stage as any, stageGroupDataMap.get((stage as any).id)) + '請按階段右上角按鈕進行操作。'"
+              :description="getConsensusWarningDescription(stage, stageGroupDataMap.get((stage).id)) + '請按階段右上角按鈕進行操作。'"
               show-icon
               :closable="false"
               class="consensus-warning"
@@ -792,7 +792,7 @@
               :pinned-group-id="pinnedGroupId"
               :project-id="projectId"
               @pin-group="handlePinGroup"
-              @force-withdraw="(handleForceWithdraw as any)"
+              @force-withdraw="handleForceWithdraw"
               @open-comment-modal="handleOpenCommentForGroup"
             />
 
@@ -831,8 +831,8 @@
         :vote-data="modalManager.currentModalVoteData.value"
         :user="props.user"
         :user-group-info="modalManager.currentModalUserGroupInfo.value"
-        :project-users="(projectData?.users || []) as any"
-        :project-user-groups="(projectData?.userGroups || []) as any"
+        :project-users="projectData?.users || []"
+        :project-user-groups="projectData?.userGroups || []"
         :read-only="voteResultReadOnly"
         @vote="handleVoteSubmit"
         @resubmit="handleResubmitRanking"
@@ -981,7 +981,7 @@
     <!-- Event Log Drawer -->
     <EventLogDrawer
       v-model="showEventLogDrawer"
-      :project="(eventLogProject as any)"
+      :project="eventLogProject"
       :user-mode="true"
     />
 
@@ -1012,7 +1012,7 @@
  */
 
 import { ref, reactive, computed, watch, watchEffect, onMounted, onBeforeUnmount, nextTick, provide, type Ref } from 'vue'
-import type { Stage, Comment, Group } from '@/types'
+import type { Stage, Group } from '@/types'
 import type { ExtendedStage } from '@/composables/useStageContentManagement'
 import TopBarUserControls from './TopBarUserControls.vue'
 import StageTimeline from './StageTimeline.vue'
@@ -1055,7 +1055,9 @@ import { useRoleSwitch } from '@/composables/useRoleSwitch'
 import { useGroupData } from '@/composables/useGroupData'
 import { useStageContentManagement } from '@/composables/useStageContentManagement'
 import { useModalManager } from '@/composables/useModalManager'
+import type { ReplyCommentTarget } from '@/composables/useModalManager'
 import { useConsensusWarning } from '@/composables/useConsensusWarning'
+import type { ConsensusGroupData } from '@/composables/useConsensusWarning'
 import { useRoute } from 'vue-router'
 import { useDataLoadingTracker } from '@/composables/useDataLoadingTracker'
 import { useProjectCore, useStages } from '@/composables/useProjectDetail'
@@ -1078,19 +1080,14 @@ const DRAWER_HANDLE_HEIGHT = 36 // Each drawer handle height
 const SCROLL_OFFSET = TOPBAR_HEIGHT + (DRAWER_HANDLE_HEIGHT * 2) // Total: 132px
 
 // ===== Props & Emits =====
-const props = defineProps({
-  user: {
-    type: Object,
-    default: null
-  },
-  sessionPercentage: {
-    type: Number,
-    default: 100
-  },
-  remainingTime: {
-    type: Number,
-    default: 0
-  }
+const props = withDefaults(defineProps<{
+  user?: UserDataWithPermissions | null
+  sessionPercentage?: number
+  remainingTime?: number
+}>(), {
+  user: null,
+  sessionPercentage: 100,
+  remainingTime: 0
 })
 
 // Get projectId from route params
@@ -1146,17 +1143,17 @@ const refreshDuration = computed(() => {
 const maxCommentSelections = computed(() => {
   // DEBUG: Log project scoring config from TanStack Query cache
   console.log('[ProjectDetail] projectData scoring config:', JSON.stringify({
-    maxCommentSelections: (projectData.value?.project as any)?.maxCommentSelections,
-    studentRankingWeight: (projectData.value?.project as any)?.studentRankingWeight,
-    teacherRankingWeight: (projectData.value?.project as any)?.teacherRankingWeight,
-    commentRewardPercentile: (projectData.value?.project as any)?.commentRewardPercentile,
+    maxCommentSelections: projectData.value?.project?.maxCommentSelections,
+    studentRankingWeight: projectData.value?.project?.studentRankingWeight,
+    teacherRankingWeight: projectData.value?.project?.teacherRankingWeight,
+    commentRewardPercentile: projectData.value?.project?.commentRewardPercentile,
   }))
 
   // 載入中返回預設值 3，避免 render 時報錯
   if (!projectData.value?.project) {
     return 3
   }
-  const val = (projectData.value.project as any)?.maxCommentSelections
+  const val = projectData.value.project?.maxCommentSelections
   // 資料載入後，如果欄位缺失則警告（資料完整性檢查）
   if (val === undefined || val === null) {
     console.error('maxCommentSelections not found in project data')
@@ -1170,7 +1167,7 @@ const commentRewardPercentile = computed(() => {
   if (!projectData.value?.project) {
     return 0
   }
-  const val = (projectData.value.project as any)?.commentRewardPercentile
+  const val = projectData.value.project?.commentRewardPercentile
   // 資料載入後，如果欄位缺失則警告（資料完整性檢查）
   if (val === undefined || val === null) {
     console.error('commentRewardPercentile not found in project data')
@@ -1181,22 +1178,22 @@ const commentRewardPercentile = computed(() => {
 
 const teacherRankingWeight = computed(() => {
   if (!projectData.value?.project) return 0.3
-  return (projectData.value.project as any)?.teacherRankingWeight ?? 0.3
+  return projectData.value.project?.teacherRankingWeight ?? 0.3
 })
 
 const studentRankingWeight = computed(() => {
   if (!projectData.value?.project) return 0.7
-  return (projectData.value.project as any)?.studentRankingWeight ?? 0.7
+  return projectData.value.project?.studentRankingWeight ?? 0.7
 })
 
 const scoreRangeMin = computed(() => {
   if (!projectData.value?.project) return 0
-  return (projectData.value.project as any)?.scoreRangeMin ?? 0
+  return projectData.value.project?.scoreRangeMin ?? 0
 })
 
 const scoreRangeMax = computed(() => {
   if (!projectData.value?.project) return 100
-  return (projectData.value.project as any)?.scoreRangeMax ?? 100
+  return projectData.value.project?.scoreRangeMax ?? 100
 })
 
 // 評論獎勵模式描述（動態顯示）
@@ -1364,7 +1361,7 @@ const permissions = useProjectPermissions(
 // 群組數據
 const groupData = useGroupData(
   projectData as unknown as Ref<ProjectDataWithGroups | null | undefined>,
-  userRef as any
+  userRef
 )
 
 // 階段內容管理（必須在 watch 之前初始化）
@@ -1463,8 +1460,8 @@ watch(
           // 保留 groups 中每個 group 的 showReport 狀態
           let preservedGroups = newStage.groups
           if (existingStage.groups && newStage.groups) {
-            preservedGroups = newStage.groups.map((newGroup: any) => {
-              const existingGroup = existingStage.groups?.find((g: any) => g.groupId === newGroup.groupId)
+            preservedGroups = newStage.groups.map((newGroup) => {
+              const existingGroup = existingStage.groups?.find((g) => g.groupId === newGroup.groupId)
               if (existingGroup) {
                 // 保留運行時狀態（showReport, approvalVotesLoading 等）
                 return {
@@ -1507,15 +1504,9 @@ watch(
   { immediate: true }
 )
 
-const projectDescription = computed(() => {
-  const project = projectData.value?.project as any
-  return project?.description || project?.projectDescription || ''
-})
+const projectDescription = computed(() => projectData.value?.project?.description || '')
 
-const projectTitle = computed(() => {
-  const project = projectData.value?.project as any
-  return project?.projectName || project?.title || ''
-})
+const projectTitle = computed(() => projectData.value?.project?.projectName || '')
 
 // EventLog 專案資料
 const eventLogProject = computed(() => {
@@ -1573,7 +1564,7 @@ const stageGroupDataMap = computed(() => {
   }
 
   // 查找當前用戶的組
-  const userGroup = projectData.value.userGroups.find((ug: any) =>
+  const userGroup = projectData.value.userGroups.find((ug) =>
     ug.userEmail === props.user?.userEmail && ug.isActive
   )
 
@@ -1654,7 +1645,7 @@ const stageMentionCounts = computed(() => {
     let count = 0
 
     if (stage.comments && Array.isArray(stage.comments)) {
-      stage.comments.forEach((comment: Comment) => {
+      stage.comments.forEach((comment) => {
         // <i class="fas fa-check-circle text-success"></i> JSON 已在載入時預先解析，直接使用陣列即可
         const mentionedUsers = comment.mentionedUsers || []
         const mentionedGroups = comment.mentionedGroups || []
@@ -1755,7 +1746,7 @@ function userHasValidCommentInStage(stage: ExtendedStage) {
     if (!targetUserEmail || !stage.comments || stage.comments.length === 0) {
       return false
     }
-    return stage.comments.some((comment: any) => {
+    return stage.comments.some((comment) => {
       return comment.canBeVoted === true && comment.authorEmail === targetUserEmail
     })
   }
@@ -1786,8 +1777,8 @@ const currentModalStageValidCommentAuthors = computed(() => {
   if (!stage?.comments || !Array.isArray(stage.comments)) return 0
 
   // 過濾有效評論（canBeVoted = true）並計算不同作者數量
-  const validComments = stage.comments.filter((c: any) => c.canBeVoted === true)
-  const uniqueAuthors = new Set(validComments.map((c: any) => c.authorEmail))
+  const validComments = stage.comments.filter((c) => c.canBeVoted === true)
+  const uniqueAuthors = new Set(validComments.map((c) => c.authorEmail))
   return uniqueAuthors.size
 })
 
@@ -1810,13 +1801,13 @@ const currentModalStageSubmissions = computed(() => {
   // 提取有提交記錄的組別，轉換為 TeacherVoteModal 需要的格式
   // 只包含已批准的成果，教師投票只能對已批准的成果進行排名
   return stage.groups
-    .filter((g: any) => g.submissionId && g.status === 'approved')
-    .map((g: any) => ({
+    .filter((g) => g.submissionId && g.status === 'approved')
+    .map((g) => ({
       submissionId: g.submissionId,
       groupId: g.groupId,
       groupName: g.groupName,
       memberNames: g.memberNames || [],
-      contentMarkdown: g.contentMarkdown || g.reportContent,
+      contentMarkdown: g.reportContent,
       submitTime: g.submitTime,
       status: g.status || 'approved'
     }))
@@ -1984,7 +1975,7 @@ function getLoadingText(progress: number): string {
  */
 function getSubmittedCount(stage: ExtendedStage | undefined): number {
   if (!stage?.groups) return 0
-  return stage.groups.filter((g: any) => g.submissionId).length
+  return stage.groups.filter((g) => g.submissionId).length
 }
 
 /**
@@ -1994,13 +1985,13 @@ function toggleAllGroupReports(stage: ExtendedStage | undefined) {
   if (!stage?.groups) return
 
   // 檢查是否有任何已展開的成果
-  const submittedGroups = stage.groups.filter((g: any) => g.submissionId)
-  const anyExpanded = submittedGroups.some((g: any) => g.showReport)
+  const submittedGroups = stage.groups.filter((g) => g.submissionId)
+  const anyExpanded = submittedGroups.some((g) => g.showReport)
 
   // 如果有任何展開的，則全部折疊；否則全部展開
   const newState = !anyExpanded
 
-  submittedGroups.forEach((g: any) => {
+  submittedGroups.forEach((g) => {
     g.showReport = newState
   })
 
@@ -2254,7 +2245,7 @@ async function loadStageMilestones(stage: ExtendedStage) {
 
     // 3. 評論事件（從 stage.comments 獲取）
     if (stage.comments && stage.comments.length > 0) {
-      stage.comments.forEach((comment: Comment) => {
+      stage.comments.forEach((comment) => {
         if (comment.createdTime) {
           const authorName = comment.authorEmail?.split('@')[0] || '匿名'
           milestones.push({
@@ -2493,7 +2484,7 @@ async function refreshSingleStageSettings(stage: ExtendedStage) {
 async function loadStageProposals(stage: ExtendedStage) {
   try {
     const stageId = stage.id || stage.stageId
-    const httpResponse = await (rpcClient.api.rankings as any).proposals.$post({
+    const httpResponse = await rpcClient.api.rankings.proposals.$post({
       json: {
         projectId: projectId.value,
         stageId
@@ -2519,7 +2510,7 @@ function hasCurrentGroupSubmitted(stage: ExtendedStage) {
     return { submitted: false, approved: false, groupData: null }
   }
 
-  const userGroup = projectData.value.userGroups.find((ug: any) =>
+  const userGroup = projectData.value.userGroups.find((ug) =>
     ug.userEmail === props.user?.userEmail && ug.isActive
   )
 
@@ -2601,6 +2592,29 @@ function openSubmitReportModal(stage: ExtendedStage) {
   modalManager.openSubmitReportModal(stage, activeGroupsCount)
 }
 
+/** 子元件送回來的提交結果——下面這批 handler 只讀 success */
+interface SubmitResult {
+  success: boolean
+}
+
+/** 群組確認投票的結果，額外帶回投票統計 */
+interface GroupApprovalVoteResult extends SubmitResult {
+  data: {
+    votingSummary: {
+      isApproved: boolean
+      agreeVotes: number
+      totalMembers: number
+    }
+  }
+}
+
+/** extractStageParticipants 回傳的一組：@mention 需要的最小欄位 */
+interface StageParticipantGroup {
+  groupId: string
+  groupName: string
+  participants: string[]
+}
+
 /**
  * 從 stage.groups 提取 participants 資料（用於 @mention 功能）
  *
@@ -2610,9 +2624,9 @@ function openSubmitReportModal(stage: ExtendedStage) {
  * - 無需 API 調用，直接從快取提取
  *
  * @param {ExtendedStage} stage - 階段物件
- * @returns {Array} submissions 資料（僅包含 @mention 所需的最小欄位）
+ * @returns submissions 資料（僅包含 @mention 所需的最小欄位）
  */
-function extractStageParticipants(stage: ExtendedStage): any[] {
+function extractStageParticipants(stage: ExtendedStage): StageParticipantGroup[] {
   if (!stage.groups || !Array.isArray(stage.groups)) {
     console.warn('⚠️ extractStageParticipants: stage.groups 不存在')
     return []
@@ -2661,14 +2675,14 @@ async function openGroupSubmissionApprovalModal(stage: ExtendedStage) {
     const participationProposal = groupSubmission.participationProposal || groupSubmission.participationPercentages || {}
 
     // Build group members with contribution data
-    const activeMembers = projectData.value?.userGroups?.filter((ug: any) =>
+    const activeMembers = projectData.value?.userGroups?.filter((ug) =>
       ug.groupId === currentGroup.groupId && ug.isActive
     ) || []
 
     const totalMembers = activeMembers.length
     const defaultContribution = totalMembers > 0 ? 100 / totalMembers : 0
 
-    const groupMembers = activeMembers.map((ug: any) => {
+    const groupMembers = activeMembers.map((ug) => {
       const user = projectData.value?.users?.find(u => u.userEmail === ug.userEmail)
 
       // Get contribution from participation proposal (convert from ratio to percentage).
@@ -2684,13 +2698,14 @@ async function openGroupSubmissionApprovalModal(stage: ExtendedStage) {
         avatarStyle: user?.avatarStyle,
         avatarOptions: user?.avatarOptions,
         contribution: contribution,  // Contribution percentage (0-100)
-        points: 0  // Will be calculated below
+        points: 0,  // Will be calculated below
+        finalWeight: 0  // Will be calculated below
       }
     })
 
     // Calculate points if we have members with valid contributions
     if (groupMembers.length > 0) {
-      const totalContribution = groupMembers.reduce((sum: number, m: any) => sum + m.contribution, 0)
+      const totalContribution = groupMembers.reduce((sum: number, m) => sum + m.contribution, 0)
 
       // Only calculate if total contribution is approximately 100%
       if (Math.abs(totalContribution - 100) < 0.01) {
@@ -2702,13 +2717,13 @@ async function openGroupSubmissionApprovalModal(stage: ExtendedStage) {
           1,  // simulatedRank
           stage.reportReward || 1000,
           totalProjectGroups.value || 4,
-          (projectData.value?.groups || []) as any,
-          currentGroup.groupId as any
+          projectData.value?.groups || [],
+          currentGroup.groupId
         )
 
         // Update points in groupMembers
-        groupMembers.forEach((member: any) => {
-          const scoringData = scoringResult.find((s: any) => s.email === member.email)
+        groupMembers.forEach((member) => {
+          const scoringData = scoringResult.find((s) => s.email === member.email)
           if (scoringData) {
             member.points = scoringData.points
             member.finalWeight = scoringData.finalWeight
@@ -2794,7 +2809,7 @@ function handleHistoryViewCommand(command: string, stage: ExtendedStage) {
 /**
  * 處理報告提交
  */
-async function handleReportSubmit(data: any) {
+async function handleReportSubmit(data: SubmitResult) {
   console.log('成果提交:', data)
 
   if (data.success) {
@@ -2842,7 +2857,7 @@ function handleOpenSubmitCommentModal(stage: ExtendedStage) {
 /**
  * 處理評論提交
  */
-async function handleCommentSubmit(data: any) {
+async function handleCommentSubmit(data: SubmitResult) {
   console.log('評論提交:', data)
 
   if (data.success) {
@@ -2869,7 +2884,7 @@ async function handleCommentSubmit(data: any) {
 /**
  * 處理投票提交
  */
-async function handleVoteSubmit(data: any) {
+async function handleVoteSubmit(data: SubmitResult) {
   console.log('報告投票提交:', data)
 
   if (data.success) {
@@ -2885,7 +2900,7 @@ async function handleVoteSubmit(data: any) {
 /**
  * 處理群組確認投票提交（優化版 - 精確緩存失效）
  */
-async function handleGroupApprovalVoteSubmit(data: any) {
+async function handleGroupApprovalVoteSubmit(data: GroupApprovalVoteResult) {
   try {
     if (data.success) {
       const { votingSummary } = data.data
@@ -2921,7 +2936,7 @@ async function handleGroupApprovalVoteSubmit(data: any) {
       }
 
       // 4. 手動刷新當前階段的 groups 資料（UI 立即更新）
-      const currentStage = stages.value.find((s: any) => s.id === currentStageId)
+      const currentStage = stages.value.find((s) => s.id === currentStageId)
       if (currentStage) {
         await stageContent.refreshStageReports(currentStage, projectId.value)
       }
@@ -2951,7 +2966,7 @@ async function handleSubmissionDeleted() {
 /**
  * 處理評論投票提交
  */
-async function handleCommentVoteSubmit(data: any) {
+async function handleCommentVoteSubmit(data: SubmitResult) {
   console.log('評論投票提交:', data)
 
   if (data.success) {
@@ -2966,7 +2981,7 @@ async function handleCommentVoteSubmit(data: any) {
 /**
  * 處理教師排名提交
  */
-async function handleTeacherRankingSubmit(data: any) {
+async function handleTeacherRankingSubmit(data: SubmitResult) {
   console.log('教師排名提交:', data)
 
   if (data.success) {
@@ -3050,7 +3065,7 @@ async function handleForceWithdrawComplete() {
 /**
  * 處理教師投票提交
  */
-async function handleTeacherVoteSubmit(data: any) {
+async function handleTeacherVoteSubmit(data: SubmitResult) {
   console.log('教師投票提交:', data)
 
   if (data.success) {
@@ -3066,7 +3081,7 @@ async function handleTeacherVoteSubmit(data: any) {
 /**
  * 處理重新提交排名
  */
-async function handleResubmitRanking(data: any) {
+async function handleResubmitRanking(data: SubmitResult) {
   console.log('重新提交排名:', data)
 
   if (data.success) {
@@ -3082,7 +3097,7 @@ async function handleResubmitRanking(data: any) {
 /**
  * 處理回復評論
  */
-function handleReplyComment(commentData: any) {
+function handleReplyComment(commentData: ReplyCommentTarget) {
   console.log('回復評論:', commentData)
 
   const stageId = findStageIdFromCommentClick()
@@ -3092,7 +3107,7 @@ function handleReplyComment(commentData: any) {
 /**
  * 處理回復提交
  */
-async function handleReplySubmitted(data: any) {
+async function handleReplySubmitted(data: SubmitResult) {
   console.log('回復已提交:', data)
 
   if (data.success) {
@@ -3169,7 +3184,7 @@ function getConsensusWarningTitle(stage: ExtendedStage) {
 /**
  * 獲取共識警告描述
  */
-function getConsensusWarningDescription(stage: ExtendedStage, groupData: any) {
+function getConsensusWarningDescription(stage: ExtendedStage, groupData: ConsensusGroupData) {
   return consensusWarning.getConsensusWarningDescription(stage as Stage, groupData)
 }
 
@@ -3219,14 +3234,14 @@ async function loadAllStageComments() {
     })
 
     if (response.success && response.data?.stageComments) {
-      const stageComments = response.data.stageComments as Record<string, any>
+      const stageComments = response.data.stageComments
 
       // 將批量結果分配到各個階段
       for (const stage of stages.value) {
         const stageData = stageComments[stage.id]
         if (stageData && stageData.comments) {
           // 預先解析 JSON 字段，避免在 computed 中重複解析
-          stage.comments = stageData.comments.map((comment: any) => ({
+          stage.comments = stageData.comments.map((comment) => ({
             ...comment,
             mentionedUsers: typeof comment.mentionedUsers === 'string'
               ? JSON.parse(comment.mentionedUsers)
@@ -3286,7 +3301,7 @@ async function loadAllStageCommentsFallback() {
       })
 
       if (response.success) {
-        stage.comments = (response.data.comments || []).map((comment: any) => ({
+        stage.comments = (response.data.comments || []).map((comment) => ({
           ...comment,
           mentionedUsers: typeof comment.mentionedUsers === 'string'
             ? JSON.parse(comment.mentionedUsers)
@@ -3333,7 +3348,7 @@ async function loadMentionData() {
 
   stages.value.forEach((stage: ExtendedStage) => {
     if (stage.comments && Array.isArray(stage.comments)) {
-      stage.comments.forEach((comment: Comment) => {
+      stage.comments.forEach((comment) => {
         // 解析 mentionedUsers
         let mentionedUsers
         try {
@@ -3394,7 +3409,7 @@ async function loadAllStageProposals() {
 
   const proposalPromises = stages.value.map(async (stage: ExtendedStage) => {
     try {
-      const httpResponse = await (rpcClient.api.rankings as any).proposals.$post({
+      const httpResponse = await rpcClient.api.rankings.proposals.$post({
         json: {
           projectId: projectId.value,
           stageId: stage.id
@@ -3808,7 +3823,7 @@ function processUrlParams() {
 
   const drawerConfig = routeDrawer.processDrawerFromUrl(
     permissions.permissions.value, // Get PermissionFlags from useProjectPermissions return value
-    stages.value as any
+    stages.value
   )
 
   if (drawerConfig) {

@@ -13,6 +13,13 @@ import { dedupRequest } from '@/utils/request-dedup'
 import type { Stage, Group, Submission } from '@/types'
 import type { StageListItem } from './useProjectDetail'
 import { apiErrorCode, apiErrorMessage } from '@/utils/api-types'
+import type { ApiData } from '@/utils/api-types'
+
+/**
+ * 階段評論。從 /comments/stage 端點推導——後端回的是巢狀評論
+ * （帶 replies / reactions / canBeVoted），和 shared 的 `Comment` 對不上。
+ */
+export type StageThreadedComment = ApiData<typeof rpcClient.api.comments.stage.$post>['comments'][number]
 
 /**
  * Extended Stage type for frontend use with additional UI state
@@ -24,9 +31,10 @@ import { apiErrorCode, apiErrorMessage } from '@/utils/api-types'
  * `settings` 與 `lastModifiedTime` 改成選填：資料來源是 `/stages/list`，
  * 那個端點不回傳這兩個欄位，宣告成必填是在說謊。
  */
-export type ExtendedStage = Omit<Stage, 'viewMode' | 'settings' | 'lastModifiedTime'> & {
+export type ExtendedStage = Omit<Stage, 'viewMode' | 'settings' | 'lastModifiedTime' | 'comments'> & {
   settings?: string
   lastModifiedTime?: number | null
+  comments?: StageThreadedComment[]
   id: string
   title: string
   reportReward: number
@@ -193,7 +201,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
 
       if (response.success && response.data?.comments) {
         // 更新階段的評論數據
-        stage.comments = response.data.comments as unknown as ExtendedStage['comments']
+        stage.comments = response.data.comments
         console.log(`✅ 已刷新階段 ${stage.title} 的評論，共 ${response.data.comments.length} 條（含 canBeVoted 標誌）`)
       } else {
         console.log(`⚠️ 階段 ${stage.title} 沒有評論內容`)
@@ -424,7 +432,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
 
     try {
       // 使用批次 API
-      const httpResponse = await (rpcClient.api.rankings as any)['all-stages-rankings'].$post({
+      const httpResponse = await rpcClient.api.rankings['all-stages-rankings'].$post({
         json: {
           projectId: projectId,
           stageIds: stageIds
@@ -595,7 +603,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
         stageId: stage.id
       })
 
-      const httpResponse = await (rpcClient.api.rankings as any)['stage-rankings'].$post({
+      const httpResponse = await rpcClient.api.rankings['stage-rankings'].$post({
         json: {
           projectId: projectId,
           stageId: stage.id
@@ -604,7 +612,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
       const response = await httpResponse.json()
 
       console.log(`📊 [loadStageRankings] 排名API完整回應:`, response)
-      console.log(`📊 [loadStageRankings] rankings 資料:`, response?.data?.rankings)
+      console.log(`📊 [loadStageRankings] rankings 資料:`, response.success ? response.data.rankings : undefined)
 
       if (response.success && response.data && response.data.rankings) {
         const rankings = response.data.rankings

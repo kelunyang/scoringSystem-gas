@@ -128,7 +128,7 @@ export function useLogin(): UseLoginReturn {
     errorMessage.value = '';
 
     try {
-      const httpResponse = await (rpcClient.api.auth as any)['login-verify-password'].$post({
+      const httpResponse = await rpcClient.api.auth['login-verify-password'].$post({
         json: {
           userEmail: credentials.email.trim(),
           password: credentials.password,
@@ -193,7 +193,7 @@ export function useLogin(): UseLoginReturn {
     errorMessage.value = '';
 
     try {
-      const httpResponse = await (rpcClient.api.auth as any)['login-verify-2fa'].$post({
+      const httpResponse = await rpcClient.api.auth['login-verify-2fa'].$post({
         json: {
           userEmail: twoFactorData.email.trim(),
           code: codeToSend.trim(),
@@ -257,7 +257,7 @@ export function useLogin(): UseLoginReturn {
     resendLoading.value = true;
 
     try {
-      const httpResponse = await (rpcClient.api.auth as any)['resend-2fa'].$post({
+      const httpResponse = await rpcClient.api.auth['resend-2fa'].$post({
         json: {
           userEmail: userEmail.value,
           preAuthToken: preAuthToken.value,
@@ -269,7 +269,8 @@ export function useLogin(): UseLoginReturn {
       if (response.success) {
         // The server re-issues the proof with the new code so both expire
         // together; keep it or the next step would submit a stale one.
-        if (response.data?.preAuthToken) {
+        // dev 模式（沒設定 SMTP）那條分支不會帶 preAuthToken
+        if (response.data && 'preAuthToken' in response.data) {
           preAuthToken.value = response.data.preAuthToken;
         }
         lastEmailSentAt.value = Date.now();

@@ -714,7 +714,7 @@ const refreshToken = async (): Promise<boolean> => {
   if (isRenewing.value) return false
   isRenewing.value = true
   try {
-    const httpResponse = await (rpcClient.api.auth as any)['refresh-token'].$post()
+    const httpResponse = await rpcClient.api.auth['refresh-token'].$post()
     const response = await httpResponse.json()
     if (response.success && response.data.token) {
       // saveToken emits a token-renewal event → reactive token + countdown update

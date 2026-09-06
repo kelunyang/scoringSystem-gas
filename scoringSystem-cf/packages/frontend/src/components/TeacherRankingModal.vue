@@ -269,17 +269,26 @@ const initializeRankings = (): void => {
 const loadVersionHistory = async (): Promise<void> => {
   try {
     loading.value = true
-    const httpResponse = await (rpcClient.api.rankings as any)['teacher-vote-history'].$post({
+    // TODO(plan/issue.md #013)：這個元件整支是壞的，而且從 UI 進不來
+    // （openTeacherRankingModal 沒有任何呼叫端）。
+    // /teacher-vote-history 不吃 rankingType、也不回 versions，
+    // 修好它等於改執行時行為，先用轉型保留現狀。
+    const httpResponse = await (rpcClient.api.rankings as unknown as {
+      'teacher-vote-history': { $post: (arg: { json: Record<string, unknown> }) => Promise<Response> }
+    })['teacher-vote-history'].$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,
         rankingType: 'submission' // 排名類型：submission
       }
     })
-    const response = await httpResponse.json()
+    const response = await httpResponse.json() as {
+      success: boolean
+      data?: { versions?: Version[] }
+    }
 
     if (response.success) {
-      rankingVersions.value = response.data.versions || []
+      rankingVersions.value = response.data?.versions || []
 
       // 如果有版本,設置為最新版本
       if (rankingVersions.value.length > 0) {
@@ -344,14 +353,18 @@ const submitTeacherRanking = async (): Promise<void> => {
       rank: typeof group.rank === 'number' ? group.rank : index + 1
     }))
 
-    const httpResponse = await (rpcClient.api.rankings as any).submit.$post({
+    // TODO(plan/issue.md #013)：/rankings/submit 是「組排名提案」端點，
+    // 而且它要的是 rankingData 不是 rankings——這裡送出去會被 Zod 擋掉。
+    const httpResponse = await (rpcClient.api.rankings.submit as unknown as {
+      $post: (arg: { json: Record<string, unknown> }) => Promise<Response>
+    }).$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,
         rankings: rankings
       }
     })
-    const response = await httpResponse.json()
+    const response = await httpResponse.json() as { success: boolean; data?: unknown }
 
     if (response.success) {
       ElMessage.success('教師排名提交成功！')

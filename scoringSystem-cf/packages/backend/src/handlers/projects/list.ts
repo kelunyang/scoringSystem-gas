@@ -9,7 +9,7 @@ import { parseJSON } from '../../utils/json';
 import { checkIsTeacherOrObserver } from '@utils/permissions';
 import { getEffectiveScoringConfig } from '../../utils/scoring-config';
 import type { SqlBindValue } from '../../types';
-import type { GroupRow, UserGroupRow } from '@db/rows';
+import type { GroupRow, ProjectRow, UserGroupRow } from '@db/rows';
 import type { Stage } from '@repo/shared';
 
 // extractParticipants function removed - no longer needed
@@ -61,7 +61,8 @@ export interface ProcessedSubmission {
   withdrawnBy?: string;
 }
 
-interface ProjectRow {
+/** listUserProjects 的一列：projects JOIN projectviewers/users，帶 viewerRole */
+interface ProjectListRow {
   projectId: string;
   projectName: string;
   description: string;
@@ -281,7 +282,7 @@ export async function getProjectCore(
     // Get project
     const project = await env.DB.prepare(`
       SELECT * FROM projects WHERE projectId = ?
-    `).bind(projectId).first();
+    `).bind(projectId).first<ProjectRow>();
 
     if (!project) {
       return errorResponse('PROJECT_NOT_FOUND', 'Project not found');
@@ -775,7 +776,7 @@ async function listProjectsForUser(
       return { projects: [], totalCount };
     }
 
-    const projects = projectsResult.results as unknown as ProjectRow[];
+    const projects = projectsResult.results as unknown as ProjectListRow[];
     const projectIds = projects.map(p => p.projectId);
 
     // Batch fetch user groups for all projects in single query

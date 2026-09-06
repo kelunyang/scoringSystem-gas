@@ -270,7 +270,7 @@ onMounted(async () => {
 
 async function fetchStatus() {
   try {
-    const httpResponse = await (rpcClient.api.auth as any).totp.status.$get();
+    const httpResponse = await rpcClient.api.auth.totp.status.$get();
     const response = await httpResponse.json();
     if (response.success) {
       const data = response.data as TotpStatusResponse;
@@ -288,7 +288,7 @@ async function fetchStatus() {
 async function startSetup() {
   initLoading.value = true;
   try {
-    const httpResponse = await (rpcClient.api.auth as any).totp['setup-init'].$post();
+    const httpResponse = await rpcClient.api.auth.totp['setup-init'].$post();
     const response = await httpResponse.json();
     if (response.success) {
       const data = response.data as TotpSetupInitResponse;
@@ -347,7 +347,7 @@ async function confirmSetup() {
   verifyError.value = '';
 
   try {
-    const httpResponse = await (rpcClient.api.auth as any).totp['setup-verify'].$post({
+    const httpResponse = await rpcClient.api.auth.totp['setup-verify'].$post({
       json: { code: verifyCode.value }
     });
     const response = await httpResponse.json();
@@ -400,7 +400,7 @@ async function confirmDisable() {
   disableError.value = '';
 
   try {
-    const httpResponse = await (rpcClient.api.auth as any).totp.disable.$post({
+    const httpResponse = await rpcClient.api.auth.totp.disable.$post({
       json: { password: disablePassword.value }
     });
     const response = await httpResponse.json();
@@ -435,7 +435,7 @@ async function confirmRegenerate() {
   regenerateError.value = '';
 
   try {
-    const httpResponse = await (rpcClient.api.auth as any).totp['recovery-codes'].regenerate.$post({
+    const httpResponse = await rpcClient.api.auth.totp['recovery-codes'].regenerate.$post({
       json: { password: regeneratePassword.value }
     });
     const response = await httpResponse.json();

@@ -336,18 +336,26 @@ interface Comment {
 
 interface Version {
   versionId: string
-  createdTime: string
+  /** 後端回的是毫秒時間戳（handlers/rankings/teacher-ranking-versions.ts:12） */
+  createdTime: number
   teacherDisplayName?: string
   teacherEmail?: string
   rankings: Ranking[]
 }
 
+/**
+ * 版本裡的一筆排名。對照
+ * handlers/rankings/teacher-ranking-versions.ts:16——
+ * 「這是成果排名還是評論排名」放在版本層的 rankingType，不在每一筆上。
+ */
 interface Ranking {
-  type: 'submission' | 'comment'
+  rankingId: string
   targetId: string
   groupId?: string
+  groupName?: string
   authorEmail?: string
   rank: number
+  memberNames?: string[]
 }
 
 interface Group {
@@ -842,7 +850,7 @@ function loadCommentRankingsToEditor(version: Version): void {
 async function loadVersionHistory(autoEnterPreview: boolean = false): Promise<void> {
   try {
     // 載入成果排名版本歷史（完整數據）
-    const httpResponse1 = await (rpcClient.api.rankings as any)['teacher-ranking-versions'].$post({
+    const httpResponse1 = await rpcClient.api.rankings['teacher-ranking-versions'].$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,
@@ -856,7 +864,7 @@ async function loadVersionHistory(autoEnterPreview: boolean = false): Promise<vo
       // 因此這裡統一改為依 createdTime 升冪排序，確保 [length-1] 永遠是最新版本。
       submissionVersions.value = (submissionVersionsResponse.data.versions || [])
         .slice()
-        .sort((a: Version, b: Version) => Number(a.createdTime) - Number(b.createdTime))
+        .sort((a, b) => a.createdTime - b.createdTime)
 
       if (submissionVersions.value.length > 0) {
         const latestVersion = submissionVersions.value[submissionVersions.value.length - 1]
@@ -877,7 +885,7 @@ async function loadVersionHistory(autoEnterPreview: boolean = false): Promise<vo
     }
 
     // 載入評論排名版本歷史（完整數據）
-    const httpResponse2 = await (rpcClient.api.rankings as any)['teacher-ranking-versions'].$post({
+    const httpResponse2 = await rpcClient.api.rankings['teacher-ranking-versions'].$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,
@@ -890,7 +898,7 @@ async function loadVersionHistory(autoEnterPreview: boolean = false): Promise<vo
       // 同上：依 createdTime 升冪排序，確保 [length-1] 為最新版本
       commentVersions.value = (commentVersionsResponse.data.versions || [])
         .slice()
-        .sort((a: Version, b: Version) => Number(a.createdTime) - Number(b.createdTime))
+        .sort((a, b) => a.createdTime - b.createdTime)
 
       if (commentVersions.value.length > 0) {
         const latestVersion = commentVersions.value[commentVersions.value.length - 1]
@@ -1301,7 +1309,7 @@ async function submitSubmissionRankings(): Promise<void> {
       rank: typeof submission.rank === 'number' ? submission.rank : index + 1
     }))
 
-    const httpResponse = await (rpcClient.api.rankings as any)['teacher-comprehensive-vote'].$post({
+    const httpResponse = await rpcClient.api.rankings['teacher-comprehensive-vote'].$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,
@@ -1354,7 +1362,7 @@ async function submitCommentRankings(): Promise<void> {
         rank: index + 1
       }))
 
-    const httpResponse = await (rpcClient.api.rankings as any)['teacher-comprehensive-vote'].$post({
+    const httpResponse = await rpcClient.api.rankings['teacher-comprehensive-vote'].$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId,

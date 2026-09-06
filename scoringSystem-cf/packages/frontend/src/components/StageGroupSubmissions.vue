@@ -275,7 +275,7 @@ interface ForceWithdrawSubmission {
   status: string
   submittedTime?: number
   createdTime?: number
-  authors?: string | string[]
+  authors?: string[]
 }
 
 /**

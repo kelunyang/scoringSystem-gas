@@ -140,12 +140,22 @@ export async function verifyTurnstileToken(
  * @param turnstileToken - Token from request body
  * @param remoteIp - User's IP address
  * @returns null if passes, error object if fails
+ *
+ * 錯誤形狀跟 errorResponse 一致（`error: { code, message }`）。
+ * 舊版回的是 `{ error: string, errorCode: string }`，前端的
+ * apiErrorMessage/apiErrorCode 讀不到，turnstile 失敗只會顯示通用訊息。
  */
+/** verifyTurnstileMiddleware 擋下請求時回的東西 */
+export interface TurnstileFailure {
+  success: false;
+  error: { code: string; message: string };
+}
+
 export async function verifyTurnstileMiddleware(
   env: Env,
   turnstileToken: string | undefined,
   remoteIp?: string
-): Promise<null | { success: false; error: string; errorCode: string }> {
+): Promise<null | TurnstileFailure> {
   // Check if Turnstile is enabled (KV-first)
   const enabledValue = await getConfigValue(env, 'TURNSTILE_ENABLED');
   const enabled = enabledValue === 'true';
@@ -159,8 +169,10 @@ export async function verifyTurnstileMiddleware(
   if (!turnstileToken) {
     return {
       success: false,
-      error: 'Missing Turnstile verification token',
-      errorCode: 'MISSING_TURNSTILE_TOKEN'
+      error: {
+        code: 'MISSING_TURNSTILE_TOKEN',
+        message: 'Missing Turnstile verification token'
+      }
     };
   }
 
@@ -177,8 +189,10 @@ export async function verifyTurnstileMiddleware(
   if (!result.success) {
     return {
       success: false,
-      error: result.error?.message || 'Turnstile verification failed',
-      errorCode: result.error?.code || 'TURNSTILE_VERIFICATION_FAILED'
+      error: {
+        code: result.error?.code || 'TURNSTILE_VERIFICATION_FAILED',
+        message: result.error?.message || 'Turnstile verification failed'
+      }
     };
   }
 

@@ -2,7 +2,6 @@ import { computed, watch, unref, type Ref, type ComputedRef } from 'vue'
 import type { PermissionLevel } from './useProjectPermissions'
 import { useRoleSelectionStore } from '@/stores/roleSelection'
 import { hasProjectAdminRole, type ProjectAdminSubject } from './useProjectAdminRole'
-import type { UserGroupRecord } from '@repo/shared'
 
 type MaybeRef<T> = T | Ref<T> | ComputedRef<T>
 
