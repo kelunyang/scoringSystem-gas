@@ -20,15 +20,34 @@ import { useAvatar } from '@/composables/useAvatar'
 import { usePhysicsAnimation, type BodyConfig } from '@/composables/usePhysicsAnimation'
 import { useInViewport } from '@/composables/useInViewport'
 import EmptyState from '@/components/shared/EmptyState.vue'
+import type { AvatarCustomOptions } from '@/types/auth'
+
+/** 圖表四邊留白 */
+interface ChartMargin {
+  top: number
+  right: number
+  bottom: number
+  left: number
+}
+
+
+interface AvatarElement {
+  element: d3.Selection<SVGGElement, unknown, null, undefined>
+  targetX: number
+  targetY: number
+  /** 這顆頭像在該版本堆疊中的序位 */
+  stackIndex?: number
+  voter: Voter
+  type: string
+}
 
 interface Voter {
   voterEmail: string
   voterDisplayName?: string
   voterAvatarSeed?: string
   voterAvatarStyle?: string
-  voterAvatarOptions?: string | Record<string, any>
+  voterAvatarOptions?: string | AvatarCustomOptions
   timestamp?: number
-  [key: string]: any
 }
 
 interface VoteDataEntry {
@@ -61,10 +80,10 @@ const chartContainer: Ref<HTMLElement | null> = ref(null)
 // 視域偵測（進入視域時才啟動動畫）
 const { hasEntered } = useInViewport(chartContainer, { once: true })
 
-const svg: Ref<any> = ref(null)
-const g: Ref<any> = ref(null)
-const yScale: Ref<any> = ref(null)
-const currentTooltip: Ref<any> = ref(null)
+const svg: Ref<d3.Selection<SVGSVGElement, unknown, null, undefined> | null> = ref(null)
+const g: Ref<d3.Selection<SVGGElement, unknown, null, undefined> | null> = ref(null)
+const yScale: Ref<d3.ScaleLinear<number, number> | null> = ref(null)
+const currentTooltip: Ref<d3.Selection<HTMLDivElement, unknown, null, undefined> | null> = ref(null)
 
 const hasData: ComputedRef<boolean> = computed(() => {
   return Object.keys(props.voteData).length > 0
@@ -86,10 +105,10 @@ const physics = usePhysicsAnimation({
 
 // 追蹤動畫進度
 const animationPhase = ref<'idle' | 'animating' | 'settled'>('idle')
-const avatarElements = ref<Map<string, any>>(new Map())  // 存儲 D3 avatar 元素
+const avatarElements = ref<Map<string, AvatarElement>>(new Map())  // 存儲 D3 avatar 元素
 let animationFrameId: number | null = null
 let chartDimensions: {
-  margin: any
+  margin: ChartMargin
   width: number
   height: number
   avatarSize: number
@@ -168,7 +187,7 @@ function renderChart(): void {
         .attr('width', width + margin.left + margin.right)
         .attr('height', height + margin.top + margin.bottom)
 
-      g.value = svg.value.append('g')
+      g.value = svg.value!.append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`)
 
       // 計算版本數和最大高度
@@ -207,14 +226,14 @@ function renderChart(): void {
         .tickValues(d3.range(0, maxVotes + 1, 1))
         .tickFormat((d) => d3.format('d')(d as number))
 
-      g.value.append('g')
+      g.value!.append('g')
         .attr('class', 'y-axis')
         .call(yAxis)
         .selectAll('text')
         .style('font-size', '11px')
 
       // Y軸標籤
-      g.value.append('text')
+      g.value!.append('text')
         .attr('transform', 'rotate(-90)')
         .attr('y', -margin.left + 10)
         .attr('x', -height / 2)
@@ -224,7 +243,7 @@ function renderChart(): void {
         .text('投票數')
 
       // 繪製X軸線（底部）
-      g.value.append('line')
+      g.value!.append('line')
         .attr('x1', 0)
         .attr('x2', width)
         .attr('y1', height)
@@ -276,7 +295,7 @@ function renderChart(): void {
         // 版本標籤居中顯示（在版本band的中心）
         const labelX = versionCenter
 
-        g.value.append('text')
+        g.value!.append('text')
           .attr('x', labelX)
           .attr('y', height + 20)
           .attr('text-anchor', 'middle')
@@ -290,7 +309,7 @@ function renderChart(): void {
           ? `${support.length}支持 / ${oppose.length}反對`
           : `${support.length}票`
 
-        g.value.append('text')
+        g.value!.append('text')
           .attr('x', labelX)
           .attr('y', height + 38)
           .attr('text-anchor', 'middle')
@@ -303,9 +322,9 @@ function renderChart(): void {
 
       // 繪製共識線（如果需要）
       if (props.consensusThreshold > 0) {
-        const consensusY = yScale.value(props.consensusThreshold)
+        const consensusY = yScale.value!(props.consensusThreshold)
 
-        g.value.append('line')
+        g.value!.append('line')
           .attr('x1', 0)
           .attr('x2', width)
           .attr('y1', consensusY)
@@ -314,7 +333,7 @@ function renderChart(): void {
           .attr('stroke-width', 2)
           .attr('stroke-dasharray', '5,5')
 
-        g.value.append('text')
+        g.value!.append('text')
           .attr('x', width + 5)
           .attr('y', consensusY - 5)
           .attr('font-size', '12px')
@@ -329,7 +348,7 @@ function renderChart(): void {
       }
 
       // 添加圖表標題
-      svg.value.append('text')
+      svg.value!.append('text')
         .attr('x', (width + margin.left + margin.right) / 2)
         .attr('y', 20)
         .attr('text-anchor', 'middle')
@@ -345,12 +364,12 @@ function drawBar(voters: Voter[], centerX: number, avatarSize: number, type: str
 
   voters.forEach((voter, index) => {
     // 計算最終目標位置（堆疊後的位置）
-    const targetY = yScale.value(index + 0.5)
+    const targetY = yScale.value!(index + 0.5)
 
     // 初始位置：從圖表上方開始（螢幕外）
     const startY = -(chartDimensions?.margin.top || 40) - (index * 20) - 50
 
-    const avatarGroup = g.value.append('g')
+    const avatarGroup = g.value!.append('g')
       .attr('class', 'vote-avatar-group physics-avatar')
       .attr('data-id', `${type}::${versionKey}::${index}`)
       .attr('transform', `translate(${centerX - avatarRadius}, ${startY - avatarRadius})`)
@@ -601,7 +620,7 @@ function triggerFireworksForLatestVersion(): void {
     const columnCenter = chartDimensions.columnCenters.get(latestVersionKey)
     if (columnCenter) {
       const { support } = props.voteData[latestVersionKey]
-      const topY = yScale.value(support.length)
+      const topY = yScale.value!(support.length)
       launchFireworks(columnCenter.supportX, topY)
     }
   }
@@ -625,7 +644,7 @@ function launchFireworks(centerX: number, startY: number): void {
         const endY = startY + Math.sin(angle) * distance
 
         // 創建 emoji text element
-        const firework = g.value.append('text')
+        const firework = g.value!.append('text')
           .attr('x', centerX)
           .attr('y', startY - 30)
           .attr('text-anchor', 'middle')
@@ -653,7 +672,7 @@ function launchFireworks(centerX: number, startY: number): void {
       })
 
       // 背景高亮
-      g.value.insert('rect', ':first-child')
+      g.value!.insert('rect', ':first-child')
         .attr('x', centerX - 25)
         .attr('y', startY - 40)
         .attr('width', 50)
@@ -670,12 +689,12 @@ function launchFireworks(centerX: number, startY: number): void {
         .remove()
     }
 
-function renderLegend(width: number, height: number, margin: any): void {
+function renderLegend(width: number, height: number, margin: ChartMargin): void {
       const legendY = height + margin.bottom - 20
       const legendX = width / 2 - 60
 
       // 支持圖例
-      svg.value.append('circle')
+      svg.value!.append('circle')
         .attr('cx', legendX + margin.left)
         .attr('cy', legendY + margin.top)
         .attr('r', 6)
@@ -683,14 +702,14 @@ function renderLegend(width: number, height: number, margin: any): void {
         .attr('stroke', '#67c23a')
         .attr('stroke-width', 2)
 
-      svg.value.append('text')
+      svg.value!.append('text')
         .attr('x', legendX + margin.left + 12)
         .attr('y', legendY + margin.top + 4)
         .text('支持')
         .attr('font-size', '12px')
 
       // 反對圖例
-      svg.value.append('circle')
+      svg.value!.append('circle')
         .attr('cx', legendX + margin.left + 60)
         .attr('cy', legendY + margin.top)
         .attr('r', 6)
@@ -698,14 +717,14 @@ function renderLegend(width: number, height: number, margin: any): void {
         .attr('stroke', '#800000')
         .attr('stroke-width', 2)
 
-      svg.value.append('text')
+      svg.value!.append('text')
         .attr('x', legendX + margin.left + 72)
         .attr('y', legendY + margin.top + 4)
         .text('反對')
         .attr('font-size', '12px')
     }
 
-function showTooltip(event: any, voter: Voter, type: string): void {
+function showTooltip(event: MouseEvent, voter: Voter, type: string): void {
   cleanupTooltips()
 
   const container = chartContainer.value
@@ -750,12 +769,12 @@ function showTooltip(event: any, voter: Voter, type: string): void {
 function hideTooltip(): void {
   if (currentTooltip.value) {
         try {
-          const tooltipNode = currentTooltip.value.node()
+          const tooltipNode = currentTooltip.value!.node()
 
           // 檢查DOM節點是否存在
           if (tooltipNode && tooltipNode.parentNode) {
             // 停止任何正在進行的 transition
-            currentTooltip.value.interrupt()
+            currentTooltip.value!.interrupt()
 
             // 開始新的 fade out transition
             currentTooltip.value

@@ -138,7 +138,8 @@ interface StageGroup {
   id?: string
   groupName?: string
   name?: string
-  description?: string
+  // 後端的 groups.description 可為 null
+  description?: string | null
 }
 
 interface RankingItem {

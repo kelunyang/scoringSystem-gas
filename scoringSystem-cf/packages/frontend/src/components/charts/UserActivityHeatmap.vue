@@ -103,7 +103,7 @@ import type { Ref, ShallowRef } from 'vue'
 import * as d3 from 'd3'
 import { useD3Chart } from '@/composables/useD3Chart'
 import { useActivityData } from '@/composables/useActivityData'
-import type { ActivityStats } from '@/composables/useActivityData'
+import type { ActivityStats, ActivityEvent } from '@/composables/useActivityData'
 import {
   calculateCompactDateRange,
   calculateFullDateRange,
@@ -138,7 +138,19 @@ const props = withDefaults(defineProps<Props>(), {
 export interface DayClickPayload {
   date: string
   stats: ActivityStats
-  events: any[]
+  events: ActivityEvent[]
+}
+
+/** calculateLayout 的回傳，也是三個 render 函式共用的版面資訊 */
+interface HeatmapLayout {
+  totalWidth: number
+  totalHeight: number
+  isHorizontal: boolean
+  monthLabelHeight: number
+  weekdayLabelHeight: number
+  cellSize: number
+  cellPadding: number
+  visibleDays: number
 }
 
 export interface DateChangePayload {
@@ -157,8 +169,8 @@ const containerRef: Ref<HTMLDivElement | null> = ref(null)
 const chartContainerRef: Ref<HTMLDivElement | null> = ref(null)
 
 // Use shallowRef for DOM/D3 objects (no deep reactivity needed)
-const tooltip: ShallowRef<d3.Selection<HTMLDivElement, unknown, null, undefined> | null> = shallowRef(null)
-const svg: ShallowRef<d3.Selection<SVGSVGElement, unknown, HTMLDivElement, undefined> | null> = shallowRef(null)
+const tooltip: ShallowRef<d3.Selection<HTMLDivElement, unknown, HTMLElement, undefined> | null> = shallowRef(null)
+const svg: ShallowRef<d3.Selection<SVGSVGElement, unknown, null, undefined> | null> = shallowRef(null)
 const resizeObserver: ShallowRef<ResizeObserver | null> = shallowRef(null)
 const resizeTimeoutId: ShallowRef<ReturnType<typeof setTimeout> | null> = shallowRef(null)
 
@@ -411,10 +423,10 @@ function renderChart() {
     .append<SVGSVGElement>('svg')
     .attr('width', layout.totalWidth)
     .attr('height', layout.totalHeight)
-    .attr('class', 'heatmap-svg') as any
+    .attr('class', 'heatmap-svg')
 
   // Create tooltip
-  tooltip.value = markRaw(createTooltip()) as any
+  tooltip.value = markRaw(createTooltip())
 
   // Render chart elements
   if (svg.value) {
@@ -516,16 +528,7 @@ function calculateLayout(
   containerWidth: number,
   cellSize: number,
   cellPadding: number
-): {
-  totalWidth: number
-  totalHeight: number
-  isHorizontal: boolean
-  monthLabelHeight: number
-  weekdayLabelHeight: number
-  cellSize: number
-  cellPadding: number
-  visibleDays: number
-} {
+): HeatmapLayout {
   const startDate = new Date(dates[0])
   const endDate = new Date(dates[dates.length - 1])
   const totalCellSize = cellSize + cellPadding
@@ -569,11 +572,11 @@ function calculateLayout(
  * Render calendar cells
  */
 function renderCalendarCells(
-  d3: any,
-  svgElement: d3.Selection<SVGSVGElement, unknown, HTMLDivElement, undefined>,
+  d3: typeof import('d3'),
+  svgElement: d3.Selection<SVGSVGElement, unknown, null, undefined>,
   dates: string[],
   dailyStats: Record<string, ActivityStats>,
-  layout: any,
+  layout: HeatmapLayout,
   cellSize: number,
   cellPadding: number
 ) {
@@ -796,10 +799,10 @@ function hasActivity(stats: ActivityStats): boolean {
  * Render month labels (full mode only)
  */
 function renderMonthLabels(
-  d3: any,
-  svgElement: d3.Selection<SVGSVGElement, unknown, HTMLDivElement, undefined>,
+  d3: typeof import('d3'),
+  svgElement: d3.Selection<SVGSVGElement, unknown, null, undefined>,
   dates: string[],
-  layout: any,
+  layout: HeatmapLayout,
   cellSize: number,
   cellPadding: number
 ) {
@@ -828,10 +831,10 @@ function renderMonthLabels(
  * Render weekday labels
  */
 function renderWeekdayLabels(
-  d3: any,
-  svgElement: d3.Selection<SVGSVGElement, unknown, HTMLDivElement, undefined>,
+  d3: typeof import('d3'),
+  svgElement: d3.Selection<SVGSVGElement, unknown, null, undefined>,
   dates: string[],
-  layout: any,
+  layout: HeatmapLayout,
   cellSize: number,
   cellPadding: number
 ) {
@@ -934,7 +937,7 @@ function hideTooltip() {
 function handleCellClick(dateStr: string, stats: ActivityStats) {
   if (!activityData.value) return
 
-  const events = activityData.value.events.filter((e: any) => e.date === dateStr)
+  const events = activityData.value.events.filter(e => e.date === dateStr)
   emit('day-click', { date: dateStr, stats, events })
 }
 

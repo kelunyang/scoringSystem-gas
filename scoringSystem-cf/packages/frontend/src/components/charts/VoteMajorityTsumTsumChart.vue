@@ -20,16 +20,33 @@ import { useAvatar } from '@/composables/useAvatar'
 import { usePhysicsAnimation, type BodyConfig } from '@/composables/usePhysicsAnimation'
 import { useInViewport } from '@/composables/useInViewport'
 import EmptyState from '@/components/shared/EmptyState.vue'
+import type { AvatarCustomOptions } from '@/types/auth'
 import type { RankingProposalStatus, VotingResult } from '@repo/shared/types/entities'
+
+/** 圖表四邊留白 */
+interface ChartMargin {
+  top: number
+  right: number
+  bottom: number
+  left: number
+}
+
+
+interface AvatarElement {
+  element: d3.Selection<SVGGElement, unknown, null, undefined>
+  targetX: number
+  targetY: number
+  voter: Voter
+  type: string
+}
 
 interface Voter {
   voterEmail: string
   voterDisplayName?: string
   voterAvatarSeed?: string
   voterAvatarStyle?: string
-  voterAvatarOptions?: string | Record<string, any>
+  voterAvatarOptions?: string | AvatarCustomOptions
   timestamp?: number
-  [key: string]: any
 }
 
 interface VoteDataEntry {
@@ -61,11 +78,11 @@ const chartContainer: Ref<HTMLElement | null> = ref(null)
 
 // 視域偵測（進入視域時才啟動動畫）
 const { hasEntered } = useInViewport(chartContainer, { once: true })
-const svg: Ref<any> = ref(null)
-const g: Ref<any> = ref(null)
-const xScale: Ref<any> = ref(null)
-const yScale: Ref<any> = ref(null)
-const currentTooltip: Ref<any> = ref(null)
+const svg: Ref<d3.Selection<SVGSVGElement, unknown, null, undefined> | null> = ref(null)
+const g: Ref<d3.Selection<SVGGElement, unknown, null, undefined> | null> = ref(null)
+const xScale: Ref<d3.ScaleLinear<number, number> | null> = ref(null)
+const yScale: Ref<d3.ScaleBand<string> | null> = ref(null)
+const currentTooltip: Ref<d3.Selection<HTMLDivElement, unknown, null, undefined> | null> = ref(null)
 
 const hasData: ComputedRef<boolean> = computed(() => {
   return Object.keys(props.voteData).length > 0
@@ -87,9 +104,9 @@ const physics = usePhysicsAnimation({
 
 // 追蹤動畫進度
 const animationPhase = ref<'idle' | 'animating' | 'settled'>('idle')
-const avatarElements = ref<Map<string, any>>(new Map())  // 存儲 D3 avatar 元素
+const avatarElements = ref<Map<string, AvatarElement>>(new Map())  // 存儲 D3 avatar 元素
 let animationFrameId: number | null = null
-let chartDimensions: { margin: any, width: number, height: number, centerX: number, avatarSize: number, rowHeight: number } | null = null
+let chartDimensions: { margin: ChartMargin, width: number, height: number, centerX: number, avatarSize: number, rowHeight: number } | null = null
 
 // 版本順序（用於動畫排序：從舊到新）
 const versionOrderForAnimation = computed(() => {
@@ -180,7 +197,7 @@ function renderChart(): void {
     .attr('width', width + margin.left + margin.right)
     .attr('height', height + margin.top + margin.bottom)
 
-  g.value = svg.value.append('g')
+  g.value = svg.value!.append('g')
     .attr('transform', `translate(${margin.left},${margin.top})`)
 
   // X軸：票數（中心為0，左負右正）
@@ -189,7 +206,7 @@ function renderChart(): void {
     .range([0, width])
 
   // 更新 centerX（使用 xScale）
-  chartDimensions!.centerX = xScale.value(0)
+  chartDimensions!.centerX = xScale.value!(0)
 
   // Y軸：版本（倒序，最新在上）
   const versionKeysReversed = [...versionKeys].reverse()
@@ -203,7 +220,7 @@ function renderChart(): void {
     .tickValues(d3.range(-maxVotes, maxVotes + 1, 1))
     .tickFormat((d) => Math.abs(d as number).toString())
 
-  g.value.append('g')
+  g.value!.append('g')
     .attr('class', 'x-axis')
     .attr('transform', `translate(0,${height})`)
     .call(xAxis)
@@ -211,7 +228,7 @@ function renderChart(): void {
     .style('font-size', '11px')
 
   // X軸標籤
-  g.value.append('text')
+  g.value!.append('text')
     .attr('x', width / 2)
     .attr('y', height + margin.bottom - 10)
     .attr('text-anchor', 'middle')
@@ -224,10 +241,10 @@ function renderChart(): void {
     const originalIndex = versionKeys.indexOf(versionKey)
     const label = props.versionLabels[originalIndex]
     const { support, oppose } = props.voteData[versionKey]
-    const yPos = (yScale.value(versionKey) || 0) + rowHeight / 2
+    const yPos = (yScale.value!(versionKey) || 0) + rowHeight / 2
 
     // 版本標籤
-    g.value.append('text')
+    g.value!.append('text')
       .attr('x', -10)
       .attr('y', yPos)
       .attr('text-anchor', 'end')
@@ -238,7 +255,7 @@ function renderChart(): void {
 
     // 票數統計
     const voteCountText = `${support.length}支持 / ${oppose?.length || 0}反對`
-    g.value.append('text')
+    g.value!.append('text')
       .attr('x', -10)
       .attr('y', yPos + 12)
       .attr('text-anchor', 'end')
@@ -248,8 +265,8 @@ function renderChart(): void {
   })
 
   // 繪製0軸線（粗黑虛線）
-  const centerX = xScale.value(0)
-  g.value.append('line')
+  const centerX = xScale.value!(0)
+  g.value!.append('line')
     .attr('x1', centerX)
     .attr('x2', centerX)
     .attr('y1', 0)
@@ -261,7 +278,7 @@ function renderChart(): void {
   // 繪製每個版本的橫條
   versionKeysReversed.forEach((versionKey) => {
     const { support, oppose } = props.voteData[versionKey]
-    const yPos = (yScale.value(versionKey) || 0)
+    const yPos = (yScale.value!(versionKey) || 0)
 
     // 繪製投票結果方塊
     const netVotes = support.length - (oppose?.length || 0)
@@ -271,7 +288,7 @@ function renderChart(): void {
     // 背景方塊（實心，矮一點讓0軸線可見）
     const boxHeight = 20 // 減少高度（原本 32px）
     const boxYOffset = (rowHeight - boxHeight) / 2 // 垂直居中
-    g.value.append('rect')
+    g.value!.append('rect')
       .attr('x', centerX - 20)
       .attr('y', yPos + boxYOffset)
       .attr('width', 40)
@@ -282,7 +299,7 @@ function renderChart(): void {
       .attr('rx', 4)
 
     // 結果文字
-    g.value.append('text')
+    g.value!.append('text')
       .attr('x', centerX)
       .attr('y', yPos + rowHeight / 2 + 5)
       .attr('text-anchor', 'middle')
@@ -293,12 +310,12 @@ function renderChart(): void {
 
     // 繪製支持票（向右）
     if (support && support.length > 0) {
-      drawHorizontalBar(support, xScale.value, yPos, avatarSize, 'support', 'right', versionKey)
+      drawHorizontalBar(support, xScale.value!, yPos, avatarSize, 'support', 'right', versionKey)
     }
 
     // 繪製反對票（向左）
     if (oppose && oppose.length > 0) {
-      drawHorizontalBar(oppose, xScale.value, yPos, avatarSize, 'oppose', 'left', versionKey)
+      drawHorizontalBar(oppose, xScale.value!, yPos, avatarSize, 'oppose', 'left', versionKey)
     }
   })
 
@@ -308,7 +325,7 @@ function renderChart(): void {
   }
 
   // 添加圖表標題
-  svg.value.append('text')
+  svg.value!.append('text')
     .attr('x', (width + margin.left + margin.right) / 2)
     .attr('y', 20)
     .attr('text-anchor', 'middle')
@@ -340,7 +357,7 @@ function startPhysicsAnimation(): void {
   // 不需要左右邊界牆，avatar 從屏幕外滑入後會撞到中軸牆停下來
 
   versionKeysReversed.forEach((versionKey) => {
-    const yPos = (yScale.value(versionKey) || 0) + rowHeight / 2
+    const yPos = (yScale.value!(versionKey) || 0) + rowHeight / 2
     // 中軸牆壁（細長條形，高度等於行高）
     physics.addWall(centerX, yPos, 30, rowHeight * 0.8, 0.5)
   })
@@ -504,7 +521,7 @@ function triggerFireworksForLatestVersion(): void {
 
   if (votingResult === 'agree') {
     const { centerX, rowHeight } = chartDimensions
-    const yPos = (yScale.value(latestVersionKey) || 0) + rowHeight / 2
+    const yPos = (yScale.value!(latestVersionKey) || 0) + rowHeight / 2
 
     launchFireworks(centerX, yPos)
   }
@@ -512,7 +529,7 @@ function triggerFireworksForLatestVersion(): void {
 
 function drawHorizontalBar(
   voters: Voter[],
-  xScaleFunc: any,
+  xScaleFunc: d3.ScaleLinear<number, number>,
   yPos: number,
   avatarSize: number,
   type: string,
@@ -541,7 +558,7 @@ function drawHorizontalBar(
     const y = yPos + avatarRadius  // 垂直居中
 
     // 創建 avatar 元素（初始位置在螢幕外）
-    const avatarGroup = g.value.append('g')
+    const avatarGroup = g.value!.append('g')
       .attr('class', 'vote-avatar-group physics-avatar')
       .attr('data-id', `${type}::${versionKey}::${index}`)
       .attr('transform', `translate(${startX - avatarRadius}, ${y - avatarRadius})`)
@@ -617,7 +634,7 @@ function launchFireworks(centerX: number, centerY: number): void {
     const endY = centerY + Math.sin(angle) * distance
 
     // 創建 emoji text element
-    const firework = g.value.append('text')
+    const firework = g.value!.append('text')
       .attr('x', centerX)
       .attr('y', centerY)
       .attr('text-anchor', 'middle')
@@ -645,7 +662,7 @@ function launchFireworks(centerX: number, centerY: number): void {
   })
 
   // 背景高亮（圓形脈衝）
-  g.value.insert('circle', ':first-child')
+  g.value!.insert('circle', ':first-child')
     .attr('cx', centerX)
     .attr('cy', centerY)
     .attr('r', 20)
@@ -662,12 +679,12 @@ function launchFireworks(centerX: number, centerY: number): void {
     .remove()
 }
 
-function renderLegend(width: number, height: number, margin: any): void {
+function renderLegend(width: number, height: number, margin: ChartMargin): void {
   const legendY = height + margin.bottom - 20
   const legendX = width / 2 - 60
 
   // 反對圖例（左側）
-  svg.value.append('circle')
+  svg.value!.append('circle')
     .attr('cx', legendX + margin.left)
     .attr('cy', legendY + margin.top)
     .attr('r', 6)
@@ -675,14 +692,14 @@ function renderLegend(width: number, height: number, margin: any): void {
     .attr('stroke', '#800000')
     .attr('stroke-width', 2)
 
-  svg.value.append('text')
+  svg.value!.append('text')
     .attr('x', legendX + margin.left + 12)
     .attr('y', legendY + margin.top + 4)
     .text('反對')
     .attr('font-size', '12px')
 
   // 支持圖例（右側）
-  svg.value.append('circle')
+  svg.value!.append('circle')
     .attr('cx', legendX + margin.left + 60)
     .attr('cy', legendY + margin.top)
     .attr('r', 6)
@@ -690,14 +707,14 @@ function renderLegend(width: number, height: number, margin: any): void {
     .attr('stroke', '#67c23a')
     .attr('stroke-width', 2)
 
-  svg.value.append('text')
+  svg.value!.append('text')
     .attr('x', legendX + margin.left + 72)
     .attr('y', legendY + margin.top + 4)
     .text('支持')
     .attr('font-size', '12px')
 }
 
-function showTooltip(event: any, voter: Voter, type: string): void {
+function showTooltip(event: MouseEvent, voter: Voter, type: string): void {
   cleanupTooltips()
 
   const container = chartContainer.value
@@ -742,12 +759,12 @@ function showTooltip(event: any, voter: Voter, type: string): void {
 function hideTooltip(): void {
   if (currentTooltip.value) {
     try {
-      const tooltipNode = currentTooltip.value.node()
+      const tooltipNode = currentTooltip.value!.node()
 
       // 檢查DOM節點是否存在
       if (tooltipNode && tooltipNode.parentNode) {
         // 停止任何正在進行的 transition
-        currentTooltip.value.interrupt()
+        currentTooltip.value!.interrupt()
 
         // 開始新的 fade out transition
         currentTooltip.value

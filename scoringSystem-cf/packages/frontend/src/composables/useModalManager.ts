@@ -8,8 +8,35 @@
 
 import { ref, computed } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
-import type { Stage } from '@/types'
+import type { Stage, Group } from '@/types'
 import type { ExtendedStage } from './useStageContentManagement'
+
+/** 開 Modal 時只會讀到階段的這幾個欄位 */
+type ModalStage = Pick<Stage, 'status' | 'groups'> & { id?: string }
+
+/** 回覆評論 Modal 需要的原評論資訊 */
+export interface ReplyCommentTarget {
+  commentId: string
+  authorName?: string
+  content?: string
+  mentionedGroups?: string[]
+  mentionedUsers?: string[]
+}
+
+/** 成果投票 Modal 的資料 */
+export interface ModalVoteData {
+  proposer: string
+  timeline: unknown[]
+  rankings: unknown[]
+}
+
+/** 使用者所屬組資訊（傳給 VoteResultModal） */
+export interface ModalUserGroupInfo {
+  groupId?: string
+  groupName?: string
+  isGroupLeader?: boolean
+  groupMemberCount?: number
+}
 
 /**
  * Modal 管理 composable
@@ -33,27 +60,17 @@ export function useModalManager() {
   // ===== Modal 數據狀態 =====
   const currentModalStageId = ref<string>('')
   const currentModalSubmissionId = ref<string>('')
-  const currentModalGroupMembers = ref<any[]>([])
-  const currentModalSubmissionData = ref<Record<string, any>>({})
-  const currentModalStageGroups = ref<any[]>([])
+  const currentModalGroupMembers = ref<unknown[]>([])
+  const currentModalSubmissionData = ref<Record<string, unknown>>({})
+  const currentModalStageGroups = ref<Group[]>([])
   const currentModalStageIsSettled = ref<boolean>(false)
-  const currentModalVoteData = ref<{
-    proposer: string
-    timeline: any[]
-    rankings: any[]
-  }>({
+  const currentModalVoteData = ref<ModalVoteData>({
     proposer: '載入中...',
     timeline: [],
     rankings: []
   })
-  const currentModalUserGroupInfo = ref<any>(null)
-  const currentReplyComment = ref<{
-    commentId: any
-    authorName: any
-    content: any
-    mentionedGroups: any
-    mentionedUsers: any
-  } | null>(null)
+  const currentModalUserGroupInfo = ref<ModalUserGroupInfo | null>(null)
+  const currentReplyComment = ref<ReplyCommentTarget | null>(null)
   const currentModalActiveGroupsCount = ref<number>(4)
 
   // ===== 計算屬性：從 stages 動態獲取 Modal 相關數據 =====
@@ -112,7 +129,10 @@ export function useModalManager() {
    * @param {Object} stage - 階段對象
    * @param {Function} loadVoteDataFn - 載入投票數據的函數
    */
-  async function openVoteResultModal(stage: Stage | ExtendedStage, loadVoteDataFn: any) {
+  async function openVoteResultModal(
+    stage: Stage | ExtendedStage,
+    loadVoteDataFn?: ((stage: Stage | ExtendedStage) => Promise<void> | void) | null
+  ) {
     try {
       currentModalStageId.value = stage.id ?? ''
 
@@ -133,8 +153,8 @@ export function useModalManager() {
    * @param {Object} stage - 階段對象
    * @param {Number} activeGroupsCount - 該階段活躍組數
    */
-  function openSubmitReportModal(stage: any, activeGroupsCount = 4) {
-    currentModalStageId.value = stage.id
+  function openSubmitReportModal(stage: ModalStage, activeGroupsCount = 4) {
+    currentModalStageId.value = stage.id ?? ''
     currentModalActiveGroupsCount.value = activeGroupsCount
     showSubmitReportModal.value = true
     console.log('開啟提交報告彈窗:', stage, `活躍組數: ${activeGroupsCount}`)
@@ -144,8 +164,8 @@ export function useModalManager() {
    * 打開提交評論 Modal
    * @param {Object} stage - 階段對象
    */
-  function openSubmitCommentModal(stage: any) {
-    currentModalStageId.value = stage.id
+  function openSubmitCommentModal(stage: ModalStage) {
+    currentModalStageId.value = stage.id ?? ''
     showSubmitCommentModal.value = true
     console.log('開啟提交評論彈窗:', stage)
   }
@@ -154,8 +174,8 @@ export function useModalManager() {
    * 打開評論投票 Modal
    * @param {Object} stage - 階段對象
    */
-  function openCommentVoteModal(stage: any) {
-    currentModalStageId.value = stage.id
+  function openCommentVoteModal(stage: ModalStage) {
+    currentModalStageId.value = stage.id ?? ''
     showCommentVoteModal.value = true
     console.log('開啟評論投票彈窗:', stage)
   }
@@ -166,9 +186,13 @@ export function useModalManager() {
    * @param {Object} submissionData - 提交數據
    * @param {Array} groupMembers - 群組成員
    */
-  function openGroupSubmissionApprovalModal(stage: any, submissionData: any, groupMembers: any) {
-    currentModalStageId.value = stage.id
-    currentModalSubmissionId.value = submissionData.submissionId
+  function openGroupSubmissionApprovalModal(
+    stage: ModalStage,
+    submissionData: Record<string, unknown> & { submissionId?: string },
+    groupMembers: unknown[]
+  ) {
+    currentModalStageId.value = stage.id ?? ''
+    currentModalSubmissionId.value = submissionData.submissionId ?? ''
     currentModalGroupMembers.value = groupMembers
     currentModalSubmissionData.value = submissionData
     showGroupSubmissionApprovalModal.value = true
@@ -179,8 +203,8 @@ export function useModalManager() {
    * 打開教師排名 Modal
    * @param {Object} stage - 階段對象
    */
-  function openTeacherRankingModal(stage: any) {
-    currentModalStageId.value = stage.id
+  function openTeacherRankingModal(stage: ModalStage) {
+    currentModalStageId.value = stage.id ?? ''
     currentModalStageGroups.value = stage.groups || []
     showTeacherRankingModal.value = true
     console.log('開啟教師排名彈窗:', stage)
@@ -190,8 +214,8 @@ export function useModalManager() {
    * 打開教師投票 Modal
    * @param {Object} stage - 階段對象
    */
-  function openTeacherVoteModal(stage: any) {
-    currentModalStageId.value = stage.id
+  function openTeacherVoteModal(stage: ModalStage) {
+    currentModalStageId.value = stage.id ?? ''
     currentModalStageGroups.value = stage.groups || []
     showTeacherVoteModal.value = true
     console.log('開啟教師投票彈窗:', stage)
@@ -202,8 +226,8 @@ export function useModalManager() {
    * @param {string} type - 分析類型 ('report' | 'comment')
    * @param {Object} stage - 階段對象
    */
-  function openAnalysisModal(type: string, stage: any) {
-    currentModalStageId.value = stage.id
+  function openAnalysisModal(type: string, stage: ModalStage) {
+    currentModalStageId.value = stage.id ?? ''
     currentModalStageIsSettled.value = (stage.status === 'completed')
 
     if (type === 'report') {
@@ -220,7 +244,7 @@ export function useModalManager() {
    * @param {Object} commentData - 評論數據
    * @param {string} stageId - 階段 ID
    */
-  function openReplyCommentModal(commentData: any, stageId: string) {
+  function openReplyCommentModal(commentData: ReplyCommentTarget, stageId: string) {
     currentReplyComment.value = {
       commentId: commentData.commentId,
       authorName: commentData.authorName,
