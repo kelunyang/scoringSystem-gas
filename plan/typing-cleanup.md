@@ -6,43 +6,54 @@
 
 ---
 
-## 現況（2026-09-06 收工時，已驗證）
+## 現況（2026-09-06，已驗證）
 
 ```
-pnpm type-check   通過（**現在才真的包含 .vue**，見下）
-pnpm test         392 passed / 0 skipped
-pnpm lint         0 error, 1399 warning
+pnpm type-check   通過（含 vue-tsc）
+pnpm test         398 passed / 0 skipped
+pnpm lint         0 error, 909 warning
 ```
 
-| 套件 | any 數量 | 起點 |
-|------|---------|------|
-| backend | 457 | 460 |
-| frontend | 852 | 888 |
-| shared | 13 | 22（原本記為 0，是因為沒被 lint 掃到）|
+| 套件 | any | 起點 |
+|------|-----|------|
+| backend | **0** | 460 |
+| shared | **0** | 22（原記為 0，因為沒被 lint 掃到）|
+| frontend | 832 | 888 |
 
 frontend 另有 77 個非 any 的 warning（`vue/no-required-prop-with-default` 28、
 `vue/require-default-prop` 22、`vue/no-template-shadow` 13、`vue/no-v-html` 12、
 `vue/multi-word-component-names` 2），與本計畫無關，可另案處理。
 
-### 批次 1 已完成（2026-09-06）
+### 已完成的批次
 
-三個 commit：`a4fa897`、`33798dc`、`7b1eff7`。做的事和原計畫差很多，
-因為一開工就撞到「契約不統一，所以根本無法定型」——詳見
-[pitfalls.md](pitfalls.md) 2026-09-06 的兩條。摘要：
+| 批次 | 狀態 |
+|------|------|
+| 1 `types/api.ts` ＋ API 契約 | ✅ 2026-09-06 |
+| 2 `catch (e: any)` | ✅ 全庫 46 → 0 |
+| 3 backend handler | ✅ 460 → 0 |
+| 5 shared | ✅ 22 → 0 |
+| 4 frontend 元件 | 進行中 |
 
-- **後端 error 回應有兩種形狀**（handler 用 `errorResponse()`、
-  router 權限守衛手寫 `c.json`，112 處）。已統一，並補上守門測試
-  `backend/tests/error-response-shape.test.ts`。
-- **`getHttpStatus()` 只認得 52 個錯誤碼，實際用 167 個**，
-  其餘 115 個一律回 500。已改成完整對照表。
-- **八份 `ApiResponse` 定義**收成一份（`@repo/shared/types/api-responses`），
-  改成以 `success` 判別的 discriminated union。
-- 因此揭出並修掉：10 處對使用者顯示 `[object Object]`、
-  兩份互相矛盾且都不等於後端回傳的 `SystemStats`、
-  **根 `pnpm type-check` 從來沒檢查過任何 `.vue` 檔**。
-- 刪除死碼：`types/api.ts` 的 20 個零引用型別、`types/auth.ts` 的
-  `ApiResponse` 三連、`utils/error-handler.ts`（計畫原本擔心要合併的
-  兩份 `getErrorMessage`，其實一份沒人用）、shared 的 `Proposal` 介面。
+### 過程中找到並修好的 bug
+
+型別清理的價值主要在這裡，全部有守門或行為測試（測試數 389 → 398）：
+
+1. **後端 error 回應有兩種形狀**（112 處 router 守衛 vs 743 處
+   `errorResponse()`）。前端沒有一種寫法能同時對：10 處顯示
+   `[object Object]`，另外 23 處把 403 的真正理由吞掉。
+2. **115 個錯誤碼一律回 HTTP 500**——`PERMISSION_DENIED`、
+   `COMMENT_NOT_FOUND`、`ALREADY_VOTED` 全被報成 Internal Server Error。
+3. **事件資源端點的權限收窄從來沒執行過**（權限層級讀錯一層，
+   值在 `.data` 底下）。路由只擋專案層級的 view，於是任何組員
+   都能看到專案內任何一份成果。同一端點的評論路徑另外因為
+   JOIN 在不存在的 `c.authorId` 上，從來沒成功過。
+4. **階段評論頁的 `userReaction` 永遠是 null**，因此 reaction
+   無法取消（再按一次是重複新增）。
+5. **根 `pnpm type-check` 從來沒檢查過任何 `.vue`**；
+   **`packages/shared` 沒有 lint script**。
+6. 兩份互相矛盾且都不等於後端回傳的 `SystemStats`。
+
+詳見 [pitfalls.md](pitfalls.md) 2026-09-06 的四條。
 
 ---
 
@@ -110,7 +121,11 @@ pnpm --filter @repo/frontend build     # 動到前端時
 不是「換成具體型別」，而是**整份檔案除了 `ApiResponse` 系列以外全是死碼**。
 真正的工作在統一前後端的錯誤契約。
 
-### 批次 2：`catch (e: any)`（全庫 46 處）｜ 機械性但要小心
+### ~~批次 2：`catch (e: any)`~~ ✅ 已完成 2026-09-06
+
+實際做的不只換標註：15 處重複的 sudo 判斷收成 `isSudoWriteBlocked()`、
+5 處 UNIQUE constraint 判斷收成 `isUniqueConstraintViolation()`。
+以下為當時的規劃。
 
 `tsconfig.base.json` 是 `strict: true`，所以拿掉標註後 catch 變數是
 `unknown`，`e.message` 會編譯失敗。**必須搭配既有的 helper**：
@@ -120,7 +135,10 @@ pnpm --filter @repo/frontend build     # 動到前端時
   ~~兩份要合併~~——`utils/error-handler.ts`（連字號那份）零引用，
   已於 2026-09-06 刪除，現在只有一份。
 
-### 批次 3：backend handler 的參數與回傳｜ 最可能抓到 bug
+### ~~批次 3：backend handler~~ ✅ 已完成 2026-09-06
+
+以下為當時的規劃，保留作為紀錄。
+
 
 D1 查詢結果幾乎都是 `(row: any)`。這裡是實際會出錯的地方——
 2026-09-05 就抓到 `.first()` 用在「使用者可能有多筆」的查詢上
@@ -143,31 +161,26 @@ D1 的 `.first<T>()` / `.all<T>()` 支援泛型，優先用它而不是事後斷
 
 ### 批次 4：frontend 元件｜ 最大宗，價值最低
 
-| 檔案 | any |
-|------|-----|
-| `components/ProjectDetail.vue` | 62 |
-| `composables/admin/useProjects.ts` | 38 |
-| `components/TeacherVoteModal.vue` | 32 |
-| `components/GroupSubmissionApprovalModal.vue` | 26 |
-| `components/StageGroupSubmissions.vue` | 25 |
-| `composables/useModalManager.ts` | 22 |
+這是唯一還沒做的一批（832 處）。批次 1〜3、5 的經驗：
+
+- **先找跨檔案的重複模式，不要一開始就逐檔掃。**
+  最大的幾筆收穫都來自「某個型別已經存在，只是沒接上」。
+- **`.all<T>()` 泛型優先於事後斷言**，型別寫在查詢旁邊。
+- **一個查詢一個型別。** 同一張表的兩個查詢 SELECT 的欄位不同時，
+  共用一個型別就是說謊（D1 泛型不會驗證欄位）。用 `Omit<>` 或分開寫。
+- **函式簽章說謊時，改簽章而不是在呼叫端轉型。**
+  `updateUserProfile`、`createGlobalGroup`、`validateCommentEligibility`
+  都是這一類。
 
 **注意**：`ProjectDetail.vue` 曾有使用者未提交的改動，2026-09-06 確認已提交。
 動它之前仍請先 `git status --short`。
 
-### 批次 5：`packages/shared` 剩餘 13 處｜ 跟批次 3 一起做
+### ~~批次 5：`packages/shared`~~ ✅ 已完成 2026-09-06
 
-2026-09-06 已把 22 收到 13。剩下的是這些欄位：
-
-| 檔案 | 欄位 |
-|------|------|
-| `types/entities.ts` | `Group.votingData`、`Group.participationProposal`、`Group.voteRankData`、`Group.teacherRankData`、`Submission.teacherRankData`、`Submission.voteRankData`、`EventLog.resource` |
-| `types/admin.ts` | `eventData`、`details`、`relatedEntities`、`metadata` ×3 |
-
-**刻意留著**：它們的形狀由 backend handler 決定，而那些 handler
-自己還是 `any`（`handlers/eventlogs/query.ts:428` 就寫著
-`let resource: any = null`）。在 handler 定型之前替這些欄位挑型別
-等於猜，猜錯會比 `any` 更難發現。做完批次 3 再回來收。
+排在批次 3 之後是對的：這些欄位的形狀由 backend handler 決定，
+而那些 handler 當時自己還是 `any`，先定就是猜。等 handler 定完型再回頭，
+形狀是查出來的。新增了 GroupVotingData、ParticipationProposal、
+RankingDisplayData、EventResourceData。
 
 ---
 
