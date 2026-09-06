@@ -45,88 +45,95 @@ SELECT status, COUNT(*) FROM stages GROUP BY status;
 確認只有 VIEW 那七個值（或該欄位確定不再被讀）之後再收窄，
 順便把 shared 的註解寫清楚它的唯一來源是 VIEW。
 
-### #011 ｜ `AppType = any` 讓整個 RPC 層失去型別（2026-09-06）
+### #011 ｜ RPC 型別：路由層已修好，回應資料層未完（2026-09-06）
 
-**現象**：`packages/frontend/src/types/backend.d.ts` 只有一行實質內容：
-
-```ts
-export type AppType = any;
-```
-
-`rpcClient` 由 `hc<AppType>()` 建出來，所以**前端呼叫後端的每一個
-端點、每一個回應都是 `any`**。2026-09-06 的清理把「純前端狀態」那
-412 處收到 0 之後，frontend 剩下的 381 處 `any` 幾乎全部集中在
-API 邊界（48 個檔案），來源就是這裡。
+> **2026-09-06 下午更新**：根因查清、路由層已修復並合併到 main。
+> 剩下的是第三層（handler 的資料型別），前端接線暫存在
+> `wip/rpc-frontend-wiring` 分支，尚有 138 個型別錯誤。
 
 ---
 
-#### 根因（2026-09-06 實測確認，與原註解說的不同）
+#### 根因（實測，與原註解說的不同）
 
-該檔案原本的註解把原因歸給「TypeScript 產生 `.d.ts` 時 route schema
-會遺失」。**實測後這不是主因。**
-
-真正的原因是：**`app.route()` 與各 router 的 `.get()/.post()` 全部
-寫成獨立述句，不是串接的。**
+原註解把 `AppType = any` 歸給「TypeScript 產生 .d.ts 時 route schema
+會遺失」。**不是。** 真正的原因是路由用獨立述句註冊：
 
 ```ts
-// packages/backend/src/index.ts
-const app = new Hono<{ Bindings: Env }>();
-app.route('/api/auth', authRouter);      // ← 述句，回傳值被丟掉
-app.route('/api/admin', adminRouter);
-// …21 個
-
-// packages/backend/src/router/auth.ts
-const authRouter = new Hono<…>();
-authRouter.post('/register', …);          // ← 同樣是述句
+const app = new Hono();
+app.route('/api/auth', authRouter);   // ← 回傳值被丟掉
 ```
 
-Hono 的 RPC 型別是靠**串接時累積在回傳值型別上**的。寫成述句時，
-`typeof app` 永遠是 `Hono<Env, BlankSchema, "/">`——schema 是空的，
-和 `.d.ts`、和 monorepo 設定都無關。
+Hono 的 RPC 型別靠串接時累積在回傳值上，寫成述句時 `typeof app`
+永遠是 `Hono<Env, BlankSchema, "/">`。三個探針證實：述句式取
+`client.api` 得到 `unknown`；只串頂層也不行（sub-router 自己也是述句式）；
+全串接的最小例子則推導成功。
 
-**實測**（在 backend 套件內做，那裡整棵原始碼都編得起來）：
+#### 已完成（commit e4a0fe9、bc35c88）
 
-| 探針 | 結果 |
-|------|------|
-| `hc<AppType>('')` 然後取 `.api` | `client` 推導成 `unknown`（TS18046） |
-| `new Hono().route('/api/auth', authRouter)` 再取 `.api` | 一樣 `unknown`——因為 `authRouter` 自己也是述句式 |
-| 全串接的最小例子（`new Hono().get(...)` ＋ `new Hono().route(...)`） | **推導成功**，`client.api.ping.$get` 有型別 |
+| 層 | 狀態 |
+|----|------|
+| **1. 路由 schema** | ✅ 22 個 router 共 267 個註冊改成串接式（純語法變換） |
+| **2. 回應信封** | ✅ `successResponse`／`errorResponse` 改回傳 `JsonResponse<T>`（Hono 官方的 `interface X extends Response, TypedResponse<T>` 模式），並移除 192 處會抹掉型別的 `: Promise<Response>` 標註 |
+| **3. handler 資料** | ❌ **未完**——見下 |
 
-第三列證明機制本身沒壞，是這個 codebase 的寫法不符合它的要求。
+`tsc --build` 11 秒，`dist/src/index.d.ts` 464K（schema 確實寫進去了）。
+探針確認端點路徑、請求 body、回應信封都推導得出來，
+不存在的端點會編譯失敗。
 
-**另外**，原註解說的第 1 條（「直接從 backend import 會去編譯整棵
-backend 原始碼樹」）確實仍然成立：把 `@repo/backend` 加進 frontend
-的 `paths` 之後，`vue-tsc` 立刻噴 TS6059／TS6307（backend 的檔案
-不在 frontend 的 `rootDir`／`include` 裡）。要能編就得把 backend
-整包納入 frontend 的 program，型別檢查時間會顯著上升。
+#### 未完成：第三層是 handler 自己的資料沒型別
 
-#### 改動規模
+接上型別之後前端冒出 158 個錯誤（現已降到 138），其中最大一類的根源是
+**D1 查詢沒帶泛型**：
 
-要走 Hono 原生推導，得把 **21 個 router、246 個路由註冊**全部改寫成
-串接式，`app.route()` 那 21 行也要串起來。這不是型別標註，是後端
-路由層的結構性改寫，而且改的過程中沒有測試會告訴你哪裡串錯
-（型別對了不代表路徑對）。
+```ts
+const stage = await env.DB.prepare(`SELECT ...`).bind(...).first();
+//                                                          ^^^^^^^ Record<string, unknown>
+```
 
-#### 三條路的取捨
+於是 handler 回傳的每個欄位都是 `unknown`，前端拿到的還是沒有資訊。
 
-| 方案 | 工作量 | 得到什麼 | 風險 |
-|------|-------|---------|------|
-| **A. 改成串接式** | 246 個路由 ＋ 21 個 route 掛載 | 前後端型別自動同步，381 處 `any` 大部分自己消失 | 改的是正在運作的路由層；frontend 編譯要吃進整包 backend，type-check 變慢 |
-| **B. 手寫 typed wrapper** | 每個端點一個 wrapper（`api/admin.ts` 已是這個模式） | 型別穩定、不依賴 Hono 版本、frontend 不必編 backend | 契約靠手寫維護，後端改了不會編譯失敗——和已刪掉的 `types/api.ts` 是同一種東西 |
-| **C. `@hono/zod-openapi`** | 重寫 backend 路由定義層 | schema 就在 `@repo/shared`，型別雙向共用，順便有 OpenAPI 文件 | 改動最大，會動到已經穩定的 handler |
+**全庫規模**：
 
-**沒有「順手做掉」的選項。** 三條都是架構決策。
+| | 無泛型 | 有泛型 |
+|---|---|---|
+| `.first()` | **366** | 72 |
+| `.all()` | **100** | 131 |
 
-**建議**：如果要做，A 的性價比最高，因為它不改變任何執行時行為
-（`app.route(x, y)` 改成 `.route(x, y)` 串接是純語法變換），
-可以一個 router 一個 router 漸進做，中途不會壞。B 的長期維護成本
-最高，C 最乾淨但最貴。
+已修兩處示範（`getStage`、兩個結算端點的空 rankings 分支），
+合計讓前端少 20 個錯誤。**照這個比例，把前端接起來大約需要處理
+20–30 個 handler 的 row 型別**，不是全部 466 個。
 
-**在有結論之前不要動那 381 處**——手寫型別去描述一個沒人驗證的
-契約，和批次 1 刪掉的 `types/api.ts` 是同一種東西。
+#### 前端剩餘 138 個錯誤的分類
 
-已順手做掉的：31 處 `(rpcClient.X as any)` 轉型。既然 `rpcClient`
-本身就是 `any`，那些轉型不會讓任何東西更寬鬆，純粹是噪音。
+| 數量 | 類別 | 處理方式 |
+|------|------|---------|
+| ~34 | 沒收窄判別聯集就讀 `.data`／`.error`（多半在 console.log） | `if (r.success)` 收窄 |
+| ~68 | 後端回 `unknown` / `{}` | 修對應 handler 的 row 型別 |
+| ~36 | 手寫的前端型別對不上真實契約 | 改用 `utils/api-types.ts` 的 `ApiData<>` 從端點推導 |
+
+最後一類是這整件事的重點：那些手寫介面（`ProjectGroup`、
+`NormalizedTransaction` 之類）當初是猜的，編譯得過、看起來合理，
+然後跟後端悄悄漂走。現在有契約了，**應該從端點推導而不是逐欄和解**。
+
+#### 順帶查清楚的事
+
+`ensureApiPrefix`（`utils/rpc-client.ts`）是個 runtime 補丁，
+在 URL 缺 `/api` 時補上——因為呼叫端混用 `rpcClient.projects.*` 和
+`rpcClient.api.projects.*`，而型別是 `any` 沒人發現。
+WIP 分支已把 178 處補成 `.api.*`；等前端接完，這個補丁可以刪掉
+（缺前綴會變成編譯錯誤）。
+
+#### 接手指引
+
+```bash
+git checkout wip/rpc-frontend-wiring
+cd scoringSystem-cf
+pnpm --filter @repo/backend build      # 前端型別檢查依賴 backend 的 .d.ts
+pnpm --filter @repo/frontend exec vue-tsc --noEmit -p tsconfig.json
+```
+
+一次修一個檔案，改完重跑。修後端 row 型別之後要重新
+`pnpm --filter @repo/backend build`，前端才看得到。
 
 ---
 
