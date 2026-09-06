@@ -105,12 +105,26 @@ interface EventLogPermissionData extends EventLogPermissionPayload {
   data?: EventLogPermissionPayload;
 }
 
-export async function getProjectEventLogs(
+/**
+ * 組出專案事件記錄的資料本體。
+ *
+ * 這一層刻意不包 `successResponse`：同檔案裡有五個地方需要這份資料再
+ * 加上 `userPermissionLevel`，原本的寫法是呼叫 `getProjectEventLogs()`
+ * 拿到 Response、再 `await response.json() as EventLogPermissionData`
+ * 解回來——那個手寫的斷言只宣告了 `logs` 與 `userPermissionLevel`，
+ * 把 `total` 和真正的 log 形狀都丟掉了，前端因此拿不到 `total`。
+ *
+ * pitfalls.md 2026-09-06 那條就是在講這個模式（handler 呼叫 handler
+ * 再解析它的 Response）的風險。
+ *
+ * @throws 查詢失敗時往上拋，由呼叫端轉成 errorResponse
+ */
+export async function buildProjectEventLogs(
   env: Env,
   projectId: string,
   filters: EventLogFilters = {}
-) {
-  try {
+): Promise<{ logs: EnrichedEventLog[]; total: number }> {
+  {
     // Build SQL query with filters
     // SECURITY FIX: Use INNER JOIN for users to ensure only valid user logs are returned
     let query = `
@@ -220,12 +234,21 @@ export async function getProjectEventLogs(
       return enrichedLog;
     }) || [];
 
-    return successResponse({
-      logs: enrichedLogs,
-      total: enrichedLogs.length,
-      userPermissionLevel: undefined // Will be set by getUserProjectEventLogs
-    });
+    return { logs: enrichedLogs, total: enrichedLogs.length };
+  }
+}
 
+/**
+ * 專案事件記錄（Response 版本，給 router 用）
+ */
+export async function getProjectEventLogs(
+  env: Env,
+  projectId: string,
+  filters: EventLogFilters = {}
+) {
+  try {
+    const data = await buildProjectEventLogs(env, projectId, filters);
+    return successResponse({ ...data, userPermissionLevel: undefined as string | undefined });
   } catch (error) {
     console.error('Get project event logs error:', error);
     return errorResponse('SYSTEM_ERROR', 'Failed to retrieve event logs');
@@ -274,13 +297,8 @@ export async function getUserProjectEventLogs(
 
     // Level 1: system_admin or create_project → See ALL logs
     if (hasGlobalAdmin) {
-      const response = await getProjectEventLogs(env, projectId, filters);
-      const responseData = await response.json() as EventLogPermissionData;
-      const data = responseData.data || responseData;  // Handle nested structure
-      data.userPermissionLevel = 'admin';
-
-
-      return successResponse(data);
+      const data = await buildProjectEventLogs(env, projectId, filters);
+      return successResponse({ ...data, userPermissionLevel: 'admin' });
     }
 
 
@@ -319,13 +337,8 @@ export async function getUserProjectEventLogs(
 
     // Level 2: teacher or observer → See all project logs
     if (viewerRole === 'teacher' || viewerRole === 'observer') {
-      const response = await getProjectEventLogs(env, projectId, filters);
-      const responseData = await response.json() as EventLogPermissionData;
-      const data = responseData.data || responseData;  // Handle nested structure
-      data.userPermissionLevel = viewerRole; // 'teacher' or 'observer'
-
-
-      return successResponse(data);
+      const data = await buildProjectEventLogs(env, projectId, filters);
+      return successResponse({ ...data, userPermissionLevel: viewerRole });
     }
 
 
@@ -377,13 +390,8 @@ export async function getUserProjectEventLogs(
         };
 
 
-        const response = await getProjectEventLogs(env, projectId, userFilters);
-        const responseData = await response.json() as EventLogPermissionData;
-        const data = responseData.data || responseData;  // Handle nested structure
-        data.userPermissionLevel = 'group_leader';
-
-
-        return successResponse(data);
+        const data = await buildProjectEventLogs(env, projectId, userFilters);
+        return successResponse({ ...data, userPermissionLevel: 'group_leader' });
       }
 
       // Level 4: Group member → See only own logs
@@ -394,13 +402,8 @@ export async function getUserProjectEventLogs(
       };
 
 
-      const response = await getProjectEventLogs(env, projectId, userFilters);
-      const responseData = await response.json() as EventLogPermissionData;
-      const data = responseData.data || responseData;  // Handle nested structure
-      data.userPermissionLevel = 'member_in_group';
-
-
-      return successResponse(data);
+      const data = await buildProjectEventLogs(env, projectId, userFilters);
+      return successResponse({ ...data, userPermissionLevel: 'member_in_group' });
     }
 
     // If no viewer role, deny access

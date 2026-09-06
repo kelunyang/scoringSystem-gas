@@ -201,17 +201,17 @@
                     </div>
 
                     <!-- 已載入的資源詳情 -->
-                    <div v-else-if="resourceContentMap.has(event.logId)" class="resource-content">
+                    <div v-else-if="resourceView(event.logId)" class="resource-content">
                       <div class="resource-meta">
-                        <p><strong>类型：</strong>{{ resourceContentMap.get(event.logId)!.type }}</p>
-                        <p><strong>作者：</strong>{{ resourceContentMap.get(event.logId)!.authorEmail || resourceContentMap.get(event.logId)!.submitterEmail }}</p>
-                        <p><strong>时间：</strong>{{ formatTimestamp((resourceContentMap.get(event.logId)!.createdTime || resourceContentMap.get(event.logId)!.submitTime) as number) }}</p>
-                        <p v-if="resourceContentMap.get(event.logId)!.status"><strong>状态：</strong>{{ resourceContentMap.get(event.logId)!.status }}</p>
+                        <p><strong>类型：</strong>{{ resourceView(event.logId)!.type }}</p>
+                        <p><strong>作者：</strong>{{ resourceView(event.logId)!.author }}</p>
+                        <p><strong>时间：</strong>{{ formatTimestamp(resourceView(event.logId)!.time) }}</p>
+                        <p v-if="resourceView(event.logId)!.status"><strong>状态：</strong>{{ resourceView(event.logId)!.status }}</p>
                       </div>
                       <el-divider />
                       <div class="resource-main-content">
                         <h5>内容：</h5>
-                        <MdPreviewWrapper :content="(resourceContentMap.get(event.logId)!.content || resourceContentMap.get(event.logId)!.contentMarkdown) as string" />
+                        <MdPreviewWrapper :content="resourceView(event.logId)!.content" />
                       </div>
                     </div>
 
@@ -267,6 +267,10 @@ import EmptyState from '@/components/shared/EmptyState.vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { getErrorMessage } from '@/utils/errorHandler'
 import type { EventLog } from '@/types'
+import type { ApiData } from '@/utils/api-types'
+
+/** 事件記錄的形狀從端點推導（見 plan/issue.md #011） */
+type ProjectEventLog = ApiData<typeof rpcClient.api.activity.project.$post>['logs'][number]
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import AdminFilterToolbar from './admin/shared/AdminFilterToolbar.vue'
 import ExpandableTableRow from './shared/ExpandableTableRow.vue'
@@ -285,16 +289,11 @@ interface StageOption {
   stageOrder: number;
 }
 
-interface ResourceDetail {
-  type?: string;
-  authorEmail?: string;
-  submitterEmail?: string;
-  createdTime?: number;
-  submitTime?: number;
-  status?: string;
-  content?: string;
-  contentMarkdown?: string;
-}
+/**
+ * 資源詳情的形狀從端點推導（見 plan/issue.md #011）。
+ * 這是個判別聯集：成果（submission）與評論（comment）的欄位不同。
+ */
+type ResourceDetail = ApiData<typeof rpcClient.api.activity.resource.$post>
 
 const props = defineProps({
   projectId: {
@@ -314,7 +313,7 @@ const props = defineProps({
 
 // 数据
 const loading = ref(false)
-const allLogs = ref<EventLog[]>([])
+const allLogs = ref<ProjectEventLog[]>([])
 
 // Backend search mode state (following SystemLogs.vue pattern)
 const searchMode = ref<'frontend' | 'backend'>('backend') // Default to backend search
@@ -358,6 +357,26 @@ const userPermissionLevel = ref('') // Permission level from backend API
 
 // 资源展开 - 使用 Map 存儲每個事件的資源詳情
 const resourceContentMap = ref<Map<string, ResourceDetail>>(new Map())
+
+/**
+ * 把兩種資源詳情攤平成模板要的欄位。
+ *
+ * 端點回的是判別聯集：成果有 submitterEmail／submitTime／status／contentMarkdown，
+ * 評論有 authorEmail／createdTime／content。模板裡不方便逐個 v-if 收窄，
+ * 在這裡收一次。
+ */
+function resourceView(logId: string) {
+  const detail = resourceContentMap.value.get(logId)
+  if (!detail) return null
+
+  return {
+    type: detail.type,
+    author: 'authorEmail' in detail ? detail.authorEmail : detail.submitterEmail,
+    time: 'createdTime' in detail ? detail.createdTime : detail.submitTime,
+    status: 'status' in detail ? detail.status : undefined,
+    content: detail.content ?? ''
+  }
+}
 const loadingResourceIds = ref<Set<string>>(new Set())
 
 // 事件详情展开（行内展开）
@@ -382,7 +401,7 @@ const uniqueStages = computed<StageOption[]>(() => {
       stageMap.set(event.stageId, {
         stageId: event.stageId,
         stageName: event.stageName || '未知階段',
-        stageOrder: event.stageOrder !== undefined ? event.stageOrder : 999
+        stageOrder: event.stageOrder ?? 999
       })
     }
   })
@@ -415,7 +434,7 @@ const shouldShowUserFilter = computed(() => {
   return ['admin', 'teacher', 'observer', 'group_leader'].includes(userPermissionLevel.value)
 })
 
-const displayedLogs = computed<EventLog[]>(() => {
+const displayedLogs = computed<ProjectEventLog[]>(() => {
   // Backend mode: data is already filtered by backend, just apply stage filter (client-side only)
   if (searchMode.value === 'backend') {
     let filtered = [...allLogs.value]
@@ -546,15 +565,16 @@ const loadEventLogs = async (useBackendFilters = true) => {
     })
     const response = await httpResponse.json()
 
-    console.log('📊 EventLogViewer: API response', {
-      success: response.success,
-      logsCount: response.data?.logs?.length,
-      total: response.data?.total,
-      userPermissionLevel: response.data?.userPermissionLevel,
-      error: response.error
-    })
+    if (!response.success) {
+      console.log('📊 EventLogViewer: API response 失敗', response.error)
+    }
 
     if (response.success) {
+      console.log('📊 EventLogViewer: API response', {
+        logsCount: response.data?.logs?.length,
+        total: response.data?.total,
+        userPermissionLevel: response.data?.userPermissionLevel
+      })
       // Backend returns { logs: [...], total: number, userPermissionLevel: string }
       allLogs.value = response.data?.logs || []
       totalCount.value = response.data?.total || allLogs.value.length
@@ -637,7 +657,7 @@ const canExpand = (resourceType: string) => {
 }
 
 // 切换事件详情展开
-const handleToggleExpansion = async (event: EventLog) => {
+const handleToggleExpansion = async (event: ProjectEventLog) => {
   if (expandedEventId.value === event.logId) {
     // 收起展開
     expandedEventId.value = null
@@ -653,7 +673,7 @@ const handleToggleExpansion = async (event: EventLog) => {
 }
 
 // 載入事件的資源詳情
-const loadResourceForEvent = async (event: EventLog) => {
+const loadResourceForEvent = async (event: ProjectEventLog) => {
   const logId = event.logId
   loadingResourceIds.value.add(logId)
 
@@ -662,6 +682,11 @@ const loadResourceForEvent = async (event: EventLog) => {
     const eventWithResource = event as EventLog & { resourceId?: string }
 
     // Type assertion needed due to AppType being any
+    if (!event.resourceType || !eventWithResource.resourceId) {
+      console.warn('缺少 resourceType 或 resourceId，略過載入', event)
+      return
+    }
+
     const httpResponse = await rpcClient.api.activity.resource.$post({
       json: {
         projectId: props.projectId,
