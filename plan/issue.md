@@ -24,29 +24,76 @@ export type AppType = any;
 ```
 
 `rpcClient` 由 `hc<AppType>()` 建出來，所以**前端呼叫後端的每一個
-端點、每一個回應都是 `any`**。批次 4 剩下的 878 處 frontend `any`
-裡，很大一部分是從這裡擴散出去的——拿到 `any` 的回應之後，
-存進 `ref<any>`、傳進 `(x: any) =>`、再標成 `Record<string, any>`。
+端點、每一個回應都是 `any`**。2026-09-06 的清理把「純前端狀態」那
+412 處收到 0 之後，frontend 剩下的 381 處 `any` 幾乎全部集中在
+API 邊界（48 個檔案），來源就是這裡。
 
-**根因與已試過的路**（原作者寫在該檔案的註解裡，值得保留）：
-Hono 的 RPC 型別推導靠 `typeof app` 捕捉整串 `app.route()` 鏈，
-但 TypeScript 產生 `.d.ts` 時這個資訊會遺失，app 型別退化成
-`Hono<{ Bindings: Env }, BlankSchema, "/">`。試過三種都不成：
+---
 
-1. 直接從 backend import——TypeScript 會去編譯整棵 backend 原始碼樹
-2. TypeScript Project References——declaration 檔仍然遺失 route schema
-3. 在 frontend 裝 `@cloudflare/workers-types`——只解決 bindings，不解決 route
+#### 根因（2026-09-06 實測確認，與原註解說的不同）
 
-**可能的方向**（都需要架構調整，不是順手能做的）：
+該檔案原本的註解把原因歸給「TypeScript 產生 `.d.ts` 時 route schema
+會遺失」。**實測後這不是主因。**
 
-- `@hono/zod-openapi`：用 Zod schema 定義路由，schema 本來就在
-  `@repo/shared`，型別可以雙向共用
-- 為每個端點手寫具型別的 API wrapper（`api/admin.ts` 已經是這個模式，
-  而且它是前端目前少數型別完整的一層）
+真正的原因是：**`app.route()` 與各 router 的 `.get()/.post()` 全部
+寫成獨立述句，不是串接的。**
 
-**為什麼記在這裡**：2026-09-06 的型別清理把 backend 與 shared 收到 0，
-frontend 剩 878。**不解決這一項，frontend 的 `any` 就有一個持續的來源**，
-清完還會長回來。要不要投入、投入哪一種，是架構決策，不該由清理順手決定。
+```ts
+// packages/backend/src/index.ts
+const app = new Hono<{ Bindings: Env }>();
+app.route('/api/auth', authRouter);      // ← 述句，回傳值被丟掉
+app.route('/api/admin', adminRouter);
+// …21 個
+
+// packages/backend/src/router/auth.ts
+const authRouter = new Hono<…>();
+authRouter.post('/register', …);          // ← 同樣是述句
+```
+
+Hono 的 RPC 型別是靠**串接時累積在回傳值型別上**的。寫成述句時，
+`typeof app` 永遠是 `Hono<Env, BlankSchema, "/">`——schema 是空的，
+和 `.d.ts`、和 monorepo 設定都無關。
+
+**實測**（在 backend 套件內做，那裡整棵原始碼都編得起來）：
+
+| 探針 | 結果 |
+|------|------|
+| `hc<AppType>('')` 然後取 `.api` | `client` 推導成 `unknown`（TS18046） |
+| `new Hono().route('/api/auth', authRouter)` 再取 `.api` | 一樣 `unknown`——因為 `authRouter` 自己也是述句式 |
+| 全串接的最小例子（`new Hono().get(...)` ＋ `new Hono().route(...)`） | **推導成功**，`client.api.ping.$get` 有型別 |
+
+第三列證明機制本身沒壞，是這個 codebase 的寫法不符合它的要求。
+
+**另外**，原註解說的第 1 條（「直接從 backend import 會去編譯整棵
+backend 原始碼樹」）確實仍然成立：把 `@repo/backend` 加進 frontend
+的 `paths` 之後，`vue-tsc` 立刻噴 TS6059／TS6307（backend 的檔案
+不在 frontend 的 `rootDir`／`include` 裡）。要能編就得把 backend
+整包納入 frontend 的 program，型別檢查時間會顯著上升。
+
+#### 改動規模
+
+要走 Hono 原生推導，得把 **21 個 router、246 個路由註冊**全部改寫成
+串接式，`app.route()` 那 21 行也要串起來。這不是型別標註，是後端
+路由層的結構性改寫，而且改的過程中沒有測試會告訴你哪裡串錯
+（型別對了不代表路徑對）。
+
+#### 三條路的取捨
+
+| 方案 | 工作量 | 得到什麼 | 風險 |
+|------|-------|---------|------|
+| **A. 改成串接式** | 246 個路由 ＋ 21 個 route 掛載 | 前後端型別自動同步，381 處 `any` 大部分自己消失 | 改的是正在運作的路由層；frontend 編譯要吃進整包 backend，type-check 變慢 |
+| **B. 手寫 typed wrapper** | 每個端點一個 wrapper（`api/admin.ts` 已是這個模式） | 型別穩定、不依賴 Hono 版本、frontend 不必編 backend | 契約靠手寫維護，後端改了不會編譯失敗——和已刪掉的 `types/api.ts` 是同一種東西 |
+| **C. `@hono/zod-openapi`** | 重寫 backend 路由定義層 | schema 就在 `@repo/shared`，型別雙向共用，順便有 OpenAPI 文件 | 改動最大，會動到已經穩定的 handler |
+
+**沒有「順手做掉」的選項。** 三條都是架構決策。
+
+**建議**：如果要做，A 的性價比最高，因為它不改變任何執行時行為
+（`app.route(x, y)` 改成 `.route(x, y)` 串接是純語法變換），
+可以一個 router 一個 router 漸進做，中途不會壞。B 的長期維護成本
+最高，C 最乾淨但最貴。
+
+**在有結論之前不要動那 381 處**——手寫型別去描述一個沒人驗證的
+契約，和批次 1 刪掉的 `types/api.ts` 是同一種東西。
 
 已順手做掉的：31 處 `(rpcClient.X as any)` 轉型。既然 `rpcClient`
 本身就是 `any`，那些轉型不會讓任何東西更寬鬆，純粹是噪音。
