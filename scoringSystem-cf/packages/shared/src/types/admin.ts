@@ -468,15 +468,21 @@ export interface SendNotificationRequest {
   notificationId: string
 }
 
-/**
- * 對照 SendBatchNotificationsRequestSchema（schemas/admin.ts:402）。
- * 注意它收的是**篩選條件**而不是通知 ID 清單——見 plan/issue.md #014。
- */
+/** 對照 SendBatchNotificationsRequestSchema（schemas/admin.ts） */
 export interface SendBatchNotificationsRequest {
-  targetUserEmail?: string
-  type?: string
-  isRead?: boolean
-  limit?: number
+  notificationIds: string[]
+}
+
+/** sendBatchNotifications 的回應（handlers/notifications/admin.ts） */
+export interface SendBatchNotificationsResponse {
+  /** 實際查到的通知數（已刪除的會被排除，可能少於送出的 ID 數） */
+  totalNotifications: number
+  queuedCount: number
+  failedCount: number
+  /** 成功排入佇列、且已標記 emailSent 的通知 ID */
+  sentIds: string[]
+  message: string
+  timestamp: number
 }
 
 export interface DeleteNotificationRequest {

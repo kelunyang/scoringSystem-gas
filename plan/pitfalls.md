@@ -4,6 +4,48 @@
 > 新坑往上加，讓最近的教訓最先被看到。
 
 ---
+## 2026-09-07 ｜ Zod 預設會靜靜剝掉不認識的欄位，於是「勾選寄信」變成「無條件群寄」
+
+**症狀**：後台通知管理頁勾選幾筆通知按「批次寄信」，實際寄出的不是
+勾選的那幾筆，而是全系統最新的 100 筆（`MAX_BATCH_EMAIL_SIZE`），
+而且不看 `emailSent`，寄過的會再寄。
+
+**根因**：前端送 `{ notificationIds: [...] }`，但端點的 schema 收的是
+篩選條件（`targetUserEmail` / `type` / `isRead` / `limit`）。
+**Zod 的 `z.object()` 預設會把 schema 沒宣告的欄位剝掉，不報錯**，
+所以 handler 拿到的是 `{}`，查詢退化成：
+
+```sql
+SELECT * FROM notifications WHERE isDeleted = 0
+ORDER BY createdTime DESC LIMIT 100
+```
+
+前端還每 50 筆跑一輪迴圈，勾 120 筆等於同一批被送出三次。
+
+**為什麼活這麼久**：三層互相掩護。
+1. 前端那行寫成 `sendBatch({ notificationIds } as any)`——轉型擋掉了形狀不符；
+2. `@repo/shared/types/admin` 手寫的 `SendBatchNotificationsRequest`
+   （userIds/title/message/type）跟真正的 Zod schema 也對不上；
+3. `adminApi` 把回應宣告成 `ApiResponse<void>`，於是前端讀
+   `result.successCount` / `sentIds`（後端其實回 `queuedCount` /
+   `failedCount`）也沒人發現。
+
+第 3 點反而是不幸中的大幸：真有人按過，畫面會顯示「成功: 0, 失敗: 0」
+而不是實際數字——這條路多半從來沒被實際用過。
+
+**教訓與防護**：
+1. **會產生外部副作用的端點（寄信、扣款、刪資料），schema 要用
+   `.strict()`**。預設的「剝掉」語意適合寬容地接收多餘欄位，
+   但當「少一個欄位」等於「換一種行為」時，寬容就是危險。
+   已對 `SendBatchNotificationsRequestSchema` 加上 `.strict()`，
+   並補守門測試 `schemas/__tests__/notification-batch-send.test.ts`
+   （拿舊 schema 跑會紅 4 條，確認不是空砲）。
+2. `as any` 蓋住的不只是型別，是**契約**。這次是把 RPC 型別接回來
+   （見 issue.md B 區「rpcClient 為什麼是 any」）之後才照出來的。
+3. 手寫的 request/response 介面若和 Zod schema 並存，兩份就會各自漂走。
+   能從 schema 或端點推導就不要手寫。
+
+---
 ## 2026-09-07 ｜ Turnstile 擋下請求時回的錯誤形狀跟全站不一樣，前端讀不到訊息
 
 **症狀**：Turnstile 驗證失敗時，前端只顯示通用的失敗訊息，

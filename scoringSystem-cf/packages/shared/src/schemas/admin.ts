@@ -397,13 +397,22 @@ export type SendSingleNotificationRequest = z.infer<typeof SendSingleNotificatio
 
 /**
  * Send batch notifications request schema
+ *
+ * 收的是「要寄哪幾筆」的通知 ID 清單，不是篩選條件。
+ * 舊版收 targetUserEmail/type/isRead/limit，但前端送的一直是
+ * notificationIds——Zod 把它剝掉之後 handler 拿到空篩選，
+ * 等於無條件寄出最新的一整批。見 plan/pitfalls.md 2026-09-07。
  */
-export const SendBatchNotificationsRequestSchema = z.object({
-  targetUserEmail: z.string().email().optional(),
-  type: z.string().optional(),
-  isRead: z.boolean().optional(),
-  limit: z.number().int().positive().optional()
-});
+export const SendBatchNotificationsRequestSchema = z
+  .object({
+    notificationIds: z
+      .array(z.string().min(1))
+      .min(1, 'At least one notification ID is required')
+  })
+  // 刻意用 strict：這個端點會寄出真實信件，形狀不符要當場報錯，
+  // 不能像 Zod 預設那樣把不認識的欄位靜靜剝掉——上一次就是這樣，
+  // 前端送的 notificationIds 被剝掉後變成「無條件寄出最新一整批」。
+  .strict();
 
 export type SendBatchNotificationsRequest = z.infer<typeof SendBatchNotificationsRequestSchema>;
 

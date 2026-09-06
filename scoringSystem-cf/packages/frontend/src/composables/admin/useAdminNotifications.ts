@@ -17,7 +17,6 @@ import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'
 import { useCurrentUser } from '@/composables/useAuth'
 import { apiErrorMessage, errorOf } from '@/utils/api-types'
-import type { SendBatchNotificationsRequest } from '@repo/shared/types/admin'
 
 // ============================================================================
 // Types
@@ -262,10 +261,12 @@ interface SendBatchNotificationEmailsParams {
   notificationIds: string[]
 }
 
+/** 對照 sendBatchNotifications 的回應（handlers/notifications/admin.ts） */
 interface BatchEmailSendResult {
-  successCount: number
-  errorCount: number
-  sentIds?: string[]
+  totalNotifications: number
+  queuedCount: number
+  failedCount: number
+  sentIds: string[]
 }
 
 export function useSendBatchNotificationEmails(): UseMutationReturnType<
@@ -278,24 +279,19 @@ export function useSendBatchNotificationEmails(): UseMutationReturnType<
 
   return useMutation({
     mutationFn: async ({ notificationIds }: SendBatchNotificationEmailsParams) => {
-      // TODO(plan/issue.md #014)：send-batch 端點收的是篩選條件，不是通知 ID
-      // 清單。這裡送的 notificationIds 會被 Zod 剝掉，實際上會依「無篩選」
-      // 寄出一整批。行為修正需要改端點，先保留現狀並標記。
-      const response = await adminApi.notifications.sendBatch(
-        { notificationIds } as unknown as SendBatchNotificationsRequest
-      )
+      const response = await adminApi.notifications.sendBatch({ notificationIds })
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '批量發送郵件失敗')
       }
 
-      return response.data as unknown as BatchEmailSendResult
+      return response.data
     },
     onSuccess: (data) => {
-      if (data.errorCount === 0) {
-        ElMessage.success(`成功發送 ${data.successCount} 封郵件`)
+      if (data.failedCount === 0) {
+        ElMessage.success(`成功發送 ${data.queuedCount} 封郵件`)
       } else {
-        ElMessage.warning(`成功: ${data.successCount}, 失敗: ${data.errorCount}`)
+        ElMessage.warning(`成功: ${data.queuedCount}, 失敗: ${data.failedCount}`)
       }
       queryClient.invalidateQueries({ queryKey: ['admin', 'notifications'] })
     },

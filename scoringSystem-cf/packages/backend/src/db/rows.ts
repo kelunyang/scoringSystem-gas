@@ -113,3 +113,29 @@ export interface ProjectRow {
   teacherRankingWeight: number | null;
   commentRewardPercentile: number | null;
 }
+
+/** notifications 表的一列（`SELECT *`）。欄位對照 migrations/0001_init_schema.sql:518 */
+export interface NotificationRow {
+  notificationId: string;
+  targetUserEmail: string;
+  type: string;
+  title: string;
+  content: string | null;
+  projectId: string | null;
+  stageId: string | null;
+  commentId: string | null;
+  submissionId: string | null;
+  groupId: string | null;
+  transactionId: string | null;
+  settlementId: string | null;
+  rankingProposalId: string | null;
+  relatedEntityId: string | null;
+  isRead: number;
+  isDeleted: number;
+  emailSent: number;
+  createdTime: number;
+  readTime: number | null;
+  deletedTime: number | null;
+  emailSentTime: number | null;
+  metadata: string | null;
+}

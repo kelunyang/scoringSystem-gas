@@ -69,6 +69,7 @@ import type {
   NotificationStatisticsResponse,
   SendNotificationRequest,
   SendBatchNotificationsRequest,
+  SendBatchNotificationsResponse,
   DeleteNotificationRequest,
 
   // Robots
@@ -462,7 +463,7 @@ export const adminApi = {
      * Send batch notifications
      */
     sendBatch: (params: SendBatchNotificationsRequest, signal?: AbortSignal) =>
-      fetchWithAuth<ApiResponse<void>>(
+      fetchWithAuth<ApiResponse<SendBatchNotificationsResponse>>(
         '/api/admin/notifications/send-batch',
         { method: 'POST', body: params, signal }
       ),

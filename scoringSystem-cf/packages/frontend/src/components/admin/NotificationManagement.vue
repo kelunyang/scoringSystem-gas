@@ -704,8 +704,8 @@ const sendSelectedEmails = async (): Promise<void> => {
           notificationIds: batch.map(n => n.notificationId)
         })
 
-        successCount += result.successCount || 0
-        errorCount += result.errorCount || 0
+        successCount += result.queuedCount || 0
+        errorCount += result.failedCount || 0
 
         // Update local state for successfully sent notifications
         if (result.sentIds) {

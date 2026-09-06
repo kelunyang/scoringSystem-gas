@@ -1430,27 +1430,33 @@ const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
     // *read* the counter, and nothing in the codebase ever incremented it, so
     // `remaining === 0` could never be true and the check never fired.
     //
-    // The batch's real size is not known until the filter query runs, so
-    // charge the configured ceiling for it; MAX_BATCH_EMAIL_SIZE is what the
-    // handler will cap the query at anyway.
+    // 現在批次大小就是 notificationIds 的長度（呼叫端指定哪幾筆就寄哪幾筆），
+    // 所以可以照實計費，不必再用 MAX_BATCH_EMAIL_SIZE 當上限估算。
     const { guardActorEmailQuota, rateLimitResponse } = await import('../middleware/rate-limit');
     const { getTypedConfig } = await import('../utils/config');
     const maxBatchSize = (await getTypedConfig(c.env, 'MAX_BATCH_EMAIL_SIZE')) as number;
-    const batchCost = Math.min(body.limit ?? maxBatchSize, maxBatchSize);
+    const batchCost = body.notificationIds.length;
+
+    if (batchCost > maxBatchSize) {
+      return errorResponse(
+        'BATCH_TOO_LARGE',
+        `一次最多只能寄 ${maxBatchSize} 封，這次收到 ${batchCost} 筆`
+      );
+    }
 
     const decision = await guardActorEmailQuota(c.env, user.userEmail, batchCost);
     if (!decision.allowed) {
       return rateLimitResponse(
         decision,
         'RATE_LIMIT_EXCEEDED',
-        `這批最多 ${batchCost} 封信會超過每小時寄信上限（剩餘 ${decision.remaining ?? 0} 封），請稍後再試`
+        `這批 ${batchCost} 封信會超過每小時寄信上限（剩餘 ${decision.remaining ?? 0} 封），請稍後再試`
       );
     }
 
     const response = await sendBatchNotifications(
       c.env,
       user.userEmail,
-      body
+      body.notificationIds
     );
 
     return response;

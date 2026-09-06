@@ -8,6 +8,7 @@ import { successResponse, errorResponse } from '../../utils/response';
 import { formatNotificationEmail } from '../../utils/email';
 import { getTypedConfig } from '../../utils/config';
 import { queueAdminNotificationEmail } from '../../queues/email-producer';
+import type { NotificationRow } from '../../db/rows';
 
 /**
  * List all notifications (admin only)
@@ -203,12 +204,7 @@ export async function sendSingleNotification(
 export async function sendBatchNotifications(
   env: Env,
   userEmail: string,
-  filters: {
-    targetUserEmail?: string;
-    type?: string;
-    isRead?: boolean;
-    limit?: number;
-  } = {}
+  notificationIds: string[]
 ) {
   try {
     // Check if user is Global PM
@@ -232,50 +228,32 @@ export async function sendBatchNotifications(
       return errorResponse('ACCESS_DENIED', 'Only system administrators can send batch notifications');
     }
 
-    // Build query to get notifications
-    let query = 'SELECT * FROM notifications WHERE isDeleted = 0';
-    const params: SqlBindValue[] = [];
-
-    if (filters.targetUserEmail) {
-      query += ' AND targetUserEmail = ?';
-      params.push(filters.targetUserEmail);
-    }
-
-    if (filters.type) {
-      query += ' AND type = ?';
-      params.push(filters.type);
-    }
-
-    if (filters.isRead !== undefined) {
-      query += ' AND isRead = ?';
-      params.push(filters.isRead ? 1 : 0);
-    }
-
-    query += ' ORDER BY createdTime DESC';
-
-    // Get configurable batch size limit
+    // 一次最多寄幾封，由設定決定
     const maxBatchSize = (await getTypedConfig(env, 'MAX_BATCH_EMAIL_SIZE')) as number;
-
-    if (filters.limit) {
-      // Use the smaller of user-requested limit or configured max
-      const effectiveLimit = Math.min(filters.limit, maxBatchSize);
-      query += ' LIMIT ?';
-      params.push(effectiveLimit);
-    } else {
-      // Use configured default limit
-      query += ' LIMIT ?';
-      params.push(maxBatchSize);
+    if (notificationIds.length > maxBatchSize) {
+      return errorResponse(
+        'BATCH_TOO_LARGE',
+        `一次最多只能寄 ${maxBatchSize} 封，這次收到 ${notificationIds.length} 筆`
+      );
     }
 
-    const result = await env.DB.prepare(query).bind(...params).all();
+    // 只寄呼叫端指定的那幾筆（已刪除的除外）
+    const placeholders = notificationIds.map(() => '?').join(',');
+    const result = await env.DB.prepare(`
+      SELECT * FROM notifications
+      WHERE isDeleted = 0 AND notificationId IN (${placeholders})
+      ORDER BY createdTime DESC
+    `).bind(...notificationIds).all<NotificationRow>();
     const notifications = result.results || [];
 
     if (notifications.length === 0) {
       return successResponse({
         totalNotifications: 0,
-        sentCount: 0,
+        queuedCount: 0,
         failedCount: 0,
-        message: 'No notifications found matching the criteria'
+        sentIds: [] as string[],
+        message: 'No notifications found matching the criteria',
+        timestamp: Date.now()
       });
     }
 
@@ -284,6 +262,8 @@ export async function sendBatchNotifications(
     let queuedCount = 0;
     let failedCount = 0;
 
+    const sentIds: string[] = [];
+
     for (const notification of notifications) {
       try {
         const actionUrl = notification.projectId
@@ -291,32 +271,45 @@ export async function sendBatchNotifications(
           : webAppUrl;
 
         const htmlBody = formatNotificationEmail(
-          notification.title as string,
-          notification.content as string,
+          notification.title,
+          notification.content ?? '',
           actionUrl,
           '查看詳情'
         );
 
         await queueAdminNotificationEmail(
           env,
-          notification.targetUserEmail as string,
-          notification.title as string,
+          notification.targetUserEmail,
+          notification.title,
           htmlBody,
           `通知詳情：${notification.content || '(無內容)'}`,
           'normal'
         );
 
         queuedCount++;
+        sentIds.push(notification.notificationId);
       } catch (error) {
         console.error(`[Admin Batch] Failed to queue email for ${notification.targetUserEmail}:`, error);
         failedCount++;
       }
     }
 
+    // 標記已寄。時機比照 notification-patrol 機器人：排入佇列即標記，
+    // 不等實際送達（handlers/robots/notification-patrol.ts:192）。
+    if (sentIds.length > 0) {
+      const sentPlaceholders = sentIds.map(() => '?').join(',');
+      await env.DB.prepare(`
+        UPDATE notifications
+        SET emailSent = 1, emailSentTime = ?
+        WHERE notificationId IN (${sentPlaceholders})
+      `).bind(Date.now(), ...sentIds).run();
+    }
+
     return successResponse({
       totalNotifications: notifications.length,
       queuedCount,
       failedCount,
+      sentIds,
       message: `Successfully queued ${queuedCount} emails`,
       timestamp: Date.now()
     });
