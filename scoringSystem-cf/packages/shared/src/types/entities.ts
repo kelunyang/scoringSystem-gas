@@ -18,8 +18,9 @@ export interface User {
   status: 'active' | 'disabled';
   preferences: string; // JSON
   avatarSeed: string | null;
-  avatarStyle: string;
-  avatarOptions: string; // JSON
+  // 這兩欄有 DEFAULT 但沒有 NOT NULL，舊資料列可能是 NULL
+  avatarStyle: string | null;
+  avatarOptions: string | null; // JSON
   lockUntil: number | null;
   lockReason: string | null;
   lockCount: number;

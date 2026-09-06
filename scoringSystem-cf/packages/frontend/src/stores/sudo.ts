@@ -8,8 +8,9 @@ export interface SudoTargetUser {
   userId: string
   userEmail: string
   displayName: string
-  avatarSeed?: string
-  avatarStyle?: string
+  // 後端 users 表這兩個欄位可為 null
+  avatarSeed?: string | null
+  avatarStyle?: string | null
   groupName?: string
   role?: 'leader' | 'member'
 }

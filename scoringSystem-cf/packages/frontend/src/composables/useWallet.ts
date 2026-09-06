@@ -16,7 +16,7 @@ import { useQuery, useInfiniteQuery } from '@tanstack/vue-query'
 import type { UseQueryReturnType } from '@tanstack/vue-query'
 import { computed, unref } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
-import { apiErrorMessage, errorOf } from '@/utils/api-types'
+import { apiErrorMessage, errorOf, type ApiData } from '@/utils/api-types'
 import { useCurrentUser } from './useAuth'
 import { useProjectsWithStages } from './useProjects'
 import type { Stage, User, Project } from '@/types'
@@ -25,6 +25,9 @@ import { debugLog } from '@/utils/debug'
 /**
  * Normalized transaction structure
  */
+/** /projects/core 回傳的使用者（欄位比 shared 的 User 少） */
+export type ProjectCoreUser = ApiData<typeof rpcClient.api.projects.core.$post>['users'][number]
+
 /** 前端統一過的交易列（比後端 Transaction 少很多欄位） */
 export interface NormalizedTransaction {
   id: string
@@ -92,7 +95,7 @@ interface WalletDataResult {
   stages: ComputedRef<Stage[]>
   stagesLoading: Ref<boolean>
   stagesError: Ref<boolean>
-  users: ComputedRef<User[]>
+  users: ComputedRef<ProjectCoreUser[]>
   usersLoading: Ref<boolean>
   usersError: Ref<boolean>
   isLoading: ComputedRef<boolean>
@@ -497,7 +500,7 @@ export function useWalletData(
       'projectUsers',
       getValue(projectId)
     ]),
-    queryFn: async (): Promise<User[]> => {
+    queryFn: async (): Promise<ProjectCoreUser[]> => {
       const httpResponse = await rpcClient.api.projects.core.$post({
         json: {
           projectId: requireProjectId(getValue(projectId))

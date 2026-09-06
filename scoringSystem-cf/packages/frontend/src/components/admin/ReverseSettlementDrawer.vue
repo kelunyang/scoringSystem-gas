@@ -456,14 +456,14 @@ async function confirmReverseSettlement(): Promise<void> {
 
         console.log('執行撤銷結算:', {
           projectId: projectId,
-          settlementId: reversePreviewData.value.settlementId,
+          settlementId: reversePreviewData.value.settlementId ?? '',
           reason: reverseReason.value
         })
 
         const reverseHttpResponse = await rpcClient.api.settlement.reverse.$post({
           json: {
             projectId: projectId,
-            settlementId: reversePreviewData.value.settlementId,
+            settlementId: reversePreviewData.value.settlementId ?? '',
             reason: reverseReason.value
           }
         })

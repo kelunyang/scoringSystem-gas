@@ -18,7 +18,7 @@ export interface RoleConfig {
 export interface RoleDetectionProject {
   project?: ProjectAdminSubject | null
   viewerRole?: string | null
-  userGroups?: UserGroupRecord[]
+  userGroups?: Array<{ userEmail: string; role?: string; isActive?: number }>
 }
 
 /** detectUserRoles 會從使用者資料讀到的欄位 */

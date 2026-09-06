@@ -183,12 +183,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, type Ref } from 'vue'
 import { usePermissionsDrawerStore } from '@/stores/permissionsDrawer'
 import { useSudoStore, type SudoTargetUser } from '@/stores/sudo'
 import { useAuth } from '@/composables/useAuth'
 import { useProjectCore } from '@/composables/useProjectDetail'
-import { useRoleSwitch } from '@/composables/useRoleSwitch'
+import { useRoleSwitch, type RoleDetectionProject } from '@/composables/useRoleSwitch'
 import DrawerAlertZone from './DrawerAlertZone.vue'
 
 // Stores
@@ -222,7 +222,7 @@ const {
   getRoleIcon
 } = useRoleSwitch(
   projectIdRef,
-  projectCore,
+  projectCore as Ref<RoleDetectionProject | undefined>,
   userRef
 )
 
@@ -280,8 +280,8 @@ interface GroupedMember {
     displayName: string
     role: 'leader' | 'member'
     userId: string
-    avatarSeed?: string
-    avatarStyle?: string
+    avatarSeed?: string | null
+    avatarStyle?: string | null
   }>
 }
 
@@ -300,7 +300,7 @@ const groupedMembers = computed<GroupedMember[]>(() => {
   }
 
   // Create a map of userEmail to user info
-  const userMap = new Map<string, { displayName: string; userId: string; avatarSeed?: string; avatarStyle?: string }>()
+  const userMap = new Map<string, { displayName: string; userId: string; avatarSeed?: string | null; avatarStyle?: string | null }>()
   for (const u of users) {
     userMap.set(u.userEmail, {
       displayName: u.displayName ?? '',

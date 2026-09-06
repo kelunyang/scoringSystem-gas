@@ -30,6 +30,24 @@ export interface StageSettlementRanking {
   memberPointsDistribution: unknown[];
 }
 
+/** `settlementhistory` 的一列（0001_init_schema.sql:385）。 */
+export interface SettlementHistoryRow {
+  settlementId: string;
+  projectId: string;
+  stageId: string;
+  settlementType: string;
+  settlementTime: number;
+  operatorEmail: string;
+  totalRewardDistributed: number | null;
+  participantCount: number | null;
+  status: string | null;
+  reversedTime: number | null;
+  reversedBy: string | null;
+  reversedReason: string | null;
+  /** JSON 字串 */
+  settlementData: string | null;
+}
+
 /** commentsettlements 的一列。 */
 export interface CommentSettlementRow {
   commentId: string;
@@ -63,7 +81,7 @@ export async function reverseSettlement(
     // Check if settlement exists and is active
     const settlement = await env.DB.prepare(`
       SELECT * FROM settlementhistory WHERE settlementId = ? AND projectId = ?
-    `).bind(settlementId, projectId).first();
+    `).bind(settlementId, projectId).first<SettlementHistoryRow>();
 
     if (!settlement) {
       return errorResponse('SETTLEMENT_NOT_FOUND', 'Settlement not found');
@@ -300,7 +318,7 @@ export async function getReversePreview(
     // Check if settlement exists
     const settlement = await env.DB.prepare(`
       SELECT * FROM settlementhistory WHERE settlementId = ? AND projectId = ?
-    `).bind(settlementId, projectId).first();
+    `).bind(settlementId, projectId).first<SettlementHistoryRow>();
 
     if (!settlement) {
       return errorResponse('SETTLEMENT_NOT_FOUND', 'Settlement not found');
@@ -431,7 +449,7 @@ export async function getSettlementHistory(
 
     query += ' ORDER BY settlementTime DESC';
 
-    const result = await env.DB.prepare(query).bind(...params).all();
+    const result = await env.DB.prepare(query).bind(...params).all<SettlementHistoryRow>();
     const settlements = result.results || [];
 
     return successResponse({
@@ -470,7 +488,7 @@ export async function getSettlementDetails(
     // Get settlement
     const settlement = await env.DB.prepare(`
       SELECT * FROM settlementhistory WHERE settlementId = ? AND projectId = ?
-    `).bind(settlementId, projectId).first();
+    `).bind(settlementId, projectId).first<SettlementHistoryRow>();
 
     if (!settlement) {
       return errorResponse('SETTLEMENT_NOT_FOUND', 'Settlement not found');

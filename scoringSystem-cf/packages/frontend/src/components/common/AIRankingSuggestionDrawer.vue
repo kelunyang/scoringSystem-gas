@@ -612,7 +612,9 @@ async function queryAI(): Promise<void> {
       metadata: item.metadata
     }))
 
-    let endpoint: string
+    // 三個端點的請求／回應形狀不同，聯集型別讓 hc 無法解析，
+    // 所以宣告成字面值聯集並在下面分開呼叫
+    let endpoint: 'ai-multi-agent-suggestion' | 'ai-bt-suggestion' | 'ai-suggestion'
     let payload: any
 
     // Build maxCommentSelections for comment mode
@@ -659,8 +661,13 @@ async function queryAI(): Promise<void> {
       }
     }
 
-    const httpResponse = await rpcClient.api.rankings[endpoint].$post({ json: payload })
-    const response = await httpResponse.json() as any
+    const httpResponse =
+      endpoint === 'ai-multi-agent-suggestion'
+        ? await rpcClient.api.rankings['ai-multi-agent-suggestion'].$post({ json: payload })
+        : endpoint === 'ai-bt-suggestion'
+          ? await rpcClient.api.rankings['ai-bt-suggestion'].$post({ json: payload })
+          : await rpcClient.api.rankings['ai-suggestion'].$post({ json: payload })
+    const response = await httpResponse.json()
 
     if (response.success) {
       currentTaskId.value = response.data.taskId
