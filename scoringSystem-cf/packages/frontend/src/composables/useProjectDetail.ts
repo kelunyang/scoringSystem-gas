@@ -313,7 +313,7 @@ export function useInfiniteStageComments(
 /**
  * Helper: 從 infinite query 結果中提取扁平化的評論陣列
  */
-export function flattenInfiniteComments(data: { pages: InfiniteCommentsPage[] } | undefined): Comment[] {
+export function flattenInfiniteComments(data: { pages: InfiniteCommentsPage[] } | undefined): InfiniteCommentsPage['comments'] {
   return data?.pages?.flatMap((page) => page.comments) ?? []
 }
 

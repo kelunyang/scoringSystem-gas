@@ -11,6 +11,8 @@ import { handleError, getErrorMessage } from '@/utils/errorHandler'
 import { rpcClient } from '@/utils/rpc-client'
 import { dedupRequest } from '@/utils/request-dedup'
 import type { Stage, Group, Submission } from '@/types'
+import type { StageListItem } from './useProjectDetail'
+import { apiErrorCode, apiErrorMessage } from '@/utils/api-types'
 
 /**
  * Extended Stage type for frontend use with additional UI state
@@ -86,7 +88,11 @@ export function useStageContentManagement(projectData: any, userData: any) {
    * @param {string} contentType - 內容類型 ('all' | 'submissions' | 'comments')
    * @returns {Promise<Object>} 階段內容數據
    */
-  async function loadStageContent(projectId: string, stageId: string, contentType = 'all') {
+  async function loadStageContent(
+    projectId: string,
+    stageId: string,
+    contentType: 'all' | 'submissions' | 'comments' = 'all'
+  ) {
     try {
       // Vue 3 Best Practice: rpcClient automatically handles authentication
       console.log(`📡 調用 API: getProjectContent(${projectId}, ${stageId}, ${contentType}, includeSubmitted: true)`)
@@ -127,14 +133,13 @@ export function useStageContentManagement(projectData: any, userData: any) {
         // 詳細檢查submissions中的排名數據
         if (response.data.submissions) {
           console.log(`🔍 [useStageContentManagement] 階段 ${stageId} 的submissions排名數據分析:`)
-          response.data.submissions.forEach((submission: Submission, index: number) => {
+          response.data.submissions.forEach((submission, index) => {
             console.log(`  📋 Submission ${index + 1}:`, {
               submissionId: submission.submissionId,
               groupId: submission.groupId,
               groupName: submission.groupName,
-              voteRank: submission.voteRank,
-              teacherRank: submission.teacherRank,
-              settlementRank: submission.settlementRank,
+              // voteRank／teacherRank／settlementRank 不在這個端點的回傳裡
+              // （由 rankings 相關端點另外補上），原本印出來永遠是 undefined
               status: submission.status
             })
           })
@@ -180,7 +185,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
 
       if (response.success && response.data?.comments) {
         // 更新階段的評論數據
-        stage.comments = response.data.comments
+        stage.comments = response.data.comments as unknown as ExtendedStage['comments']
         console.log(`✅ 已刷新階段 ${stage.title} 的評論，共 ${response.data.comments.length} 條（含 canBeVoted 標誌）`)
       } else {
         console.log(`⚠️ 階段 ${stage.title} 沒有評論內容`)
@@ -246,8 +251,8 @@ export function useStageContentManagement(projectData: any, userData: any) {
         // Enhanced error logging
         console.warn(`⚠️ 群組 ${groupData.groupId} 投票數據載入失敗:`, response.error)
         console.warn(`⚠️ [loadGroupVotingData] 錯誤詳情:`, {
-          errorCode: response.error?.code,
-          errorMessage: response.error?.message,
+          errorCode: apiErrorCode(response.error),
+          errorMessage: apiErrorMessage(response.error),
           fullError: response.error,
           fullResponse: response
         })
@@ -256,9 +261,9 @@ export function useStageContentManagement(projectData: any, userData: any) {
         groupData.votingData = null
 
         // Show user-friendly error message if it's a critical error
-        if (response.error?.code === 'SYSTEM_ERROR') {
+        if (apiErrorCode(response.error) === 'SYSTEM_ERROR') {
           handleError(
-            new Error(response.error?.message || 'Unknown error'),
+            new Error(apiErrorMessage(response.error) || 'Unknown error'),
             {
               action: '載入投票數據',
               type: 'error'
@@ -1053,24 +1058,30 @@ export function useStageContentManagement(projectData: any, userData: any) {
    * @param {Array} stages - 原始階段陣列
    * @returns {Array} 處理後的階段陣列
    */
-  function processStagesData(stages: Stage[]): ExtendedStage[] {
+  /**
+   * 把 `/stages/list` 回來的階段轉成前端用的 ExtendedStage。
+   *
+   * 參數型別取自端點而不是 shared 的 `Stage`：列表端點多帶了
+   * `statistics`，而且 `reportRewardPool` 這些欄位才是它真正回傳的名字。
+   */
+  function processStagesData(stages: StageListItem[]): ExtendedStage[] {
     return stages
-      .filter((stage: Stage) => stage.status !== 'archived') // 過濾已歸檔階段
-      .map((stage: Stage): ExtendedStage => {
-        const reportRewardValue = (stage as any).reportRewardPool ?? (stage as any).reportReward ?? 0
-        const commentRewardValue = (stage as any).commentRewardPool ?? (stage as any).commentReward ?? 0
+      .filter(stage => stage.status !== 'archived') // 過濾已歸檔階段
+      .map((stage): ExtendedStage => {
+        const reportRewardValue = stage.reportRewardPool ?? 0
+        const commentRewardValue = stage.commentRewardPool ?? 0
 
         const processedStage: ExtendedStage = {
           ...stage,
           id: stage.stageId,
-          title: stage.stageName || (stage as any).stageTitle || (stage as any).title || '',
+          title: stage.stageName || '',
           description: stage.description || '',
           reportReward: reportRewardValue,
           commentReward: commentRewardValue,
-          deadline: stage.endTime ?? (stage as any).deadline,
+          deadline: stage.endTime ?? undefined,
           startTime: stage.startTime,
           endTime: stage.endTime,
-          settledTime: stage.settledTime,
+          settledTime: stage.settledTime ?? undefined,
           status: stage.status, // 使用後端提供的狀態值
           viewMode: false, // false = 查看報告, true = 查看評論
           groups: [], // 將按需載入

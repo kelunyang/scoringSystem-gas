@@ -1044,6 +1044,7 @@ import { showSuccess, showWarning, handleError, getErrorMessage } from '@/utils/
 import dayjs from 'dayjs'
 import { InfoFilled } from '@element-plus/icons-vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { errorOf, apiErrorMessage } from '@/utils/api-types'
 import { dedupRequest } from '@/utils/request-dedup'
 import { getStageColor } from '@repo/shared'
 import NumberFlow from '@number-flow/vue'
@@ -2462,11 +2463,11 @@ async function refreshSingleStageSettings(stage: ExtendedStage) {
       const updatedStage = response.data
 
       // 更新當前 stage 對象的設定欄位
-      stage.title = updatedStage.stageName || updatedStage.title || stage.title
+      stage.title = updatedStage.stageName || stage.title
       stage.description = updatedStage.description ?? stage.description
-      stage.reportReward = updatedStage.reportRewardPool ?? updatedStage.reportReward ?? stage.reportReward
-      stage.commentReward = updatedStage.commentRewardPool ?? updatedStage.commentReward ?? stage.commentReward
-      stage.deadline = updatedStage.endTime ?? updatedStage.deadline ?? stage.deadline
+      stage.reportReward = updatedStage.reportRewardPool ?? stage.reportReward
+      stage.commentReward = updatedStage.commentRewardPool ?? stage.commentReward
+      stage.deadline = updatedStage.endTime ?? stage.deadline
       stage.startTime = updatedStage.startTime ?? stage.startTime
       stage.endTime = updatedStage.endTime ?? stage.endTime
       stage.status = updatedStage.status ?? stage.status
@@ -3328,7 +3329,7 @@ async function loadMentionData() {
   console.log('🔄 開始載入 mention 數據...')
 
   // 收集所有 mentionedUsers
-  const allUserEmails = new Set()
+  const allUserEmails = new Set<string>()
 
   stages.value.forEach((stage: ExtendedStage) => {
     if (stage.comments && Array.isArray(stage.comments)) {
@@ -3484,7 +3485,7 @@ async function loadStageSettlementData(stage: ExtendedStage) {
 
     if (response.success && response.data && response.data.rankings) {
       if (DEBUG) {
-        console.log(`✅ [loadStageSettlementData] 成功載入 ${response.data.rankings.length} 筆結算數據`)
+        console.log(`✅ [loadStageSettlementData] 成功載入 ${Object.keys(response.data.rankings).length} 筆結算數據`)
       }
 
       // 使用 helper 函數映射數據到 groups（返回新數組，觸發響應式更新）
@@ -3498,7 +3499,7 @@ async function loadStageSettlementData(stage: ExtendedStage) {
 
       // 通知用戶
       if (DEBUG) {
-        showWarning(`未取得結算數據: ${response.error?.message || '未知錯誤'}`)
+        showWarning(`未取得結算數據: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
       } else {
         showWarning('未取得結算數據，請稍後再試')
       }

@@ -57,24 +57,35 @@ import type { Group, Member } from '@/types'
  * const updatedGroups = mapSettlementToGroups(settlementData.rankings, stage.groups)
  * // Returns new array with settlement data merged into each group
  */
-/** 結算 API 回的排名列，這裡只讀這幾個欄位 */
+/**
+ * 結算 API 回的排名列，這裡只讀這幾個欄位。
+ *
+ * 不加索引簽章：TypeScript 只讓 type alias 有隱含索引簽章，
+ * 後端那些 interface（StageSettlementRanking）會因此不能指派進來。
+ */
 export interface SettlementRanking {
   groupId: string
   finalRank?: number
   allocatedPoints?: number
-  memberPointsDistribution?: Member[]
-  [key: string]: unknown
+  /** 後端存 JSON 字串、解析後回傳，元素形狀由結算流程決定 */
+  memberPointsDistribution?: unknown[]
 }
 
 export function mapSettlementToGroups(
-  rankings: SettlementRanking[] | null | undefined,
+  /**
+   * 後端回的是**以 groupId 為鍵的物件**
+   * （handlers/settlement/manage.ts 的 rankingMap），不是陣列。
+   * 也接受陣列形態，因為舊呼叫端可能還這樣傳。
+   */
+  rankings: Record<string, SettlementRanking> | SettlementRanking[] | null | undefined,
   groups: Group[]
 ) {
   if (!rankings || !groups) return groups
 
   // Create a map for O(1) lookup
   const rankingMap = new Map<string, SettlementRanking>()
-  rankings.forEach(ranking => {
+  const list = Array.isArray(rankings) ? rankings : Object.values(rankings)
+  list.forEach(ranking => {
     rankingMap.set(ranking.groupId, ranking)
   })
 
@@ -88,7 +99,7 @@ export function mapSettlementToGroups(
         earnedPoints: settlement.allocatedPoints,
         // Deep copy array AND objects within to avoid reference issues
         memberPointsDistribution: settlement.memberPointsDistribution
-          ? settlement.memberPointsDistribution.map((member: Member) => ({ ...member }))
+          ? settlement.memberPointsDistribution.map(member => ({ ...(member as Record<string, unknown>) }))
           : undefined,
         rankingsLoading: false
       }
