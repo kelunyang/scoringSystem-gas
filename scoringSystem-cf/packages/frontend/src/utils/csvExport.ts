@@ -89,7 +89,7 @@ export function downloadCSV(csvContent: string, fileName: string): void {
     handleError(error as Error, {
       action: '匯出CSV檔案',
       type: 'error'
-    } as any)
+    })
   }
 }
 

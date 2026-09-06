@@ -343,7 +343,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useQueryClient } from '@tanstack/vue-query'
 import { rpcClient } from '@/utils/rpc-client'
 import { handleError, showWarning, showSuccess } from '@/utils/errorHandler'
-import type { User, Transaction } from '@/types'
+import type { User } from '@/types'
 import TopBarUserControls from './TopBarUserControls.vue'
 import TransactionFiltersSection from './TransactionFiltersSection.vue'
 import TransactionTableSection from './TransactionTableSection.vue'
@@ -353,6 +353,7 @@ import StageGrowthChart from './charts/StageGrowthChart.vue'
 import StageGanttChart from './charts/StageGanttChart.vue'
 import type { ViewportChangePayload, GanttStage } from './charts/StageGanttChart.vue'
 import type { UserGrowthData } from './charts/StageGrowthChart.vue'
+import type { NormalizedTransaction } from '@/composables/useWallet'
 import ProjectDescriptionDialog from './shared/ProjectDescriptionDialog.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import TransactionReversalDrawer from './TransactionReversalDrawer.vue'
@@ -1005,7 +1006,7 @@ async function handleReversalConfirm({ transactionId, reason }: { transactionId:
  * @param {string} command - 'report' 或 'comment'
  * @param {Object} transaction - 交易物件
  */
-function handleSettlementCommand(command: string, transaction: Transaction) {
+function handleSettlementCommand(command: string, transaction: NormalizedTransaction) {
   if (!transaction.stageId || !transaction.settlementId) {
     showWarning('無法載入結算資訊')
     return
@@ -1035,7 +1036,7 @@ function handleSettlementCommand(command: string, transaction: Transaction) {
 /**
  * 切換交易展開狀態
  */
-function handleToggleTransaction(transaction: Transaction) {
+function handleToggleTransaction(transaction: NormalizedTransaction) {
   if (import.meta.env.DEV) {
     console.log('[DEBUG] handleToggleTransaction called with:', {
       transactionId: transaction.transactionId,
@@ -1063,7 +1064,7 @@ function getTransactionDetails(transactionId: string) {
 /**
  * 檢查交易是否已撤銷
  */
-function checkTransactionReversed(transaction: Transaction) {
+function checkTransactionReversed(transaction: NormalizedTransaction) {
   return isTransactionReversed(transaction, transactions.value)
 }
 

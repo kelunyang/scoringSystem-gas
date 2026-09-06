@@ -9,7 +9,7 @@
 import { ref, type Ref } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
 import { handleError, showSuccess, showWarning } from '@/utils/errorHandler'
-import type { Transaction } from '@repo/shared' // Use shared Transaction type for consistency
+import type { NormalizedTransaction } from './useWallet'
 
 /**
  * 交易撤銷 composable（Drawer 模式）
@@ -25,7 +25,7 @@ export function useTransactionReversal(projectId: string | Ref<string | null>, o
 
   // Drawer 狀態管理
   const showReversalDrawer = ref(false)
-  const selectedTransaction = ref<Transaction | null>(null)
+  const selectedTransaction = ref<NormalizedTransaction | null>(null)
 
   // ===== Methods =====
 
@@ -33,7 +33,7 @@ export function useTransactionReversal(projectId: string | Ref<string | null>, o
    * 打開撤銷交易抽屜
    * @param {Object} transaction - 交易對象
    */
-  function openReversalDrawer(transaction: Transaction) {
+  function openReversalDrawer(transaction: NormalizedTransaction) {
     selectedTransaction.value = transaction
     showReversalDrawer.value = true
   }

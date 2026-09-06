@@ -8,7 +8,7 @@ export interface UseExpandableOptions {
   singleMode?: boolean
 }
 
-export interface UseExpandableReturn<T = any> {
+export interface UseExpandableReturn<T = unknown> {
   /** 已展開的 ID Set (reactive) */
   expandedIds: ReturnType<typeof reactive<Set<string>>>
   /** 內容快取 Map (reactive) */
@@ -50,7 +50,7 @@ export interface UseExpandableReturn<T = any> {
  * }
  * ```
  */
-export function useExpandable<T = any>(
+export function useExpandable<T = unknown>(
   options: UseExpandableOptions = {}
 ): UseExpandableReturn<T> {
   const { singleMode = true } = options

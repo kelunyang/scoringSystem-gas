@@ -134,8 +134,8 @@ class ErrorHandler {
 
     // 其他對象
     if (error && typeof error === 'object' && 'message' in error) {
-      const err = error as any
-      return this.translateErrorMessage(err.message, err.code)
+      const err = error as { message?: string; code?: string }
+      return this.translateErrorMessage(err.message ?? '', err.code)
     }
 
     // 預設錯誤訊息

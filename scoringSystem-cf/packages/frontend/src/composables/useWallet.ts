@@ -24,7 +24,8 @@ import { debugLog } from '@/utils/debug'
 /**
  * Normalized transaction structure
  */
-interface NormalizedTransaction {
+/** 前端統一過的交易列（比後端 Transaction 少很多欄位） */
+export interface NormalizedTransaction {
   id: string
   transactionId: string
   points: number

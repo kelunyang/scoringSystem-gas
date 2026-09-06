@@ -147,7 +147,7 @@
  * 單一職責：顯示交易記錄表格和可展開的詳情
  */
 
-import type { Transaction } from '@repo/shared'
+import type { NormalizedTransaction } from '@/composables/useWallet'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import { formatTime, getTransactionTypeText } from '@/utils/walletHelpers'
 import { sanitizeHtml } from '@/utils/sanitize'
@@ -169,7 +169,7 @@ interface TransactionDetail {
 }
 
 export interface Props {
-  filteredTransactions: Transaction[]
+  filteredTransactions: NormalizedTransaction[]
   showUserColumn: boolean
   canManageWallets: boolean
   loading: boolean
@@ -178,22 +178,22 @@ export interface Props {
   isExpanded: (transactionId: string) => boolean
   isLoadingDetails: (transactionId: string) => boolean
   getTransactionDetails: (transactionId: string) => TransactionDetail | undefined
-  checkTransactionReversed: (transaction: Transaction) => boolean
+  checkTransactionReversed: (transaction: NormalizedTransaction) => boolean
   isReversing: (transactionId: string) => boolean
 }
 
 defineProps<Props>()
 
 const emit = defineEmits<{
-  (e: 'toggle-transaction', transaction: Transaction): void
-  (e: 'open-reversal', transaction: Transaction): void
-  (e: 'settlement-command', command: string, transaction: Transaction): void
+  (e: 'toggle-transaction', transaction: NormalizedTransaction): void
+  (e: 'open-reversal', transaction: NormalizedTransaction): void
+  (e: 'settlement-command', command: string, transaction: NormalizedTransaction): void
 }>()
 
 /**
  * 切換交易展開狀態
  */
-function handleToggle(transaction: Transaction) {
+function handleToggle(transaction: NormalizedTransaction) {
   emit('toggle-transaction', transaction)
 }
 </script>

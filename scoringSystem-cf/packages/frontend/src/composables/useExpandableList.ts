@@ -21,7 +21,7 @@ export function useExpandableList() {
    * @param {string} itemId - 項目 ID
    * @param {Function} [onExpand] - 展開時的回調函數
    */
-  function toggle(itemId: string, onExpand: any) {
+  function toggle(itemId: string, onExpand?: (itemId: string) => void) {
     const index = expandedIds.value.indexOf(itemId)
 
     if (index > -1) {
@@ -43,7 +43,7 @@ export function useExpandableList() {
    * @param {string} itemId - 項目 ID
    * @param {Function} [onExpand] - 展開時的回調函數
    */
-  function expand(itemId: string, onExpand: any) {
+  function expand(itemId: string, onExpand?: (itemId: string) => void) {
     if (!expandedIds.value.includes(itemId)) {
       expandedIds.value.push(itemId)
 
@@ -78,11 +78,11 @@ export function useExpandableList() {
    * @param {Array<string>} itemIds - 所有項目的 ID 列表
    * @param {Function} [onExpand] - 展開時的回調函數
    */
-  function expandAll(itemIds: any, onExpand: any) {
+  function expandAll(itemIds: string[], onExpand?: (itemId: string) => void) {
     expandedIds.value = [...itemIds]
 
     if (onExpand && typeof onExpand === 'function') {
-      itemIds.forEach((id: string) => onExpand(id))
+      itemIds.forEach(id => onExpand(id))
     }
   }
 

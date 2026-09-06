@@ -29,11 +29,11 @@ export const buildCsvRow = (cells: (string | number | undefined | null)[]): stri
  * @param headers 表頭陣列
  * @param rowMapper 行映射函數
  */
-export const exportToCsv = (
-  data: any[],
+export const exportToCsv = <T>(
+  data: T[],
   filename: string,
   headers: string[],
-  rowMapper: (item: any) => any[]
+  rowMapper: (item: T) => Array<string | number | null | undefined>
 ): void => {
   if (!data || data.length === 0) {
     ElMessage.warning('沒有可匯出的資料')
@@ -67,7 +67,7 @@ export const exportToCsv = (
  * @param data 資料陣列
  * @param filename 檔名（不含副檔名）
  */
-export const exportToJson = (data: any[], filename: string): void => {
+export const exportToJson = (data: unknown[], filename: string): void => {
   if (!data || data.length === 0) {
     ElMessage.warning('沒有可匯出的資料')
     return

@@ -8,6 +8,7 @@
 
 import { ref, watch, type Ref } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
+import type { NormalizedTransaction } from './useWallet'
 import { handleError, getErrorMessage } from '@/utils/errorHandler'
 import type { Transaction } from '@repo/shared' // Use shared Transaction type for consistency
 
@@ -140,7 +141,7 @@ export function useTransactionDetailsLoader(projectId: string | Ref<string | nul
    * 加載單個交易的詳情
    * @param {Object} transaction - 交易對象
    */
-  async function loadDetails(transaction: Transaction) {
+  async function loadDetails(transaction: NormalizedTransaction) {
     if (import.meta.env.DEV) {
       console.log('[DEBUG] loadDetails called with:', {
         transaction,

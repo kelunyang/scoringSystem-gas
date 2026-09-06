@@ -303,10 +303,10 @@ export function calculateProjectPermissions(
 
     // Level 3: Group Leader
     if (isLeader) {
-      const leaderGroup = userGroups.find((g: any) => g.role === 'leader')
+      const leaderGroup = userGroups.find(g => g.role === 'leader')
 
       // Get allowChange from project.groups array (not from userGroups)
-      const group = (project as any).groups?.find((g: any) => g.groupId === leaderGroup?.groupId)
+      const group = project.groups?.find(g => g.groupId === leaderGroup?.groupId)
       const canChangeMembers = Boolean(group?.allowChange)
 
       return {

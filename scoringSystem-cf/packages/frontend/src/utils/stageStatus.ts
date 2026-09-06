@@ -6,7 +6,15 @@
  * 此文件僅包含 UI 顯示相關的輔助函數，不再進行 status 計算
  */
 
-export type StageStatus = 'pending' | 'active' | 'voting' | 'settling' | 'completed' | 'archived'
+import type { Stage as SharedStage } from '@repo/shared'
+
+/**
+ * 階段狀態，直接取自 @repo/shared 的 Stage，避免兩邊各寫一份而分歧。
+ *
+ * 注意：`draft` / `closed` / `paused` 目前在 getStageStatusText 與
+ * getStageStatusType 都沒有對應分支，會落到 default（「尚未開始」／info）。
+ */
+export type StageStatus = SharedStage['status']
 export type StageStatusType = 'info' | 'success' | 'warning' | 'primary' | 'danger'
 
 export interface Stage {

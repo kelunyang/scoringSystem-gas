@@ -21,7 +21,7 @@ import type { UserPrefs } from '@/utils/userPreferences'
  *   searchKeyword: ''
  * })
  */
-export function useFilterPersistence<T extends Record<string, any>>(
+export function useFilterPersistence<T extends Record<string, unknown>>(
   pageKey: string,
   defaultFilters: T
 ) {

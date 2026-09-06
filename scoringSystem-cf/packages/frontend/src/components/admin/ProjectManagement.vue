@@ -344,7 +344,7 @@
 
                   <!-- Gantt Chart Section -->
                   <div
-                    v-if="showGanttChart.get(project.projectId) && projectStagesMap.get(project.projectId)?.length > 0"
+                    v-if="showGanttChart.get(project.projectId) && (projectStagesMap.get(project.projectId)?.length ?? 0) > 0"
                     class="stages-gantt-section"
                   >
                     <StageGanttChart
@@ -413,7 +413,7 @@
                           </el-button>
                           <el-button
                             size="small"
-                            :disabled="index === projectStagesMap.get(project.projectId)?.length - 1"
+                            :disabled="index === (projectStagesMap.get(project.projectId)?.length ?? 0) - 1"
                             title="下移"
                             @click="moveStageDownInProject(project.projectId, index as number)"
                           >
@@ -542,7 +542,7 @@
                           <el-tooltip content="下移" placement="top">
                             <el-button
                               size="small"
-                              :disabled="index === projectStagesMap.get(project.projectId)?.length - 1"
+                              :disabled="index === (projectStagesMap.get(project.projectId)?.length ?? 0) - 1"
                               @click="moveStageDownInProject(project.projectId, index as number)"
                             >
                               <i class="fas fa-arrow-down"></i>
@@ -1317,7 +1317,7 @@ const {
   loadingIds: loadingProjectStages,
   isExpanded: isProjectExpanded,
   collapseAll: collapseAllProjects
-} = useExpandable({ singleMode: true })
+} = useExpandable<Stage[]>({ singleMode: true })
 
 // Keep currentProjectId for backwards compatibility (used in other watchers)
 const currentProjectId = computed(() => {

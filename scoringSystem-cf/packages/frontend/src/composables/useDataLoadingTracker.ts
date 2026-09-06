@@ -16,7 +16,7 @@ export function useDataLoadingTracker() {
    * @param {string} key - 載入源的唯一標識
    * @param {boolean} isLoading - 是否正在載入
    */
-  const setLoading = (key: any, isLoading: boolean) => {
+  const setLoading = (key: string, isLoading: boolean) => {
     loadingStates.value.set(key, isLoading)
     console.log(`📊 [LoadingTracker] ${key}: ${isLoading ? '載入中...' : '✅ 完成'}`)
   }

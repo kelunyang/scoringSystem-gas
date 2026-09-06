@@ -247,6 +247,10 @@ export interface Stage {
   forceVotingTime?: number | null; // Force voting timestamp (NULL if not forced) - overrides time-based status calculation
   pausedTime?: number | null; // Pause timestamp (NULL if not paused) - overrides time-based status calculation
   settings: string; // JSON
+  /** stages.reportRewardPool（0001_init_schema.sql:227，stages_with_status VIEW 也有選） */
+  reportRewardPool?: number;
+  /** stages.commentRewardPool（同上） */
+  commentRewardPool?: number;
   createdTime: number;
   lastModifiedTime: number | null;
   // Extended properties (computed/used in frontend)

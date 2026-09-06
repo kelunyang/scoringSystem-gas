@@ -57,12 +57,24 @@ import type { Group, Member } from '@/types'
  * const updatedGroups = mapSettlementToGroups(settlementData.rankings, stage.groups)
  * // Returns new array with settlement data merged into each group
  */
-export function mapSettlementToGroups(rankings: any, groups: Group[]) {
+/** 結算 API 回的排名列，這裡只讀這幾個欄位 */
+export interface SettlementRanking {
+  groupId: string
+  finalRank?: number
+  allocatedPoints?: number
+  memberPointsDistribution?: Member[]
+  [key: string]: unknown
+}
+
+export function mapSettlementToGroups(
+  rankings: SettlementRanking[] | null | undefined,
+  groups: Group[]
+) {
   if (!rankings || !groups) return groups
 
   // Create a map for O(1) lookup
-  const rankingMap = new Map()
-  rankings.forEach((ranking: any) => {
+  const rankingMap = new Map<string, SettlementRanking>()
+  rankings.forEach(ranking => {
     rankingMap.set(ranking.groupId, ranking)
   })
 

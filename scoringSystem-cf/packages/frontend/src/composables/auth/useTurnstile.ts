@@ -63,9 +63,9 @@ export function useTurnstile(): UseTurnstileReturn {
     isReady.value = false;
 
     // Reset the widget if Turnstile API is available
-    if (typeof window !== 'undefined' && (window as any).turnstile) {
+    if (typeof window !== 'undefined' && window.turnstile) {
       try {
-        (window as any).turnstile.reset();
+        window.turnstile.reset();
       } catch (error) {
         console.warn('Failed to reset Turnstile widget:', error);
       }

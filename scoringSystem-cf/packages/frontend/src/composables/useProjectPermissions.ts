@@ -85,6 +85,16 @@ export type ProjectDataWithGroups = Omit<Project, 'userGroups'> & {
     groupId: string
     allowChange?: boolean
   }>
+  /**
+   * 有些呼叫端傳的是「專案回應的整包」而不是專案本身，
+   * 專案欄位在這一層底下。兩種形狀都要能吃。
+   */
+  project?: {
+    projectId?: string
+    createdBy?: string | null
+  }
+  /** 專案本身也可能直接帶 createdBy（未包一層時） */
+  createdBy?: string | null
 }
 
 /**
@@ -140,7 +150,7 @@ export function useProjectPermissions(
     // 🕵️ 檢查是否為 sudo 模式
     // 注意：projectData 結構是 { project: { projectId: ... }, groups: [...], ... }
     const sudoStore = useSudoStore()
-    const projectIdFromData = (project as any).project?.projectId
+    const projectIdFromData = project.project?.projectId
     const isSudoActive = sudoStore.isActive &&
                          sudoStore.projectId === projectIdFromData &&
                          sudoStore.targetUser
@@ -160,7 +170,7 @@ export function useProjectPermissions(
       // Creator status is an identity, so sudo must drop it along with the
       // global permissions above — otherwise a teacher impersonating a student
       // on a project they created would see the admin view.
-      createdBy: isSudoActive ? null : ((project as any).project?.createdBy ?? (project as any).createdBy ?? null),
+      createdBy: isSudoActive ? null : (project.project?.createdBy ?? project.createdBy ?? null),
       currentUserId: isSudoActive ? null : (user.userId ?? null),
       userGroups: normalizeUserGroups(
         project.userGroups || [],

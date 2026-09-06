@@ -16,7 +16,7 @@ const isDev = import.meta.env.DEV
  * @param message - Log message
  * @param data - Optional data to log
  */
-export function debugLog(message: string, data?: any) {
+export function debugLog(message: string, data?: unknown) {
   if (isDev) {
     if (data !== undefined) {
       console.log(message, data)

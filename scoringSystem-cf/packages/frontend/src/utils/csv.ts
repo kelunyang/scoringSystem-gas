@@ -7,8 +7,8 @@ import Papa from 'papaparse'
 
 export interface CsvColumn<T> {
   header: string
-  accessor: keyof T | ((row: T) => any)
-  formatter?: (value: any) => string
+  accessor: keyof T | ((row: T) => unknown)
+  formatter?: (value: unknown) => string
 }
 
 /**
@@ -29,7 +29,7 @@ export function exportToCsv<T>(
 
   // Transform data to CSV-ready format
   const csvData = data.map(row => {
-    const csvRow: Record<string, any> = {}
+    const csvRow: Record<string, unknown> = {}
 
     columns.forEach(col => {
       const value = typeof col.accessor === 'function'

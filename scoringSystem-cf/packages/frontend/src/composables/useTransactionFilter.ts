@@ -36,10 +36,24 @@ export interface TransactionFilterOptions {
  * @param {TransactionFilterOptions} options - 可選的配置選項
  * @returns {Object} 過濾狀態和方法
  */
-export function useTransactionFilter(transactions: any, options?: TransactionFilterOptions) {
+/** 過濾器實際會讀到的交易欄位 */
+export interface FilterableTransaction {
+  timestamp: number
+  stageId?: string
+  transactionType: Transaction['transactionType'] | string
+  points: number
+  description?: string
+  userEmail?: string
+  displayName?: string
+}
+
+export function useTransactionFilter<T extends FilterableTransaction>(
+  transactions: { value: T[] | null | undefined },
+  options?: TransactionFilterOptions
+) {
   // 過濾條件
   const dateRange = ref<[string, string] | null>(null)          // 日期範圍 [startTimestamp, endTimestamp]
-  const pointsFilter = ref(null)
+  const pointsFilter = ref<number | null>(null)
   const descriptionFilter = ref('')
   const userFilter = ref('')           // 使用者名稱或 Email 過濾
   const selectedStageIds = ref<string[]>([])      // 選中的階段 ID 數組
@@ -65,7 +79,7 @@ export function useTransactionFilter(transactions: any, options?: TransactionFil
     // 1. 按日期範圍過濾
     if (dateRange.value && dateRange.value.length === 2) {
       const [start, end] = dateRange.value
-      result = result.filter((tx: any) => {
+      result = result.filter(tx => {
         const txTime = tx.timestamp
         // +1 day (86400000ms) to include the end date
         return txTime >= parseInt(start) && txTime <= parseInt(end) + 86400000
@@ -74,7 +88,7 @@ export function useTransactionFilter(transactions: any, options?: TransactionFil
 
     // 2. 按階段過濾（多選）
     if (selectedStageIds.value.length > 0) {
-      result = result.filter((t: Transaction) => {
+      result = result.filter(t => {
         // stageId is always a string (per shared types definition)
         return t.stageId && selectedStageIds.value.includes(t.stageId)
       })
@@ -82,20 +96,20 @@ export function useTransactionFilter(transactions: any, options?: TransactionFil
 
     // 3. 按交易類型過濾（多選）
     if (selectedTransactionTypes.value.length > 0) {
-      result = result.filter((t: Transaction) =>
-        selectedTransactionTypes.value.includes(t.transactionType)
+      result = result.filter(t =>
+        selectedTransactionTypes.value.includes(t.transactionType as Transaction['transactionType'])
       )
     }
 
     // 4. 按點數過濾（精確匹配）
     if (pointsFilter.value !== null && pointsFilter.value !== undefined) {
-      result = result.filter((t: Transaction) => t.points === pointsFilter.value)
+      result = result.filter(t => t.points === pointsFilter.value)
     }
 
     // 5. 按描述過濾（模糊搜索 - debounced）
     if (debouncedDescriptionFilter.value && debouncedDescriptionFilter.value.trim()) {
       const searchText = debouncedDescriptionFilter.value.trim().toLowerCase()
-      result = result.filter((t: Transaction) =>
+      result = result.filter(t =>
         t.description && t.description.toLowerCase().includes(searchText)
       )
     }
@@ -103,7 +117,7 @@ export function useTransactionFilter(transactions: any, options?: TransactionFil
     // 6. 按使用者過濾（模糊搜索 userEmail 或 displayName - debounced）
     if (debouncedUserFilter.value && debouncedUserFilter.value.trim()) {
       const searchText = debouncedUserFilter.value.trim().toLowerCase()
-      result = result.filter((t: Transaction) => {
+      result = result.filter(t => {
         const email = (t.userEmail || '').toLowerCase()
         const displayName = (t.displayName || '').toLowerCase()
         return email.includes(searchText) || displayName.includes(searchText)
@@ -118,7 +132,7 @@ export function useTransactionFilter(transactions: any, options?: TransactionFil
    * 設置點數過濾
    * @param {number|null} points - 點數值
    */
-  function setPointsFilter(points: any) {
+  function setPointsFilter(points: number | null) {
     pointsFilter.value = points
   }
 
@@ -126,7 +140,7 @@ export function useTransactionFilter(transactions: any, options?: TransactionFil
    * 設置描述過濾
    * @param {string} text - 搜索文本
    */
-  function setDescriptionFilter(text: any) {
+  function setDescriptionFilter(text: string) {
     descriptionFilter.value = text
   }
 
