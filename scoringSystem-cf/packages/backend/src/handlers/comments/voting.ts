@@ -489,7 +489,14 @@ export async function getCommentRankingHistory(
       FROM commentrankingproposals
       WHERE projectId = ? AND stageId = ? AND authorEmail = ?
       ORDER BY createdTime ASC
-    `).bind(projectId, stageId, userEmail).all();
+    `).bind(projectId, stageId, userEmail).all<{
+      proposalId: string;
+      /** JSON 字串 */
+      rankingData: string;
+      createdTime: number;
+      /** JSON 字串 */
+      metadata: string | null;
+    }>();
 
     const proposals = proposalsResult.results || [];
 

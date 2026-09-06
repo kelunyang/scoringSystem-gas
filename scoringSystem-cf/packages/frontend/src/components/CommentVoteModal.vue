@@ -50,7 +50,7 @@
           <div class="success-title">您有投票資格</div>
           <div class="success-message">已在評論中提及 {{ votingEligibility.groupMentionCount }} 個組別</div>
           <div v-if="votingEligibility.hasVoted" class="vote-history">
-            <i class="fas fa-lightbulb"></i> 您已經於 {{ formatVoteTime(votingEligibility.lastVoteTime || '') }} 投過票了 (共 {{ votingEligibility.voteCount }} 次)
+            <i class="fas fa-lightbulb"></i> 您已經於 {{ formatVoteTime(votingEligibility.lastVoteTime) }} 投過票了 (共 {{ votingEligibility.voteCount }} 次)
           </div>
         </div>
       </div>
@@ -76,10 +76,10 @@
               : `版本 ${index + 1}`"
           @version-change="onVersionChange"
         >
-          <template #description="{ version }: { version: unknown }">
+          <template #description="{ version }: { version: ProposalVersion }">
             <div class="version-description">
-              <div>提交時間：{{ formatVoteTime((version as ProposalVersion).createdTime) }}</div>
-              <div>已選評論：{{ JSON.parse((version as ProposalVersion).rankingData).length }} 則</div>
+              <div>提交時間：{{ formatVoteTime(version.createdTime) }}</div>
+              <div>已選評論：{{ parseRankingCount(version.rankingData) }} 則</div>
             </div>
           </template>
         </VersionTimeline>
@@ -187,6 +187,7 @@ import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { usePointCalculation } from '@/composables/usePointCalculation'
 import { useSudoStore } from '@/stores/sudo'
+import type { ApiData } from '@/utils/api-types'
 
 // Drawer Breadcrumb
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
@@ -212,22 +213,17 @@ interface Comment {
   timestamp: string
 }
 
-interface VotingEligibility {
-  canVote: boolean
-  message: string
-  hasMentionedGroup?: boolean
-  groupMentionCount?: number
-  hasVoted?: boolean
-  lastVoteTime?: string
-  voteCount?: number
-}
-
-interface ProposalVersion {
-  proposalId: string
-  rankingData: string
-  createdTime: string
-  authorEmail: string
-}
+/** 投票資格與提案版本的形狀從端點推導（見 plan/issue.md #011） */
+/**
+ * 投票資格。欄位取自端點，但前端在還沒發請求時也會自己組一個
+ * 只有 canVote／message 的狀態，所以其餘欄位是選填。
+ */
+type VotingEligibility =
+  Partial<ApiData<(typeof rpcClient.api.comments)['voting-eligibility']['$post']>> & {
+    canVote: boolean
+    message: string
+  }
+type ProposalVersion = ApiData<(typeof rpcClient.api.comments)['ranking-history']['$post']>['proposals'][number]
 
 interface RankingData {
   commentId: string
@@ -708,7 +704,18 @@ function initializeComments(commentsData: Comment[] | null = null): void {
   selectedComments.value = []
 }
 
-function formatVoteTime(timestamp: string): string {
+/** 解析提案的 rankingData（JSON 字串）並回傳筆數 */
+function parseRankingCount(rankingData: unknown): number {
+  if (typeof rankingData !== 'string') return Array.isArray(rankingData) ? rankingData.length : 0
+  try {
+    const parsed = JSON.parse(rankingData)
+    return Array.isArray(parsed) ? parsed.length : 0
+  } catch {
+    return 0
+  }
+}
+
+function formatVoteTime(timestamp: number | string | null | undefined): string {
   if (!timestamp) return ''
   const date = new Date(timestamp)
   const year = date.getFullYear()

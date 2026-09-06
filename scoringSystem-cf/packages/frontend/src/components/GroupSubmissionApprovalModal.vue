@@ -61,7 +61,7 @@
           </h3>
           <div class="submission-meta">
             <span>提交者: {{ getSubmitterDisplayName(finalVersionData) }}</span>
-            <span>提交時間: {{ formatDateTime(finalVersionData?.submitTime) }}</span>
+            <span>提交時間: {{ formatDateTime(finalVersionData?.submittedTime) }}</span>
           </div>
         </div>
         <MdPreviewWrapper :content="finalVersionContentMarkdown" class="submission-content" />
@@ -705,7 +705,8 @@ const votingData = computed(() => {
     totalVotes,                                          // ✅ 從 votesSummary
     totalMembers,                                        // ✅ 從 root level
     isApproved: totalMembers > 0 && agreeVotes === totalMembers && totalVotes === totalMembers,
-    hasUserVoted: Boolean(data.hasUserVoted) || !!currentUserVote,
+    // 端點沒有回傳 hasUserVoted，只能靠有沒有找到自己的那一票
+    hasUserVoted: !!currentUserVote,
     participationProposal: data.participationProposal || {},
     currentUserVote
   }
@@ -814,6 +815,20 @@ const isViewingOldVersion = computed(() => {
   return result
 })
 
+/**
+ * 取出版本的 participationProposal。
+ * 後端只在使用者「看得到百分比」時才帶這個欄位
+ * （handlers/submissions/versions.ts 的 canSeeParticipation），
+ * 所以型別上是兩種形狀的聯集。
+ */
+function proposalOf(version: unknown): Record<string, number> | undefined {
+  if (version && typeof version === 'object' && 'participationProposal' in version) {
+    const value = (version as { participationProposal: unknown }).participationProposal
+    if (value && typeof value === 'object') return value as Record<string, number>
+  }
+  return undefined
+}
+
 const finalVersionData = computed(() => {
   // 最終版本 = 陣列最後一個元素（不論 status）
   const versions = votingDataComposable.versions.value
@@ -904,7 +919,7 @@ const participationChanges = computed(() => {
   if (!isViewingOldVersion.value) return []
 
   const oldProposal = currentVersionData.value?.participationProposal || {}
-  const newProposal = finalVersionData.value?.participationProposal || {}
+  const newProposal = proposalOf(finalVersionData.value) || {}
 
   // 合併所有出現過的成員
   const allEmails = new Set([...Object.keys(oldProposal), ...Object.keys(newProposal)])
@@ -934,7 +949,7 @@ const activeParticipationProposal = computed(() => {
     submissionData: props.submissionData,
     currentProposal: currentVersionData.value?.participationProposal,
     currentPercentages: (currentVersionData.value as any)?.participationPercentages,
-    finalProposal: finalVersionData.value?.participationProposal,
+    finalProposal: proposalOf(finalVersionData.value),
     finalPercentages: (finalVersionData.value as any)?.participationPercentages,
     submissionProposal: props.submissionData?.participationProposal,
     submissionPercentages: props.submissionData?.participationPercentages
@@ -951,7 +966,7 @@ const activeParticipationProposal = computed(() => {
   }
 
   // 否則使用最終版本的數據
-  const finalProposal = finalVersionData.value?.participationProposal
+  const finalProposal = proposalOf(finalVersionData.value)
                      || (finalVersionData.value as any)?.participationPercentages
 
   if (finalProposal && typeof finalProposal === 'object' && Object.keys(finalProposal).length > 0) {
@@ -1153,7 +1168,7 @@ watch(() => props.visible, (newVal) => {
         console.log('[DEBUG] visible watcher - state initialized:', {
           currentVersionId: currentVersionId.value,
           selectedVersion: selectedVersion.value,
-          hasContentMarkdown: !!activeVer.contentMarkdown,
+          hasContent: !!activeVer.content,
           totalVersions: votingDataComposable.versions.value.length,
           versionStatuses: votingDataComposable.versions.value.map(v => `${v.submissionId?.slice(-6)}:${v.status}`)
         })
@@ -1518,7 +1533,7 @@ async function handleVersionChange(versionId: string) {
       selectedVersion: selectedVersion.value,
       currentVersionId: currentVersionId.value,
       isViewingOldVersion: selectedVersion.value !== currentVersionId.value,
-      hasContentMarkdown: !!version.contentMarkdown
+      hasContent: !!version.content
     })
 
     // 點數分配圖表由組件自動響應式更新，無需手動渲染

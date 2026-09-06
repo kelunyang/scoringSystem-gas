@@ -23,9 +23,10 @@ interface Member {
 
 interface Vote {
   voterEmail: string
-  voterDisplayName?: string
-  voterAvatarSeed?: string
-  voterAvatarStyle?: string
+  // 後端 users 表這些欄位可為 null
+  voterDisplayName?: string | null
+  voterAvatarSeed?: string | null
+  voterAvatarStyle?: string | null
   voterAvatarOptions?: string | Record<string, unknown> | null
 }
 

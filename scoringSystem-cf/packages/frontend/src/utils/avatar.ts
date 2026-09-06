@@ -15,13 +15,13 @@ export interface AvatarData {
   avatarSeed?: string | null
   // 後端這兩個欄位可為 null
   avatarStyle?: string | null
-  avatarOptions?: string | object | null
+  avatarOptions?: unknown
 }
 
 /**
  * Parse avatar options from string or object
  */
-export function parseAvatarOptions(options: string | object | null | undefined): AvatarCustomOptions {
+export function parseAvatarOptions(options: unknown): AvatarCustomOptions {
   let raw: unknown = options
   if (typeof options === 'string') {
     try {

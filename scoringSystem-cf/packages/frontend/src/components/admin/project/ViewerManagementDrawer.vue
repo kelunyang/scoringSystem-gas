@@ -407,7 +407,8 @@ export interface SearchUser {
   userEmail: string
   displayName?: string | null
   avatarSeed?: string | null
-  avatarStyle?: string
+  avatarStyle?: string | null
+  avatarOptions?: unknown
 }
 
 /** 選取待加入的使用者（email + 指派角色） */

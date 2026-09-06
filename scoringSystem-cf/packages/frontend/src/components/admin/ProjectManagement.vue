@@ -1131,6 +1131,7 @@ import {
 } from '@/composables/admin/useProjects'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
+import type { ViewerRole } from '@/composables/admin/useProjects'
 
 defineOptions({ name: 'ProjectManagement' })
 
@@ -1332,7 +1333,7 @@ const projectMembersMap = ref(new Map())
 const loadingProjectMembers = ref(new Set())
 const showAddMemberDialog = ref(false)
 const addingMember = ref(false)
-const newMember = reactive({
+const newMember = reactive<{ email: string; role: ViewerRole }>({
   email: '',
   role: 'teacher'
 })
@@ -2047,7 +2048,7 @@ const addSelectedViewers = async (payload: { users: SelectedUser[] }) => {
   }
 }
 
-const updateViewerRole = async ({ userEmail, newRole }: { userEmail: string; newRole: string }) => {
+const updateViewerRole = async ({ userEmail, newRole }: { userEmail: string; newRole: ViewerRole }) => {
   if (!selectedProject.value) {
     ElMessage.error('未選擇專案')
     return
@@ -2088,7 +2089,7 @@ const removeViewer = async (userEmail: string) => {
   }
 }
 
-const batchUpdateRoles = async (payload: { users: string[]; newRole: string }) => {
+const batchUpdateRoles = async (payload: { users: string[]; newRole: ViewerRole }) => {
   const userEmails = payload?.users || []
   const newRole = payload?.newRole
 

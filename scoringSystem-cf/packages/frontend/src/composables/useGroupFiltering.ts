@@ -10,7 +10,8 @@ import { computed, unref, type ComputedRef, type Ref } from 'vue'
 
 interface GroupWithStatus {
   groupName: string
-  status?: 'active' | 'inactive'
+  // 後端的 groups.status 是 TEXT，沒有約束成兩個值
+  status?: string
   isActive?: boolean
 }
 

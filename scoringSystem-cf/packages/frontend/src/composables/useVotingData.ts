@@ -173,7 +173,7 @@ export function useVotingData(
           options: groupIdRef.value ? { groupId: groupIdRef.value } : {}
         }
       })
-      const response: VersionsResponse = await httpResponse.json()
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '無法載入版本資料')
@@ -197,7 +197,7 @@ export function useVotingData(
           groupId: groupIdRef.value
         }
       })
-      const response: VotingHistoryResponse = await httpResponse.json()
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '無法載入投票歷史')
@@ -222,7 +222,7 @@ export function useVotingData(
           agree
         }
       })
-      const response: VoteSubmitResponse = await httpResponse.json()
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '投票失敗')
