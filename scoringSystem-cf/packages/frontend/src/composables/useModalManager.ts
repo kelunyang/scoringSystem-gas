@@ -79,7 +79,6 @@ export function useModalManager() {
   const showSubmitCommentModal = ref(false)
   const showCommentVoteModal = ref(false)
   const showGroupSubmissionApprovalModal = ref(false)
-  const showTeacherRankingModal = ref(false)
   const showTeacherVoteModal = ref(false)
   const showVotingAnalysisModal = ref(false)
   const showCommentVotingAnalysisModal = ref(false)
@@ -228,17 +227,6 @@ export function useModalManager() {
   }
 
   /**
-   * 打開教師排名 Modal
-   * @param {Object} stage - 階段對象
-   */
-  function openTeacherRankingModal(stage: ModalStage) {
-    currentModalStageId.value = stage.id ?? ''
-    currentModalStageGroups.value = stage.groups || []
-    showTeacherRankingModal.value = true
-    console.log('開啟教師排名彈窗:', stage)
-  }
-
-  /**
    * 打開教師投票 Modal
    * @param {Object} stage - 階段對象
    */
@@ -294,7 +282,6 @@ export function useModalManager() {
     showSubmitCommentModal.value = false
     showCommentVoteModal.value = false
     showGroupSubmissionApprovalModal.value = false
-    showTeacherRankingModal.value = false
     showTeacherVoteModal.value = false
     showVotingAnalysisModal.value = false
     showCommentVotingAnalysisModal.value = false
@@ -329,7 +316,6 @@ export function useModalManager() {
     showSubmitCommentModal,
     showCommentVoteModal,
     showGroupSubmissionApprovalModal,
-    showTeacherRankingModal,
     showTeacherVoteModal,
     showVotingAnalysisModal,
     showCommentVotingAnalysisModal,
@@ -359,7 +345,6 @@ export function useModalManager() {
     openSubmitCommentModal,
     openCommentVoteModal,
     openGroupSubmissionApprovalModal,
-    openTeacherRankingModal,
     openTeacherVoteModal,
     openAnalysisModal,
     openReplyCommentModal,

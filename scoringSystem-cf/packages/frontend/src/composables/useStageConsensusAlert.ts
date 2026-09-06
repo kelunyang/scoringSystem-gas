@@ -5,7 +5,7 @@
  * still has an unapproved submission (consensus incomplete), shows a drawer
  * warning that those groups cannot participate in voting.
  *
- * Used by the 成果排名/投票 drawers (TeacherVoteModal, TeacherRankingModal).
+ * Used by the 成果排名/投票 drawer (TeacherVoteModal).
  *
  * @example
  * ```typescript

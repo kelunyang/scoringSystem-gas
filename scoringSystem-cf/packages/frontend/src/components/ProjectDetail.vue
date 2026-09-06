@@ -912,16 +912,6 @@
         @submission-deleted="handleSubmissionDeleted"
       />
 
-      <TeacherRankingModal
-        v-model:visible="modalManager.showTeacherRankingModal.value"
-        :project-id="projectId"
-        :stage-id="modalManager.currentModalStageId.value"
-        :project-title="projectTitle"
-        :stage-title="currentModalStageTitle"
-        :stage-groups="modalManager.currentModalStageGroups.value"
-        @ranking-submitted="handleTeacherRankingSubmit"
-      />
-
       <TeacherVoteModal
         v-model:visible="modalManager.showTeacherVoteModal.value"
         :project-id="projectId"
@@ -1023,7 +1013,6 @@ import SubmitReportModal from './SubmitReportModal.vue'
 import SubmitCommentModal from './SubmitCommentModal.vue'
 import CommentVoteModal from './CommentVoteModal.vue'
 import GroupSubmissionApprovalModal from './GroupSubmissionApprovalModal.vue'
-import TeacherRankingModal from './TeacherRankingModal.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import TeacherVoteModal from './TeacherVoteModal.vue'
 import VotingAnalysisModal from './VotingAnalysisModal.vue'
@@ -2936,18 +2925,6 @@ async function handleCommentVoteSubmit(data: SubmitResult) {
     if (currentStage) {
       await stageContent.refreshStageComments(currentStage, projectId.value)
     }
-  }
-}
-
-/**
- * 處理教師排名提交
- */
-async function handleTeacherRankingSubmit(data: SubmitResult) {
-  console.log('教師排名提交:', data)
-
-  if (data.success) {
-    showSuccess('教師排名已成功提交！')
-    await loadProjectData()
   }
 }
 
