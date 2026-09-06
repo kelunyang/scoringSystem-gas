@@ -144,8 +144,13 @@ export async function getGlobalGroups(
 export async function createGlobalGroup(
   env: Env,
   adminEmail: string,
+  /**
+   * groupName 標成選填是誠實的：呼叫端的 schema
+   * （CreateGlobalGroupRequestSchema）另外支援扁平格式，那個格式裡
+   * groupName 可以省略。函式一開頭就會擋掉沒有 groupName 的情況。
+   */
   groupData: {
-    groupName: string;
+    groupName?: string;
     description?: string;
     globalPermissions?: string[];
   }

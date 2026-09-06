@@ -57,7 +57,8 @@ export interface NotificationData {
   transactionId?: string;
   settlementId?: string;
   rankingProposalId?: string;
-  metadata?: Record<string, any>;
+  /** 通知自帶的額外資料，只會序列化存起來。 */
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -192,7 +193,8 @@ export async function createBatchNotifications(
     // Log batch notification creation event
     try {
       // Group notifications by projectId for logging
-      const notificationsByProject = new Map<string, any[]>();
+      // 只是為了寫日誌而彙整，不是完整的 NotificationData
+      const notificationsByProject = new Map<string, Array<{ notificationId: string; type: string; targetUser: string }>>();
 
       for (let i = 0; i < notifications.length; i++) {
         const data = notifications[i];
@@ -245,9 +247,9 @@ export async function getGroupMemberEmails(
     const result = await env.DB.prepare(`
       SELECT userEmail FROM usergroups
       WHERE projectId = ? AND groupId = ? AND isActive = 1
-    `).bind(projectId, groupId).all();
+    `).bind(projectId, groupId).all<{ userEmail: string }>();
 
-    return result.results?.map((r: any) => r.userEmail) || [];
+    return result.results?.map(r => r.userEmail) || [];
   } catch (error) {
     console.error('[getGroupMemberEmails] Error:', error);
     return [];
@@ -273,9 +275,9 @@ export async function getStageMemberEmails(
       FROM usergroups ug
       INNER JOIN groups g ON ug.groupId = g.groupId
       WHERE g.projectId = ? AND ug.projectId = ? AND ug.isActive = 1
-    `).bind(projectId, projectId).all();
+    `).bind(projectId, projectId).all<{ userEmail: string }>();
 
-    return result.results?.map((r: any) => r.userEmail) || [];
+    return result.results?.map(r => r.userEmail) || [];
   } catch (error) {
     console.error('[getStageMemberEmails] Error:', error);
     return [];

@@ -43,6 +43,16 @@ import { logProjectOperation } from '../utils/logging';
  *
  * Progress updates are sent via WebSocket (Durable Object NotificationHub)
  */
+/**
+ * OpenAI 相容的 chat completion 回應。
+ * 各家 provider（OpenAI、Gemini 的相容端點…）都回這個形狀，
+ * 這裡只列出真的會讀到的欄位。
+ */
+interface ChatCompletionResponse {
+  choices?: Array<{ message?: { content?: string } }>;
+  usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+}
+
 export default {
   async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
     console.log(`[AI Ranking Consumer] Processing batch of ${batch.messages.length} messages`);
@@ -119,7 +129,17 @@ export default {
 
         try {
           // Try to extract callId from message for error recording
-          const body = message.body as any;
+          // 錯誤路徑上只需要這幾個欄位；訊息本身可能是任何一種
+          // AI 排名任務，所以全部標成選填。
+          const body = message.body as {
+            callId?: string;
+            userEmail?: string;
+            mode?: string;
+            taskId?: string;
+            projectId?: string;
+            stageId?: string;
+            rankingType?: string;
+          } | undefined;
           if (body?.callId) {
             await failAIServiceCall(
               env.DB,
@@ -152,14 +172,14 @@ export default {
                 body.projectId,
                 'ai_ranking_query_failed',
                 body.rankingType || 'submission',
-                body.callId,
+                body.callId ?? '',
                 {
                   stageId: body.stageId,
                   mode: body.mode,
                   taskId: body.taskId,
                   errorMessage
                 },
-                { relatedEntities: { stage: body.stageId }, level: 'error' }
+                { relatedEntities: { stage: body.stageId ?? '' }, level: 'error' }
               );
             }
           }
@@ -599,7 +619,7 @@ async function callBTComparison(
     throw new Error(`AI API error: ${response.status} - ${errorText}`);
   }
 
-  const data = await response.json() as any;
+  const data = await response.json() as ChatCompletionResponse;
   const content = data.choices?.[0]?.message?.content || '';
 
   const { winner, reason } = parseBTVerdict(content);
@@ -616,7 +636,8 @@ async function broadcastProgress(
   userEmail: string,
   message: {
     type: string;
-    data: any;
+    /** 進度內容依 type 而異，原樣轉發給前端。 */
+    data: unknown;
   }
 ): Promise<void> {
   try {
@@ -911,7 +932,7 @@ async function processMultiAgentRanking(
         throw new Error(`AI API error: ${response.status} - ${errorText}`);
       }
 
-      const data = await response.json() as any;
+      const data = await response.json() as ChatCompletionResponse;
       const content = data.choices?.[0]?.message?.content || '';
 
       // Parse Round 2 response

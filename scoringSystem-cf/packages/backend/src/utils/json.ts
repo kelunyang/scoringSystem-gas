@@ -15,7 +15,7 @@
  * const permissions = safeJsonParse(group.globalPermissions, []);
  * // Returns array if valid JSON, empty array if invalid
  */
-export function safeJsonParse<T = any>(
+export function safeJsonParse<T = unknown>(
   jsonString: string | null | undefined,
   defaultValue: T
 ): T {
@@ -42,7 +42,7 @@ export function safeJsonParse<T = any>(
  * const jsonStr = safeJsonStringify({ key: 'value' }, '{}');
  */
 export function safeJsonStringify(
-  obj: any,
+  obj: unknown,
   defaultValue: string = '{}'
 ): string {
   try {
@@ -64,8 +64,8 @@ export function safeJsonStringify(
  * const permissions = parseJsonArray(group.globalPermissions);
  * // Always returns an array
  */
-export function parseJsonArray(field: string | null | undefined): any[] {
-  return safeJsonParse(field, []);
+export function parseJsonArray<T = unknown>(field: string | null | undefined): T[] {
+  return safeJsonParse<T[]>(field, []);
 }
 
 // Aliases for backwards compatibility

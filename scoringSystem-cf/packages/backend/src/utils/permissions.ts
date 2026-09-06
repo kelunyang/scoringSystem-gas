@@ -140,7 +140,7 @@ export async function hasGlobalPermission(
 
     // Check if any group has the permission
     for (const group of userGroups.results) {
-      const permissions = parseJsonArray(group.globalPermissions as string);
+      const permissions = parseJsonArray<string>(group.globalPermissions as string);
       if (permissions.includes(permission)) {
         return true;
       }
@@ -322,7 +322,7 @@ export async function getUserGlobalPermissions(
     // Collect all unique permissions
     const permissionsSet = new Set<string>();
     for (const group of userGroups.results) {
-      const permissions = parseJsonArray(group.globalPermissions as string);
+      const permissions = parseJsonArray<string>(group.globalPermissions as string);
       permissions.forEach(p => permissionsSet.add(p));
     }
 

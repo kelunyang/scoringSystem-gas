@@ -22,14 +22,14 @@ const LAST_ACTIVITY_THROTTLE_MS = 5 * 60 * 1000;
  * Extract session ID from request
  * Checks body, query parameters, and headers
  */
-async function getSessionId(c: Context<any>): Promise<string | null> {
+async function getSessionId(c: Context<{ Bindings: Env; Variables: HonoVariables }>): Promise<string | null> {
   // 1. Try to get from request body (POST requests)
   try {
     const contentType = c.req.header('content-type');
     if (contentType?.includes('application/json')) {
       // Clone the request to avoid consuming the original body stream
       const clonedRequest = c.req.raw.clone();
-      const body = await clonedRequest.json() as Record<string, any>;
+      const body = await clonedRequest.json() as Record<string, unknown>;
       if (body && typeof body === 'object' && 'sessionId' in body && typeof body.sessionId === 'string') {
         return body.sessionId;
       }
@@ -269,7 +269,8 @@ export const authMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: HonoV
       // The copy is kept anyway because it costs one object spread and does not
       // depend on that runtime detail staying true. Do not "simplify" it back
       // to mutating the binding.
-      (c as any).env = { ...c.env, DB: createSudoSafeDB(c.env.DB) };
+      // Hono 的 Context.env 是唯讀屬性，這裡刻意換掉整個 binding 物件。
+      (c as { env: Env }).env = { ...c.env, DB: createSudoSafeDB(c.env.DB) };
     }
 
     // Continue to next handler

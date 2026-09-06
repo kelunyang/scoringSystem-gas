@@ -211,6 +211,7 @@ import { logGlobalOperation } from '../utils/logging';
 
 // Configuration utility
 import { getAllConfigValues, getConfigValue, setConfigValue, deleteConfigValue, UPDATABLE_CONFIG_KEYS } from '../utils/config';
+import type { ConfigValue } from '../utils/config';
 
 const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
@@ -304,7 +305,10 @@ app.get('/users/list', async (c) => {
     // Parse query parameters
     const search = c.req.query('search');
     const status = c.req.query('status') as 'active' | 'inactive' | undefined;
-    const sortBy = c.req.query('sortBy') as any;
+    // getAllUsers 會自己驗證白名單，不在白名單上直接回 INVALID_INPUT，
+    // 所以這裡放行任意字串即可。
+    const sortBy = c.req.query('sortBy') as
+      | 'registrationTime' | 'email' | 'displayName' | 'lastActivityTime' | undefined;
     const sortOrder = c.req.query('sortOrder') as 'asc' | 'desc' | undefined;
     const limit = c.req.query('limit') ? parseInt(c.req.query('limit')!) : undefined;
     const offset = c.req.query('offset') ? parseInt(c.req.query('offset')!) : undefined;
@@ -705,7 +709,7 @@ app.post(
     const response = await createGlobalGroup(
       c.env,
       user.userEmail,
-      groupData as any
+      groupData
     );
 
     return response;
@@ -1175,8 +1179,8 @@ app.post(
       // Track changes with before/after values
       const changes: Array<{
         field: string;
-        oldValue: any;
-        newValue: any;
+        oldValue: ConfigValue | null;
+        newValue: ConfigValue;
       }> = [];
 
       // Process all submitted properties

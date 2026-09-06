@@ -6,9 +6,10 @@
  */
 
 import { Hono } from 'hono';
+import type { MiddlewareHandler } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import type { Env } from '../types';
+import type { Env, HonoVariables } from '../types';
 import { authMiddleware } from '../middleware/auth';
 import { getSystemLogs, getLogStatistics } from '../handlers/admin/system';
 import { getConfigValue } from '../utils/config';
@@ -116,7 +117,7 @@ systemRouter.use('*', authMiddleware);
  * Permission middleware for log endpoints
  * Allows either system_admin OR view_system_logs permission
  */
-const requireViewSystemLogs = async (c: any, next: any) => {
+const requireViewSystemLogs: MiddlewareHandler<{ Bindings: Env; Variables: HonoVariables }> = async (c, next) => {
   const user = c.get('user');
 
   if (!user) {
@@ -209,7 +210,7 @@ systemRouter.post('/logs-stats', requireViewSystemLogs, async (c) => {
  * Permission middleware for AI provider management
  * Requires system_admin permission
  */
-const requireAIProviderAdmin = async (c: any, next: any) => {
+const requireAIProviderAdmin: MiddlewareHandler<{ Bindings: Env; Variables: HonoVariables }> = async (c, next) => {
   const user = c.get('user');
 
   if (!user) {

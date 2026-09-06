@@ -113,7 +113,7 @@ async function processSingleNotification(
     transactionId?: string;
     settlementId?: string;
     rankingProposalId?: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   },
   queueMessageId: string
 ): Promise<void> {
@@ -269,7 +269,7 @@ async function processBatchNotifications(
     transactionId?: string;
     settlementId?: string;
     rankingProposalId?: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }>,
   queueMessageId: string
 ): Promise<void> {
@@ -306,9 +306,9 @@ async function processBatchNotifications(
   const placeholders = userEmails.map(() => '?').join(',');
   const validUsersResult = await env.DB.prepare(`
     SELECT userEmail FROM users WHERE userEmail IN (${placeholders}) AND status = 'active'
-  `).bind(...userEmails).all();
+  `).bind(...userEmails).all<{ userEmail: string }>();
 
-  const validUserSet = new Set(validUsersResult.results?.map((r: any) => r.userEmail) || []);
+  const validUserSet = new Set(validUsersResult.results?.map(r => r.userEmail) || []);
   const invalidCount = userEmails.length - validUserSet.size;
 
   if (invalidCount > 0) {
@@ -436,7 +436,7 @@ async function processBatchNotifications(
   // 注意：批量通知可能針對多個用戶，需要逐個用戶獲取其 DO 並廣播
   try {
     // 按用戶分組通知 (使用已生成的 notificationRecords)
-    const notificationsByUser = new Map<string, any[]>();
+    const notificationsByUser = new Map<string, typeof notificationRecords>();
     notificationRecords.forEach(record => {
       if (!notificationsByUser.has(record.userEmail)) {
         notificationsByUser.set(record.userEmail, []);

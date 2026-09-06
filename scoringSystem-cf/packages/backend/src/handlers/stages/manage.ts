@@ -396,7 +396,7 @@ export async function updateStage(
     const ALLOWED_STAGE_COLUMNS = ['stageName', 'description', 'status', 'startTime', 'endTime', 'reportRewardPool', 'commentRewardPool', 'stageOrder', 'updatedAt'];
 
     // Filter allowedUpdates to only include whitelisted columns
-    const safeUpdates: Record<string, any> = {};
+    const safeUpdates: Record<string, SqlBindValue> = {};
     for (const key of ALLOWED_STAGE_COLUMNS) {
       if (key in allowedUpdates) {
         safeUpdates[key] = allowedUpdates[key];
@@ -465,7 +465,7 @@ export async function updateStage(
 
       // 發送階段狀態變化通知
       try {
-        const stageName = (stage as any).stageName || '未命名階段';
+        const stageName = stage?.stageName || '未命名階段';
         const members = await getStageMemberEmails(env, projectId, stageId);
 
         let notificationType: 'stage_started' | 'stage_voting' | 'stage_completed' | null = null;
@@ -716,11 +716,11 @@ export async function cloneStageToProjects(
     const projectsResult = await env.DB.prepare(`
       SELECT projectId, projectName FROM projects
       WHERE projectId IN (${projectPlaceholders})
-    `).bind(...targetProjectIds).all();
+    `).bind(...targetProjectIds).all<{ projectId: string; projectName: string }>();
 
-    const existingProjectIds = new Set(projectsResult.results.map((p: any) => p.projectId));
+    const existingProjectIds = new Set(projectsResult.results.map(p => p.projectId));
     const projectNameMap = new Map(
-      projectsResult.results.map((p: any) => [p.projectId, p.projectName])
+      projectsResult.results.map(p => [p.projectId, p.projectName])
     );
 
     // Check if all target projects exist
