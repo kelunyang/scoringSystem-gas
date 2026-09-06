@@ -206,11 +206,7 @@ const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
     // Check if stage accepts rankings (prevent during settlement)
     const stageCheck = await checkStageAcceptsRankings(c.env.DB, body.projectId, body.stageId);
     if (!stageCheck.valid) {
-      return c.json({
-        success: false,
-        error: stageCheck.error,
-        errorCode: stageCheck.errorCode
-      }, 400);
+      return errorResponse(stageCheck.errorCode || 'STAGE_NOT_ACCEPTING', stageCheck.error || '此階段目前不接受排名');
     }
 
     // Teacher role validation is handled in the handler function
@@ -246,11 +242,7 @@ const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
     // Check if stage accepts rankings (prevent during settlement)
     const stageCheck = await checkStageAcceptsRankings(c.env.DB, body.projectId, body.stageId);
     if (!stageCheck.valid) {
-      return c.json({
-        success: false,
-        error: stageCheck.error,
-        errorCode: stageCheck.errorCode
-      }, 400);
+      return errorResponse(stageCheck.errorCode || 'STAGE_NOT_ACCEPTING', stageCheck.error || '此階段目前不接受排名');
     }
 
     const response = await submitGroupRanking(c.env, user, body);
@@ -280,11 +272,7 @@ const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
       const stageId = proposal.stageId as string;
       const stageCheck = await checkStageAcceptsRankings(c.env.DB, body.projectId, stageId);
       if (!stageCheck.valid) {
-        return c.json({
-          success: false,
-          error: stageCheck.error,
-          errorCode: stageCheck.errorCode
-        }, 400);
+        return errorResponse(stageCheck.errorCode || 'STAGE_NOT_ACCEPTING', stageCheck.error || '此階段目前不接受排名');
       }
     }
 
@@ -342,11 +330,7 @@ const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
     // Check if stage accepts rankings (prevent during settlement)
     const stageCheck = await checkStageAcceptsRankings(c.env.DB, body.projectId, body.stageId);
     if (!stageCheck.valid) {
-      return c.json({
-        success: false,
-        error: stageCheck.error,
-        errorCode: stageCheck.errorCode
-      }, 400);
+      return errorResponse(stageCheck.errorCode || 'STAGE_NOT_ACCEPTING', stageCheck.error || '此階段目前不接受排名');
     }
 
     const response = await submitStageRankingVote(c.env, user, body);

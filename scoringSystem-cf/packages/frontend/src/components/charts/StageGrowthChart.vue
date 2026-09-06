@@ -151,8 +151,8 @@ function renderLineChart() {
     // 使用數據的時間範圍
     const dataToUse = hasTopUser ? props.topUserData!.stageGrowth : props.targetUserData!.stageGrowth
     xScaleDomain = [
-      new Date(dataToUse[0].endTime),
-      new Date(dataToUse[dataToUse.length - 1].endTime)
+      new Date(dataToUse[0].endTime ?? 0),
+      new Date(dataToUse[dataToUse.length - 1].endTime ?? 0)
     ]
   }
 
@@ -223,7 +223,7 @@ function renderLineChart() {
 
   // 折線生成器
   const line = d3.line<GrowthPoint>()
-    .x(d => xScale(new Date(d.endTime)))
+    .x(d => xScale(new Date(d.endTime ?? 0)))
     .y(d => yScale(d.cumulativePoints))
     .curve(d3.curveMonotoneX)
 
@@ -243,7 +243,7 @@ function renderLineChart() {
       .enter()
       .append('circle')
       .attr('class', 'dot-top')
-      .attr('cx', d => xScale(new Date(d.endTime)))
+      .attr('cx', d => xScale(new Date(d.endTime ?? 0)))
       .attr('cy', d => yScale(d.cumulativePoints))
       .attr('r', 5)
       .attr('fill', '#409eff')
@@ -256,7 +256,7 @@ function renderLineChart() {
       .enter()
       .append('text')
       .attr('class', 'label-top')
-      .attr('x', d => xScale(new Date(d.endTime)))
+      .attr('x', d => xScale(new Date(d.endTime ?? 0)))
       .attr('y', d => yScale(d.cumulativePoints) - 12)
       .attr('text-anchor', 'middle')
       .attr('font-size', '10px')
@@ -281,7 +281,7 @@ function renderLineChart() {
       .enter()
       .append('circle')
       .attr('class', 'dot-target')
-      .attr('cx', d => xScale(new Date(d.endTime)))
+      .attr('cx', d => xScale(new Date(d.endTime ?? 0)))
       .attr('cy', d => yScale(d.cumulativePoints))
       .attr('r', 5)
       .attr('fill', '#f56c6c')
@@ -294,7 +294,7 @@ function renderLineChart() {
       .enter()
       .append('text')
       .attr('class', 'label-target')
-      .attr('x', d => xScale(new Date(d.endTime)))
+      .attr('x', d => xScale(new Date(d.endTime ?? 0)))
       .attr('y', d => yScale(d.cumulativePoints) + 18)
       .attr('text-anchor', 'middle')
       .attr('font-size', '10px')

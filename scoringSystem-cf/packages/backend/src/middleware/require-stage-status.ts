@@ -141,16 +141,15 @@ export function requireStageStatus(allowedStatuses: string[]) {
       const currentStatus = stage.status as string;
 
       if (!allowedStatuses.includes(currentStatus)) {
-        return c.json({
-          success: false,
-          error: `This operation requires stage status to be one of [${allowedStatuses.join(', ')}], but current status is '${currentStatus}'`,
-          errorCode: 'STAGE_STATUS_NOT_ALLOWED',
-          details: {
+        return errorResponse(
+          'STAGE_STATUS_NOT_ALLOWED',
+          `This operation requires stage status to be one of [${allowedStatuses.join(', ')}], but current status is '${currentStatus}'`,
+          {
             currentStatus,
             allowedStatuses,
             stageName: stage.stageName
           }
-        }, 403);
+        );
       }
 
       // Status check passed, continue to handler

@@ -50,20 +50,23 @@ function handWrittenErrorBodies(src: string): Array<{
 }> {
   const found: Array<{ line: number; status: number; code: string | null; message: string }> = []
 
-  for (const m of src.matchAll(/return c\.json\(\s*\{(.{0,500}?)\}\s*,\s*(\d+)\s*\)\s*;/gs)) {
+  for (const m of src.matchAll(/return c\.json\(\s*\{(.{0,800}?)\}\s*,\s*(\d+)\s*\)\s*;/gs)) {
     const body = m[1]
     if (!body.includes('success: false')) continue
 
-    // A string literal for `error` is the hand-written shape; an object is not.
-    const message = body.match(/error:\s*'([^']*)'/)
-    if (!message) continue
+    // `error:` 後面第一個非空白字元是 `{` 才是正確形狀。
+    // 只比對單引號字串會漏掉樣板字串（`...`）、三元運算式、
+    // 以及 `error: someVariable`——2026-09-06 就是這樣漏掉 13 處。
+    const errorValue = body.match(/error:\s*([\s\S]{0,60})/)
+    if (!errorValue) continue
+    if (errorValue[1].trimStart().startsWith('{')) continue
 
     const code = body.match(/(?:errorCode|code):\s*'([^']*)'/)
     found.push({
       line: src.slice(0, m.index!).split('\n').length,
       status: Number(m[2]),
       code: code ? code[1] : null,
-      message: message[1]
+      message: errorValue[1].split('\n')[0].trim()
     })
   }
 

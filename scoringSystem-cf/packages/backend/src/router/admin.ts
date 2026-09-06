@@ -1328,15 +1328,10 @@ const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
         { level: 'warning' }
       );
 
-      return c.json({
-        success: false,
-        error: `Failed to reset ${failedResets.length} properties`,
-        errorCode: 'PARTIAL_RESET_FAILURE',
-        data: {
-          resetFields: resetProperties,
-          failedFields: failedResets
-        }
-      }, 500);
+      return errorResponse('PARTIAL_RESET_FAILURE', `Failed to reset ${failedResets.length} properties`, {
+        resetFields: resetProperties,
+        failedFields: failedResets
+      });
     }
 
     // Complete success - log with warning level because this is a significant operation
@@ -1680,11 +1675,7 @@ const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
   } catch (error) {
     console.error('Update notification patrol config error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
-    return c.json({
-      success: false,
-      error: `Failed to update configuration: ${message}`,
-      errorCode: 'UPDATE_FAILED'
-    }, 400);
+    return errorResponse('UPDATE_FAILED', `Failed to update configuration: ${message}`);
   }
 })
 
@@ -1906,19 +1897,11 @@ const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
         messageId: result.messageId
       });
     } else {
-      return c.json({
-        success: false,
-        error: result.error || 'Cloudflare Email 測試失敗',
-        errorCode: result.errorType || 'CF_EMAIL_TEST_FAILED'
-      }, 400);
+      return errorResponse(result.errorType || 'CF_EMAIL_TEST_FAILED', result.error || 'Cloudflare Email 測試失敗');
     }
   } catch (error) {
     console.error('Cloudflare Email test error:', error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Cloudflare Email 測試失敗',
-      errorCode: 'CF_EMAIL_TEST_FAILED'
-    }, 500);
+    return errorResponse('CF_EMAIL_TEST_FAILED', error instanceof Error ? error.message : 'Cloudflare Email 測試失敗');
   }
 })
 

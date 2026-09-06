@@ -377,7 +377,7 @@ export function useGroupMembers() {
     try {
       removingMemberEmail.value = member.userEmail
 
-      const httpResponse = await rpcClient.api.groups.removeMember.$post({
+      const httpResponse = await rpcClient.api.groups['remove-member'].$post({
         json: {
           projectId: projectId,
           groupId: groupId,

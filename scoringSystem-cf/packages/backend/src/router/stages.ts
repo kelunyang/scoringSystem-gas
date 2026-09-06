@@ -231,15 +231,14 @@ const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
           'SELECT projectName FROM projects WHERE projectId = ?'
         ).bind(targetProjectId).first();
 
-        return c.json({
-          success: false,
-          error: `Insufficient permissions on target project: ${project?.projectName || targetProjectId}`,
-          errorCode: 'ACCESS_DENIED',
-          data: {
+        return errorResponse(
+          'ACCESS_DENIED',
+          `Insufficient permissions on target project: ${project?.projectName || targetProjectId}`,
+          {
             failedProjectId: targetProjectId,
             failedProjectName: project?.projectName || null
           }
-        }, 403);
+        );
       }
     }
 

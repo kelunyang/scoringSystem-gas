@@ -293,7 +293,7 @@ class ErrorHandler {
   handleApiError(error: ApiError | Error | string, action: string): void {
     // 對於 NO_SESSION 錯誤（首次載入或登出狀態），不顯示錯誤訊息
     // 這是正常狀態，不是錯誤
-    if (error && typeof error === 'object' && 'error' in error && apiErrorCode(errorOf(error)) === 'NO_SESSION') {
+    if (error && typeof error === 'object' && 'error' in error && (error as { error?: { code?: string } }).error?.code === 'NO_SESSION') {
       console.log(`ℹ️ ${action}: 尚未登入`)
       return
     }
@@ -383,7 +383,7 @@ export function getErrorMessage(error: unknown): string {
   // Check for ApiError format
   if (error && typeof error === 'object' && 'error' in error) {
     const apiError = error as ApiError
-    return apiErrorMessage(errorOf(apiError)) || '未知錯誤'
+    return apiError.error?.message || '未知錯誤'
   }
 
   // Fallback for other object types

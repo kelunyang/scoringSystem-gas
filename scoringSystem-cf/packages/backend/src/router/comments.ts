@@ -112,13 +112,12 @@ const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
     const allowedStatuses = isTeacher ? ['active', 'voting'] : ['active'];
     if (!allowedStatuses.includes(stage.status as string)) {
-      return c.json({
-        success: false,
-        error: isTeacher
+      return errorResponse(
+        'STAGE_STATUS_NOT_ALLOWED',
+        isTeacher
           ? 'Comments can only be created during active or voting stages'
-          : 'Comments can only be created during active stage',
-        errorCode: 'STAGE_STATUS_NOT_ALLOWED'
-      }, 403);
+          : 'Comments can only be created during active stage'
+      );
     }
 
     const response = await createComment(
@@ -258,11 +257,10 @@ const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
         'CANNOT_REACT_OWN_COMMENT': 'Cannot react to your own comment',
         'NOT_IN_REACTION_USERS': 'Only mentioned students can react to this comment'
       };
-      return c.json({
-        success: false,
-        error: errorMessages[eligibility.reason || 'NOT_IN_REACTION_USERS'] || 'Cannot react to this comment',
-        errorCode: eligibility.reason || 'ACCESS_DENIED'
-      }, 403);
+      return errorResponse(
+        eligibility.reason || 'ACCESS_DENIED',
+        errorMessages[eligibility.reason || 'NOT_IN_REACTION_USERS'] || 'Cannot react to this comment'
+      );
     }
 
     const response = await addReaction(
@@ -375,11 +373,7 @@ const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
     // Check if stage accepts rankings (prevent during settlement)
     const stageCheck = await checkStageAcceptsRankings(c.env.DB, body.projectId, body.stageId);
     if (!stageCheck.valid) {
-      return c.json({
-        success: false,
-        error: stageCheck.error,
-        errorCode: stageCheck.errorCode
-      }, 400);
+      return errorResponse(stageCheck.errorCode || 'STAGE_NOT_ACCEPTING', stageCheck.error || '此階段目前不接受排名');
     }
 
     // Check permission: need comment permission (Level 3 students)

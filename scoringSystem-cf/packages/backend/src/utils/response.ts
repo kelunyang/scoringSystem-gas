@@ -209,6 +209,12 @@ export const HTTP_STATUS_BY_ERROR_CODE: Readonly<Record<string, number>> = {
   NOT_PROJECT_MEMBER: 403,
   USER_DISABLED: 403,
   ACCESS_DENIED: 403,
+  /** 階段狀態不允許這個操作（例如已暫停時發評論） */
+  STAGE_STATUS_NOT_ALLOWED: 403,
+  /** Cloudflare Email 測試失敗——是設定或外部服務的問題，不是伺服器錯誤 */
+  CF_EMAIL_TEST_FAILED: 400,
+  /** 批次重設只有部分成功 */
+  PARTIAL_RESET_FAILURE: 500,
   SUDO_NO_WRITE: 403,
   NOT_GROUP_MEMBER: 403,
   NOT_GROUP_LEADER: 403,
