@@ -102,7 +102,7 @@ export async function resetProposalVotes(
     const groupMembers = await env.DB.prepare(`
       SELECT userEmail FROM usergroups
       WHERE groupId = ? AND projectId = ? AND isActive = 1
-    `).bind(groupId, projectId).all();
+    `).bind(groupId, projectId).all<{ userEmail: string }>();
 
     if (!groupMembers.results || groupMembers.results.length === 0) {
       return errorResponse('NO_GROUP_MEMBERS', 'No active group members found');
@@ -255,7 +255,7 @@ export async function resetProposalVotes(
     // Notify all group members about the vote reset
     try {
       // Get all group member emails
-      const memberEmails = groupMembers.results.map((m: any) => m.userEmail);
+      const memberEmails = groupMembers.results.map(m => m.userEmail);
 
       // Send notification to all members
       for (const memberEmail of memberEmails) {

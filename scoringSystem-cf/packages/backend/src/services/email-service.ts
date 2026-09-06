@@ -26,7 +26,8 @@ export interface SendEmailOptions {
   subject: string;
   htmlBody: string;
   textBody?: string;
-  emailContext?: Record<string, any>;
+  /** 只會序列化存進 emailContext 欄位，不讀內容。 */
+  emailContext?: Record<string, unknown>;
 }
 
 /**

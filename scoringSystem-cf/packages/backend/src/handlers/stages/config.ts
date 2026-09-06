@@ -9,6 +9,25 @@ import { parseJSON, stringifyJSON } from '@utils/json';
 import { logProjectOperation } from '@utils/logging';
 
 /**
+ * 階段設定。已知欄位列在下面，其餘由各階段類型自行擴充
+ * （整個物件會序列化存進 stages.config）。
+ */
+export interface StageConfig {
+  allowSubmissionEdit?: boolean;
+  allowSubmissionDelete?: boolean;
+  requireApproval?: boolean;
+  maxSubmissionsPerUser?: number;
+  minSubmissionLength?: number;
+  maxSubmissionLength?: number;
+  allowComments?: boolean;
+  allowVoting?: boolean;
+  votingMethod?: string;
+  minVotesRequired?: number;
+  allowSelfVoting?: boolean;
+  [key: string]: unknown;
+}
+
+/**
  * Update stage configuration
  */
 export async function updateStageConfig(
@@ -16,18 +35,7 @@ export async function updateStageConfig(
   userEmail: string,
   projectId: string,
   stageId: string,
-  configUpdates: {
-    allowSubmissionEdit?: boolean;
-    allowSubmissionDelete?: boolean;
-    requireApproval?: boolean;
-    maxSubmissionsPerUser?: number;
-    allowComments?: boolean;
-    allowVoting?: boolean;
-    votingMethod?: string;
-    minVotesRequired?: number;
-    allowSelfVoting?: boolean;
-    [key: string]: any;
-  }
+  configUpdates: StageConfig
 ): Promise<Response> {
   try {
     // Get current stage
@@ -162,7 +170,7 @@ export async function resetStageConfig(
 /**
  * Get default stage configuration
  */
-export function getDefaultStageConfig(): any {
+export function getDefaultStageConfig(): StageConfig {
   return {
     // Submission settings
     allowSubmissionEdit: true,

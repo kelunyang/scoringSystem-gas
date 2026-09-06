@@ -22,7 +22,7 @@ interface RegistrationData {
   invitationCode: string;
   avatarSeed?: string;
   avatarStyle?: string;
-  avatarOptions?: Record<string, any>;
+  avatarOptions?: Record<string, string>;
 }
 
 /**

@@ -59,14 +59,14 @@ export async function getTeacherVoteHistory(
       FROM teachersubmissionrankings
       WHERE projectId = ? AND stageId = ? AND teacherEmail = ?
       ORDER BY createdTime DESC
-    `).bind(projectId, stageId, userEmail).all();
+    `).bind(projectId, stageId, userEmail).all<{ createdTime: number }>();
 
     const submissionVersions = submissionVersionsResult.results || [];
     console.log(`📊 [getTeacherVoteHistory] Submission versions count: ${submissionVersions.length}`);
 
     if (submissionVersions.length > 0) {
       // Get the latest voting timestamp
-      const latestSubmissionTime = (submissionVersions[0] as any).createdTime;
+      const latestSubmissionTime = submissionVersions[0].createdTime;
 
       // Get count of submissions ranked in the latest version
       const latestSubmissionCountResult = await env.DB.prepare(`
@@ -99,14 +99,14 @@ export async function getTeacherVoteHistory(
       FROM teachercommentrankings
       WHERE projectId = ? AND stageId = ? AND teacherEmail = ?
       ORDER BY createdTime DESC
-    `).bind(projectId, stageId, userEmail).all();
+    `).bind(projectId, stageId, userEmail).all<{ createdTime: number }>();
 
     const commentVersions = commentVersionsResult.results || [];
     console.log(`💬 [getTeacherVoteHistory] Comment versions count: ${commentVersions.length}`);
 
     if (commentVersions.length > 0) {
       // Get the latest voting timestamp
-      const latestCommentTime = (commentVersions[0] as any).createdTime;
+      const latestCommentTime = commentVersions[0].createdTime;
 
       // Get count of comments ranked in the latest version
       const latestCommentCountResult = await env.DB.prepare(`

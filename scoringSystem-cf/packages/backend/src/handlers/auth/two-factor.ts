@@ -117,7 +117,8 @@ export async function verifyTwoFactorCode(
   error?: string;
   message?: string;
   attemptsLeft?: number;
-  user?: any;
+  /** 驗證成功時回傳的使用者資料列；查不到時是 null。 */
+  user?: Record<string, unknown> | null;
   passwordVerified?: boolean;
 }> {
   const db = env.DB;

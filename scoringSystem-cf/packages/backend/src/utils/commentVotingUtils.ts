@@ -6,6 +6,25 @@
 /**
  * 檢查用戶是否為專案的 Group Leader 或 Member
  */
+/**
+ * 驗證結果。用 valid 判別，所以通過時 comment 必定存在——
+ * 呼叫端不需要再檢查一次或加 `!`。
+ */
+type CommentEligibility =
+  | { valid: true; comment: VotableCommentRow; error?: undefined }
+  | { valid: false; error: string; comment?: undefined };
+
+/** 檢查「這則評論可不可以被投票」時讀到的欄位。 */
+interface VotableCommentRow {
+  commentId: string;
+  authorEmail: string;
+  isReply: number;
+  replyLevel: number | null;
+  /** JSON 字串陣列。 */
+  mentionedGroups: string | null;
+  mentionedUsers: string | null;
+}
+
 export async function checkUserGroupMembership(
   db: D1Database,
   projectId: string,
@@ -388,11 +407,7 @@ export async function validateCommentEligibility(
   projectId: string,
   commentId: string,
   excludeAuthorEmail?: string
-): Promise<{
-  valid: boolean;
-  error?: string;
-  comment?: any;
-}> {
+): Promise<CommentEligibility> {
   // 1. 獲取評論資料
   const comment = await db.prepare(`
     SELECT
@@ -404,7 +419,7 @@ export async function validateCommentEligibility(
       mentionedUsers
     FROM comments
     WHERE commentId = ? AND projectId = ?
-  `).bind(commentId, projectId).first();
+  `).bind(commentId, projectId).first<VotableCommentRow>();
 
   if (!comment) {
     return { valid: false, error: '評論不存在' };

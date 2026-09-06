@@ -4,6 +4,7 @@
  */
 
 import { getConfigValue } from './config';
+import type { Env } from '@/types';
 
 interface TurnstileVerificationResponse {
   success: boolean;
@@ -141,7 +142,7 @@ export async function verifyTurnstileToken(
  * @returns null if passes, error object if fails
  */
 export async function verifyTurnstileMiddleware(
-  env: any,
+  env: Env,
   turnstileToken: string | undefined,
   remoteIp?: string
 ): Promise<null | { success: false; error: string; errorCode: string }> {

@@ -132,9 +132,9 @@ export async function voteOnRankingProposal(
         SELECT voteId, voterEmail, agree, timestamp
         FROM proposalvotes
         WHERE proposalId = ? AND projectId = ?
-      `).bind(proposalId, projectId).all();
+      `).bind(proposalId, projectId).all<{ voteId: string; voterEmail: string; agree: number; timestamp: number }>();
 
-      const agreeCount = existingVotes.results.filter((v: any) => v.agree).length;
+      const agreeCount = existingVotes.results.filter(v => v.agree).length;
       const disagreeCount = existingVotes.results.length - agreeCount;
 
       // Check current proposal status (use VIEW for correct status)

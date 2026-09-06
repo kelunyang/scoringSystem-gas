@@ -66,14 +66,20 @@ export function requireStageStatus(allowedStatuses: string[]) {
     try {
       // Extract projectId from route params, query params, or body
       let projectId = c.req.param('projectId') || c.req.query('projectId');
-      let body: any = null;
+      // 各端點的 body 形狀不同，這裡只讀定位階段用得到的欄位。
+      let body: {
+        projectId?: string;
+        stageId?: string;
+        commentData?: { stageId?: string };
+        submissionId?: string;
+      } | null = null;
 
       // If not found in params/query, try body
       if (!projectId) {
         try {
           // Clone request to avoid consuming the body
           body = await c.req.json();
-          projectId = body.projectId;
+          projectId = body?.projectId;
         } catch {
           // Body might not be JSON
         }
@@ -88,12 +94,12 @@ export function requireStageStatus(allowedStatuses: string[]) {
 
       // If no direct stageId, try body
       if (!stageId && body) {
-        stageId = body.stageId;
+        stageId = body.stageId ?? null;
       }
 
       // Try nested commentData.stageId (for comments API)
       if (!stageId && body?.commentData?.stageId) {
-        stageId = body.commentData.stageId;
+        stageId = body.commentData.stageId ?? null;
       }
 
       // If still no stageId, try to get it from submissionId
@@ -102,7 +108,7 @@ export function requireStageStatus(allowedStatuses: string[]) {
 
         // Try body if not found in params/query
         if (!submissionId && body) {
-          submissionId = body.submissionId;
+          submissionId = body.submissionId ?? null;
         }
 
         if (submissionId) {

@@ -92,7 +92,7 @@ function shouldRetryEmailError(error: unknown): boolean {
   }
 
   // Check Cloudflare Email Service error codes
-  const errorCode = (error as any)?.code;
+  const errorCode = (error as { code?: string } | null)?.code;
   if (errorCode) {
     // Cloudflare Email Service - retryable errors
     if (errorCode === 'E_RATE_LIMIT_EXCEEDED') {

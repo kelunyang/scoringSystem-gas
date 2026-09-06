@@ -149,7 +149,7 @@ export async function updateProject(
     const ALLOWED_PROJECT_COLUMNS = ['projectName', 'description', 'status', 'scoreRangeMin', 'scoreRangeMax', 'lastModified'];
 
     // Filter allowedUpdates to only include whitelisted columns
-    const safeUpdates: Record<string, any> = {};
+    const safeUpdates: Record<string, SqlBindValue> = {};
     for (const key of ALLOWED_PROJECT_COLUMNS) {
       if (key in allowedUpdates) {
         safeUpdates[key] = allowedUpdates[key];
@@ -440,9 +440,9 @@ async function getAllProjectMembers(env: Env, projectId: string): Promise<string
         UNION
         SELECT userEmail FROM projectviewers WHERE projectId = ? AND isActive = 1
       )
-    `).bind(projectId, projectId).all();
+    `).bind(projectId, projectId).all<{ userEmail: string }>();
 
-    return result.results?.map((r: any) => r.userEmail) || [];
+    return result.results?.map(r => r.userEmail) || [];
   } catch (error) {
     console.error('[getAllProjectMembers] Error:', error);
     return [];

@@ -39,7 +39,7 @@ export async function logEvent(
   eventType: string,
   entityType: string,
   entityId: string,
-  details: any = {}
+  details: Record<string, unknown> = {}
 ): Promise<void> {
   try {
     const logId = generateId('evtlog');

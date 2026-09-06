@@ -19,6 +19,19 @@ import { parseJSON } from '../../utils/json';
  *
  * @param zeroScoreThreshold - Points below this threshold are treated as 0 score (default: 0 = disabled)
  */
+/** 排行榜上的一列。非同組的使用者名稱會被遮蔽（isMasked）。 */
+interface LeaderboardEntry {
+  userEmail: string;
+  currentBalance: number;
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarSeed: string | null;
+  avatarStyle: string;
+  avatarOptions: Record<string, unknown>;
+  isMasked: boolean;
+}
+
 export async function getProjectWalletLadder(
   env: Env,
   userEmail: string,
@@ -82,7 +95,7 @@ export async function getProjectWalletLadder(
       });
     }
 
-    let walletData: any[] = [];
+    let walletData: LeaderboardEntry[] = [];
 
     if (hasFullAccess) {
       // Teacher/Admin/Observer (Level 0-2): Return all users with full data

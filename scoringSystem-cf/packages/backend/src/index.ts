@@ -75,7 +75,14 @@ app.get('/', async (c) => {
       dbInitialized = false;
     }
 
-    const response: any = {
+    const response: {
+      name: string;
+      version: string;
+      status: string;
+      database: string;
+      timestamp: number;
+      setup?: { message: string; instructions: string[] };
+    } = {
       name: 'Scoring System API',
       version: '1.0.0',
       status: 'healthy',

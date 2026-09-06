@@ -110,7 +110,7 @@ async function sendEmailViaCloudflare(
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown Cloudflare Email error';
-    const errorCode = (error as any)?.code;
+    const errorCode = (error as { code?: string } | null)?.code;
 
     // Map Cloudflare error codes to errorType
     let errorType = 'cloudflare_email_error';

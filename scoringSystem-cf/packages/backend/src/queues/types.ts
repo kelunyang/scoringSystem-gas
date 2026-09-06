@@ -229,7 +229,7 @@ export interface NotificationData {
   transactionId?: string;
   settlementId?: string;
   rankingProposalId?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export const NotificationQueueMessageSchema = z.discriminatedUnion('type', [

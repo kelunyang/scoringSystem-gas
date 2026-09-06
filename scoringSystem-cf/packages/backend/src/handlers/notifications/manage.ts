@@ -12,6 +12,25 @@ import type { SqlBindValue } from '../../types';
 /**
  * Get user's unread notification count
  */
+/** notifications LEFT JOIN projects 的一列。 */
+interface NotificationRow {
+  notificationId: string;
+  type: string;
+  title: string;
+  content: string;
+  projectId: string | null;
+  projectName: string | null;
+  stageId: string | null;
+  commentId: string | null;
+  relatedEntityId: string | null;
+  isRead: number;
+  emailSent: number;
+  createdTime: number;
+  readTime: number | null;
+  /** JSON 字串或已解析的物件——舊資料兩種都有。 */
+  metadata: string | Record<string, unknown> | null;
+}
+
 export async function getUserNotificationCount(
   env: Env,
   userEmail: string
@@ -106,10 +125,10 @@ export async function getUserNotifications(
     query += ` LIMIT ? OFFSET ?`;
     params.push(limit, offset);
 
-    const result = await env.DB.prepare(query).bind(...params).all();
+    const result = await env.DB.prepare(query).bind(...params).all<NotificationRow>();
 
     // Enrich notifications
-    const notifications = result.results?.map((n: any) => {
+    const notifications = result.results?.map(n => {
       // Parse metadata if it's a JSON string
       let metadata = n.metadata;
       if (typeof n.metadata === 'string') {

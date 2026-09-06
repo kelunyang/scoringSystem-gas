@@ -8,7 +8,7 @@ import type { Env } from '../../types'
 /**
  * Success response helper
  */
-function successResponse(data: any): Response {
+function successResponse(data: unknown): Response {
   return new Response(JSON.stringify({ success: true, data }), {
     headers: { 'Content-Type': 'application/json' }
   })

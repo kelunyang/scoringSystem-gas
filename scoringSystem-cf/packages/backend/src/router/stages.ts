@@ -347,17 +347,17 @@ app.post(
 
     // Send notifications for status change
     try {
-      const stageName = (stage as any).stageName || '未命名階段';
+      const stageName = stage?.stageName || '未命名階段';
 
       // Get all project viewers (teachers, observers, members)
       const viewers = await c.env.DB.prepare(`
         SELECT userEmail FROM projectviewers
         WHERE projectId = ? AND isActive = 1
-      `).bind(body.projectId).all();
+      `).bind(body.projectId).all<{ userEmail: string }>();
 
       if (viewers.results && viewers.results.length > 0) {
         const { createBatchNotifications } = await import('../utils/notifications.js');
-        await createBatchNotifications(c.env, viewers.results.map((v: any) => ({
+        await createBatchNotifications(c.env, viewers.results.map(v => ({
           targetUserEmail: v.userEmail,
           type: 'stage_voting',
           title: '階段進入投票',

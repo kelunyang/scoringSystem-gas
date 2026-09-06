@@ -721,10 +721,10 @@ authRouter.post(
     let verified: boolean;
 
     // Fetch user first to check TOTP status
-    const user: any = await c.env.DB
+    const user = await c.env.DB
       .prepare('SELECT * FROM users WHERE userEmail = ?')
       .bind(body.userEmail)
-      .first();
+      .first<Record<string, unknown>>();
 
     if (!user) {
       return c.json({
@@ -1714,7 +1714,7 @@ authRouter.post(
     const authUser = c.get('user');
 
     // 可選 attachment：'platform'（綁這台電腦）/ 'cross-platform'（綁手機，跳 QR）
-    const body = await c.req.json().catch(() => ({} as any));
+    const body = await c.req.json().catch(() => ({})) as { attachment?: string };
     const attachment =
       body?.attachment === 'platform' || body?.attachment === 'cross-platform'
         ? body.attachment

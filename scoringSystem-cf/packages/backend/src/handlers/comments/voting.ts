@@ -11,6 +11,14 @@ import { getEffectiveScoringConfig } from '../../utils/scoring-config';
 /**
  * Check if user is eligible to vote on comments
  */
+/** 一則評論在各種排名裡的名次。沒有排名時是 null。 */
+interface CommentRankingSummary {
+  commentId: string;
+  userVoteRank: number | null;
+  teacherVoteRank: number | null;
+  settlementRank: number | null;
+}
+
 export async function checkVotingEligibility(
   env: Env,
   userEmail: string,
@@ -276,7 +284,7 @@ export async function getCommentRankings(
   commentId: string
 ): Promise<Response> {
   try {
-    const rankings: any = {
+    const rankings: CommentRankingSummary = {
       commentId,
       userVoteRank: null,
       teacherVoteRank: null,
@@ -295,7 +303,8 @@ export async function getCommentRankings(
     if (userProposalResult && userProposalResult.rankingData) {
       try {
         const rankingData = JSON.parse(userProposalResult.rankingData as string);
-        const commentRanking = rankingData.find((r: any) => r.commentId === commentId);
+        const commentRanking = (rankingData as Array<{ commentId: string; rank: number }>)
+          .find(r => r.commentId === commentId);
         if (commentRanking) {
           rankings.userVoteRank = commentRanking.rank;
         }
@@ -360,7 +369,7 @@ export async function getStageCommentRankings(
         AND (pv.role IS NULL OR pv.role != 'teacher')
     `).bind(projectId, stageId).all();
 
-    const rankingsMap: Record<string, any> = {};
+    const rankingsMap: Record<string, CommentRankingSummary> = {};
 
     if (!commentsResult.results || commentsResult.results.length === 0) {
       return successResponse(rankingsMap);

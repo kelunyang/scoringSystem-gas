@@ -8,6 +8,7 @@ import { successResponse, errorResponse } from '../../utils/response';
 import { generateId } from '../../utils/id-generator';
 import { logApiAction, logProjectOperation } from '../../utils/logging';
 import { isSudoWriteBlocked } from '../../utils/sudo-db-proxy';
+import type { SubmissionRankingEntry } from '@repo/shared';
 
 /**
  * Submit a group ranking proposal
@@ -19,7 +20,8 @@ export async function submitGroupRanking(
   requestData: {
     projectId: string;
     stageId: string;
-    rankingData: any;
+    /** 提交的成果排名，一定是陣列（zod schema 已驗證）。 */
+    rankingData: SubmissionRankingEntry[];
   }
 ): Promise<Response> {
   const { userEmail } = context;
@@ -208,11 +210,11 @@ export async function submitGroupRanking(
       proposalId,
       {
         submissionCount: rankingData.length,
-        submissionIds: rankingData.map((item: any) => item.submissionId).filter(Boolean),
+        submissionIds: rankingData.map(item => item.submissionId).filter(Boolean),
         groupId,
         stageId,
         proposerEmail: userEmail,
-        rankingPreview: rankingData.slice(0, 3).map((item: any) => ({
+        rankingPreview: rankingData.slice(0, 3).map(item => ({
           submissionId: item.submissionId,
           rank: item.rank
         }))

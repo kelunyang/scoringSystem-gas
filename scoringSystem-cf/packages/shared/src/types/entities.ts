@@ -478,14 +478,24 @@ export interface AvatarOptions {
   [key: string]: unknown;
 }
 
+/** 成果排名裡的一列。 */
+export interface SubmissionRankingEntry {
+  submissionId: string;
+  rank: number;
+}
+
+/** 評論排名裡的一列。 */
+export interface CommentRankingEntry {
+  commentId: string;
+  rank: number;
+}
+
 /**
  * 排名提案裡的一列：哪一個對象、排第幾。
- * 成果排名用 submissionId，評論排名用 commentId
- * （handlers/comments/voting.ts 的 rankingData 參數即此形狀）。
+ * 成果排名與評論排名共用同一個 rankingData 欄位，
+ * 只有識別欄位不同——處理單一種排名的地方請直接用上面兩個具名型別。
  */
-export type RankingEntry =
-  | { submissionId: string; rank: number }
-  | { commentId: string; rank: number };
+export type RankingEntry = SubmissionRankingEntry | CommentRankingEntry;
 
 /**
  * Ranking Proposal entity

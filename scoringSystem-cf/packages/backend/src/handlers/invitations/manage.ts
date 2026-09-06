@@ -26,6 +26,23 @@ interface InvitationRow {
 /**
  * List invitations created by a user
  */
+/** invitation_codes_with_status LEFT JOIN users 的一列。 */
+interface InvitationListRow {
+  invitationId: string;
+  displayCode: string | null;
+  targetEmail: string | null;
+  createdBy: string | null;
+  creatorDisplayName: string | null;
+  creatorEmail: string | null;
+  createdTime: number;
+  expiryTime: number | null;
+  status: string;
+  usedTime: number | null;
+  /** JSON 字串陣列。 */
+  defaultTags: string | null;
+  defaultGlobalGroups: string | null;
+}
+
 export async function getUserInvitations(
   env: Env,
   userEmail: string
@@ -48,9 +65,9 @@ export async function getUserInvitations(
       LEFT JOIN users u ON ic.createdBy = u.userId
       WHERE ic.createdBy = ?
       ORDER BY ic.createdTime DESC
-    `).bind(userId.userId).all();
+    `).bind(userId.userId).all<InvitationListRow>();
 
-    const formattedInvitations = invitations.results.map((inv: any) => ({
+    const formattedInvitations = invitations.results.map(inv => ({
       invitationId: inv.invitationId,
       invitationCode: inv.displayCode || '****-****-****',
       targetEmail: inv.targetEmail,

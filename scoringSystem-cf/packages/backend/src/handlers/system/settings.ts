@@ -7,6 +7,7 @@ import type { Env } from '../../types';
 import { successResponse, errorResponse, ERROR_CODES } from '../../utils/response';
 import { getSystemTitle } from '../../utils/email';
 import { getConfigValue } from '../../utils/config';
+import type { ConfigValue } from '@utils/config';
 
 /**
  * Get system settings (for admin dashboard)
@@ -120,7 +121,7 @@ async function getDatabaseStats(db: D1Database): Promise<{
 export async function updateSystemSettings(
   env: Env,
   db: D1Database,
-  updates: Record<string, any>
+  updates: Record<string, ConfigValue>
 ): Promise<Response> {
   try {
     // Note: Environment variables (vars) cannot be updated at runtime
@@ -135,7 +136,7 @@ export async function updateSystemSettings(
       'maxProjectNameLength'
     ];
 
-    const settingsToUpdate: Record<string, any> = {};
+    const settingsToUpdate: Record<string, ConfigValue> = {};
     for (const key of allowedSettings) {
       if (updates[key] !== undefined) {
         settingsToUpdate[key] = updates[key];

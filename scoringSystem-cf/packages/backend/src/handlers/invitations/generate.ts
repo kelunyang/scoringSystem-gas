@@ -550,7 +550,7 @@ function generateReadableCode(): string {
 async function getActiveInvitationByEmail(
   env: Env,
   targetEmail: string
-): Promise<any | null> {
+): Promise<Record<string, unknown> | null> {
   try {
     const currentTime = Date.now();
     const normalizedEmail = targetEmail.trim().toLowerCase();

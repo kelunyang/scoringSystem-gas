@@ -10,6 +10,14 @@ import { successResponse, errorResponse } from '../../utils/response';
  * Get teacher rankings for a stage
  * Permission: Level 1 (Teachers only), or project creator/admin
  */
+/** 教師排名清單裡的一項：排了哪個對象、第幾名。 */
+interface TeacherRankingItem {
+  submissionId?: string;
+  commentId?: string;
+  rank: number;
+  [field: string]: unknown;
+}
+
 export async function getTeacherRankings(
   env: Env,
   context: { userEmail: string; userId: string },
@@ -92,7 +100,16 @@ export async function getTeacherRankings(
       LEFT JOIN users u ON u.userEmail = tsr.teacherEmail
       WHERE tsr.stageId = ? AND tsr.projectId = ?
       ORDER BY tsr.teacherEmail, tsr.rank
-    `).bind(stageId, projectId).all();
+    `).bind(stageId, projectId).all<{
+      teacherRankingId: string;
+      teacherEmail: string;
+      submissionId: string;
+      groupId: string;
+      rank: number;
+      createdTime: number;
+      groupName: string | null;
+      teacherName: string | null;
+    }>();
 
     // Get teacher comment rankings
     const commentRankings = await env.DB.prepare(`
@@ -110,14 +127,23 @@ export async function getTeacherRankings(
       LEFT JOIN users ua ON ua.userEmail = tcr.authorEmail
       WHERE tcr.stageId = ? AND tcr.projectId = ?
       ORDER BY tcr.teacherEmail, tcr.rank
-    `).bind(stageId, projectId).all();
+    `).bind(stageId, projectId).all<{
+      rankingId: string;
+      teacherEmail: string;
+      commentId: string;
+      authorEmail: string;
+      rank: number;
+      createdTime: number;
+      teacherName: string | null;
+      authorName: string | null;
+    }>();
 
     // Group rankings by teacher
     const teacherData = new Map<string, {
       teacherEmail: string;
       teacherName: string;
-      submissionRankings: any[];
-      commentRankings: any[];
+      submissionRankings: TeacherRankingItem[];
+      commentRankings: TeacherRankingItem[];
       lastUpdated: number;
     }>();
 
@@ -127,10 +153,10 @@ export async function getTeacherRankings(
       if (!teacherData.has(teacherEmail)) {
         teacherData.set(teacherEmail, {
           teacherEmail,
-          teacherName: (ranking.teacherName as string) || teacherEmail,
+          teacherName: ranking.teacherName || teacherEmail,
           submissionRankings: [],
           commentRankings: [],
-          lastUpdated: ranking.createdTime as number
+          lastUpdated: ranking.createdTime
         });
       }
 
@@ -144,8 +170,8 @@ export async function getTeacherRankings(
         createdTime: ranking.createdTime
       });
 
-      if ((ranking.createdTime as number) > teacher.lastUpdated) {
-        teacher.lastUpdated = ranking.createdTime as number;
+      if (ranking.createdTime > teacher.lastUpdated) {
+        teacher.lastUpdated = ranking.createdTime;
       }
     }
 
@@ -155,10 +181,10 @@ export async function getTeacherRankings(
       if (!teacherData.has(teacherEmail)) {
         teacherData.set(teacherEmail, {
           teacherEmail,
-          teacherName: (ranking.teacherName as string) || teacherEmail,
+          teacherName: ranking.teacherName || teacherEmail,
           submissionRankings: [],
           commentRankings: [],
-          lastUpdated: ranking.createdTime as number
+          lastUpdated: ranking.createdTime
         });
       }
 
@@ -172,8 +198,8 @@ export async function getTeacherRankings(
         createdTime: ranking.createdTime
       });
 
-      if ((ranking.createdTime as number) > teacher.lastUpdated) {
-        teacher.lastUpdated = ranking.createdTime as number;
+      if (ranking.createdTime > teacher.lastUpdated) {
+        teacher.lastUpdated = ranking.createdTime;
       }
     }
 

@@ -221,8 +221,8 @@ app.post(
       body.stageId,
       {
         rankings: {
-          submissions: (body.rankings as any).submissions || [],
-          comments: (body.rankings as any).comments || []
+          submissions: body.rankings.submissions || [],
+          comments: body.rankings.comments || []
         }
       }
     );

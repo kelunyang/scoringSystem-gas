@@ -8,16 +8,28 @@ import { validateWeakOrder } from '@repo/shared';
 /**
  * 驗證成果是否符合投票資格
  */
+/**
+ * 驗證結果。用 valid 判別，所以通過時 submission 必定存在。
+ */
+type SubmissionEligibility =
+  | { valid: true; submission: VotableSubmissionRow; error?: undefined }
+  | { valid: false; error: string; submission?: undefined };
+
+/** 檢查「這份成果可不可以被投票」時讀到的欄位。 */
+interface VotableSubmissionRow {
+  submissionId: string;
+  groupId: string;
+  status: string;
+  submitTime: number;
+  contentMarkdown: string | null;
+}
+
 export async function validateSubmissionEligibility(
   db: D1Database,
   projectId: string,
   submissionId: string,
   excludeGroupId?: string
-): Promise<{
-  valid: boolean;
-  error?: string;
-  submission?: any;
-}> {
+): Promise<SubmissionEligibility> {
   // 1. 獲取成果資料
   const submission = await db.prepare(`
     SELECT
@@ -28,7 +40,7 @@ export async function validateSubmissionEligibility(
       contentMarkdown
     FROM submissions_with_status
     WHERE submissionId = ? AND projectId = ?
-  `).bind(submissionId, projectId).first();
+  `).bind(submissionId, projectId).first<VotableSubmissionRow>();
 
   if (!submission) {
     return { valid: false, error: '成果不存在' };
