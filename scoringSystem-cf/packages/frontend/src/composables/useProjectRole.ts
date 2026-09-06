@@ -15,7 +15,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { rpcClient } from '@/utils/rpc-client'
 import { useCurrentUser } from './useAuth'
 import { usePermissions } from './usePermissions'
-import type { ProjectCoreData } from './useProjectDetail'
+import { apiErrorCode, apiErrorMessage } from '@/utils/api-types'
 import { hasProjectAdminRole } from './useProjectAdminRole'
 
 /**
@@ -31,18 +31,18 @@ export function useProjectViewers(projectId: string | Ref<string | null>) {
   return useQuery({
     queryKey: ['projectViewers', projectIdValue],
     queryFn: async () => {
-      const httpResponse = await rpcClient.api.projects['viewers/list'].$post({
-        json: { projectId: projectIdValue.value }
+      const httpResponse = await rpcClient.api.projects.viewers.list.$post({
+        json: { projectId: projectIdValue.value ?? '' }
       })
       const result = await httpResponse.json()
       if (!result.success) {
         // Silently handle permission errors for regular members
         // They don't need to see the full viewer list - backend handles role assignment
-        if (result.error?.code === 'PERMISSION_DENIED') {
+        if (apiErrorCode(result.error) === 'PERMISSION_DENIED') {
           console.debug('[useProjectRole] User does not have permission to view project viewers list (this is normal for regular members)')
           return []
         }
-        throw new Error(result.error?.message || 'Failed to fetch project viewers')
+        throw new Error(apiErrorMessage(result.error) || 'Failed to fetch project viewers')
       }
       return result.data
     },
@@ -68,11 +68,11 @@ export function useProjectRole(projectId: string | Ref<string | null>) {
    * Query project core data to check userGroups for Level 3 detection
    * Only enabled when we need to check for student membership
    */
-  const projectCoreQuery = useQuery<ProjectCoreData>({
+  const projectCoreQuery = useQuery({
     queryKey: ['project', 'core', projectIdValue],
     queryFn: async () => {
       const httpResponse = await rpcClient.api.projects.core.$post({
-        json: { projectId: projectIdValue.value }
+        json: { projectId: projectIdValue.value ?? '' }
       })
       const response = await httpResponse.json()
       if (!response.success) {
@@ -200,7 +200,7 @@ export function useProjectRole(projectId: string | Ref<string | null>) {
     const currentUserEmail = userEmail.value
 
     if (userGroups && currentUserEmail) {
-      const hasActiveGroup = userGroups.some((group: any) =>
+      const hasActiveGroup = userGroups.some(group =>
         group.userEmail === currentUserEmail && group.isActive
       )
       if (hasActiveGroup) {

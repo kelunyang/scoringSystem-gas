@@ -154,20 +154,13 @@ export async function submitDeliverable(
         LIMIT 1
       `).bind(projectId, stageId, groupId).first();
 
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'Submission already recorded (duplicate prevented)',
-        data: {
-          deduped: true,
-          submissionId: recentSubmission?.submissionId || 'unknown',
-          groupId,
-          stageId,
-          status: recentSubmission?.status || 'submitted'
-        }
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return successResponse({
+        deduped: true,
+        submissionId: (recentSubmission?.submissionId as string | undefined) || 'unknown',
+        groupId,
+        stageId,
+        status: (recentSubmission?.status as string | undefined) || 'submitted'
+      }, 'Submission already recorded (duplicate prevented)');
     }
     // ========== END DEDUPLICATION ==========
 
@@ -676,20 +669,13 @@ export async function withdrawSubmission(
 
     if (!isNewAction) {
       // Duplicate withdrawal attempt - return already withdrawn submission
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'Submission already withdrawn (duplicate prevented)',
-        data: {
-          deduped: true,
-          submissionId,
-          status: 'withdrawn',
-          groupId: submission.groupId,
-          stageId: submission.stageId
-        }
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return successResponse({
+        deduped: true,
+        submissionId,
+        status: 'withdrawn',
+        groupId: submission.groupId as string,
+        stageId: submission.stageId as string
+      }, 'Submission already withdrawn (duplicate prevented)');
     }
 
     // Soft delete with atomic check:
@@ -1285,23 +1271,16 @@ export async function voteParticipationProposal(
       const totalVotesCount = existingVotes.results.length;
       const isApproved = agreeCount >= totalMembers && agreeCount > 0;
 
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'Vote already recorded (duplicate prevented)',
-        data: {
-          deduped: true,
-          votingSummary: {
-            totalMembers,
-            agreeVotes: agreeCount,
-            disagreeVotes: totalVotesCount - agreeCount,
-            totalVotes: totalVotesCount,
-            isApproved
-          }
+      return successResponse({
+        deduped: true,
+        votingSummary: {
+          totalMembers,
+          agreeVotes: agreeCount,
+          disagreeVotes: totalVotesCount - agreeCount,
+          totalVotes: totalVotesCount,
+          isApproved
         }
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      }, 'Vote already recorded (duplicate prevented)');
     }
     // ========== END DEDUPLICATION ==========
 

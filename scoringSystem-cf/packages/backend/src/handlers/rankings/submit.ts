@@ -120,20 +120,13 @@ export async function submitGroupRanking(
         LIMIT 1
       `).bind(projectId, stageId, groupId).first();
 
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'Ranking proposal already submitted (duplicate prevented)',
-        data: {
-          deduped: true,
-          proposalId: recentProposal?.proposalId || 'unknown',
-          groupId,
-          stageId,
-          status: recentProposal?.status || 'pending'
-        }
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return successResponse({
+        deduped: true,
+        proposalId: recentProposal?.proposalId || 'unknown',
+        groupId,
+        stageId,
+        status: recentProposal?.status || 'pending'
+      }, 'Ranking proposal already submitted (duplicate prevented)');
     }
     // ========== END DEDUPLICATION ==========
 

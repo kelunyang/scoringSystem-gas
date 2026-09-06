@@ -4,31 +4,10 @@
  */
 
 import type { Env } from '../../types'
-
-/**
- * Success response helper
- */
-function successResponse(data: unknown): Response {
-  return new Response(JSON.stringify({ success: true, data }), {
-    headers: { 'Content-Type': 'application/json' }
-  })
-}
-
-/**
- * Error response helper
- */
-function errorResponse(errorCode: string, message: string): Response {
-  return new Response(
-    JSON.stringify({
-      success: false,
-      error: { code: errorCode, message }
-    }),
-    {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    }
-  )
-}
+// 這個檔案原本自己重寫了一份 successResponse／errorResponse，
+// 回傳裸 Response 且 data 標成 unknown——RPC 型別因此拿不到形狀。
+// 改用共用的（順帶取得正確的 HTTP 狀態碼對照）。
+import { successResponse, errorResponse } from '@utils/response'
 
 /**
  * Batch query user displayNames

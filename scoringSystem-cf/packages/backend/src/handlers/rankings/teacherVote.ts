@@ -138,18 +138,11 @@ export async function submitTeacherComprehensiveVote(
         LIMIT 10
       `).bind(projectId, stageId, userEmail).first();
 
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'Teacher ranking already recorded (duplicate prevented)',
-        data: {
-          deduped: true,
-          submissionRankingsCount: recentSubmissionRankings?.count || 0,
-          commentRankingsCount: recentCommentRankings?.count || 0
-        }
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return successResponse({
+        deduped: true,
+        submissionRankingsCount: recentSubmissionRankings?.count || 0,
+        commentRankingsCount: recentCommentRankings?.count || 0
+      }, 'Teacher ranking already recorded (duplicate prevented)');
     }
     // ========== END DEDUPLICATION ==========
 

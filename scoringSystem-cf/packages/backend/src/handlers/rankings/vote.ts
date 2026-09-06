@@ -142,26 +142,19 @@ export async function voteOnRankingProposal(
         SELECT status, votingResult FROM rankingproposals_with_status WHERE proposalId = ?
       `).bind(proposalId).first();
 
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'Vote already recorded (duplicate prevented)',
-        data: {
-          deduped: true,
-          voteId: 'deduped',
-          proposalId,
-          votingSummary: {
-            totalMembers,
-            agreeVotes: agreeCount,
-            disagreeVotes: disagreeCount,
-            totalVotes: existingVotes.results.length,
-            votingResult: currentProposal?.votingResult || 'no_votes',
-            status: currentProposal?.status || 'pending'
-          }
+      return successResponse({
+        deduped: true,
+        voteId: 'deduped',
+        proposalId,
+        votingSummary: {
+          totalMembers,
+          agreeVotes: agreeCount,
+          disagreeVotes: disagreeCount,
+          totalVotes: existingVotes.results.length,
+          votingResult: currentProposal?.votingResult || 'no_votes',
+          status: currentProposal?.status || 'pending'
         }
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      }, 'Vote already recorded (duplicate prevented)');
     }
     // ========== END DEDUPLICATION ==========
 

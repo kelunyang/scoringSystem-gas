@@ -25,6 +25,30 @@ function extractParticipants(participationProposal: Record<string, number> | nul
 /**
  * Get all versions of submissions for a stage/group
  */
+/** `getSubmissionVersions` 那句 SELECT 選出來的欄位 */
+interface SubmissionVersionRow {
+  submissionId: string;
+  stageId: string;
+  groupId: string;
+  contentMarkdown: string | null;
+  /** JSON 字串 */
+  actualAuthors: string | null;
+  /** JSON 字串 */
+  participationProposal: string | null;
+  submitTime: number;
+  status: string;
+  updatedAt: number | null;
+  withdrawnTime: number | null;
+  withdrawnBy: string | null;
+  groupName: string;
+  submitterEmail: string;
+  submitterName: string | null;
+  submitterAvatarSeed: string | null;
+  submitterAvatarStyle: string | null;
+  submitterAvatarOptions: string | null;
+  withdrawnByName: string | null;
+}
+
 export async function getSubmissionVersions(
   env: Env,
   userEmail: string,
@@ -130,7 +154,7 @@ export async function getSubmissionVersions(
     query += ` ORDER BY s.groupId, s.submitTime ASC`;
 
 
-    const result = await env.DB.prepare(query).bind(...bindings).all();
+    const result = await env.DB.prepare(query).bind(...bindings).all<SubmissionVersionRow>();
 
     // Check if user is a member of the queried group (for privacy protection)
     let isGroupMember = false;

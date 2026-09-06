@@ -299,6 +299,7 @@ import { useSudoStore } from '@/stores/sudo'
 // Drawer Breadcrumb
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 import { rpcClient } from '@/utils/rpc-client'
+import type { ApiData } from '@/utils/api-types'
 import { ElMessage } from 'element-plus'
 
 // TypeScript interfaces
@@ -315,16 +316,8 @@ interface GroupMember {
   finalWeight?: number   // Final calculated weight for scoring
 }
 
-interface HistoricalVersion {
-  submissionId: string
-  content: string
-  submitter: string
-  submittedTime: string
-  participationProposal?: Record<string, number>
-  actualAuthors?: string[]
-  status?: string
-  groupId?: string
-}
+/** 歷史版本的形狀從端點推導（見 plan/issue.md #011） */
+type HistoricalVersion = ApiData<typeof rpcClient.api.submissions.versions.$post>['versions'][number]
 
 interface CurrentGroup {
   groupId: string
@@ -783,7 +776,9 @@ const loadHistoricalVersions = async (): Promise<void> => {
       json: {
         projectId: props.projectId,
         stageId: props.stageId,
-        groupId: props.currentGroup?.groupId
+        // schema 要的是 options.groupId；原本放在頂層，等於從來沒傳過，
+        // 教師／管理員因此拿到整個階段所有組的版本
+        options: { groupId: props.currentGroup?.groupId }
       }
     })
 
@@ -795,15 +790,16 @@ const loadHistoricalVersions = async (): Promise<void> => {
 
     const response = await httpResponse.json()
 
-    console.log('📦 [loadHistoricalVersions] Response data:', {
-      success: response.success,
-      hasData: !!response.data,
-      hasVersions: !!response.data?.versions,
-      versionsCount: response.data?.versions?.length || 0,
-      error: response.error
-    })
+    if (!response.success) {
+      console.log('📦 [loadHistoricalVersions] Response 失敗:', response.error)
+    }
 
     if (response.success) {
+      console.log('📦 [loadHistoricalVersions] Response data:', {
+        hasData: !!response.data,
+        hasVersions: !!response.data?.versions,
+        versionsCount: response.data?.versions?.length || 0
+      })
       console.log('✅ [loadHistoricalVersions] API call successful', {
         versionsCount: response.data?.versions?.length || 0,
         metadata: response.data?.metadata,

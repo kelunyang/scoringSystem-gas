@@ -119,19 +119,12 @@ export async function submitStageRankingVote(
         WHERE stageId = ? AND proposerUserId = ?
       `).bind(stageId, userId).first();
 
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'Stage ranking vote already recorded (duplicate prevented)',
-        data: {
-          deduped: true,
-          proposalId: existingVote?.proposalId || 'unknown',
-          stageId,
-          action: 'deduped'
-        }
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return successResponse({
+        deduped: true,
+        proposalId: existingVote?.proposalId || 'unknown',
+        stageId,
+        action: 'deduped'
+      }, 'Stage ranking vote already recorded (duplicate prevented)');
     }
     // ========== END DEDUPLICATION ==========
 

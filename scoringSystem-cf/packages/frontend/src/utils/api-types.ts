@@ -24,3 +24,27 @@ export type ApiData<T extends (...args: never[]) => unknown> =
 /** 端點失敗回應（success: false）裡 `error` 的型別 */
 export type ApiError<T extends (...args: never[]) => unknown> =
   Extract<InferResponseType<T>, { success: false }> extends { error: infer E } ? E : never
+
+/**
+ * 從錯誤回應的 `error` 取出錯誤碼。
+ *
+ * 端點的失敗回應是聯集：我們自己的 `{ code, message }`，加上
+ * `zValidator` 驗證失敗時 Zod 丟回來的形狀（沒有 `code`）。
+ * 呼叫端多半只在意自己的錯誤碼，這裡收一次。
+ */
+export function apiErrorCode(error: unknown): string | undefined {
+  if (error && typeof error === 'object' && 'code' in error) {
+    const code = (error as { code: unknown }).code
+    if (typeof code === 'string') return code
+  }
+  return undefined
+}
+
+/** 從錯誤回應的 `error` 取出可顯示的訊息；取不到就回 undefined。 */
+export function apiErrorMessage(error: unknown): string | undefined {
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message: unknown }).message
+    if (typeof message === 'string') return message
+  }
+  return undefined
+}
