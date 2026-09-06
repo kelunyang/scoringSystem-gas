@@ -11,8 +11,9 @@ import type { Stage as SharedStage } from '@repo/shared'
 /**
  * 階段狀態，直接取自 @repo/shared 的 Stage，避免兩邊各寫一份而分歧。
  *
- * 注意：`draft` / `closed` / `paused` 目前在 getStageStatusText 與
- * getStageStatusType 都沒有對應分支，會落到 default（「尚未開始」／info）。
+ * `stages_with_status` VIEW 實際只會產出七個值（archived / settling /
+ * completed / paused / voting / active / pending，見 0007_add_stage_pause.sql）。
+ * shared 的聯集另外含 `draft` 與 `closed`，後端沒有任何路徑會產生它們。
  */
 export type StageStatus = SharedStage['status']
 export type StageStatusType = 'info' | 'success' | 'warning' | 'primary' | 'danger'
@@ -59,6 +60,7 @@ export function getStageStatusText(status: StageStatus | null | undefined): stri
     case 'settling': return '結算中'
     case 'completed': return '已結束'
     case 'archived': return '已封存'
+    case 'paused': return '已暫停'
     default: return '尚未開始'
   }
 }
@@ -78,6 +80,7 @@ export function getStageStatusType(status: StageStatus | null | undefined): Stag
     case 'settling': return 'warning'
     case 'completed': return 'primary'
     case 'archived': return 'info'
+    case 'paused': return 'warning'
     default: return 'info'
   }
 }

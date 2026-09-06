@@ -15,40 +15,35 @@
 
 ## A. 未解決 Issues
 
-### #012 ｜ 三個階段狀態在 UI 沒有對應文字（2026-09-06）
+### #012 ｜ shared 的 `Stage['status']` 含兩個後端不會產生的值（2026-09-06）
 
-**現象**：`utils/stageStatus.ts` 的 `getStageStatusText()` 與
-`getStageStatusType()` 只處理六個狀態：
+**已修的部分**：`utils/stageStatus.ts` 的 `getStageStatusText()` 與
+`getStageStatusType()` 漏了 `paused`，導致管理端的階段清單把已暫停的
+階段顯示成「尚未開始」＋灰色，旁邊卻同時有「恢復階段」按鈕。
+已補上（「已暫停」＋ warning），並加了守門測試
+`utils/__tests__/stageStatus.test.ts`。
 
-```ts
-case 'pending' | 'active' | 'voting' | 'settling' | 'completed' | 'archived'
-default: return '尚未開始'   //  ← draft / closed / paused 都掉進這裡
+**仍然開放的**：`@repo/shared` 的 `Stage['status']` 宣告了九個值，
+但 `stages_with_status` VIEW（`0007_add_stage_pause.sql:22-29`）
+只會產出七個：
+
+```
+archived / settling / completed / paused / voting / active / pending
 ```
 
-而後端（`@repo/shared` 的 `Stage['status']`，對應
-`stages_with_status` VIEW）實際會回**九個**：多了
-`draft`、`closed`、`paused`。
+`draft` 與 `closed` **後端沒有任何路徑會產生**，前端也沒有一處判斷它們
+（`stages.status` 欄位本身在 0001 就標了 DEPRECATED，所有讀取都走 VIEW）。
 
-所以一個「已暫停」的階段，在 UI 上顯示成「尚未開始」，
-狀態標籤是灰色的 info。`draft` 與 `closed` 同理。
+**為什麼沒有順手刪掉**：收窄聯集是契約變更。雖然目前查不到任何使用者，
+但 `stages.status` 這個廢棄欄位若有歷史殘值，收窄後型別會宣稱一件
+資料庫不保證的事。**要刪之前先確認遠端 `stages.status` 的實際值分布**：
 
-**怎麼發現的**：2026-09-06 第二輪型別清理。前端本來自己寫了一份
-六個值的 `StageStatus`，與 shared 分歧；改成
-`SharedStage['status']` 之後，那三個沒有分支的狀態才浮出來。
-**這是 runtime 本來就有的行為，型別只是把它攤開**——不是這次改壞的。
+```sql
+SELECT status, COUNT(*) FROM stages GROUP BY status;
+```
 
-**未決的是產品問題，不是技術問題**：
-
-1. `paused` / `closed` / `draft` 這三個狀態，實際上會不會出現在
-   學生看得到的階段列表？如果只出現在管理端，優先度就低。
-2. 要顯示成什麼？（例如「已暫停」橘色 warning、「草稿」灰色 info、
-   「已關閉」灰色）——這是使用者要決定的文案與配色。
-
-在有答案之前不要自己補分支，補錯的文案比顯示「尚未開始」更糟。
-
-**位置**：`packages/frontend/src/utils/stageStatus.ts:44` 與 `:63`。
-
----
+確認只有 VIEW 那七個值（或該欄位確定不再被讀）之後再收窄，
+順便把 shared 的註解寫清楚它的唯一來源是 VIEW。
 
 ### #011 ｜ `AppType = any` 讓整個 RPC 層失去型別（2026-09-06）
 
