@@ -12,6 +12,14 @@ import { queueSingleNotification } from '../../queues/notification-producer';
 /**
  * Get user profile by userId
  */
+/** 顯示在使用者名稱旁的身分標記。 */
+interface UserBadge {
+  type: string;
+  label: string;
+  color: string;
+  icon: string;
+}
+
 export async function getUserProfile(
   env: Env,
   sessionUserId: string,
@@ -74,7 +82,7 @@ export async function updateUserProfile(
   env: Env,
   userId: string,
   userEmail: string,
-  updates: { displayName?: string; preferences?: any }
+  updates: { displayName?: string; preferences?: Record<string, unknown> }
 ): Promise<Response> {
   try {
     // Get current user profile for change tracking
@@ -137,7 +145,7 @@ export async function updateUserAvatar(
   env: Env,
   userId: string,
   userEmail: string,
-  avatarData: { avatarSeed?: string; avatarStyle?: string; avatarOptions?: any }
+  avatarData: { avatarSeed?: string; avatarStyle?: string; avatarOptions?: Record<string, string> }
 ): Promise<Response> {
   try {
     console.log('📝 Received avatar data:', avatarData);
@@ -319,9 +327,9 @@ export function generateAvatarSeed(userEmail: string): string {
 /**
  * Get user badges based on their roles
  */
-async function getUserBadges(env: Env, userEmail: string): Promise<any[]> {
+async function getUserBadges(env: Env, userEmail: string): Promise<UserBadge[]> {
   try {
-    const badges: any[] = [];
+    const badges: UserBadge[] = [];
 
     // Check if user is system admin
     const isAdmin = await checkGlobalPermission(env, userEmail, 'system_admin');

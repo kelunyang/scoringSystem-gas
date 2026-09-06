@@ -18,6 +18,25 @@ import { parseJSON } from '../../utils/json';
  * Note: Project-specific filtering should be done at the API/component level
  * by checking projectviewers table
  */
+/** 顯示在使用者名稱旁的身分標記。 */
+interface UserBadge {
+  type: string;
+  label: string;
+  color: string;
+  icon: string;
+}
+
+/** 使用者搜尋結果的一列。 */
+interface UserSearchRow {
+  userId: string;
+  userEmail: string;
+  displayName: string;
+  avatarSeed: string | null;
+  avatarStyle: string | null;
+  /** JSON 字串，讀出來會補上預設色。 */
+  avatarOptions: string | null;
+}
+
 export async function searchUsers(
   env: Env,
   sessionUserEmail: string,
@@ -48,16 +67,16 @@ export async function searchUsers(
       `%${sanitizedQuery}%`,
       `%${sanitizedQuery}%`,
       limit
-    ).all();
+    ).all<UserSearchRow>();
 
     // Get all user emails for batch badge query
-    const userEmails = users.results.map((u: any) => u.userEmail as string);
+    const userEmails = users.results.map(u => u.userEmail);
 
     // Batch query badges for all users (2 queries instead of N*3 queries)
     const badgesMap = await getBatchUserBadges(env, userEmails);
 
     // Format results using pre-fetched badges
-    const matchingUsers = users.results.map((user: any) => ({
+    const matchingUsers = users.results.map(user => ({
       userId: user.userId,
       userEmail: user.userEmail,
       displayName: user.displayName,
@@ -83,32 +102,6 @@ export async function searchUsers(
  * Helper: Get user tags for display
  * DISABLED: Tags system has been disabled
  */
-/* DISABLED - Tags system
-async function getUserTagsForDisplay(env: Env, userEmail: string): Promise<any[]> {
-  try {
-    const userId = await env.DB.prepare(`
-      SELECT userId FROM users WHERE userEmail = ?
-    `).bind(userEmail).first();
-
-    if (!userId) return [];
-
-    const tags = await env.DB.prepare(`
-      SELECT t.tagId, t.tagName
-      FROM usertags ut
-      JOIN globaltags t ON ut.tagId = t.tagId
-      WHERE ut.userEmail = ? AND ut.isActive = 1 AND t.isActive = 1
-    `).bind(userEmail).all();
-
-    return tags.results.map((t: any) => ({
-      tagId: t.tagId,
-      tagName: t.tagName
-    }));
-  } catch (error) {
-    console.warn('Get user tags for display error:', error);
-    return [];
-  }
-}
-*/
 
 /**
  * Helper: Get badges for multiple users in batch (optimized for search)
@@ -117,8 +110,8 @@ async function getUserTagsForDisplay(env: Env, userEmail: string): Promise<any[]
 async function getBatchUserBadges(
   env: Env,
   userEmails: string[]
-): Promise<Map<string, any[]>> {
-  const badgesMap = new Map<string, any[]>();
+): Promise<Map<string, UserBadge[]>> {
+  const badgesMap = new Map<string, UserBadge[]>();
 
   if (userEmails.length === 0) return badgesMap;
 

@@ -33,6 +33,17 @@ export interface InvitationEmailStatus {
  *   }
  * }
  */
+/** globalemaillogs 裡一筆邀請信的寄送紀錄。 */
+interface InvitationEmailLogRow {
+  status: string;
+  timestamp: number;
+  error: string | null;
+  retryCount: number;
+  /** JSON 字串，裡面帶 invitationCode。 */
+  emailContext: string | null;
+  recipient: string;
+}
+
 export async function getInvitationEmailStatus(
   env: Env,
   userEmail: string,
@@ -75,7 +86,7 @@ export async function getInvitationEmailStatus(
       SELECT invitationId, invitationCode, targetEmail
       FROM invitation_codes_with_status
       WHERE invitationCode IN (${placeholders})
-    `).bind(...invitationCodes).all();
+    `).bind(...invitationCodes).all<{ invitationCode: string; invitationId: string; targetEmail: string }>();
 
     if (!invitationsResult.results || invitationsResult.results.length === 0) {
       return successResponse({ emailStatuses: {} });
@@ -83,7 +94,7 @@ export async function getInvitationEmailStatus(
 
     // Build invitationCode -> invitationId/targetEmail map
     const invitationMap = new Map<string, { invitationId: string; targetEmail: string }>();
-    invitationsResult.results.forEach((row: any) => {
+    invitationsResult.results.forEach(row => {
       invitationMap.set(row.invitationCode, {
         invitationId: row.invitationId,
         targetEmail: row.targetEmail
@@ -107,10 +118,10 @@ export async function getInvitationEmailStatus(
       WHERE trigger = 'invitation'
         AND recipient IN (${targetEmailPlaceholders})
       ORDER BY timestamp DESC
-    `).bind(...targetEmails).all();
+    `).bind(...targetEmails).all<InvitationEmailLogRow>();
 
     // Build email logs map: invitationCode -> logs[]
-    const logsMap = new Map<string, any[]>();
+    const logsMap = new Map<string, InvitationEmailLogRow[]>();
 
     for (const log of allLogsResult.results || []) {
       const context = parseJSON<{ invitationCode?: string }>(log.emailContext as string, {});
@@ -157,8 +168,8 @@ export async function getInvitationEmailStatus(
       // Aggregate email status
       const latestLog = relevantLogs[0];
       const totalAttempts = relevantLogs.length;
-      const sentLogs = relevantLogs.filter((log: any) => log.status === 'sent');
-      const failedLogs = relevantLogs.filter((log: any) => log.status === 'failed');
+      const sentLogs = relevantLogs.filter(log => log.status === 'sent');
+      const failedLogs = relevantLogs.filter(log => log.status === 'failed');
 
       let status: 'sent' | 'failed' | 'pending' | 'not_sent';
       if (sentLogs.length > 0) {

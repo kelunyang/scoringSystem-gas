@@ -122,12 +122,9 @@ async function getAllActiveProjects(env: Env): Promise<ProjectInfo[]> {
     FROM projects
     WHERE status = 'active'
     ORDER BY projectName
-  `).all();
+  `).all<ProjectInfo>();
 
-  return (result.results || []).map((row: any) => ({
-    projectId: row.projectId,
-    projectName: row.projectName
-  }));
+  return result.results || [];
 }
 
 /**
@@ -157,10 +154,9 @@ async function getUserParticipatedProjects(env: Env, userEmail: string): Promise
     SELECT p.projectId, p.projectName
     FROM projects p
     WHERE p.createdBy = ? AND p.status = 'active'
-  `).bind(userId).all();
+  `).bind(userId).all<ProjectInfo>();
 
-  for (const row of createdProjects.results || []) {
-    const project = row as any;
+  for (const project of createdProjects.results || []) {
     projectMap.set(project.projectId, {
       projectId: project.projectId,
       projectName: project.projectName
@@ -173,10 +169,9 @@ async function getUserParticipatedProjects(env: Env, userEmail: string): Promise
     FROM projectviewers pv
     JOIN projects p ON pv.projectId = p.projectId
     WHERE pv.userEmail = ? AND pv.isActive = 1 AND p.status = 'active'
-  `).bind(userEmail).all();
+  `).bind(userEmail).all<ProjectInfo>();
 
-  for (const row of viewerProjects.results || []) {
-    const project = row as any;
+  for (const project of viewerProjects.results || []) {
     projectMap.set(project.projectId, {
       projectId: project.projectId,
       projectName: project.projectName
@@ -189,10 +184,9 @@ async function getUserParticipatedProjects(env: Env, userEmail: string): Promise
     FROM usergroups ug
     JOIN projects p ON ug.projectId = p.projectId
     WHERE ug.userEmail = ? AND ug.isActive = 1 AND p.status = 'active'
-  `).bind(userEmail).all();
+  `).bind(userEmail).all<ProjectInfo>();
 
-  for (const row of memberProjects.results || []) {
-    const project = row as any;
+  for (const project of memberProjects.results || []) {
     projectMap.set(project.projectId, {
       projectId: project.projectId,
       projectName: project.projectName

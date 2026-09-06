@@ -13,6 +13,18 @@ import { parseJSON } from '../../utils/json';
 /**
  * List all viewers for a project
  */
+/** projectviewers JOIN users 的一列，供專案成員清單顯示。 */
+interface ProjectViewerDisplayRow {
+  userEmail: string;
+  role: string;
+  displayName: string | null;
+  avatarSeed: string | null;
+  avatarStyle: string | null;
+  /** JSON 字串，讀出來會補上預設色。 */
+  avatarOptions: string | null;
+  [column: string]: unknown;
+}
+
 export async function listProjectViewers(
   env: Env,
   userEmail: string,
@@ -43,10 +55,10 @@ export async function listProjectViewers(
       LEFT JOIN users u ON pv.userEmail = u.userEmail
       WHERE pv.projectId = ? AND pv.isActive = 1
       ORDER BY pv.assignedAt DESC
-    `).bind(projectId).all();
+    `).bind(projectId).all<ProjectViewerDisplayRow>();
 
     // Parse avatarOptions with default values to match search.ts behavior
-    const viewersWithParsedOptions = (result.results || []).map((viewer: any) => ({
+    const viewersWithParsedOptions = (result.results || []).map(viewer => ({
       ...viewer,
       avatarOptions: parseJSON(viewer.avatarOptions, {
         backgroundColor: 'b6e3f4',
@@ -589,21 +601,21 @@ export async function markUnassignedMembers(
       SELECT userEmail
       FROM projectviewers
       WHERE projectId = ? AND role = 'member' AND isActive = 1
-    `).bind(projectId).all();
+    `).bind(projectId).all<{ userEmail: string }>();
 
     // Query all members in usergroups for this project
     const groupedMembers = await env.DB.prepare(`
       SELECT DISTINCT userEmail
       FROM usergroups
       WHERE projectId = ? AND isActive = 1
-    `).bind(projectId).all();
+    `).bind(projectId).all<{ userEmail: string }>();
 
     // Find difference: members in projectviewers but not in usergroups
     const viewerEmails = new Set(
-      (viewerMembers.results || []).map((r: any) => r.userEmail as string)
+      (viewerMembers.results || []).map(r => r.userEmail)
     );
     const groupedEmails = new Set(
-      (groupedMembers.results || []).map((r: any) => r.userEmail as string)
+      (groupedMembers.results || []).map(r => r.userEmail)
     );
 
     const unassigned = Array.from(viewerEmails).filter(
@@ -758,10 +770,10 @@ export async function addProjectViewersBatch(
     const placeholders = targetEmails.map(() => '?').join(',');
     const existingUsers = await env.DB.prepare(`
       SELECT userEmail FROM users WHERE userEmail IN (${placeholders})
-    `).bind(...targetEmails).all();
+    `).bind(...targetEmails).all<{ userEmail: string }>();
 
     const existingUserEmails = new Set(
-      (existingUsers.results || []).map((u: any) => u.userEmail as string)
+      (existingUsers.results || []).map(u => u.userEmail)
     );
 
     // Find non-existent users
@@ -774,7 +786,7 @@ export async function addProjectViewersBatch(
     const existingViewers = await env.DB.prepare(`
       SELECT userEmail, role, isActive FROM projectviewers
       WHERE projectId = ? AND userEmail IN (${placeholders})
-    `).bind(projectId, ...targetEmails).all();
+    `).bind(projectId, ...targetEmails).all<{ userEmail: string; role: string; isActive: number }>();
 
     const existingViewerMap = new Map<string, { role: string; isActive: number }>();
     for (const v of existingViewers.results || []) {
@@ -969,7 +981,7 @@ export async function removeProjectViewersBatch(
     const existingViewers = await env.DB.prepare(`
       SELECT userEmail, role FROM projectviewers
       WHERE projectId = ? AND userEmail IN (${placeholders}) AND isActive = 1
-    `).bind(projectId, ...targetEmails).all();
+    `).bind(projectId, ...targetEmails).all<{ userEmail: string; role: string }>();
 
     const existingMap = new Map<string, string>();
     for (const v of existingViewers.results || []) {
@@ -1083,7 +1095,7 @@ export async function updateProjectViewersRoleBatch(
     const existingViewers = await env.DB.prepare(`
       SELECT userEmail, role FROM projectviewers
       WHERE projectId = ? AND userEmail IN (${placeholders}) AND isActive = 1
-    `).bind(projectId, ...targetEmails).all();
+    `).bind(projectId, ...targetEmails).all<{ userEmail: string; role: string }>();
 
     const existingMap = new Map<string, string>();
     for (const v of existingViewers.results || []) {

@@ -141,13 +141,6 @@ export interface SessionData {
   expiryTime: number;
 }
 
-/**
- * Request context with user information
- * Set by authentication middleware
- */
-export interface RequestContext {
-  user: AuthUser;
-}
 
 /**
  * Sudo target user info (the user being impersonated)
@@ -205,67 +198,11 @@ export type {
 } from '@repo/shared';
 
 /**
- * Request parameter types
+ * 請求的形狀不定義在這裡。
+ *
+ * 這裡原本有 LoginRequest、CreateProjectRequest、CreateStageRequest…
+ * 共七個介面，全庫零引用，而且欄位早已和實際的端點脫節。
+ * 真正驗證請求的是 @repo/shared/schemas 的 Zod schema，
+ * handler 拿到的型別由 `c.req.valid('json')` 從 schema 推導出來，
+ * 所以再抄一份手寫介面只會多一個會過期的假契約。已於 2026-09-06 移除。
  */
-
-// Login request
-export interface LoginRequest {
-  userEmail: string;
-  password: string;
-  turnstileToken?: string;
-}
-
-// Register request
-export interface RegisterRequest {
-  password: string;
-  userEmail: string;
-  displayName: string;
-  invitationCode: string;
-  avatarSeed?: string;
-  avatarStyle?: string;
-  avatarOptions?: Record<string, string>;
-  turnstileToken?: string;
-}
-
-// Create project request
-export interface CreateProjectRequest {
-  projectName: string;
-  description?: string;
-  settings?: Record<string, any>;
-}
-
-// Create stage request
-export interface CreateStageRequest {
-  projectId: string;
-  stageName: string;
-  description?: string;
-  startTime?: number;
-  endTime?: number;
-  settings?: Record<string, any>;
-}
-
-// Create submission request
-export interface CreateSubmissionRequest {
-  stageId: string;
-  groupId: string;
-  title: string;
-  content: string;
-  metadata?: Record<string, any>;
-}
-
-// Award points request
-export interface AwardPointsRequest {
-  projectId: string;
-  userId: string;
-  amount: number;
-  description?: string;
-  relatedEntityType?: string;
-  relatedEntityId?: string;
-}
-
-// Create comment request
-export interface CreateCommentRequest {
-  submissionId: string;
-  content: string;
-  parentCommentId?: string;
-}

@@ -10,6 +10,19 @@ import { successResponse, errorResponse } from '../../utils/response';
  * Get comment settlement analysis with enriched data
  * Requires stage to be in 'completed' status
  */
+/** commentsettlements JOIN 出來的一列，用於結算明細。 */
+interface CommentSettlementDetailRow {
+  commentId: string;
+  authorEmail: string;
+  finalRank: number;
+  studentScore: number;
+  teacherScore: number;
+  totalScore: number;
+  allocatedPoints: number;
+  rewardPercentage: number;
+  [column: string]: unknown;
+}
+
 export async function getCommentSettlementAnalysis(
   env: Env,
   projectId: string,
@@ -49,7 +62,7 @@ export async function getCommentSettlementAnalysis(
       LEFT JOIN users u ON u.userEmail = cs.authorEmail
       WHERE cs.projectId = ? AND cs.stageId = ?
       ORDER BY cs.finalRank ASC
-    `).bind(projectId, stageId).all();
+    `).bind(projectId, stageId).all<CommentSettlementDetailRow>();
 
     if (!settlementsResult.results || settlementsResult.results.length === 0) {
       return successResponse({
@@ -59,7 +72,7 @@ export async function getCommentSettlementAnalysis(
     }
 
     // 3. Enrich settlement data
-    const enrichedSettlements = settlementsResult.results.map((settlement: any) => {
+    const enrichedSettlements = settlementsResult.results.map(settlement => {
       const content = settlement.content as string;
       const preview = content ? content.substring(0, 50) + (content.length > 50 ? '...' : '') : '';
 
@@ -81,17 +94,17 @@ export async function getCommentSettlementAnalysis(
 
     // 4. Calculate summary statistics
     const totalAllocated = enrichedSettlements.reduce(
-      (sum: number, s: any) => sum + (s.allocatedPoints || 0),
+      (sum, s) => sum + (s.allocatedPoints || 0),
       0
     );
 
     const avgStudentScore = enrichedSettlements.reduce(
-      (sum: number, s: any) => sum + (s.studentScore || 0),
+      (sum, s) => sum + (s.studentScore || 0),
       0
     ) / enrichedSettlements.length;
 
     const avgTeacherScore = enrichedSettlements.reduce(
-      (sum: number, s: any) => sum + (s.teacherScore || 0),
+      (sum, s) => sum + (s.teacherScore || 0),
       0
     ) / enrichedSettlements.length;
 

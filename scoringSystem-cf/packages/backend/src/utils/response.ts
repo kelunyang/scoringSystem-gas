@@ -37,7 +37,7 @@ export type ErrorResponse = ApiErrorResponse;
  * // Returns Response with: { success: true, data: { userId: 'usr_123', displayName: 'John Doe' } }
  */
 export function successResponse<T>(data: T, message?: string): Response {
-  const responseBody: any = {
+  const responseBody: ApiSuccessResponse<T> = {
     success: true,
     data
   };
@@ -68,14 +68,15 @@ export function successResponse<T>(data: T, message?: string): Response {
 export function errorResponse(
   code: string,
   message: string,
-  context?: any
+  /** 附在 error.context 上一起序列化，不會被讀取。 */
+  context?: unknown
 ): Response {
   const errorBody: ApiErrorResponse = {
     success: false,
     error: {
       code,
       message,
-      ...(context && { context })
+      ...(context ? { context } : {})
     }
   };
 
@@ -478,7 +479,7 @@ export function isUniqueConstraintViolation(error: unknown, column?: string): bo
  *   return handleError(error, { userId: 'usr_123' });
  * }
  */
-export function handleError(error: unknown, context?: any): Response {
+export function handleError(error: unknown, context?: unknown): Response {
   console.error('Error occurred:', error, context);
 
   // Handle SudoWriteBlockedError - check by name since it's from a different module
@@ -517,7 +518,7 @@ export function handleError(error: unknown, context?: any): Response {
  * }
  */
 export function validateRequired(
-  params: Record<string, any>,
+  params: Record<string, unknown>,
   required: string[]
 ): Response | null {
   const missing = required.filter(key => !params[key]);
