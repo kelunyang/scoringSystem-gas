@@ -832,7 +832,7 @@ async function loadStageGrowth() {
   loadingStageGrowth.value = true
 
   try {
-    const httpResponse = await (rpcClient.wallets as any)['stage-growth'].$post({
+    const httpResponse = await rpcClient.wallets['stage-growth'].$post({
       json: {
         projectId: selectedProjectId.value,
         targetUserEmail: selectedUserEmail.value || props.user?.userEmail

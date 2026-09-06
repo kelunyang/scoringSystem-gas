@@ -237,7 +237,7 @@ export function useRankingProposals(
   const groupsQuery = useQuery({
     queryKey: computed(() => ['rankings', 'submitted-groups', getValue(projectId), getValue(stageId)]),
     queryFn: async (): Promise<SubmittedGroup[]> => {
-      const httpResponse = await (rpcClient.projects as any).content.$post({
+      const httpResponse = await rpcClient.projects.content.$post({
         json: {
           projectId: getValue(projectId),
           stageId: getValue(stageId),

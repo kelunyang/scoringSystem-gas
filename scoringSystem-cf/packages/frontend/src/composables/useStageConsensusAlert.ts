@@ -36,7 +36,7 @@ export function useStageConsensusAlert() {
     if (!projectId || !stageId) return
 
     try {
-      const httpResponse = await (rpcClient.submissions as any)['stage-consensus-status'].$post({
+      const httpResponse = await rpcClient.submissions['stage-consensus-status'].$post({
         json: { projectId, stageId }
       })
       const response = await httpResponse.json()

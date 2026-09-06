@@ -447,7 +447,7 @@ const loadCommentAnalysis = async (): Promise<void> => {
             stageId: props.stageId
           }
         }),
-        (rpcClient.scoring as any)['comment-voting-data'].$post({
+        rpcClient.scoring['comment-voting-data'].$post({
           json: {
             stageId: props.stageId
           }
@@ -503,7 +503,7 @@ const loadCommentAnalysis = async (): Promise<void> => {
     } else {
       // 實時計算模式：載入評論投票數據並即時計算
       const [commentVotingHttpResponse, stageHttpResponse] = await Promise.all([
-        (rpcClient.scoring as any)['comment-voting-data'].$post({
+        rpcClient.scoring['comment-voting-data'].$post({
           json: {
             stageId: props.stageId
           }

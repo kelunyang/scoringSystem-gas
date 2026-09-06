@@ -225,7 +225,7 @@ export function useBatchAddGroupMembers() {
       groupId: string
       members: Array<{ userEmail: string; role: 'leader' | 'member' }>
     }) => {
-      const httpResponse = await (rpcClient.groups as any)['batch-add-members'].$post({
+      const httpResponse = await rpcClient.groups['batch-add-members'].$post({
         json: {
           projectId,
           groupId,
@@ -264,7 +264,7 @@ export function useRemoveGroupMember() {
 
   return useMutation({
     mutationFn: async ({ projectId, groupId, userEmail }: { projectId: string; groupId: string; userEmail: string }) => {
-      const httpResponse = await (rpcClient.groups as any)['remove-member'].$post({
+      const httpResponse = await rpcClient.groups['remove-member'].$post({
         json: {
           projectId,
           groupId,

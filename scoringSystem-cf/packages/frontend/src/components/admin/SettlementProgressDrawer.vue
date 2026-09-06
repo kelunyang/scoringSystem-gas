@@ -977,7 +977,7 @@ async function settleStage(stage: Stage, forceSettle = false): Promise<void> {
 
     // Run validation if not forced
     if (!forceSettle) {
-      const validationHttpResponse = await (rpcClient.scoring as any)['validate-settlement'].$post({
+      const validationHttpResponse = await rpcClient.scoring['validate-settlement'].$post({
         json: {
           projectId: projectId,
           stageId: stage.stageId

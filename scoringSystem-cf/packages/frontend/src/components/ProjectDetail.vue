@@ -2724,7 +2724,7 @@ async function openGroupSubmissionApprovalModal(stage: ExtendedStage) {
     }
 
     // 查詢該 stage 有多少組提交過（與 openSubmitReportModal 邏輯一致）
-    const submissionsHttpResponse = await (rpcClient.submissions as any).list.$post({
+    const submissionsHttpResponse = await rpcClient.submissions.list.$post({
       json: {
         projectId: projectId.value,
         stageId: stage.id
@@ -3205,7 +3205,7 @@ async function loadAllStageComments() {
     // 使用批量 API 一次獲取所有階段的評論（帶分頁參數）
     const dedupKey = `comments:all-stages:${projectId.value}:${stageIds.join(',')}:limit${userCommentPageSize.value}`
     const response = await dedupRequest(dedupKey, async () => {
-      const httpResponse = await (rpcClient.comments as any)['all-stages'].$post({
+      const httpResponse = await rpcClient.comments['all-stages'].$post({
         json: {
           projectId: projectId.value,
           stageIds: stageIds,
@@ -3272,7 +3272,7 @@ async function loadAllStageCommentsFallback() {
     try {
       const dedupKey = `comments:${projectId.value}:${stage.id}:limit${userCommentPageSize.value}`
       const response = await dedupRequest(dedupKey, async () => {
-        const httpResponse = await (rpcClient.comments as any).stage.$post({
+        const httpResponse = await rpcClient.comments.stage.$post({
           json: {
             projectId: projectId.value,
             stageId: stage.id,
@@ -3365,7 +3365,7 @@ async function loadMentionData() {
   if (missingUsers.length > 0) {
     console.log(`🔍 發現 ${missingUsers.length} 位新用戶不在 projectData 中，需要額外查詢`)
     try {
-      const httpResponse = await (rpcClient.users as any)['display-names'].$post({
+      const httpResponse = await rpcClient.users['display-names'].$post({
         json: {
           projectId: projectId.value,
           userEmails: missingUsers
@@ -3430,7 +3430,7 @@ async function loadAllStageProposals() {
  */
 async function loadGroupApprovalVotes(projectId: string, stageId: string, submissionId: string, groupId: string) {
   try {
-    const httpResponse = await (rpcClient.submissions as any)['participation-status'].$post({
+    const httpResponse = await rpcClient.submissions['participation-status'].$post({
       json: {
         projectId,
         stageId,
@@ -3474,7 +3474,7 @@ async function loadStageSettlementData(stage: ExtendedStage) {
     })) || []
 
     // 調用結算 API
-    const httpResponse = await (rpcClient.settlement as any)['stage-rankings'].$post({
+    const httpResponse = await rpcClient.settlement['stage-rankings'].$post({
       json: {
         projectId: projectId.value,
         stageId: stage.id

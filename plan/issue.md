@@ -15,6 +15,45 @@
 
 ## A. 未解決 Issues
 
+### #011 ｜ `AppType = any` 讓整個 RPC 層失去型別（2026-09-06）
+
+**現象**：`packages/frontend/src/types/backend.d.ts` 只有一行實質內容：
+
+```ts
+export type AppType = any;
+```
+
+`rpcClient` 由 `hc<AppType>()` 建出來，所以**前端呼叫後端的每一個
+端點、每一個回應都是 `any`**。批次 4 剩下的 878 處 frontend `any`
+裡，很大一部分是從這裡擴散出去的——拿到 `any` 的回應之後，
+存進 `ref<any>`、傳進 `(x: any) =>`、再標成 `Record<string, any>`。
+
+**根因與已試過的路**（原作者寫在該檔案的註解裡，值得保留）：
+Hono 的 RPC 型別推導靠 `typeof app` 捕捉整串 `app.route()` 鏈，
+但 TypeScript 產生 `.d.ts` 時這個資訊會遺失，app 型別退化成
+`Hono<{ Bindings: Env }, BlankSchema, "/">`。試過三種都不成：
+
+1. 直接從 backend import——TypeScript 會去編譯整棵 backend 原始碼樹
+2. TypeScript Project References——declaration 檔仍然遺失 route schema
+3. 在 frontend 裝 `@cloudflare/workers-types`——只解決 bindings，不解決 route
+
+**可能的方向**（都需要架構調整，不是順手能做的）：
+
+- `@hono/zod-openapi`：用 Zod schema 定義路由，schema 本來就在
+  `@repo/shared`，型別可以雙向共用
+- 為每個端點手寫具型別的 API wrapper（`api/admin.ts` 已經是這個模式，
+  而且它是前端目前少數型別完整的一層）
+
+**為什麼記在這裡**：2026-09-06 的型別清理把 backend 與 shared 收到 0，
+frontend 剩 878。**不解決這一項，frontend 的 `any` 就有一個持續的來源**，
+清完還會長回來。要不要投入、投入哪一種，是架構決策，不該由清理順手決定。
+
+已順手做掉的：31 處 `(rpcClient.X as any)` 轉型。既然 `rpcClient`
+本身就是 `any`，那些轉型不會讓任何東西更寬鬆，純粹是噪音。
+
+---
+
+
 ### #010 ｜ 底層系統檢查（2026-09-05）：認證流程、sudo、migrations、佇列 ｜ 大部分已修
 
 > **2026-09-05 修復完成。** 甲、乙、丁全部修掉，戊修掉兩項。

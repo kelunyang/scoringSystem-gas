@@ -168,7 +168,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
       // 使用 /api/comments/stage 獲取完整評論數據（包含 reactions 和 canBeVoted）
       // 使用 dedupRequest 防止重複請求
       const response = await dedupRequest(dedupKey, async () => {
-        const httpResponse = await (rpcClient.comments as any).stage.$post({
+        const httpResponse = await rpcClient.comments.stage.$post({
           json: {
             projectId,
             stageId,
@@ -222,7 +222,7 @@ export function useStageContentManagement(projectData: any, userData: any) {
         groupId: groupData.groupId
       })
 
-      const httpResponse = await (rpcClient.submissions as any)['participation-status'].$post({
+      const httpResponse = await rpcClient.submissions['participation-status'].$post({
         json: {
           projectId,
           stageId,

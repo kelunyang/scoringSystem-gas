@@ -525,7 +525,7 @@ const loadVotingAnalysis = async (): Promise<void> => {
             stageId: props.stageId
           }
         }),
-        (rpcClient.settlement as any)['stage-rankings'].$post({
+        rpcClient.settlement['stage-rankings'].$post({
           json: {
             projectId: props.projectId,
             stageId: props.stageId
@@ -544,7 +544,7 @@ const loadVotingAnalysis = async (): Promise<void> => {
 
         stageRewardPool.value = stageResponse.data.reportRewardPool || 0
 
-        const votingHttpResponse = await (rpcClient.scoring as any)['submission-voting-data'].$post({
+        const votingHttpResponse = await rpcClient.scoring['submission-voting-data'].$post({
           json: {
             stageId: props.stageId
           }
@@ -601,7 +601,7 @@ const loadVotingAnalysis = async (): Promise<void> => {
     } else {
       // 實時計算模式：載入投票數據並即時計算
       const [votingHttpResponse, stageHttpResponse] = await Promise.all([
-        (rpcClient.scoring as any)['submission-voting-data'].$post({
+        rpcClient.scoring['submission-voting-data'].$post({
           json: {
             stageId: props.stageId
           }

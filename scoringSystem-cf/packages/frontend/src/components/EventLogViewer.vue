@@ -662,7 +662,7 @@ const loadResourceForEvent = async (event: EventLog) => {
     const eventWithResource = event as EventLog & { resourceId?: string }
 
     // Type assertion needed due to AppType being any
-    const httpResponse = await (rpcClient.activity as any).resource.$post({
+    const httpResponse = await rpcClient.activity.resource.$post({
       json: {
         projectId: props.projectId,
         resourceType: event.resourceType,

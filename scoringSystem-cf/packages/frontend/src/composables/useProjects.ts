@@ -115,7 +115,7 @@ export function useProjectsWithStages(): UseQueryReturnType<ProjectWithStages[],
     queryKey: ['projects', 'withStages'],
     queryFn: async (): Promise<ProjectWithStages[]> => {
       console.log('🔍 useProjectsWithStages queryFn executing')
-      const httpResponse = await (rpcClient.projects as any)['list-with-stages'].$post({
+      const httpResponse = await rpcClient.projects['list-with-stages'].$post({
         json: { filters: {} }
       })
       const response = await httpResponse.json() as ApiResponse<ProjectWithStages[] | { projects: ProjectWithStages[] }>

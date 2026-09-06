@@ -597,7 +597,7 @@ async function checkVotingEligibility(): Promise<void> {
       return
     }
 
-    const httpResponse = await (rpcClient.comments as any)['voting-eligibility'].$post({
+    const httpResponse = await rpcClient.comments['voting-eligibility'].$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId
@@ -819,7 +819,7 @@ function getCurrentUserEmail(): string | null {
 async function loadProposalVersions(): Promise<void> {
   isLoadingProposal.value = true  // Set lock to prevent initializeComments from clearing
   try {
-    const httpResponse = await (rpcClient.comments as any)['ranking-history'].$post({
+    const httpResponse = await rpcClient.comments['ranking-history'].$post({
       json: {
         projectId: props.projectId,
         stageId: props.stageId

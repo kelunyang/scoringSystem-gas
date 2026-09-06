@@ -367,7 +367,7 @@ export function useWalletLeaderboard(
       getValue(projectId)
     ]),
     queryFn: async (): Promise<WalletLadderData> => {
-      const httpResponse = await (rpcClient.wallets as any)['project-ladder'].$post({
+      const httpResponse = await rpcClient.wallets['project-ladder'].$post({
         json: {
           projectId: getValue(projectId)
         }

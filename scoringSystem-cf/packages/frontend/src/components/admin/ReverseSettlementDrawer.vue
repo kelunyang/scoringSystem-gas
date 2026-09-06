@@ -349,7 +349,7 @@ async function loadPreviewData(): Promise<void> {
         const settlement = historyResponse.data.settlements[0]
 
         // Get detailed preview from new API
-        const previewHttpResponse = await (rpcClient.settlement as any)['reverse-preview'].$post({
+        const previewHttpResponse = await rpcClient.settlement['reverse-preview'].$post({
           json: {
             projectId: projectId,
             settlementId: settlement.settlementId
@@ -416,7 +416,7 @@ async function confirmReverseSettlement(): Promise<void> {
           })
 
           const clearToActive = extendActiveHours.value > 0
-          const clearHttpResponse = await (rpcClient.scoring as any)['clear-stage-votes'].$post({
+          const clearHttpResponse = await rpcClient.scoring['clear-stage-votes'].$post({
             json: {
               projectId: projectId,
               stageId: props.stage.stageId,
