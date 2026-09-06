@@ -15,6 +15,41 @@
 
 ## A. 未解決 Issues
 
+### #012 ｜ 三個階段狀態在 UI 沒有對應文字（2026-09-06）
+
+**現象**：`utils/stageStatus.ts` 的 `getStageStatusText()` 與
+`getStageStatusType()` 只處理六個狀態：
+
+```ts
+case 'pending' | 'active' | 'voting' | 'settling' | 'completed' | 'archived'
+default: return '尚未開始'   //  ← draft / closed / paused 都掉進這裡
+```
+
+而後端（`@repo/shared` 的 `Stage['status']`，對應
+`stages_with_status` VIEW）實際會回**九個**：多了
+`draft`、`closed`、`paused`。
+
+所以一個「已暫停」的階段，在 UI 上顯示成「尚未開始」，
+狀態標籤是灰色的 info。`draft` 與 `closed` 同理。
+
+**怎麼發現的**：2026-09-06 第二輪型別清理。前端本來自己寫了一份
+六個值的 `StageStatus`，與 shared 分歧；改成
+`SharedStage['status']` 之後，那三個沒有分支的狀態才浮出來。
+**這是 runtime 本來就有的行為，型別只是把它攤開**——不是這次改壞的。
+
+**未決的是產品問題，不是技術問題**：
+
+1. `paused` / `closed` / `draft` 這三個狀態，實際上會不會出現在
+   學生看得到的階段列表？如果只出現在管理端，優先度就低。
+2. 要顯示成什麼？（例如「已暫停」橘色 warning、「草稿」灰色 info、
+   「已關閉」灰色）——這是使用者要決定的文案與配色。
+
+在有答案之前不要自己補分支，補錯的文案比顯示「尚未開始」更糟。
+
+**位置**：`packages/frontend/src/utils/stageStatus.ts:44` 與 `:63`。
+
+---
+
 ### #011 ｜ `AppType = any` 讓整個 RPC 層失去型別（2026-09-06）
 
 **現象**：`packages/frontend/src/types/backend.d.ts` 只有一行實質內容：
