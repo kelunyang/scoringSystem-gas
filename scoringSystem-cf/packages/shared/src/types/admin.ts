@@ -81,7 +81,8 @@ export interface Activity {
   eventId: string
   eventType: string
   eventTime: number
-  eventData?: any
+  /** 事件自帶的資料，形狀依 eventType 而異，只用於顯示。 */
+  eventData?: Record<string, unknown>
 }
 
 // ============================================================================
@@ -298,8 +299,10 @@ export interface EntityDetailsRequest {
 export interface EntityDetailsResponse {
   entityType: string
   entityId: string
-  details: any
-  relatedEntities?: any[]
+  /** 實體本身的欄位，形狀依 entityType 而異（成果、評論、階段…）。 */
+  details: Record<string, unknown>
+  /** 相關實體，同樣依 entityType 而異。 */
+  relatedEntities?: Array<Record<string, unknown>>
 }
 
 // ============================================================================
@@ -422,7 +425,8 @@ export interface Notification {
   type: 'info' | 'warning' | 'error' | 'success'
   isRead: boolean
   createdTime: number
-  metadata?: any
+  /** 通知自帶的額外資料，只會序列化存起來。 */
+  metadata?: Record<string, unknown>
 }
 
 export interface NotificationListRequest {
@@ -450,7 +454,8 @@ export interface SendNotificationRequest {
   title: string
   message: string
   type: 'info' | 'warning' | 'error' | 'success'
-  metadata?: any
+  /** 通知自帶的額外資料，只會序列化存起來。 */
+  metadata?: Record<string, unknown>
 }
 
 export interface SendBatchNotificationsRequest {
@@ -458,7 +463,8 @@ export interface SendBatchNotificationsRequest {
   title: string
   message: string
   type: 'info' | 'warning' | 'error' | 'success'
-  metadata?: any
+  /** 通知自帶的額外資料，只會序列化存起來。 */
+  metadata?: Record<string, unknown>
 }
 
 export interface DeleteNotificationRequest {

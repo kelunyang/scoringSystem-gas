@@ -2670,10 +2670,10 @@ async function openGroupSubmissionApprovalModal(stage: ExtendedStage) {
     const groupMembers = activeMembers.map((ug: any) => {
       const user = projectData.value?.users?.find(u => u.userEmail === ug.userEmail)
 
-      // Get contribution from participation proposal (convert from ratio to percentage)
-      const contribution = participationProposal[ug.userEmail]
-        ? participationProposal[ug.userEmail] * 100
-        : defaultContribution
+      // Get contribution from participation proposal (convert from ratio to percentage).
+      // 沒有權限看百分比時後端會回 null（保留 email、隱藏數字），此時用預設值。
+      const share = participationProposal[ug.userEmail]
+      const contribution = share ? share * 100 : defaultContribution
 
       return {
         userEmail: ug.userEmail,

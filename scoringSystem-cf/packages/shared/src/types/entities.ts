@@ -116,6 +116,76 @@ export interface Member {
 }
 
 /**
+ * 組內對「這份成果的貢獻度分配」的投票結果。
+ * 由 backend 的 getParticipationConfirmations 回傳。
+ * 跨組的學生看到的是遮蔽過的版本（votes 為空、統計歸零）。
+ */
+export interface GroupVotingData {
+  votes: Array<{
+    voteId: string;
+    voterEmail: string;
+    agree: number;
+    comment?: string | null;
+    createdTime: number;
+  }>;
+  agreeVotes: number;
+  totalVotes: number;
+  /** 參與者人數（依 participationProposal 計算，不是全組人數）。 */
+  totalMembers: number;
+  isApproved: boolean;
+  hasUserVoted: boolean;
+  currentUserVote: {
+    voteId: string;
+    agree: number;
+    comment?: string | null;
+    createdTime: number;
+  } | null;
+  participationProposal: ParticipationProposal;
+  isSameGroup: boolean;
+  canSeeVotingDetails: boolean;
+  canSeePercentages: boolean;
+}
+
+/**
+ * 組內貢獻度分配：email → 百分比。
+ * 沒有權限看百分比的人拿到的是 null（保留 email，隱藏數字）。
+ */
+export type ParticipationProposal = Record<string, number | null>;
+
+/**
+ * 一項排名在畫面上顯示所需的資料：名次加上它的來源。
+ * 學生排名帶 proposerDisplayName，教師排名帶 teacherDisplayName。
+ */
+export interface RankingDisplayData {
+  rank: number;
+  createdTime?: number;
+  proposerDisplayName?: string;
+  teacherDisplayName?: string;
+  [field: string]: unknown;
+}
+
+/**
+ * 事件記錄背後的那筆資源（成果或評論），
+ * 由 backend 的 getEventResourceDetails 回傳。
+ */
+export type EventResourceData =
+  | {
+      type: 'submission';
+      content: string | null;
+      submitTime: number;
+      submitterEmail: string;
+      submitterName: string | null;
+      status: string;
+    }
+  | {
+      type: 'comment';
+      content: string;
+      createdTime: number;
+      authorEmail: string;
+      authorName: string | null;
+    };
+
+/**
  * Project Group entity
  */
 export interface Group {
@@ -136,15 +206,15 @@ export interface Group {
   submitTime?: number;
   submissionId?: string;
   approvalVotesLoading?: boolean;
-  votingData?: any;
-  participationProposal?: any;
+  votingData?: GroupVotingData | null;
+  participationProposal?: ParticipationProposal;
   // UI state properties (frontend-specific)
   rankingsLoading?: boolean;
   settlementRank?: number | null;
   voteRank?: number | string | null;
   teacherRank?: number | null;
-  voteRankData?: any;
-  teacherRankData?: any;
+  voteRankData?: RankingDisplayData | null;
+  teacherRankData?: RankingDisplayData | null;
   finalSettlementRank?: number | null;
   earnedPoints?: number | null;
   memberNames?: string | string[];
@@ -254,10 +324,10 @@ export interface Submission {
   settlementRank?: number;
   voteRank?: number;
   teacherRank?: number;
-  teacherRankData?: any;
+  teacherRankData?: RankingDisplayData | null;
   finalSettlementRank?: number;
   earnedPoints?: number;
-  voteRankData?: any;
+  voteRankData?: RankingDisplayData | null;
   userEmail?: string; // Submitter email
   groupEmail?: string; // Group email for group submissions
   // Voting metadata (from VIEW)
@@ -410,7 +480,7 @@ export interface EventLog {
   action?: string;
   resourceType?: string;
   resourceId?: string; // Alias for entityId
-  resource?: any;
+  resource?: EventResourceData;
   stageId?: string;
   stageName?: string;
   stageOrder?: number;
