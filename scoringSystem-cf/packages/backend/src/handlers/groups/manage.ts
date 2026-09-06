@@ -12,6 +12,7 @@ import { logProjectOperation, generateChanges } from '@utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
 import { getGroupMemberEmails } from '@utils/notifications';
 import { getConfigValue } from '@utils/config';
+import type { GroupRow } from '@db/rows';
 
 /**
  * Create a new group in a project
@@ -263,7 +264,7 @@ export async function getGroup(
     // Get group
     const group = await env.DB.prepare(`
       SELECT * FROM groups WHERE projectId = ? AND groupId = ?
-    `).bind(projectId, groupId).first();
+    `).bind(projectId, groupId).first<GroupRow>();
 
     if (!group) {
       return errorResponse('GROUP_NOT_FOUND', 'Group not found');
@@ -276,7 +277,17 @@ export async function getGroup(
       FROM usergroups pug
       JOIN users u ON pug.userEmail = u.userEmail
       WHERE pug.projectId = ? AND pug.groupId = ? AND pug.isActive = 1
-    `).bind(projectId, groupId).all();
+    `).bind(projectId, groupId).all<{
+      membershipId: string;
+      userId: string;
+      userEmail: string;
+      displayName: string;
+      role: string;
+      joinTime: number;
+      avatarSeed: string | null;
+      avatarStyle: string | null;
+      avatarOptions: string | null;
+    }>();
 
     return successResponse({
       groupId: group.groupId,
@@ -287,7 +298,7 @@ export async function getGroup(
       createdBy: group.createdBy,
       createdTime: group.createdTime,
       memberCount: members.results.length,
-      members: members.results.map((m: any) => ({
+      members: members.results.map(m => ({
         membershipId: m.membershipId,
         userId: m.userId,
         userEmail: m.userEmail,
@@ -348,14 +359,14 @@ export async function updateGroup(
     // Get group
     const group = await env.DB.prepare(`
       SELECT * FROM groups WHERE projectId = ? AND groupId = ?
-    `).bind(projectId, groupId).first();
+    `).bind(projectId, groupId).first<GroupRow>();
 
     if (!group) {
       return errorResponse('GROUP_NOT_FOUND', 'Group not found');
     }
 
     // Store old group name for notification
-    const oldGroupName = (group as any).groupName;
+    const oldGroupName = group.groupName;
 
     // Validate updates
     const allowedUpdates: Record<string, SqlBindValue> = {};
@@ -458,14 +469,14 @@ export async function deleteGroup(
     // Get group
     const group = await env.DB.prepare(`
       SELECT * FROM groups WHERE projectId = ? AND groupId = ?
-    `).bind(projectId, groupId).first();
+    `).bind(projectId, groupId).first<GroupRow>();
 
     if (!group) {
       return errorResponse('GROUP_NOT_FOUND', 'Group not found');
     }
 
     // Store group name and get members for notification before deletion checks
-    const groupName = (group as any).groupName || '未命名群組';
+    const groupName = group.groupName || '未命名群組';
     const groupMembers = await getGroupMemberEmails(env, projectId, groupId);
 
     // Check for active members

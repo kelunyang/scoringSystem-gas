@@ -373,12 +373,17 @@ export async function logApiAction(
  * // Result: { name: { oldValue: 'Old Name', newValue: 'New Name' },
  * //           status: { oldValue: 'active', newValue: 'completed' } }
  */
-export function generateChanges<T extends Record<string, unknown>>(
+export function generateChanges<T extends object>(
   oldData: T,
-  newData: Partial<T>,
+  newData: Partial<T> | Record<string, unknown>,
   excludeFields: string[] = []
 ): Record<string, { oldValue: unknown; newValue: unknown }> {
   const changes: Record<string, { oldValue: unknown; newValue: unknown }> = {};
+
+  // 約束是 object 而不是 Record<string, unknown>：呼叫端多半傳的是
+  // 具名 interface（例如 GroupRow），而 interface 沒有隱含索引簽章，
+  // 用 Record 當約束會把它們全部擋在外面。
+  const before = oldData as Record<string, unknown>;
 
   for (const [key, newValue] of Object.entries(newData)) {
     // Skip excluded fields
@@ -386,7 +391,7 @@ export function generateChanges<T extends Record<string, unknown>>(
       continue;
     }
 
-    const oldValue = oldData[key];
+    const oldValue = before[key];
 
     // Record change (even if values are the same, to track all updated fields)
     changes[key] = {

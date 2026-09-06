@@ -2,6 +2,8 @@
 // Email Templates for Queue Consumer
 // ============================================
 
+import type { Threat } from './login-events-consumer';
+
 /**
  * 登入記錄詳情類型
  */
@@ -704,7 +706,7 @@ export function buildSecurityAlertEmailContent(
   ipAddress: string,
   country: string,
   lockUntil: number | undefined,
-  threats: any[] | undefined,
+  threats: Threat[] | undefined,
   systemTitle: string,
   relatedLogsDetails?: LoginLogDetail[]
 ): { subject: string; htmlBody: string; textBody: string } {

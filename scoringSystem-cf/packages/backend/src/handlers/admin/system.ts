@@ -11,6 +11,26 @@ import type { SqlBindValue } from '../../types';
 /**
  * Get system statistics
  */
+/** sys_logs JOIN users/projects 的一列，供管理後台的系統日誌檢視。 */
+interface SysLogRow {
+  logId: string;
+  level: string;
+  functionName: string | null;
+  userId: string | null;
+  displayName: string | null;
+  action: string;
+  message: string;
+  /** JSON 字串，原樣傳給前端在對話框裡展開。 */
+  context: string | null;
+  createdAt: number;
+  projectId: string | null;
+  projectName: string | null;
+  entityType: string | null;
+  entityId: string | null;
+  /** JSON 字串，同上。 */
+  relatedEntities: string | null;
+}
+
 export async function getSystemStats(env: Env, userEmail?: string): Promise<Response> {
   try {
     // Get user statistics
@@ -237,9 +257,9 @@ export async function getSystemLogs(
     query += ` LIMIT ? OFFSET ?`;
     params.push(limit, offset);
 
-    const result = await env.DB.prepare(query).bind(...params).all();
+    const result = await env.DB.prepare(query).bind(...params).all<SysLogRow>();
 
-    const logs = result.results?.map((log: any) => {
+    const logs = result.results?.map(log => {
       return {
         logId: log.logId,
         level: log.level,
@@ -286,7 +306,7 @@ export async function getLogStatistics(env: Env): Promise<Response> {
         COUNT(*) as count
       FROM sys_logs
       GROUP BY level
-    `).all();
+    `).all<{ level: string; count: number }>();
 
     // Get total log count
     const totalCount = await env.DB.prepare(`
@@ -300,7 +320,7 @@ export async function getLogStatistics(env: Env): Promise<Response> {
 
     // Convert level stats to object format expected by frontend
     const levelCounts: Record<string, number> = {};
-    levelStats.results?.forEach((stat: any) => {
+    levelStats.results?.forEach(stat => {
       levelCounts[stat.level] = stat.count;
     });
 
@@ -351,7 +371,13 @@ export async function getEntityDetails(
     // Handle system entity types (these don't have database tables)
     if (['system_settings', 'system_dashboard', 'system_robots', 'system_audit', 'security_audit'].includes(entityType)) {
       // For system entities, return metadata instead of querying database
-      const systemEntityInfo: Record<string, any> = {
+      const systemEntityInfo: Record<string, {
+        entityId: string;
+        entityType: string;
+        name: string;
+        description: string;
+        category: string;
+      }> = {
         system_settings: {
           entityId: entityId,
           entityType: 'system_settings',

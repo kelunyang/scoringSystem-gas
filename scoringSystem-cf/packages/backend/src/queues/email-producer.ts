@@ -4,6 +4,7 @@
 
 import type { Env } from '../types';
 import type { EmailQueueMessage } from './types';
+import type { Threat } from './login-events-consumer';
 
 /**
  * 推送邀請碼郵件到 Queue
@@ -157,7 +158,7 @@ export async function queueSecurityAlertEmail(
     ipAddress: string;
     country: string;
     lockUntil?: number;
-    threats?: any[];
+    threats?: Threat[];
     relatedLogsDetails?: Array<{  // 🔥 Add relatedLogsDetails parameter
       logId: string;
       timestamp: number;

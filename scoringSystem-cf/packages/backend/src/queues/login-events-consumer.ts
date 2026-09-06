@@ -18,7 +18,8 @@ import { generateId, ID_PREFIXES } from '../utils/id-generator';
 /**
  * Threat detection result
  */
-interface Threat {
+/** 登入事件分析出的可疑訊號，會一路帶到安全警報信裡。 */
+export interface Threat {
   type: 'distributed_attack' | 'geo_anomaly' | 'device_anomaly';
   severity: 'critical' | 'high' | 'medium' | 'low';
   details: string;
@@ -70,9 +71,17 @@ async function analyzeLoginEvent(
         LIMIT 100
       `)
       .bind(event.userId || event.userEmail, twentyFourHoursAgo)
-      .all();
+      .all<{
+        action: string;
+        ipAddress: string | null;
+        country: string | null;
+        city: string | null;
+        userAgent: string | null;
+        reason: string | null;
+        createdAt: number;
+      }>();
 
-    const recentLogins: LoginEvent[] = (recentEvents.results || []).map((row: any) => ({
+    const recentLogins: LoginEvent[] = (recentEvents.results || []).map(row => ({
       eventType: row.action === 'login_success' ? 'login_success' : 'login_failed',
       userEmail: event.userEmail,
       userId: event.userId,
@@ -83,7 +92,8 @@ async function analyzeLoginEvent(
       userAgent: row.userAgent || 'unknown',
       requestPath: '',
       timestamp: row.createdAt,
-      reason: row.reason
+      // SQL 沒有 reason 時給 null，但 LoginEvent 用 undefined 表示「沒有」
+      reason: row.reason ?? undefined
     }));
 
     // Detect threats
@@ -283,7 +293,7 @@ async function executeSecurityAction(
   const relatedLogIds: string[] = [];
   const relatedLogsDetails: LogEntryDetail[] = [];
 
-  (recentFailedLogsResult.results || []).forEach((log: any) => {
+  (recentFailedLogsResult.results || []).forEach(log => {
     relatedLogIds.push(log.logId as string);
 
     try {

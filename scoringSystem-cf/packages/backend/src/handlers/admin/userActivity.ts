@@ -202,13 +202,13 @@ async function queryLoginEvents(
 
   const result = await env.DB.prepare(query)
     .bind(userId, startTimestamp, endTimestamp)
-    .all()
+    .all<{ logId: string; level: string; action: string; message: string; context: string | null; createdAt: number; entityId: string | null }>()
 
   if (!result.success) {
     throw new Error('Failed to query login events')
   }
 
-  return result.results.map((row: any) => {
+  return result.results.map(row => {
     const context = row.context ? JSON.parse(row.context) : {}
 
     // Determine event type
@@ -276,19 +276,28 @@ async function queryActivityEvents(
 
   const result = await env.DB.prepare(query)
     .bind(userId, startTimestamp, endTimestamp)
-    .all()
+    .all<{
+      timestamp: number;
+      entityType: string | null;
+      entityId: string | null;
+      projectId: string | null;
+      projectName: string | null;
+      eventType: string;
+    }>()
 
   if (!result.success) {
     throw new Error('Failed to query activity events')
   }
 
-  return result.results.map((row: any) => ({
+  return result.results.map(row => ({
     timestamp: row.timestamp,
     date: new Date(row.timestamp).toISOString().split('T')[0],
     eventType: 'activity',
-    entityType: row.entityType,
-    entityId: row.entityId,
-    projectId: row.projectId,
+    // UserActivityEvent 的欄位都是選填（沒有就是 undefined），
+    // 而 D1 的空值是 null，兩者要轉一次
+    entityType: row.entityType ?? undefined,
+    entityId: row.entityId ?? undefined,
+    projectId: row.projectId ?? undefined,
     projectName: row.projectName || 'Unknown Project',
     action: row.eventType
   }))

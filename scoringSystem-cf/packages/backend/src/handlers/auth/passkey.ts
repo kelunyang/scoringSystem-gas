@@ -107,6 +107,17 @@ function getConfig(env: Env): WebAuthnConfig {
 /**
  * Get passkey status for a user
  */
+/** passkey_credentials 的一列。transports 存的是 JSON 字串陣列。 */
+interface PasskeyCredentialRow {
+  credentialId: string;
+  userId: string;
+  deviceName: string | null;
+  transports: string | null;
+  createdAt: number;
+  lastUsedAt: number | null;
+  backedUp: number;
+}
+
 export async function getPasskeyStatus(
   env: Env,
   userId: string
@@ -123,9 +134,9 @@ export async function getPasskeyStatus(
       ORDER BY lastUsedAt DESC NULLS LAST, createdAt DESC
     `)
     .bind(userId)
-    .all();
+    .all<PasskeyCredentialRow>();
 
-  const parsedCredentials: PasskeyCredential[] = credentials.results.map((row: any) => ({
+  const parsedCredentials: PasskeyCredential[] = credentials.results.map(row => ({
     credentialId: row.credentialId,
     userId: row.userId,
     deviceName: row.deviceName || 'Passkey',
@@ -162,9 +173,9 @@ export async function initPasskeyRegistration(
   const existing = await env.DB
     .prepare('SELECT credentialId, transports FROM passkey_credentials WHERE userId = ?')
     .bind(userId)
-    .all();
+    .all<Pick<PasskeyCredentialRow, 'credentialId' | 'transports'>>();
 
-  const excludeCredentials = existing.results.map((row: any) => ({
+  const excludeCredentials = existing.results.map(row => ({
     id: row.credentialId,
     type: 'public-key' as const,
     transports: JSON.parse(row.transports || '["internal", "hybrid"]'),
@@ -367,7 +378,7 @@ export async function initPasskeyAuthentication(
   const credentials = await env.DB
     .prepare('SELECT credentialId, transports FROM passkey_credentials WHERE userId = ?')
     .bind(user.userId)
-    .all();
+    .all<Pick<PasskeyCredentialRow, 'credentialId' | 'transports'>>();
 
   if (credentials.results.length === 0) {
     return null;
@@ -398,7 +409,7 @@ export async function initPasskeyAuthentication(
     // 「使用這台電腦」照舊帶入該帳號已註冊的憑證 → 直接走本機。
     allowCredentials: crossDevice
       ? []
-      : credentials.results.map((row: any) => ({
+      : credentials.results.map(row => ({
           id: row.credentialId,
           type: 'public-key' as const,
           transports: JSON.parse(row.transports || '["internal", "hybrid"]'),

@@ -8,6 +8,7 @@ import { queueSecurityAlertEmail } from '../queues/email-producer';
 import { ALERT_SEVERITY, LOCK_TYPE } from '../config/security';
 import { generateId, ID_PREFIXES } from './id-generator';
 import { isUniqueConstraintViolation } from '../utils/response';
+import type { Threat } from '../queues/login-events-consumer';
 
 /**
  * Notification details for admin alerts
@@ -20,7 +21,7 @@ export interface AdminNotificationDetails {
   country: string;
   timestamp: number;
   severity: typeof ALERT_SEVERITY.CRITICAL | typeof ALERT_SEVERITY.HIGH | typeof ALERT_SEVERITY.MEDIUM;
-  threats?: any[];
+  threats?: Threat[];
   lockUntil?: number;
   relatedLogsDetails?: Array<{  // 🔥 Add relatedLogsDetails parameter
     logId: string;
