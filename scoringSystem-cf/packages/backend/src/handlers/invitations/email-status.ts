@@ -89,7 +89,9 @@ export async function getInvitationEmailStatus(
     `).bind(...invitationCodes).all<{ invitationCode: string; invitationId: string; targetEmail: string }>();
 
     if (!invitationsResult.results || invitationsResult.results.length === 0) {
-      return successResponse({ emailStatuses: {} });
+      // 具型別的空 map：兩個分支形狀一致，前端才不必猜
+      const emptyStatuses: Record<string, InvitationEmailStatus> = {};
+      return successResponse({ emailStatuses: emptyStatuses });
     }
 
     // Build invitationCode -> invitationId/targetEmail map

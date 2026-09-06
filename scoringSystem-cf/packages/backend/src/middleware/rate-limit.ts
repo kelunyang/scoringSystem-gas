@@ -13,7 +13,7 @@
 
 import type { Context, Next } from 'hono';
 import type { Env, AuthUser } from '../types';
-import { errorResponse } from '../utils/response';
+import { errorResponse, type JsonResponse } from '../utils/response';
 import { getTypedConfig } from '../utils/config';
 import {
   consumeRateLimit,
@@ -42,6 +42,21 @@ const DEFAULT_AI_RATE_LIMIT_PER_MINUTE = 10;
 const DEFAULT_AI_RATE_LIMIT_PER_HOUR = 60;
 
 /**
+ * 429 的 body 形狀。比一般的 errorResponse 多帶 rule／retryAfter／resetTime，
+ * 前端要靠它們顯示「還要等多久」。
+ */
+export interface RateLimitErrorBody {
+  success: false;
+  error: {
+    code: string;
+    message: string;
+    rule?: string;
+    retryAfter: number;
+    resetTime?: number;
+  };
+}
+
+/**
  * Build the 429 for a rejected decision.
  *
  * @param decision - The rejecting decision from the limiter
@@ -53,12 +68,12 @@ export function rateLimitResponse(
   decision: RateLimitDecision,
   code: string,
   message: string
-): Response {
+): JsonResponse<RateLimitErrorBody> {
   const retryAfterSeconds = Math.max(1, Math.ceil((decision.retryAfterMs ?? 0) / 1000));
 
   return new Response(
     JSON.stringify({
-      success: false,
+      success: false as const,
       error: {
         code,
         message,
@@ -77,7 +92,7 @@ export function rateLimitResponse(
         'X-RateLimit-Reset': String(decision.resetAt ?? Date.now())
       }
     }
-  );
+  ) as JsonResponse<RateLimitErrorBody>;
 }
 
 /**

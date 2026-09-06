@@ -322,6 +322,7 @@ import AnimatedStatistic from '../shared/AnimatedStatistic.vue'
 // Drawer Breadcrumb
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 import { rpcClient } from '@/utils/rpc-client'
+import type { ApiData } from '@/utils/api-types'
 import type { GroupClickData } from '@/types/components'
 
 import { getErrorMessage } from '@/utils/errorHandler'
@@ -399,9 +400,10 @@ export interface Member {
   displayName: string
   points: number
   contribution: number
-  avatarSeed?: string
-  avatarStyle?: string
-  avatarOptions?: any
+  // 後端 users 表這三個欄位可為 null
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | null
 }
 
 export interface GroupData {
@@ -472,14 +474,21 @@ const settlementResult: Ref<SettlementDetails | null> = ref(null)
 const settlementValidation: Ref<Validation | null> = ref(null)
 const selectedSettlementGroup: Ref<SelectedGroup | null> = ref(null)
 const loadingSettlementTransactions: Ref<boolean> = ref(false)
-const settlementGroupTransactions: Ref<Transaction[]> = ref([])
+/** 結算交易列表的形狀：端點回的交易，外加這裡補上的 displayName／participationPercentage */
+type SettlementGroupTransaction =
+  ApiData<typeof rpcClient.api.wallets.transactions.$post>['transactions'][number] & {
+    displayName: string
+    participationPercentage: number
+  }
+
+const settlementGroupTransactions: Ref<SettlementGroupTransaction[]> = ref([])
 const settlementGroupNamesFromTransactions: Ref<Record<string, string>> = ref({})
 const showScoringExplanation = ref<boolean>(false)
 
 // ========== Utility Functions ==========
 
 // Utility: Safe JSON parsing
-function safeParseMetadata(metadata: string | Record<string, any> | undefined): Record<string, any> {
+function safeParseMetadata(metadata: string | Record<string, unknown> | null | undefined): Record<string, unknown> {
   try {
     return typeof metadata === 'string' ? JSON.parse(metadata) : (metadata || {})
   } catch (err) {
@@ -587,7 +596,7 @@ const settlementGroupMembers = computed((): Member[] => {
       email: tx.userEmail,
       displayName: tx.displayName || tx.userEmail,
       points: tx.amount,
-      contribution: (metadata?.participationPercentage || 0) * 100,
+      contribution: Number(metadata?.participationPercentage || 0) * 100,
       avatarSeed: tx.avatarSeed,
       avatarStyle: tx.avatarStyle,
       avatarOptions: tx.avatarOptions
@@ -635,15 +644,15 @@ async function buildGroupNamesFromTransactions(): Promise<void> {
     const response = await httpResponse.json()
 
     console.log('[buildGroupNamesFromTransactions] API response:', response.success)
-    console.log('[buildGroupNamesFromTransactions] Transactions count:', response.data?.transactions?.length)
+    console.log('[buildGroupNamesFromTransactions] Transactions count:', response.success ? response.data.transactions.length : 0)
 
     if (response.success && response.data?.transactions) {
       const groupNames: Record<string, string> = {}
 
-      response.data.transactions.forEach((tx: Transaction) => {
+      response.data.transactions.forEach(tx => {
         const metadata = safeParseMetadata(tx.metadata)
 
-        if (metadata?.groupId && metadata?.groupName) {
+        if (typeof metadata?.groupId === 'string' && typeof metadata?.groupName === 'string') {
           groupNames[metadata.groupId] = metadata.groupName
           console.log(`[buildGroupNamesFromTransactions] Extracted: ${metadata.groupId} -> ${metadata.groupName}`)
         }
@@ -745,12 +754,12 @@ async function handleSettlementGroupClick(groupData: GroupClickData): Promise<vo
         ElMessage.info('此組尚無結算交易記錄')
         settlementGroupTransactions.value = []
       } else {
-        settlementGroupTransactions.value = response.data.transactions.map((tx: Transaction) => {
+        settlementGroupTransactions.value = response.data.transactions.map(tx => {
           const metadata = safeParseMetadata(tx.metadata)
           return {
             ...tx,
             displayName: tx.displayName || tx.userEmail,
-            participationPercentage: metadata?.participationPercentage || 0
+            participationPercentage: Number(metadata?.participationPercentage || 0)
           }
         })
 
@@ -759,7 +768,7 @@ async function handleSettlementGroupClick(groupData: GroupClickData): Promise<vo
           const firstTx = response.data.transactions[0]
           const metadata = safeParseMetadata(firstTx.metadata)
 
-          if (metadata?.groupName && metadata.groupName !== groupData.groupId) {
+          if (typeof metadata?.groupName === 'string' && metadata.groupName !== groupData.groupId) {
             selectedSettlementGroup.value = {
               ...selectedSettlementGroup.value!,
               groupName: metadata.groupName

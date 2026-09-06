@@ -613,6 +613,7 @@ import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
 import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { rpcClient } from '@/utils/rpc-client'
+import type { ApiData } from '@/utils/api-types'
 import { fetchWithAuth } from '@/utils/api-helpers'
 import AdminFilterToolbar from '@/components/admin/shared/AdminFilterToolbar.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
@@ -631,15 +632,16 @@ import {
 } from '@element-plus/icons-vue'
 
 // Types
-interface Invitation {
-  invitationId: string
-  invitationCode: string
-  targetEmail: string
-  status: 'active' | 'used' | 'expired' | 'deactivated'
-  createdBy: string
-  createdTime: number
-  expiryTime: number
-  defaultGlobalGroups?: string[]
+/** 邀請碼的形狀從端點推導（見 plan/issue.md #011） */
+type Invitation = ApiData<typeof rpcClient.api.invitations.list.$post>[number]
+
+/**
+ * 邀請碼是否已過期。
+ * `expiryTime` 在資料庫可為 NULL（invitation_codes 沒有 NOT NULL 約束），
+ * 沒有到期時間就當作不會過期。
+ */
+function isExpired(invite: { expiryTime: number | null }, now: number): boolean {
+  return invite.expiryTime !== null && invite.expiryTime <= now
 }
 
 interface GlobalGroup {
@@ -740,7 +742,7 @@ const filteredInvitations = computed(() => {
   if (!showUnusableInvitations.value && !inviteStatusFilter.value) {
     const now = Date.now()
     filtered = filtered.filter(invite =>
-      invite.status === 'active' && invite.expiryTime > now
+      invite.status === 'active' && !isExpired(invite, now)
     )
   }
 
@@ -756,9 +758,9 @@ const filteredInvitations = computed(() => {
     filtered = filtered.filter(invite => {
       const now = Date.now()
       if (inviteStatusFilter.value === 'active') {
-        return invite.status === 'active' && invite.expiryTime > now
+        return invite.status === 'active' && !isExpired(invite, now)
       } else if (inviteStatusFilter.value === 'expired') {
-        return invite.expiryTime <= now
+        return isExpired(invite, now)
       } else if (inviteStatusFilter.value === 'used') {
         return invite.status === 'used'
       } else if (inviteStatusFilter.value === 'deactivated') {
@@ -776,8 +778,8 @@ const invitationStats = computed(() => {
   const inviteList = invitations.value || []
   return {
     total: inviteList.length,
-    active: inviteList.filter(i => i.status === 'active' && i.expiryTime > now).length,
-    expired: inviteList.filter(i => i.expiryTime <= now).length,
+    active: inviteList.filter(i => i.status === 'active' && !isExpired(i, now)).length,
+    expired: inviteList.filter(i => isExpired(i, now)).length,
     used: inviteList.filter(i => i.status === 'used').length,
     deactivated: inviteList.filter(i => i.status === 'deactivated').length
   }
@@ -864,7 +866,7 @@ const getInvitationStatusText = (invitation: Invitation): string => {
   const now = Date.now()
   if (invitation.status === 'deactivated') return '已停用'
   if (invitation.status === 'used') return '已使用'
-  if (invitation.expiryTime <= now) return '已過期'
+  if (isExpired(invitation, now)) return '已過期'
   if (invitation.status === 'active') return '有效'
   return invitation.status
 }
@@ -1264,7 +1266,7 @@ const getInvitationTagType = (invitation: Invitation): 'primary' | 'success' | '
   const now = Date.now()
   if (invitation.status === 'deactivated') return 'danger'
   if (invitation.status === 'used') return 'success'
-  if (invitation.expiryTime <= now) return 'info'
+  if (isExpired(invitation, now)) return 'info'
   if (invitation.status === 'active') return 'primary'
   return 'info'
 }
