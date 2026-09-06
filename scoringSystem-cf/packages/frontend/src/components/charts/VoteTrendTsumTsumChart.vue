@@ -20,7 +20,6 @@ import { useAvatar } from '@/composables/useAvatar'
 import { usePhysicsAnimation, type BodyConfig } from '@/composables/usePhysicsAnimation'
 import { useInViewport } from '@/composables/useInViewport'
 import EmptyState from '@/components/shared/EmptyState.vue'
-import type { AvatarCustomOptions } from '@/types/auth'
 
 /** 圖表四邊留白 */
 interface ChartMargin {
@@ -46,7 +45,7 @@ interface Voter {
   voterDisplayName?: string
   voterAvatarSeed?: string
   voterAvatarStyle?: string
-  voterAvatarOptions?: string | AvatarCustomOptions
+  voterAvatarOptions?: string | Record<string, unknown>
   timestamp?: number
 }
 

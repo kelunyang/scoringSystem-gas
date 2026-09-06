@@ -117,63 +117,45 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, computed, watch, type PropType } from 'vue'
+<script setup lang="ts" generic="T extends object">
+import { ref, computed, watch, type Ref } from 'vue'
 import { denseRanksToMidRanks } from '@repo/shared'
 import EmptyState from '@/components/shared/EmptyState.vue'
 
 /**
- * 一個可拖曳的項目。這個元件不認識項目的內容，只透過
- * `itemKey`／`itemLabel` 指定的欄位名去取值，其餘原樣傳回。
+ * 這個元件不認識項目的內容，只透過 `itemKey`／`itemLabel` 指定的
+ * 欄位名去取值，其餘原樣傳回。元素型別由呼叫端決定（泛型 T）。
  */
-interface RankingItem {
-  rank?: number
-  groupName?: string
-  name?: string
-}
 
-/** 依 props.itemKey／props.itemLabel 指定的欄位名動態取值 */
-function readField(item: RankingItem | undefined, key: string): unknown {
+/** 依 props 指定的欄位名動態取值 */
+function readField(item: T | undefined, key: string): unknown {
   return item ? (item as Record<string, unknown>)[key] : undefined
 }
 
 interface Bar {
   id: string
-  members: RankingItem[]
+  members: T[]
 }
 
-const props = defineProps({
-  items: {
-    type: Array as PropType<RankingItem[]>,
-    required: true,
-    default: () => []
-  },
-  itemKey: {
-    type: String,
-    default: 'id'
-  },
-  itemLabel: {
-    type: String,
-    default: 'name'
-  },
-  disabled: {
-    type: Boolean,
-    default: false
-  },
-  showActions: {
-    type: Boolean,
-    default: true
-  },
-  // 是否啟用「同名」群組打包功能（僅 submission 排名輸入啟用）
-  enableGrouping: {
-    type: Boolean,
-    default: false
-  }
+const props = withDefaults(defineProps<{
+  items: T[]
+  itemKey?: string
+  itemLabel?: string
+  disabled?: boolean
+  showActions?: boolean
+  /** 是否啟用「同名」群組打包功能（僅 submission 排名輸入啟用） */
+  enableGrouping?: boolean
+}>(), {
+  itemKey: 'id',
+  itemLabel: 'name',
+  disabled: false,
+  showActions: true,
+  enableGrouping: false
 })
 
-const emit = defineEmits(['update:items'])
+const emit = defineEmits<{ 'update:items': [items: T[]] }>()
 
-const bars = ref<Bar[]>([])
+const bars = ref<Bar[]>([]) as Ref<Bar[]>
 const draggedIndex = ref<number | null>(null)
 const selectedBarIds = ref<Set<string>>(new Set())
 
@@ -184,32 +166,32 @@ function nextBarId(): string {
 }
 
 // 取得項目唯一標識
-function getItemKey(item: RankingItem | undefined, index: number) {
+function getItemKey(item: T | undefined, index: number) {
   return readField(item, props.itemKey) ?? `item-${index}`
 }
 
 // 取得項目顯示標籤
-function getItemLabel(item: RankingItem | undefined) {
-  return readField(item, props.itemLabel) || item?.groupName || item?.name || '未命名'
+function getItemLabel(item: T | undefined) {
+  return readField(item, props.itemLabel) || readField(item, 'groupName') || readField(item, 'name') || '未命名'
 }
 
 /**
  * 由 props.items 重建 bars。
  * 若項目已帶相同 rank（重新載入已存的同名排名），則合併為群組 bar。
  */
-function buildBarsFromItems(items: RankingItem[]): Bar[] {
+function buildBarsFromItems(items: T[]): Bar[] {
   if (!Array.isArray(items) || items.length === 0) return []
 
   // 是否有可用的 rank 欄位可據以分組
-  const hasRanks = items.every(it => typeof it?.rank === 'number')
+  const hasRanks = items.every(it => typeof readField(it, 'rank') === 'number')
   if (!hasRanks) {
     return items.map(it => ({ id: nextBarId(), members: [it] }))
   }
 
   // 依 rank 分組（rank 相同 = 同名），並依 rank 排序
-  const byRank = new Map<number, RankingItem[]>()
+  const byRank = new Map<number, T[]>()
   for (const it of items) {
-    const r = it.rank as number
+    const r = readField(it, 'rank') as number
     if (!byRank.has(r)) byRank.set(r, [])
     byRank.get(r)!.push(it)
   }
@@ -284,7 +266,7 @@ function toggleSelect(barId: string) {
 
 /** 將輸出 emit 出去：攤平成 items，每個成員帶上 dense rank */
 function emitUpdate() {
-  const result: RankingItem[] = []
+  const result: T[] = []
   bars.value.forEach((bar, idx) => {
     bar.members.forEach(m => {
       result.push({ ...m, rank: idx + 1 })

@@ -41,11 +41,11 @@
           version-id-key="proposalId"
           created-time-key="createdTime"
           display-name-key="proposerDisplayName"
-          :format-title-fn="(version: any, index: number) =>
+          :format-title-fn="(version, index) =>
             index === proposalVersions.length - 1 ? '最終版本' : formatVersionStepTime(version.createdTime)"
           @version-change="onVersionChange"
         >
-          <template #description="{ version }: { version: any }">
+          <template #description="{ version }">
             <div class="version-step-description">
               <div class="submitter-line">
                 提交者：{{ version.proposerDisplayName }}
@@ -53,8 +53,8 @@
               <div class="vote-stats-line">
                 支持: {{ version.supportCount || 0 }} | 反對: {{ version.opposeCount || 0 }}
               </div>
-              <div v-if="getVersionStatusText(version as any)" class="status-line">
-                {{ getVersionStatusText(version as any) }}
+              <div v-if="getVersionStatusText(version)" class="status-line">
+                {{ getVersionStatusText(version) }}
               </div>
             </div>
           </template>
@@ -80,7 +80,7 @@
             :enable-grouping="true"
             @update:items="handleRankingUpdate"
           >
-            <template #default="{ item }: { item: any }">
+            <template #default="{ item }">
               <div class="group-info" :class="{ 'not-in-version': isGroupNotInProposalVersion(item) }">
                 <div class="group-header">
                   <div class="group-name">{{ item.groupName }}</div>
@@ -161,7 +161,7 @@
         </div>
 
         <VoteMajorityTsumTsumChart
-          :vote-data="(tsumTsumVoteData as any)"
+          :vote-data="tsumTsumVoteData"
           :version-labels="versionLabels"
           :version-statuses="versionStatuses"
           :version-voting-results="versionVotingResults"
@@ -569,7 +569,7 @@ import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import { usePointCalculation } from '@/composables/usePointCalculation'
 import { useAvatar } from '@/composables/useAvatar'
-import { useRankingProposals, type SubmittedGroup, type RankingData } from '@/composables/useRankingProposals'
+import { useRankingProposals, type SubmittedGroup, type RankingData, type VoteRecord } from '@/composables/useRankingProposals'
 import { useVoteResultAlerts } from '@/composables/useVoteResultAlerts'
 import { useSudoStore } from '@/stores/sudo'
 
@@ -711,7 +711,7 @@ const proposalGroupIds = ref<Set<string>>(new Set())
  * 某組是否「不在目前檢視的提案版本中」（例如新通過共識後才補進可投票名單的組）。
  * 僅在「唯讀檢視既有提案」時標記；一旦進入重新投票（編輯）模式就不標記，因為使用者正在設定新排名。
  */
-function isGroupNotInProposalVersion(item: any): boolean {
+function isGroupNotInProposalVersion(item: { groupId?: string } | undefined): boolean {
   return (
     hasExistingProposal.value &&
     !isResubmitting.value &&
@@ -917,13 +917,13 @@ const tsumTsumVoteData = computed(() => {
     return {}
   }
 
-  const voteData: Record<string, { support: unknown[]; oppose: unknown[] }> = {}
+  const voteData: Record<string, { support: VoteRecord[]; oppose: VoteRecord[] }> = {}
 
   proposalVersions.value.forEach(proposal => {
     const allVotes = proposal.votes || []
     voteData[proposal.proposalId] = {
-      support: allVotes.filter((v: { agree: number }) => v.agree === 1),
-      oppose: allVotes.filter((v: { agree: number }) => v.agree === -1)
+      support: allVotes.filter(v => v.agree === 1),
+      oppose: allVotes.filter(v => v.agree === -1)
     }
   })
 
@@ -1273,8 +1273,8 @@ function processProposalRankings(proposal: { proposalId?: string; rankingData?: 
   const includedGroupIds = new Set(currentRankings.value.map(r => r.groupId))
   const maxRank = currentRankings.value.reduce((m, r) => Math.max(m, r.rank || 0), 0)
   const appendedGroups = localSubmittedGroups.value
-    .filter((g: any) => g && g.groupId && !includedGroupIds.has(g.groupId))
-    .map((g: any, i: number) => ({
+    .filter(g => g && g.groupId && !includedGroupIds.has(g.groupId))
+    .map((g, i) => ({
       groupId: g.groupId,
       rank: maxRank + i + 1,
       submissionId: g.submissionId || '',
@@ -1429,7 +1429,7 @@ async function submitNewProposal() {
 
   try {
     const targetArray = hasExistingProposal.value ? currentRankings.value : localSubmittedGroups.value
-    const rankingData: RankingData[] = targetArray.map((group: any, index) => ({
+    const rankingData: RankingData[] = targetArray.map((group, index) => ({
       groupId: group.groupId,
       // 採用元件計算的 dense 弱序 rank（同名共用同一 rank），回退為位置序
       rank: typeof group.rank === 'number' ? group.rank : index + 1,
@@ -1557,14 +1557,6 @@ function truncateContent(content: string, maxLength = 100) {
     : plainText
 }
 
-interface VoteRecord {
-  voterAvatarSeed?: string
-  voterAvatarStyle?: string
-  voterAvatarOptions?: Record<string, unknown>
-  voterDisplayName?: string
-  voterEmail?: string
-}
-
 function getVoterAvatarUrl(vote: VoteRecord) {
   if (!vote.voterAvatarSeed) return ''
   return generateMemberAvatarUrl({
@@ -1572,12 +1564,12 @@ function getVoterAvatarUrl(vote: VoteRecord) {
     avatarSeed: vote.voterAvatarSeed,
     avatarStyle: vote.voterAvatarStyle || 'bottts',
     avatarOptions: vote.voterAvatarOptions
-  } as any)
+  })
 }
 
 function getVoterInitials(vote: VoteRecord) {
   const name = vote.voterDisplayName || vote.voterEmail || ''
-  return generateMemberInitials({ email: '', displayName: name } as any)
+  return generateMemberInitials({ email: '', displayName: name })
 }
 
 function getMemberAvatarUrl(member: GroupMember) {
@@ -1587,12 +1579,12 @@ function getMemberAvatarUrl(member: GroupMember) {
     avatarSeed: member.avatarSeed,
     avatarStyle: member.avatarStyle || 'bottts',
     avatarOptions: member.avatarOptions
-  } as any)
+  })
 }
 
 function getMemberInitials(member: GroupMember) {
   const name = member.displayName || member.userEmail
-  return generateMemberInitials({ email: member.userEmail, displayName: name } as any)
+  return generateMemberInitials({ email: member.userEmail, displayName: name })
 }
 </script>
 

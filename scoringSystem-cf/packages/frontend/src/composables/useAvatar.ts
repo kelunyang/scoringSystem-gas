@@ -9,6 +9,7 @@
 
 import { reactive } from 'vue'
 import type { AvatarCustomOptions } from '@/types/auth'
+import { parseAvatarOptions } from '@/utils/avatar'
 
 interface Member {
   /** 後端多數端點回傳的是 userEmail；少數轉換過的資料才有 email */
@@ -17,7 +18,7 @@ interface Member {
   displayName?: string
   avatarSeed?: string | null
   avatarStyle?: string | null
-  avatarOptions?: string | AvatarCustomOptions | null
+  avatarOptions?: string | Record<string, unknown> | null
 }
 
 interface Vote {
@@ -25,7 +26,7 @@ interface Vote {
   voterDisplayName?: string
   voterAvatarSeed?: string
   voterAvatarStyle?: string
-  voterAvatarOptions?: string | AvatarCustomOptions
+  voterAvatarOptions?: string | Record<string, unknown> | null
 }
 
 interface AvatarErrors {
@@ -92,21 +93,7 @@ export function useAvatar(): AvatarReturn {
     const style = member.avatarStyle || 'avataaars'
 
     // 解析 avatarOptions（可能是 JSON 字串或物件）
-    let options: AvatarCustomOptions = {}
-    if (member.avatarOptions) {
-      if (typeof member.avatarOptions === 'string') {
-        try {
-          options = JSON.parse(member.avatarOptions)
-        } catch {
-          console.warn('Failed to parse avatarOptions:', member.avatarOptions)
-          options = {}
-        }
-      } else {
-        options = member.avatarOptions
-      }
-    }
-
-    return generateDicebearUrl(seed, style, options)
+    return generateDicebearUrl(seed, style, parseAvatarOptions(member.avatarOptions ?? undefined))
   }
 
   /**
@@ -193,19 +180,7 @@ export function useAvatar(): AvatarReturn {
     const seed = vote.voterAvatarSeed || vote.voterEmail
     const style = vote.voterAvatarStyle || 'avataaars'
 
-    let options: AvatarCustomOptions = {}
-    if (vote.voterAvatarOptions) {
-      if (typeof vote.voterAvatarOptions === 'string') {
-        try {
-          options = JSON.parse(vote.voterAvatarOptions)
-        } catch {
-          console.warn('Failed to parse voterAvatarOptions:', vote.voterAvatarOptions)
-          options = {}
-        }
-      } else {
-        options = vote.voterAvatarOptions
-      }
-    }
+    const options = parseAvatarOptions(vote.voterAvatarOptions ?? undefined)
 
     return generateDicebearUrl(seed, style, options)
   }

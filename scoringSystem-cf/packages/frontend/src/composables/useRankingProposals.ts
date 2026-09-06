@@ -34,6 +34,10 @@ export interface VoteRecord {
   agree: 1 | -1
   timestamp: number
   comment?: string
+  // 後端 JOIN users 帶回來的頭像欄位（圖表與投票列表會用）
+  voterAvatarSeed?: string
+  voterAvatarStyle?: string
+  voterAvatarOptions?: string | Record<string, unknown>
 }
 
 /**
