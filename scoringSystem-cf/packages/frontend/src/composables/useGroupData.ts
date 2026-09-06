@@ -9,15 +9,7 @@
 import { computed, type Ref } from 'vue'
 import type { User, Group } from '@/types'
 import { useSudoStore } from '@/stores/sudo'
-
-/** 成員與群組的對應記錄 */
-export interface GroupDataUserGroup {
-  groupId: string
-  userEmail: string
-  isActive?: boolean | number
-  role?: string
-  joinTime?: number | string
-}
+import type { UserGroupRecord } from '@repo/shared'
 
 /** 這裡只讀使用者的顯示與頭像欄位 */
 export interface GroupDataUser {
@@ -32,7 +24,7 @@ export interface GroupDataUser {
 export interface GroupDataProject {
   project?: { projectId?: string } | null
   groups?: Group[]
-  userGroups?: GroupDataUserGroup[]
+  userGroups?: UserGroupRecord[]
   users?: GroupDataUser[]
 }
 

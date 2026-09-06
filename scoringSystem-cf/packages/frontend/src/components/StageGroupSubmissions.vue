@@ -222,12 +222,28 @@
 <script setup lang="ts">
 // computed 未使用，已移除
 import type { Group } from '@/types'
+import type { GroupVotingData, UserGroupRecord } from '@repo/shared'
 import type { ExtendedStage } from '@/composables/useStageContentManagement'
 import StatNumberDisplay from './shared/StatNumberDisplay.vue'
 import AvatarGroup from './common/AvatarGroup.vue'
 import MarkdownViewer from './MarkdownViewer.vue'
 import EmptyState from './shared/EmptyState.vue'
 import dayjs from 'dayjs'
+
+/** 一位使用者的顯示與頭像欄位（來自專案的 users 清單） */
+interface ProjectUserInfo {
+  userEmail: string
+  displayName?: string | null
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | null
+}
+
+/** 這個階段的排名提案（只讀這兩個欄位） */
+interface StageProposalSummary {
+  groupId: string
+  status?: string
+}
 
 /**
  * Props interface
@@ -236,10 +252,10 @@ export interface Props {
   stage: ExtendedStage
   currentUserGroupId: string | null
   projectGroups: Group[]
-  groupApprovalVotesCache: Map<string, any>
-  projectUserGroups: any[]
-  projectUsers: any[]
-  stageProposals: any[]
+  groupApprovalVotesCache: Map<string, GroupVotingData>
+  projectUserGroups: UserGroupRecord[]
+  projectUsers: ProjectUserInfo[]
+  stageProposals: StageProposalSummary[]
   isTeacher?: boolean
   canComment?: boolean
   pinnedGroupId?: string | null
@@ -386,7 +402,7 @@ function getGroupMembersForAvatar(group: Group) {
   if (participationMap && Object.keys(participationMap).length > 0) {
     // 2. ✅ 使用 participationProposal 中的成員（實際提交者）
     groupMembers = Object.entries(participationMap).map(([userEmail, participation]) => {
-      const user = props.projectUsers?.find((u: any) => u.userEmail === userEmail)
+      const user = props.projectUsers?.find(u => u.userEmail === userEmail)
       return {
         userEmail: userEmail,                    // ✅ 修正欄位名稱（從 email 改為 userEmail）
         displayName: user?.displayName || userEmail.split('@')[0],
@@ -399,20 +415,20 @@ function getGroupMembersForAvatar(group: Group) {
     })
 
     // 3. 檢查是否有真實百分比（任一成員 > 0 表示有權限）
-    const hasRealPercentages = groupMembers.some((m: any) => m.participation > 0)
+    const hasRealPercentages = groupMembers.some(m => Number(m.participation) > 0)
 
     if (hasRealPercentages) {
       // 3a. 有權限：排序並設置 role
-      groupMembers.sort((a: any, b: any) => (b.participation || 0) - (a.participation || 0))
-      groupMembers.forEach((member: any, index: number) => {
+      groupMembers.sort((a, b) => Number(b.participation || 0) - Number(a.participation || 0))
+      groupMembers.forEach((member, index) => {
         member.role = index === 0 ? 'leader' : 'member'
       })
     } else {
       // 3b. 無權限（所有百分比為 0）：Fallback 到 userGroups
       groupMembers = props.projectUserGroups
-        .filter((ug: any) => ug.groupId === group.groupId && ug.isActive)
-        .map((ug: any) => {
-          const user = props.projectUsers?.find((u: any) => u.userEmail === ug.userEmail)
+        .filter(ug => ug.groupId === group.groupId && ug.isActive)
+        .map(ug => {
+          const user = props.projectUsers?.find(u => u.userEmail === ug.userEmail)
           return {
             userEmail: ug.userEmail,             // ✅ 修正欄位名稱
             displayName: user?.displayName || ug.userEmail.split('@')[0],
@@ -427,9 +443,9 @@ function getGroupMembersForAvatar(group: Group) {
   } else {
     // 5. ✅ 降級方案：使用 userGroups 中的數據
     groupMembers = props.projectUserGroups
-      .filter((ug: any) => ug.groupId === group.groupId && ug.isActive)
-      .map((ug: any) => {
-        const user = props.projectUsers?.find((u: any) => u.userEmail === ug.userEmail)
+      .filter(ug => ug.groupId === group.groupId && ug.isActive)
+      .map(ug => {
+        const user = props.projectUsers?.find(u => u.userEmail === ug.userEmail)
         return {
           userEmail: ug.userEmail,               // ✅ 修正欄位名稱
           displayName: user?.displayName || ug.userEmail.split('@')[0],
@@ -493,7 +509,7 @@ function getGroupTotalMembers(groupId: string): number {
   if (!props.projectUserGroups) return 0
 
   return props.projectUserGroups.filter(
-    (ug: any) => ug.groupId === groupId && ug.isActive
+    ug => ug.groupId === groupId && ug.isActive
   ).length
 }
 
@@ -534,7 +550,7 @@ function getConsensusTooltipData(group: Group) {
  * 解析 email 對應的顯示名稱（降級為 email 前綴）
  */
 function resolveConsensusDisplayName(email: string): string {
-  const user = props.projectUsers?.find((u: any) => u.userEmail === email)
+  const user = props.projectUsers?.find(u => u.userEmail === email)
   return user?.displayName || email.split('@')[0]
 }
 
@@ -542,17 +558,18 @@ function resolveConsensusDisplayName(email: string): string {
  * 計算該組尚未投共識票的參與者（依 participationProposal > 0 但不在 votes 內）
  * 回傳「姓名(email)」字串陣列
  */
-function getConsensusPendingMembers(group: Group, votingData?: any): string[] {
+function getConsensusPendingMembers(group: Group, votingData?: GroupVotingData): string[] {
   const data = votingData || props.groupApprovalVotesCache.get(group.groupId)
   if (!data) return []
 
   // 優先使用投票 API 回傳的 participationProposal（與後端共識門檻一致），降級用 group 上的
-  let proposal: Record<string, number> = data.participationProposal || {}
-  if (Object.keys(proposal).length === 0 && (group as any).participationProposal) {
+  let proposal: Record<string, number | null> = data.participationProposal || {}
+  const groupProposal = (group as { participationProposal?: string | Record<string, number> }).participationProposal
+  if (Object.keys(proposal).length === 0 && groupProposal) {
     try {
-      proposal = typeof (group as any).participationProposal === 'string'
-        ? JSON.parse((group as any).participationProposal)
-        : (group as any).participationProposal
+      proposal = typeof groupProposal === 'string'
+        ? JSON.parse(groupProposal)
+        : groupProposal
     } catch {
       proposal = {}
     }
@@ -561,7 +578,7 @@ function getConsensusPendingMembers(group: Group, votingData?: any): string[] {
   const participantEmails = Object.keys(proposal).filter(
     (email) => typeof proposal[email] === 'number' && proposal[email] > 0
   )
-  const votedEmails = new Set((data.votes || []).map((v: any) => v.voterEmail))
+  const votedEmails = new Set((data.votes || []).map(v => v.voterEmail))
 
   return participantEmails
     .filter((email) => !votedEmails.has(email))
@@ -571,7 +588,7 @@ function getConsensusPendingMembers(group: Group, votingData?: any): string[] {
 /**
  * 在共識票 tooltip 訊息後附上「尚未投票」成員清單（若可計算）
  */
-function appendPendingMembers(baseMessage: string, group: Group, votingData?: any): string {
+function appendPendingMembers(baseMessage: string, group: Group, votingData?: GroupVotingData): string {
   const pending = getConsensusPendingMembers(group, votingData)
   if (pending.length === 0) return baseMessage
   return `${baseMessage}\n尚未投票：\n${pending.join('\n')}`
@@ -587,7 +604,7 @@ function checkGroupSubmittedRanking(groupId: string, _stage: ExtendedStage): boo
   }
 
   // 檢查是否有該組提交且未撤回的提案
-  return props.stageProposals.some((p: any) =>
+  return props.stageProposals.some(p =>
     p.groupId === groupId && p.status !== 'withdrawn'
   )
 }

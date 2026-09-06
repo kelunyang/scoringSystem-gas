@@ -62,7 +62,7 @@ export interface Project {
   projectDescription?: string; // Alias for description
   title?: string; // Alias for projectName
   viewerRole?: string; // User's role in this project (viewer, editor, admin)
-  userGroups?: Group[]; // User's groups in this project
+  userGroups?: UserGroupRecord[]; // usergroups 關聯列（不是 Group）
   groups?: Group[]; // All groups in project
   users?: User[]; // All users in project
   stages?: Stage[]; // All stages in project
@@ -188,6 +188,24 @@ export type EventResourceData =
 /**
  * Project Group entity
  */
+/**
+ * `usergroups` 資料表的一列：使用者與組的關聯，不是組本身。
+ *
+ * `Project.userGroups` 裝的是這個而不是 `Group[]`——前端好幾個地方
+ * 早就各自重寫了正確的形狀（例如 useProjectPermissions 的
+ * `Omit<Project, 'userGroups'>`），這裡把它扶正。
+ */
+export interface UserGroupRecord {
+  userGroupId?: string;
+  groupId: string;
+  /** 後端 JOIN groups 帶回來的組名（handlers/projects/list.ts:150） */
+  groupName?: string;
+  userEmail: string;
+  role?: string;
+  isActive?: number;
+  joinTime?: number;
+}
+
 export interface Group {
   groupId: string;
   projectId: string;

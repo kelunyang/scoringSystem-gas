@@ -19,6 +19,7 @@ import { rpcClient } from '@/utils/rpc-client'
 import { useCurrentUser } from './useAuth'
 import { ElMessage } from 'element-plus'
 import type { Stage, Comment, User, Group } from '@/types'
+import type { UserGroupRecord } from '@repo/shared'
 
 /**
  * Project core data structure
@@ -37,7 +38,7 @@ export interface ProjectCoreData {
   users: User[]
   groups: Group[]
   stages: Stage[]
-  userGroups?: Group[] // User's groups in this project
+  userGroups?: UserGroupRecord[] // usergroups 關聯列（不是 Group）
   viewerRole?: 'teacher' | 'observer' | 'member' | null // User's role in project_viewers
 }
 

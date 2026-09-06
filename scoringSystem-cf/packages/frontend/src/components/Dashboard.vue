@@ -648,7 +648,7 @@ const openGroupMemberManagement = async (project: Project) => {
   const freshProject = projects.value?.find(p => p.projectId === project.projectId) || project
 
   // 從 userGroups 找到組長身份
-  const leaderUserGroup = freshProject.userGroups?.find((g: Group) => g.role === 'leader')
+  const leaderUserGroup = freshProject.userGroups?.find(g => g.role === 'leader')
   if (!leaderUserGroup) {
     showWarning('您不是任何群組的組長')
     return
@@ -658,8 +658,15 @@ const openGroupMemberManagement = async (project: Project) => {
   const fullGroup = (freshProject as any).groups?.find((g: any) => g.groupId === leaderUserGroup.groupId)
 
   // 合併資料：userGroups 的基本資訊 + groups 的 allowChange
-  const leaderGroup = {
-    ...leaderUserGroup,
+  // userGroups 是關聯列（沒有 projectId／createdTime），這裡補齊成 Group
+  const leaderGroup: Group = {
+    ...(fullGroup ?? {}),
+    groupId: leaderUserGroup.groupId,
+    projectId: freshProject.projectId,
+    groupName: leaderUserGroup.groupName ?? fullGroup?.groupName ?? '',
+    createdTime: fullGroup?.createdTime ?? 0,
+    isActive: fullGroup?.isActive ?? 1,
+    role: leaderUserGroup.role,
     allowChange: fullGroup?.allowChange ?? true,
     description: fullGroup?.description ?? ''
   }

@@ -4,6 +4,43 @@
 > 新坑往上加，讓最近的教訓最先被看到。
 
 ---
+## 2026-09-06 ｜ 同一個檔案裡兩份權限實作，被呼叫的那份是對的，另一份不是
+
+**症狀**：無（還沒爆）。`useDetailedProjectPermissions.ts` 裡有兩份
+幾乎一樣的權限計算：一個 composable（`useDetailedProjectPermissions`，
+170 行）和一個純函式（`calculateProjectPermissions`）。
+**只有純函式被呼叫**（Dashboard 一處），composable 零引用。
+
+**分歧點**：組長的 `canManageMembers`。
+
+```ts
+// composable（死碼）：從 userGroups 關聯列讀 allowChange
+const leaderGroup = userGroups.find(g => g.role === 'leader')
+const canChangeMembers = leaderGroup?.allowChange !== false   // 恆為 true
+
+// 純函式（實際使用）：從 project.groups 讀
+const group = project.groups?.find(g => g.groupId === leaderGroup?.groupId)
+const canChangeMembers = Boolean(group?.allowChange)
+```
+
+`usergroups` 那一列根本沒有 `allowChange` 欄位，所以死碼那份會讓
+「已關閉成員異動」的組，組長照樣拿到管理權限。純函式那份的註解
+甚至寫著「Get allowChange from project.groups array (not from userGroups)」
+——有人修過其中一份，另一份留在原地。
+
+**為什麼沒被發現**：`Project.userGroups` 在 shared 裡宣告成 `Group[]`，
+而 `Group` 有 `allowChange`。型別上完全合法，只是資料不是那個形狀。
+
+**教訓與防護**：
+
+1. **同一個檔案裡出現兩份做同一件事的實作，就要確認兩份都還活著。**
+   這次是刪掉死的那份。如果兩份都在用，那才是更糟的狀況。
+2. **型別宣告成「看起來合理」的既有型別，比宣告成 `any` 更危險。**
+   `userGroups?: Group[]` 讓 `g.allowChange` 通過檢查，而它永遠是
+   undefined。已在 shared 新增 `UserGroupRecord` 並改用它——
+   改完之後，讀錯欄位的地方立刻在 `tsc` 冒出來。
+
+---
 ## 2026-09-06 ｜ 回呼傳的是物件，接的人當布林用，於是警告從來沒出現過
 
 **症狀**：專案階段列表上的「本組尚未提交報告」警告從來不顯示。
