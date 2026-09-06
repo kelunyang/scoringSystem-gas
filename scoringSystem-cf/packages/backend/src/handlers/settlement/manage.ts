@@ -11,6 +11,39 @@ import { generateId } from '../../utils/id-generator';
  * Reverse a settlement
  * Creates reverse transactions for all transactions in the settlement
  */
+/** stagesettlements 的一列。memberEmails / memberPointsDistribution 存的是 JSON 字串。 */
+interface StageSettlementRow {
+  settlementId: string;
+  groupId: string;
+  finalRank: number;
+  allocatedPoints: number;
+  memberEmails: string | null;
+  memberPointsDistribution: string | null;
+}
+
+/** 上面那一列解析後回給前端的形狀。 */
+interface StageSettlementRanking {
+  groupId: string;
+  finalRank: number;
+  allocatedPoints: number;
+  memberEmails: string[];
+  memberPointsDistribution: unknown[];
+}
+
+/** commentsettlements 的一列。 */
+interface CommentSettlementRow {
+  commentId: string;
+  authorEmail: string;
+  finalRank: number;
+  allocatedPoints: number;
+  studentScore: number;
+  teacherScore: number;
+  totalScore: number;
+  rewardPercentage: number;
+}
+
+type CommentSettlementRanking = CommentSettlementRow;
+
 export async function reverseSettlement(
   env: Env,
   userEmail: string,
@@ -284,7 +317,7 @@ export async function getReversePreview(
       LEFT JOIN users u ON t.userEmail = u.userEmail
       WHERE t.settlementId = ? AND t.projectId = ?
       ORDER BY t.timestamp DESC
-    `).bind(settlementId, projectId).all();
+    `).bind(settlementId, projectId).all<{ userEmail: string; amount: number; displayName: string | null }>();
 
     const transactions = transactionsResult.results || [];
 
@@ -296,7 +329,7 @@ export async function getReversePreview(
     const uniqueUsers = new Map();
     let totalAmount = 0;
 
-    transactions.forEach((tx: any) => {
+    transactions.forEach(tx => {
       const userEmail = tx.userEmail;
       const amount = Number(tx.amount);
       totalAmount += amount;
@@ -451,7 +484,7 @@ export async function getSettlementDetails(
     const settlementTransactions = transactionsResult.results || [];
 
     // Get stage/comment settlement details
-    let settlementDetails: any[] = [];
+    let settlementDetails: Array<Record<string, unknown>> = [];
     if (settlement.settlementType === 'stage') {
       const stageSettlementsResult = await env.DB.prepare(`
         SELECT * FROM stagesettlements WHERE settlementId = ? AND projectId = ?
@@ -573,15 +606,15 @@ export async function getStageSettlementRankings(
     console.log('[getStageSettlementRankings] Fetching settlements...');
     const settlementsResult = await env.DB.prepare(`
       SELECT * FROM stagesettlements WHERE stageId = ? AND projectId = ?
-    `).bind(stageId, projectId).all();
+    `).bind(stageId, projectId).all<StageSettlementRow>();
 
     const settlements = settlementsResult.results || [];
 
     console.log('[getStageSettlementRankings] Found settlements:', settlements.length);
 
     // Create ranking map: groupId -> finalRank
-    const rankingMap: Record<string, any> = {};
-    settlements.forEach((settlement: any) => {
+    const rankingMap: Record<string, StageSettlementRanking> = {};
+    settlements.forEach(settlement => {
       rankingMap[settlement.groupId] = {
         groupId: settlement.groupId,
         finalRank: settlement.finalRank,
@@ -699,13 +732,13 @@ export async function getCommentSettlementRankings(
     // Only fetch settlements if stage is completed
     const settlementsResult = await env.DB.prepare(`
       SELECT * FROM commentsettlements WHERE stageId = ? AND projectId = ?
-    `).bind(stageId, projectId).all();
+    `).bind(stageId, projectId).all<CommentSettlementRow>();
 
     const settlements = settlementsResult.results || [];
 
     // Create ranking map: commentId -> finalRank
-    const rankingMap: Record<string, any> = {};
-    settlements.forEach((settlement: any) => {
+    const rankingMap: Record<string, CommentSettlementRanking> = {};
+    settlements.forEach(settlement => {
       rankingMap[settlement.commentId] = {
         commentId: settlement.commentId,
         authorEmail: settlement.authorEmail,

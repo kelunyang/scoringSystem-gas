@@ -15,7 +15,7 @@ import { getGroupMemberEmails } from '@utils/notifications';
  * Extract unique participant emails from participationProposal
  * Returns only emails (no percentages) to protect group internal work distribution privacy
  */
-function extractParticipants(participationProposal: any): string[] {
+function extractParticipants(participationProposal: Record<string, number> | null | undefined): string[] {
   if (!participationProposal || typeof participationProposal !== 'object') {
     return [];
   }
@@ -147,7 +147,7 @@ export async function getSubmissionVersions(
     const canSeeParticipation = hasElevatedPermissions || isGroupMember;
 
     // Map to flat array (matching GAS format)
-    const versions = result.results.map((sub: any) => {
+    const versions = result.results.map(sub => {
       const parsedProposal = parseJSON(sub.participationProposal as string, {});
 
       const baseVersion = {
@@ -185,8 +185,8 @@ export async function getSubmissionVersions(
     // Count unique groups with submissions (excluding withdrawn) for this stage
     const activeGroupsWithSubmissions = new Set(
       result.results
-        .filter((sub: any) => !sub.withdrawnTime)
-        .map((sub: any) => sub.groupId)
+        .filter(sub => !sub.withdrawnTime)
+        .map(sub => sub.groupId)
     ).size;
 
     // Create metadata
@@ -361,9 +361,9 @@ export async function restoreSubmissionVersion(
       // Get stage name for notification
       const stage = await env.DB.prepare(`
         SELECT stageName FROM stages WHERE stageId = ? AND projectId = ?
-      `).bind(stageId, projectId).first();
+      `).bind(stageId, projectId).first<{ stageName: string }>();
 
-      const stageName = (stage as any)?.stageName || '未命名階段';
+      const stageName = stage?.stageName || '未命名階段';
 
       // Get group members
       const groupMembers = await getGroupMemberEmails(env, projectId, oldSubmission.groupId as string);

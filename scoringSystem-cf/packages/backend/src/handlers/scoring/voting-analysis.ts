@@ -8,6 +8,7 @@ import { Context } from 'hono'
 import { errorResponse, successResponse } from '../../utils/response'
 import { logProjectOperation } from '../../utils/logging'
 import { checkProjectPermission } from '../../middleware/permissions'
+import type { Env, HonoVariables } from '@/types'
 
 /**
  * Get submission voting data for analysis
@@ -15,7 +16,7 @@ import { checkProjectPermission } from '../../middleware/permissions'
  *
  * @route POST /scoring/submission-voting-data
  */
-export async function getSubmissionVotingData(c: Context<any>) {
+export async function getSubmissionVotingData(c: Context<{ Bindings: Env; Variables: HonoVariables }>) {
   try {
     const { stageId } = await c.req.json()
 
@@ -72,7 +73,7 @@ export async function getSubmissionVotingData(c: Context<any>) {
       WHERE rp.stageId = ?
         AND rp.status = 'settled'
       ORDER BY rp.groupId
-    `).bind(stageId).all()
+    `).bind(stageId).all<{ groupId: string; proposerEmail: string; rankingData: string; groupName: string | null; proposerDisplayName: string | null }>()
 
     // 2. Get teacher submission rankings with teacher info
     const teacherRankings = await c.env.DB.prepare(`
@@ -97,7 +98,7 @@ export async function getSubmissionVotingData(c: Context<any>) {
       WHERE projectId = ?
         AND status = 'active'
       ORDER BY groupName
-    `).bind(stage.projectId).all()
+    `).bind(stage.projectId).all<{ groupId: string; groupName: string }>()
 
     // 4. Get settlement scores from stagesettlements (if stage has been settled)
     const settlementScores = await c.env.DB.prepare(`
@@ -130,7 +131,7 @@ export async function getSubmissionVotingData(c: Context<any>) {
     }
 
     // Format student votes (approved proposals) with proposer info
-    const studentVotes = approvedProposals.results.map((proposal: any) => {
+    const studentVotes = approvedProposals.results.map(proposal => {
       let rankingData: Array<{ groupId: string; rank: number }> = []
 
       try {
@@ -185,7 +186,7 @@ export async function getSubmissionVotingData(c: Context<any>) {
     }))
 
     // Format group info with settlement scores
-    const groupInfo = groups.results.map((group: any) => {
+    const groupInfo = groups.results.map(group => {
       const groupId = group.groupId as string
       const settlementData = settlementScoresMap.get(groupId)
 
@@ -219,7 +220,7 @@ export async function getSubmissionVotingData(c: Context<any>) {
  *
  * @route POST /scoring/comment-voting-data
  */
-export async function getCommentVotingData(c: Context<any>) {
+export async function getCommentVotingData(c: Context<{ Bindings: Env; Variables: HonoVariables }>) {
   try {
     const { stageId } = await c.req.json()
 
@@ -276,7 +277,7 @@ export async function getCommentVotingData(c: Context<any>) {
       LEFT JOIN users u ON crp.authorEmail = u.userEmail
       WHERE crp.stageId = ? AND ug.isActive = 1
       ORDER BY crp.createdTime DESC
-    `).bind(stage.projectId, stageId).all()
+    `).bind(stage.projectId, stageId).all<{ authorEmail: string; rankingData: string; createdTime: number; proposerDisplayName: string | null; groupId: string }>()
 
     // 2. Get teacher comment rankings with teacher info
     const teacherCommentRankings = await c.env.DB.prepare(`
@@ -348,7 +349,7 @@ export async function getCommentVotingData(c: Context<any>) {
     }
 
     // Format student votes (comment proposals) with proposer info
-    const studentVotes = commentProposals.results.map((proposal: any) => {
+    const studentVotes = commentProposals.results.map(proposal => {
       let rankingData: Array<{ commentId: string; rank: number }> = []
 
       try {
@@ -402,7 +403,7 @@ export async function getCommentVotingData(c: Context<any>) {
     }))
 
     // Format comment info with settlement scores and author info
-    const commentInfo = comments.results.map((comment: any) => {
+    const commentInfo = comments.results.map(comment => {
       const commentId = comment.commentId as string
       const settlementData = commentScoresMap.get(commentId)
 

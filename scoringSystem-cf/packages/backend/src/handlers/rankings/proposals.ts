@@ -10,10 +10,47 @@
 
 import type { Env } from '../../types';
 import { successResponse, errorResponse } from '../../utils/response';
+import type { RankingEntry } from '@repo/shared';
 
 /**
  * Get all ranking proposals for a stage
  */
+/** rankingproposals_with_status JOIN users 的一列。 */
+interface RankingProposalRow {
+  proposalId: string;
+  projectId: string;
+  stageId: string;
+  groupId: string;
+  proposerEmail: string;
+  /** RankingEntry[] 的 JSON 字串，部分路徑會先解析再往下傳。 */
+  rankingData: string;
+  status: string;
+  votingResult: string | null;
+  supportCount: number;
+  opposeCount: number;
+  totalVotes: number;
+  settleTime: number | null;
+  withdrawnTime: number | null;
+  withdrawnBy: string | null;
+  withdrawnReason: string | null;
+  createdTime: number;
+  resetTime: number | null;
+  proposerDisplayName: string | null;
+}
+
+/** proposalvotes JOIN users 的一列。 */
+interface ProposalVoteRow {
+  proposalId: string;
+  voteId: string;
+  voterEmail: string;
+  agree: number;
+  timestamp: number;
+  voterDisplayName: string | null;
+  voterAvatarSeed: string | null;
+  voterAvatarStyle: string | null;
+  voterAvatarOptions: string | null;
+}
+
 export async function getStageRankingProposals(
   env: Env,
   userEmail: string,
@@ -59,7 +96,7 @@ export async function getStageRankingProposals(
         LEFT JOIN users u ON rp.proposerEmail = u.userEmail
         WHERE rp.projectId = ? AND rp.stageId = ?
         ORDER BY rp.createdTime ASC
-      `).bind(projectId, stageId).all();
+      `).bind(projectId, stageId).all<RankingProposalRow>();
     } else {
       // Students can only see their own group's proposals
       // Get user's group ID
@@ -100,7 +137,7 @@ export async function getStageRankingProposals(
         LEFT JOIN users u ON rp.proposerEmail = u.userEmail
         WHERE rp.projectId = ? AND rp.stageId = ? AND rp.groupId = ?
         ORDER BY rp.createdTime ASC
-      `).bind(projectId, stageId, userGroupId).all();
+      `).bind(projectId, stageId, userGroupId).all<RankingProposalRow>();
     }
 
     const proposals = proposalsResult.results || [];
@@ -136,7 +173,7 @@ export async function getStageRankingProposals(
     // Instead of N queries per proposal, we do 3 batch queries total
 
     // Batch Query 1: Get ALL votes for ALL proposals in this stage
-    const proposalIds = proposals.map((p: any) => p.proposalId);
+    const proposalIds = proposals.map(p => p.proposalId);
     const proposalPlaceholders = proposalIds.map(() => '?').join(',');
 
     const allVotesResult = await env.DB.prepare(`
@@ -154,12 +191,12 @@ export async function getStageRankingProposals(
       LEFT JOIN users u ON pv.voterEmail = u.userEmail
       WHERE pv.proposalId IN (${proposalPlaceholders})
       ORDER BY pv.proposalId, pv.timestamp ASC
-    `).bind(...proposalIds).all();
+    `).bind(...proposalIds).all<ProposalVoteRow>();
 
     // Group votes by proposalId
-    const votesByProposal = new Map<string, any[]>();
+    const votesByProposal = new Map<string, ProposalVoteRow[]>();
     for (const vote of (allVotesResult.results || [])) {
-      const pid = vote.proposalId as string;
+      const pid = vote.proposalId;
       if (!votesByProposal.has(pid)) {
         votesByProposal.set(pid, []);
       }
@@ -182,15 +219,15 @@ export async function getStageRankingProposals(
     const approvedSubmissionsResult = await env.DB.prepare(`
       SELECT submissionId FROM submissions_with_status
       WHERE projectId = ? AND stageId = ? AND status = 'approved'
-    `).bind(projectId, stageId).all();
+    `).bind(projectId, stageId).all<{ submissionId: string }>();
 
     // Create a Set for fast lookup
     const approvedSubmissionIds = new Set(
-      (approvedSubmissionsResult.results || []).map((s: any) => s.submissionId as string)
+      (approvedSubmissionsResult.results || []).map(s => s.submissionId)
     );
 
     // ============ PROCESS PROPOSALS (No more individual DB queries!) ============
-    const proposalsWithVotes = proposals.map((proposal: any, index: number) => {
+    const proposalsWithVotes = proposals.map((proposal, index) => {
       // Get votes from batch result
       const votes = votesByProposal.get(proposal.proposalId) || [];
 
@@ -200,8 +237,10 @@ export async function getStageRankingProposals(
         ? (userAgree === 1 ? 'support' : userAgree === -1 ? 'oppose' : null)
         : null;
 
-      // Validate ranking data using pre-loaded approved submissions
-      let validatedRankingData = proposal.rankingData;
+      // Validate ranking data using pre-loaded approved submissions.
+      // DB 存的是 JSON 字串，過濾之後就變成陣列——兩種形態都會離開這裡，
+      // 所以型別是聯集（和 @repo/shared 的 RankingProposal.rankingData 一致）。
+      let validatedRankingData: string | RankingEntry[] = proposal.rankingData;
       try {
         const rankingDataParsed = typeof proposal.rankingData === 'string'
           ? JSON.parse(proposal.rankingData)
@@ -209,7 +248,7 @@ export async function getStageRankingProposals(
 
         if (Array.isArray(rankingDataParsed)) {
           // Filter out submissions that are not approved (using Set lookup - O(1))
-          validatedRankingData = rankingDataParsed.filter((item: any) => {
+          validatedRankingData = rankingDataParsed.filter((item: { submissionId?: string }) => {
             if (item.submissionId) {
               const isApproved = approvedSubmissionIds.has(item.submissionId);
               if (!isApproved) {

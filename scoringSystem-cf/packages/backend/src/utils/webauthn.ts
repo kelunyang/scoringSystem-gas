@@ -56,10 +56,24 @@ export function generateChallenge(): string {
 // ─── CBOR Decoding (Minimal implementation for WebAuthn) ───
 
 /**
+ * CBOR 能表示的值。這個解碼器只支援 WebAuthn 用得到的子集：
+ * 無號／負整數、byte string、text string、陣列、map、以及
+ * true / false / null。
+ */
+export type CborValue =
+  | number
+  | string
+  | boolean
+  | null
+  | Uint8Array
+  | CborValue[]
+  | { [key: string]: CborValue };
+
+/**
  * Minimal CBOR decoder for WebAuthn attestation objects
  * Supports: maps, byte strings, text strings, unsigned integers, arrays
  */
-export function decodeCbor(buffer: Uint8Array): any {
+export function decodeCbor(buffer: Uint8Array): CborValue {
   let offset = 0;
 
   function readByte(): number {
@@ -98,7 +112,7 @@ export function decodeCbor(buffer: Uint8Array): any {
     throw new Error(`CBOR: Invalid additional info: ${additionalInfo}`);
   }
 
-  function decode(): any {
+  function decode(): CborValue {
     const byte = readByte();
     const majorType = byte >> 5;
     const additionalInfo = byte & 0x1f;
@@ -123,7 +137,7 @@ export function decodeCbor(buffer: Uint8Array): any {
 
       case 4: { // Array
         const arrayLength = readLength(additionalInfo);
-        const array: any[] = [];
+        const array: CborValue[] = [];
         for (let i = 0; i < arrayLength; i++) {
           array.push(decode());
         }
@@ -132,7 +146,7 @@ export function decodeCbor(buffer: Uint8Array): any {
 
       case 5: { // Map
         const mapLength = readLength(additionalInfo);
-        const map: Record<string, any> = {};
+        const map: Record<string, CborValue> = {};
         for (let i = 0; i < mapLength; i++) {
           const key = decode();
           const value = decode();
@@ -251,6 +265,11 @@ export function parseAuthenticatorData(
  */
 export async function coseToPublicKey(coseKey: Uint8Array): Promise<CryptoKey> {
   const decoded = decodeCbor(coseKey);
+
+  // COSE key 一定是 map；其他形態代表資料壞了。
+  if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded) || decoded instanceof Uint8Array) {
+    throw new Error('Invalid COSE key: expected a CBOR map');
+  }
 
   // COSE key types:
   // 1 = kty (key type): 2 = EC2, 3 = RSA
@@ -420,7 +439,8 @@ export async function verifySignature(
 export interface AttestationObject {
   fmt: string;                    // Attestation format (e.g., "none", "packed")
   authData: Uint8Array;           // Authenticator data
-  attStmt: Record<string, any>;   // Attestation statement
+  /** 驗證聲明，內容依 fmt 而異；'none' 格式時是空物件。 */
+  attStmt: Record<string, CborValue>;
 }
 
 /**
@@ -429,6 +449,11 @@ export interface AttestationObject {
 export function parseAttestationObject(buffer: Uint8Array): AttestationObject {
   const decoded = decodeCbor(buffer);
 
+  // attestationObject 一定是 map；其他形態代表資料壞了。
+  if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded) || decoded instanceof Uint8Array) {
+    throw new Error('Invalid attestation: expected a CBOR map');
+  }
+
   if (typeof decoded.fmt !== 'string') {
     throw new Error('Invalid attestation: missing fmt');
   }
@@ -436,10 +461,15 @@ export function parseAttestationObject(buffer: Uint8Array): AttestationObject {
     throw new Error('Invalid attestation: missing authData');
   }
 
+  const attStmt = decoded.attStmt;
+
   return {
     fmt: decoded.fmt,
     authData: decoded.authData,
-    attStmt: decoded.attStmt || {},
+    attStmt:
+      typeof attStmt === 'object' && attStmt !== null && !Array.isArray(attStmt) && !(attStmt instanceof Uint8Array)
+        ? attStmt
+        : {},
   };
 }
 

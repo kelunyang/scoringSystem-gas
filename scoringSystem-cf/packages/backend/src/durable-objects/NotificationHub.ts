@@ -16,7 +16,8 @@ export interface NotificationData {
   message: string;
   type?: 'info' | 'success' | 'warning' | 'error';
   timestamp?: number;
-  [key: string]: any;
+  /** 各種通知自帶的額外欄位，原樣序列化後推給前端。 */
+  [key: string]: unknown;
 }
 
 /**
@@ -26,7 +27,7 @@ export interface SystemAnnouncementData {
   message: string;
   userId?: string;
   timestamp?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -34,7 +35,8 @@ export interface SystemAnnouncementData {
  */
 export interface UserDataUpdate {
   field: string;
-  value: any;
+  /** 欄位的新值，型別隨 field 而異。 */
+  value: unknown;
   timestamp?: number;
 }
 
@@ -86,7 +88,7 @@ export class NotificationHub {
     const websockets = this.state.getWebSockets();
     if (websockets) {
       websockets.forEach((ws: WebSocket) => {
-        const metadata = (ws as any).deserializeAttachment() as ConnectionMetadata;
+        const metadata = ws.deserializeAttachment() as ConnectionMetadata;
         this.sessions.set(ws, metadata);
       });
     }
@@ -168,7 +170,7 @@ export class NotificationHub {
     };
 
     this.sessions.set(server, metadata);
-    (server as any).serializeAttachment(metadata);
+    server.serializeAttachment(metadata);
 
     // Send welcome message
     this.send(server, {
