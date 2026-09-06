@@ -957,14 +957,15 @@ const batchDeactivateProjectGroups = async () => {
   if (selectedProjectGroups.size === 0) return
 
   try {
-    const promises = Array.from(selectedProjectGroups).map(groupId =>
-      rpcClient.api.groups.deactivate.$post({
+    const promises = Array.from(selectedProjectGroups).map(async groupId => {
+      const res = await rpcClient.api.groups.deactivate.$post({
         json: {
           projectId: selectedProjectId.value,
           groupId
         }
-      }).then(res => res.json())
-    )
+      })
+      return res.json()
+    })
 
     const results = await Promise.all(promises)
     const successCount = results.filter(r => r.success).length
@@ -985,14 +986,15 @@ const batchActivateProjectGroups = async () => {
   if (selectedProjectGroups.size === 0) return
 
   try {
-    const promises = Array.from(selectedProjectGroups).map(groupId =>
-      rpcClient.api.groups.activate.$post({
+    const promises = Array.from(selectedProjectGroups).map(async groupId => {
+      const res = await rpcClient.api.groups.activate.$post({
         json: {
           projectId: selectedProjectId.value,
           groupId
         }
-      }).then(res => res.json())
-    )
+      })
+      return res.json()
+    })
 
     const results = await Promise.all(promises)
     const successCount = results.filter(r => r.success).length
@@ -1013,15 +1015,16 @@ const batchLockProjectGroups = async () => {
   if (selectedProjectGroups.size === 0) return
 
   try {
-    const promises = Array.from(selectedProjectGroups).map(groupId =>
-      rpcClient.api.groups.update.$post({
+    const promises = Array.from(selectedProjectGroups).map(async groupId => {
+      const res = await rpcClient.api.groups.update.$post({
         json: {
           projectId: selectedProjectId.value,
           groupId,
           updates: { allowChange: false }
         }
-      }).then(res => res.json())
-    )
+      })
+      return res.json()
+    })
 
     const results = await Promise.all(promises)
     const successCount = results.filter(r => r.success).length
@@ -1042,15 +1045,16 @@ const batchUnlockProjectGroups = async () => {
   if (selectedProjectGroups.size === 0) return
 
   try {
-    const promises = Array.from(selectedProjectGroups).map(groupId =>
-      rpcClient.api.groups.update.$post({
+    const promises = Array.from(selectedProjectGroups).map(async groupId => {
+      const res = await rpcClient.api.groups.update.$post({
         json: {
           projectId: selectedProjectId.value,
           groupId,
           updates: { allowChange: true }
         }
-      }).then(res => res.json())
-    )
+      })
+      return res.json()
+    })
 
     const results = await Promise.all(promises)
     const successCount = results.filter(r => r.success).length

@@ -305,7 +305,7 @@
               </div>
               <div class="member-details">
                 <span class="member-email">{{ member.userEmail }}</span>
-                <span class="member-join-time">加入時間: {{ formatTime(member.joinTime || member.joinedAt) }}</span>
+                <span class="member-join-time">加入時間: {{ formatTime(member.joinTime) }}</span>
               </div>
             </div>
 

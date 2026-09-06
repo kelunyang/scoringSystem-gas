@@ -3,22 +3,21 @@
  *
  * This file centralizes type definitions to avoid duplication across components
  * and ensure consistency in the group management domain.
+ *
+ * **專案群組的形狀從 API 契約推導**（見 plan/issue.md #011）。
+ * 舊的手寫版本跟後端已經對不上——`status` 宣告成 `'active' | 'inactive'`
+ * 但實際是 string，`description` 宣告成 `string` 但實際可為 null。
+ * 後端改了欄位，現在會編譯失敗而不是靜靜漂走。
  */
+
+import type { ApiData } from '@/utils/api-types'
+import type { rpcClient } from '@/utils/rpc-client'
 
 // ============================================================================
 // Project Groups
 // ============================================================================
 
-export interface ProjectGroup {
-  groupId: string
-  groupName: string
-  allowChange: boolean
-  status: 'active' | 'inactive'
-  description?: string
-  memberCount: number
-  leaderCount: number
-  members?: GroupMember[]
-}
+export type ProjectGroup = ApiData<typeof rpcClient.api.groups.list.$post>[number]
 
 // ============================================================================
 // Global Groups
@@ -38,19 +37,7 @@ export interface GlobalGroup {
 // Group Members
 // ============================================================================
 
-export interface GroupMember {
-  membershipId: string
-  userEmail: string
-  displayName: string
-  role?: 'member' | 'leader'
-  joinTime?: string
-  joinedAt?: string
-  // Avatar fields (for DiceBear avatar display)
-  userId?: string
-  avatarSeed?: string | null
-  avatarStyle?: string
-  avatarOptions?: string // JSON string
-}
+export type GroupMember = NonNullable<ProjectGroup['members']>[number]
 
 // ============================================================================
 // Users

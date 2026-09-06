@@ -18,6 +18,26 @@
  * `SELECT * FROM groups WHERE projectId = ? AND status = 'active'`
  * 這段查詢散落在 handlers/groups/members.ts 與 handlers/projects/list.ts。
  */
+/**
+ * `usergroups` JOIN `users` 的一列：組員清單查詢用。
+ * 多個 handler 用同一句 SELECT，欄位一致。
+ */
+export interface GroupMemberRow {
+  membershipId: string;
+  userId: string;
+  userEmail: string;
+  displayName: string | null;
+  /**
+   * 資料庫欄位是 TEXT 沒有 CHECK 約束，但唯一的寫入路徑
+   * （handlers/groups/members.ts:47）會擋掉這兩個值以外的東西。
+   */
+  role: 'member' | 'leader';
+  joinTime: number;
+  avatarSeed: string | null;
+  avatarStyle: string | null;
+  avatarOptions: string | null;
+}
+
 export interface GroupRow {
   groupId: string;
   projectId: string;

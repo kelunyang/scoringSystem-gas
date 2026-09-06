@@ -660,7 +660,7 @@ const handleMarkUnassigned = async () => {
 
     if (response.ok) {
       const data = await response.json()
-      ungroupedMembers.value = data.data?.ungroupedMemberEmails || []
+      ungroupedMembers.value = data.success ? data.data.ungroupedMemberEmails : []
       ElMessage.success(`找到 ${ungroupedMembers.value.length} 位未分組成員`)
     }
   } catch (error) {
@@ -709,7 +709,7 @@ const handleLoadFromProjects = async () => {
           message += `（${skipped.length} 個專案因權限不足被跳過）`
         }
         ElMessage.success(message)
-      } else {
+      } else if (!data.success) {
         ElMessage.error(data.error?.message || '載入失敗')
       }
     } else {

@@ -11,7 +11,7 @@ import { checkProjectPermission } from '@middleware/permissions';
 import { logProjectOperation } from '@utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
 import { getConfigValue } from '@utils/config';
-import type { GroupRow } from '@db/rows';
+import type { GroupRow, GroupMemberRow } from '@db/rows';
 
 /**
  * 取得專案裡一個仍然 active 的群組。
@@ -394,7 +394,7 @@ export async function listProjectGroups(
           FROM usergroups pug
           JOIN users u ON pug.userEmail = u.userEmail
           WHERE pug.projectId = ? AND pug.groupId = ? AND pug.isActive = 1
-        `).bind(projectId, group.groupId).all();
+        `).bind(projectId, group.groupId).all<GroupMemberRow>();
 
         // Check if current user is group leader
         const isGroupLeader = members.results.some(m =>
