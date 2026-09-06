@@ -320,10 +320,11 @@
 
 <script setup lang="ts">
 import * as AvatarConfig from '@/utils/avatarConfig'
+import type { AvatarCustomOptions } from '@/types/auth'
 
 export interface Props {
   style: string
-  options: Record<string, any>
+  options: AvatarCustomOptions
   layout?: 'dropdown' | 'inline'
 }
 
@@ -333,7 +334,7 @@ withDefaults(defineProps<Props>(), {
 
 defineEmits<{
   'update:style': [value: string]
-  'update:option': [key: string, value: any]
+  'update:option': [key: string, value: string]
 }>()
 
 // Import all avatar configuration options

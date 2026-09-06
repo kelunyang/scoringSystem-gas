@@ -365,6 +365,8 @@ import { useBreadcrumb } from '@/composables/useBreadcrumb'
 import { rpcClient } from '@/utils/rpc-client'
 import { apiClient } from '@/utils/api'
 import { getUserPreferences, setUserPreference } from '@/utils/userPreferences'
+import { parseAvatarOptions } from '@/utils/avatar'
+import type { AvatarCustomOptions } from '@/types/auth'
 
 /** 設定頁需要的使用者欄位（父層傳入 AuthUser，此處取結構子集） */
 interface SettingsUser {
@@ -381,7 +383,7 @@ interface SettingsUser {
 interface AvatarData {
   avatarSeed: string
   avatarStyle: string
-  avatarOptions: Record<string, unknown>
+  avatarOptions: AvatarCustomOptions
 }
 
 interface UserBadge {
@@ -465,7 +467,7 @@ const avatarData = computed<AvatarData>({
     return {
       avatarSeed: props.user?.avatarSeed || '',
       avatarStyle: props.user?.avatarStyle || 'avataaars',
-      avatarOptions: props.user?.avatarOptions || {}
+      avatarOptions: parseAvatarOptions(props.user?.avatarOptions)
     }
   },
   set(_value) {

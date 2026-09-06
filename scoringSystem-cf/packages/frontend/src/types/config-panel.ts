@@ -25,13 +25,22 @@ export interface SelectOption {
 }
 
 /**
+ * 設定值的實際型別（後端以字串儲存，前端表單可能是數字或布林）
+ */
+export type ConfigValue = string | number | boolean
+
+/**
  * 值轉換函數（用於 slider 等需要轉換的欄位）
+ *
+ * 刻意使用方法簽章而非屬性簽章：各個 transform 只接受自己認得的
+ * 子集（例如 msToHours 只收 string | number），方法簽章的參數是
+ * 雙變的，才能讓它們指派給這個介面。
  */
 export interface FieldTransform {
   /** 從儲存值轉換為顯示值 */
-  toDisplay: (value: any) => any
+  toDisplay(value: ConfigValue | undefined): ConfigValue
   /** 從顯示值轉換為儲存值 */
-  toValue: (display: any) => any
+  toValue(display: ConfigValue | undefined): ConfigValue
 }
 
 /**

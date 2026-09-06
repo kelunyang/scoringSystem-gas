@@ -42,20 +42,20 @@
       <!-- Member avatars -->
       <div
         v-for="(member, idx) in members"
-        :key="(member as any).userEmail"
+        :key="member.userEmail"
         class="avatar-wrapper physics-avatar"
         :style="getAvatarStyle(`member-${idx}`)"
-        @click="toggleExpand((member as any).userEmail)"
+        @click="toggleExpand(member.userEmail)"
       >
         <img
           :src="getAvatarUrl(member)"
-          :alt="(member as any).displayName || (member as any).userEmail"
+          :alt="member.displayName || member.userEmail"
           class="avatar member"
           :style="{ width: size, height: size }"
         />
         <transition name="slide-name">
-          <div v-if="isExpanded((member as any).userEmail)" class="name-card">
-            {{ (member as any).displayName || (member as any).userEmail.split('@')[0] }} ({{ (member as any).userEmail }})
+          <div v-if="isExpanded(member.userEmail)" class="name-card">
+            {{ member.displayName || member.userEmail.split('@')[0] }} ({{ member.userEmail }})
           </div>
         </transition>
       </div>
@@ -93,19 +93,19 @@
       <!-- Member avatars -->
       <div
         v-for="member in members"
-        :key="(member as any).userEmail"
+        :key="member.userEmail"
         class="avatar-wrapper static-avatar"
-        @click="toggleExpand((member as any).userEmail)"
+        @click="toggleExpand(member.userEmail)"
       >
         <img
           :src="getAvatarUrl(member)"
-          :alt="(member as any).displayName || (member as any).userEmail"
+          :alt="member.displayName || member.userEmail"
           class="avatar member"
           :style="{ width: size, height: size }"
         />
         <transition name="slide-name">
-          <div v-if="isExpanded((member as any).userEmail)" class="name-card">
-            {{ (member as any).displayName || (member as any).userEmail.split('@')[0] }} ({{ (member as any).userEmail }})
+          <div v-if="isExpanded(member.userEmail)" class="name-card">
+            {{ member.displayName || member.userEmail.split('@')[0] }} ({{ member.userEmail }})
           </div>
         </transition>
       </div>
@@ -114,16 +114,29 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted, type PropType } from 'vue'
 import Matter from 'matter-js'
 import { usePhysicsAnimation, type BodyConfig } from '@/composables/usePhysicsAnimation'
 import { useInViewport } from '@/composables/useInViewport'
 import { generateAvatarUrl } from '@/utils/walletHelpers'
-import type { Member } from '@/types'
+
+/**
+ * 這個元件只讀成員的少數幾個欄位，而呼叫端傳進來的東西來自各種
+ * API 回應，形狀彼此不同（有的沒有 userId，有的整包是索引簽章）。
+ * 因此 prop 收 unknown[]，在元件內窄化成實際會讀的欄位。
+ */
+interface AvatarGroupMember {
+  userEmail: string
+  displayName?: string
+  role?: string
+  avatarSeed?: string
+  avatarStyle?: string
+  avatarOptions?: string
+}
 
 const props = defineProps({
   groupMembers: {
-    type: Array,
+    type: Array as PropType<unknown[]>,
     required: true,
     default: () => []
   },
@@ -156,15 +169,17 @@ const containerWidth = computed(() => {
 // Container height - keep original size, animation overflows
 const containerHeight = computed(() => avatarSize.value + 10)
 
+const groupMembers = computed(() => props.groupMembers as AvatarGroupMember[])
+
 // Map to store userEmail -> timeout ID for name expansion
 const expandedAvatars = ref(new Map())
 
 const leader = computed(() => {
-  return (props.groupMembers as any[]).find((m: any) => m.role === 'leader')
+  return groupMembers.value.find(m => m.role === 'leader')
 })
 
 const members = computed(() => {
-  return (props.groupMembers as any[]).filter((m: any) => m.role === 'member')
+  return groupMembers.value.filter(m => m.role === 'member')
 })
 
 // 使用 composable 管理物理動畫
@@ -367,7 +382,7 @@ const isExpanded = (userEmail: string) => {
   return expandedAvatars.value.has(userEmail)
 }
 
-const getAvatarUrl = (member: Member) => {
+const getAvatarUrl = (member: AvatarGroupMember) => {
   if (member.avatarSeed || member.avatarStyle) {
     return generateAvatarUrl(member)
   }

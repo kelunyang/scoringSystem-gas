@@ -3,6 +3,8 @@
  * Extracted from UserManagement.vue to follow DRY principle
  */
 
+import type { AvatarCustomOptions } from '@/types/auth'
+
 /**
  * Generic avatar data interface
  * Any object with these fields can be used for avatar generation
@@ -18,16 +20,24 @@ export interface AvatarData {
 /**
  * Parse avatar options from string or object
  */
-export function parseAvatarOptions(options: string | object | undefined): Record<string, any> {
+export function parseAvatarOptions(options: string | object | undefined): AvatarCustomOptions {
+  let raw: unknown = options
   if (typeof options === 'string') {
     try {
-      return JSON.parse(options)
+      raw = JSON.parse(options)
     } catch (e) {
       console.warn('Failed to parse avatarOptions:', e)
       return {}
     }
   }
-  return options || {}
+  if (!raw || typeof raw !== 'object') return {}
+
+  // 這些值最終會進 URLSearchParams，本來就會被字串化，這裡先做掉
+  const result: AvatarCustomOptions = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    result[key] = String(value)
+  }
+  return result
 }
 
 /**
@@ -36,7 +46,7 @@ export function parseAvatarOptions(options: string | object | undefined): Record
 export function generateDicebearUrl(
   seed: string,
   style: string = 'avataaars',
-  options: Record<string, any> = {}
+  options: AvatarCustomOptions = {}
 ): string {
   const baseUrl = `https://api.dicebear.com/7.x/${style}/svg`
   const params = new URLSearchParams({
@@ -68,7 +78,7 @@ export function generateInitialsAvatar(user: Partial<AvatarData> | null): string
  */
 export function getAvatarUrl(
   user: Partial<AvatarData> | null,
-  extraOptions?: Record<string, any>,
+  extraOptions?: AvatarCustomOptions,
   fallbackMode: boolean = false
 ): string {
   if (!user || fallbackMode) {

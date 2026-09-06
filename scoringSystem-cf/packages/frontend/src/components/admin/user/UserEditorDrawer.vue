@@ -291,6 +291,7 @@ import { ref, reactive, computed, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import AvatarEditor from '@/components/shared/AvatarEditor.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
+import { parseAvatarOptions } from '@/utils/avatar'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 
 /**
@@ -434,8 +435,8 @@ const avatarData = computed({
   get: () => ({
     avatarSeed: editingUser.value?.avatarSeed || '',
     avatarStyle: editingUser.value?.avatarStyle || 'avataaars',
-    // runtime 實際是 JSON 字串（父層傳入），AvatarEditor 內部不區分處理
-    avatarOptions: (editingUser.value?.avatarOptions || {}) as unknown as Record<string, unknown>
+    // runtime 可能是 JSON 字串（父層傳入），parseAvatarOptions 兩種都吃
+    avatarOptions: parseAvatarOptions(editingUser.value?.avatarOptions)
   }),
   set: (value) => {
     if (editingUser.value) {

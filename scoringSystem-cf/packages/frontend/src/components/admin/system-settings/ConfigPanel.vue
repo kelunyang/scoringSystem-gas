@@ -97,7 +97,7 @@
               <!-- Input Field -->
               <el-input
                 v-if="field.type === 'input'"
-                v-model="localValues[field.key]"
+                v-model="stringValues[field.key]"
                 :placeholder="field.placeholder"
                 :maxlength="field.maxlength"
                 :show-word-limit="field.showWordLimit"
@@ -112,7 +112,7 @@
               <!-- Number Input -->
               <el-input-number
                 v-else-if="field.type === 'number'"
-                v-model.number="localValues[field.key]"
+                v-model.number="numberValues[field.key]"
                 :min="field.min"
                 :max="field.max"
                 :step="field.step"
@@ -122,7 +122,7 @@
               <!-- Slider -->
               <div v-else-if="field.type === 'slider'" class="slider-container">
                 <el-slider
-                  v-model="displayValues[field.key]"
+                  v-model="displayNumbers[field.key]"
                   :min="field.min"
                   :max="field.max"
                   :step="field.step"
@@ -139,7 +139,7 @@
               <!-- Select -->
               <el-select
                 v-else-if="field.type === 'select'"
-                v-model="localValues[field.key]"
+                v-model="stringValues[field.key]"
                 :placeholder="field.placeholder || '請選擇'"
                 :disabled="field.disabled"
               >
@@ -154,7 +154,7 @@
               <!-- Switch -->
               <el-switch
                 v-else-if="field.type === 'switch'"
-                v-model="displayValues[field.key]"
+                v-model="displayBooleans[field.key]"
                 active-text="開啟"
                 inactive-text="關閉"
                 :disabled="field.disabled"
@@ -164,7 +164,7 @@
               <!-- Password -->
               <el-input
                 v-else-if="field.type === 'password'"
-                v-model="localValues[field.key]"
+                v-model="stringValues[field.key]"
                 type="password"
                 :placeholder="field.placeholder"
                 :show-password="field.showPassword"
@@ -186,7 +186,7 @@
                     </span>
                   </div>
                   <el-slider
-                    v-model="localValues[field.customConfig.slider1.key]"
+                    v-model="numberValues[field.customConfig.slider1.key]"
                     :min="field.customConfig.slider1.min"
                     :max="field.customConfig.slider1.max"
                     :step="field.customConfig.slider1.step"
@@ -206,7 +206,7 @@
                     </span>
                   </div>
                   <el-slider
-                    v-model="localValues[field.customConfig.slider2.key]"
+                    v-model="numberValues[field.customConfig.slider2.key]"
                     :min="field.customConfig.slider2.min"
                     :max="field.customConfig.slider2.max"
                     :step="field.customConfig.slider2.step"
@@ -228,7 +228,7 @@
               <!-- Icon Selector -->
               <IconSelector
                 v-else-if="field.type === 'icon-selector'"
-                v-model="localValues[field.key]"
+                v-model="stringValues[field.key]"
                 @update:model-value="(val) => emit('update', field.key, val)"
               />
             </div>
@@ -244,7 +244,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted } from 'vue'
-import type { ConfigCategory, ConfigField } from '@/types/config-panel'
+import type { ConfigCategory, ConfigField, ConfigValue, CustomDualSliderConfig } from '@/types/config-panel'
 import IconSelector from '@/components/common/IconSelector.vue'
 
 /**
@@ -254,9 +254,9 @@ export interface Props {
   /** 配置分類 */
   categories: ConfigCategory[]
   /** 配置值（響應式對象） */
-  values: Record<string, any>
+  values: Record<string, ConfigValue | undefined>
   /** 原始配置值（用於檢測修改） */
-  originalValues?: Record<string, any>
+  originalValues?: Record<string, ConfigValue | undefined>
   /** 是否正在載入 */
   loading?: boolean
   /** 是否正在儲存 */
@@ -293,7 +293,7 @@ interface Emits {
   /** 重設配置 */
   (e: 'reset'): void
   /** 配置值更新 */
-  (e: 'update', key: string, value: any): void
+  (e: 'update', key: string, value: ConfigValue | undefined): void
 }
 
 const emit = defineEmits<Emits>()
@@ -302,8 +302,23 @@ const emit = defineEmits<Emits>()
  * Local State
  */
 const activePanel = ref<string>('auth')
-const localValues = reactive<Record<string, any>>({})
-const displayValues = reactive<Record<string, any>>({})
+const localValues = reactive<Record<string, ConfigValue | undefined>>({})
+const displayValues = reactive<Record<string, ConfigValue | undefined>>({})
+
+/**
+ * 給模板用的窄化視圖
+ *
+ * `localValues` / `displayValues` 是異質的表單模型：同一個物件裡
+ * 字串、數字、布林都有，由 `field.type` 決定。Element Plus 的
+ * v-model 型別彼此不相容（el-input 收 string、el-input-number 與
+ * el-slider 收 number、el-switch 收 boolean），沒有單一型別能同時
+ * 滿足。與其整包標成 any，這裡改成三個窄化視圖，讓模板明講
+ * 每種欄位型別實際綁的是什麼。
+ */
+const stringValues = localValues as Record<string, string>
+const numberValues = localValues as Record<string, number>
+const displayNumbers = displayValues as Record<string, number>
+const displayBooleans = displayValues as Record<string, boolean>
 
 /**
  * Computed
@@ -378,7 +393,7 @@ const handleSwitchChange = (field: ConfigField): void => {
  * 處理雙向聯動滑桿變更
  * 當一個滑桿改變時，自動調整另一個滑桿以保持總和為 sumConstraint
  */
-const handleDualSliderChange = (changedKey: string, config: any): void => {
+const handleDualSliderChange = (changedKey: string, config: CustomDualSliderConfig): void => {
   const slider1Key = config.slider1.key
   const slider2Key = config.slider2.key
   const sumConstraint = config.sumConstraint
@@ -404,10 +419,10 @@ const handleDualSliderChange = (changedKey: string, config: any): void => {
 /**
  * 格式化雙向滑桿值（顯示為百分比）
  */
-const formatDualSliderValue = (value: any, config: any): string => {
+const formatDualSliderValue = (value: ConfigValue | undefined, config: CustomDualSliderConfig): string => {
   if (value === undefined || value === null) return '-'
   if (config.formatTooltip) {
-    return config.formatTooltip(value)
+    return config.formatTooltip(Number(value))
   }
   return String(value)
 }
@@ -415,7 +430,7 @@ const formatDualSliderValue = (value: any, config: any): string => {
 /**
  * 計算雙向滑桿總和
  */
-const getDualSliderSum = (config: any): number => {
+const getDualSliderSum = (config: CustomDualSliderConfig): number => {
   const value1 = Number(localValues[config.slider1.key] || 0)
   const value2 = Number(localValues[config.slider2.key] || 0)
   return Math.round((value1 + value2) * 1000) / 1000 // 避免浮點數精度問題
@@ -424,7 +439,7 @@ const getDualSliderSum = (config: any): number => {
 /**
  * 檢查雙向滑桿總和是否正確
  */
-const isDualSliderSumValid = (config: any): boolean => {
+const isDualSliderSumValid = (config: CustomDualSliderConfig): boolean => {
   const sum = getDualSliderSum(config)
   return Math.abs(sum - config.sumConstraint) < 0.001
 }

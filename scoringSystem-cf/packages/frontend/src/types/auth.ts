@@ -35,7 +35,7 @@ export interface RegisterData {
   displayName: string;
   avatarSeed: string;
   avatarStyle: string;
-  avatarOptions: Record<string, any>;
+  avatarOptions: AvatarCustomOptions;
   turnstileToken?: string;
 }
 
@@ -62,12 +62,20 @@ export interface Project {
 export type AvatarStyle = 'avataaars' | 'bottts' | 'initials' | 'identicon' | 'lorelei' | 'micah' | 'pixel-art' | 'personas';
 
 /**
+ * DiceBear 的外觀自訂選項。
+ *
+ * 值一律是字串：這些選項最後會直接被塞進 `URLSearchParams`，
+ * 任何非字串都會被瀏覽器轉成字串，所以在型別上就寫成字串。
+ */
+export type AvatarCustomOptions = Record<string, string>;
+
+/**
  * Avatar generator options
  */
 export interface AvatarOptions {
   seed: string;
   style: AvatarStyle;
-  options: Record<string, any>;
+  options: AvatarCustomOptions;
 }
 
 /**

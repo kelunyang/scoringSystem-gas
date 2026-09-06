@@ -8,13 +8,16 @@
  */
 
 import { reactive } from 'vue'
+import type { AvatarCustomOptions } from '@/types/auth'
 
 interface Member {
+  /** 後端多數端點回傳的是 userEmail；少數轉換過的資料才有 email */
+  userEmail?: string
   email: string
   displayName?: string
   avatarSeed?: string
   avatarStyle?: string
-  avatarOptions?: string | Record<string, any>
+  avatarOptions?: string | AvatarCustomOptions
 }
 
 interface Vote {
@@ -22,7 +25,7 @@ interface Vote {
   voterDisplayName?: string
   voterAvatarSeed?: string
   voterAvatarStyle?: string
-  voterAvatarOptions?: string | Record<string, any>
+  voterAvatarOptions?: string | AvatarCustomOptions
 }
 
 interface AvatarErrors {
@@ -30,7 +33,7 @@ interface AvatarErrors {
 }
 
 interface AvatarReturn {
-  generateDicebearUrl: (seed: string, style: string, options?: Record<string, any>) => string
+  generateDicebearUrl: (seed: string, style: string, options?: AvatarCustomOptions) => string
   generateMemberAvatarUrl: (member: Member) => string
   generateMemberInitialsAvatar: (member: Member | null) => string
   generateMemberInitials: (member: Member | null) => string
@@ -59,7 +62,7 @@ export function useAvatar(): AvatarReturn {
    * @param options - 額外選項
    * @returns DiceBear Avatar URL
    */
-  function generateDicebearUrl(seed: string, style: string, options: Record<string, any> = {}): string {
+  function generateDicebearUrl(seed: string, style: string, options: AvatarCustomOptions = {}): string {
     const baseUrl = `https://api.dicebear.com/7.x/${style}/svg`
     const params = new URLSearchParams({
       seed: seed,
@@ -84,7 +87,7 @@ export function useAvatar(): AvatarReturn {
     const style = member.avatarStyle || 'avataaars'
 
     // 解析 avatarOptions（可能是 JSON 字串或物件）
-    let options: Record<string, any> = {}
+    let options: AvatarCustomOptions = {}
     if (member.avatarOptions) {
       if (typeof member.avatarOptions === 'string') {
         try {
@@ -150,7 +153,7 @@ export function useAvatar(): AvatarReturn {
    * @returns Avatar URL
    */
   function getMemberAvatarUrlFromEmail(email: string, members: Member[] = []): string {
-    const member = members.find(m => (m as any).userEmail === email || m.email === email)
+    const member = members.find(m => m.userEmail === email || m.email === email)
     if (!member) {
       return generateMemberInitialsAvatar({ email, displayName: email?.split('@')[0] || 'U' })
     }
@@ -164,7 +167,7 @@ export function useAvatar(): AvatarReturn {
    * @returns Initials 文字
    */
   function getMemberInitialsFromEmail(email: string, members: Member[] = []): string {
-    const member = members.find(m => (m as any).userEmail === email || m.email === email)
+    const member = members.find(m => m.userEmail === email || m.email === email)
     if (!member) {
       const name = email?.split('@')[0] || 'U'
       return name.substring(0, 2).toUpperCase()
@@ -185,7 +188,7 @@ export function useAvatar(): AvatarReturn {
     const seed = vote.voterAvatarSeed || vote.voterEmail
     const style = vote.voterAvatarStyle || 'avataaars'
 
-    let options: Record<string, any> = {}
+    let options: AvatarCustomOptions = {}
     if (vote.voterAvatarOptions) {
       if (typeof vote.voterAvatarOptions === 'string') {
         try {

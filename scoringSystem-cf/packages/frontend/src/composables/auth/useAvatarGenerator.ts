@@ -3,11 +3,11 @@
  * Provides random avatar generation for user registration
  */
 
-import type { AvatarStyle } from '../../types/auth';
+import type { AvatarStyle, AvatarCustomOptions } from '../../types/auth';
 
 export interface UseAvatarGeneratorReturn {
-  generateRandomOptions: (style: AvatarStyle) => Record<string, any>;
-  getAvatarUrl: (seed: string, style: AvatarStyle, options: Record<string, any>) => string;
+  generateRandomOptions: (style: AvatarStyle) => AvatarCustomOptions;
+  getAvatarUrl: (seed: string, style: AvatarStyle, options: AvatarCustomOptions) => string;
   getRandomSeed: () => string;
 }
 
@@ -40,8 +40,8 @@ export function useAvatarGenerator(): UseAvatarGeneratorReturn {
    * Generate random options for a given avatar style
    * Note: This is a simplified version - extend based on DiceBear API options
    */
-  function generateRandomOptions(style: AvatarStyle): Record<string, any> {
-    const options: Record<string, any> = {};
+  function generateRandomOptions(style: AvatarStyle): AvatarCustomOptions {
+    const options: AvatarCustomOptions = {};
 
     switch (style) {
       case 'avataaars':
@@ -82,7 +82,7 @@ export function useAvatarGenerator(): UseAvatarGeneratorReturn {
   /**
    * Get DiceBear avatar URL
    */
-  function getAvatarUrl(seed: string, style: AvatarStyle, options: Record<string, any>): string {
+  function getAvatarUrl(seed: string, style: AvatarStyle, options: AvatarCustomOptions): string {
     const baseUrl = `https://api.dicebear.com/7.x/${style}/svg`;
     const params = new URLSearchParams({
       seed,

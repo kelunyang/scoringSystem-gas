@@ -79,12 +79,13 @@
 import { ref, computed, watch } from 'vue'
 import AvatarCustomizationOptions from './AvatarCustomizationOptions.vue'
 import * as AvatarConfig from '@/utils/avatarConfig'
+import type { AvatarCustomOptions } from '@/types/auth'
 
 // Types
 export interface AvatarData {
   avatarSeed: string
   avatarStyle: string
-  avatarOptions: Record<string, any>
+  avatarOptions: AvatarCustomOptions
 }
 
 export interface Props {
@@ -123,7 +124,7 @@ const regenerating = ref(false)
 const saving = ref(false)
 
 // Error handling state
-const verifiedConfigs = ref<Array<{ seed: string; style: string; options: Record<string, any> }>>([])
+const verifiedConfigs = ref<Array<{ seed: string; style: string; options: AvatarCustomOptions }>>([])
 const retryCount = ref(0)
 const isRetrying = ref(false)
 const avatarError = ref(false)
@@ -152,7 +153,7 @@ watch(() => props.modelValue, (newValue) => {
 }, { deep: true })
 
 // Methods
-function generateDicebearUrl(seed: string, style: string, options: Record<string, any> = {}): string {
+function generateDicebearUrl(seed: string, style: string, options: AvatarCustomOptions = {}): string {
   const baseUrl = `https://api.dicebear.com/7.x/${style}/svg`
   const params = new URLSearchParams({
     seed: seed,
@@ -267,7 +268,7 @@ function handleStyleChange(newStyle: string) {
   emitUpdate()
 }
 
-function handleOptionUpdate(key: string, value: any) {
+function handleOptionUpdate(key: string, value: string) {
   localValue.value.avatarOptions = {
     ...localValue.value.avatarOptions,
     [key]: value
