@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 
 /**
  * Composable for managing project viewers (access control)
@@ -36,7 +37,7 @@ export function useProjectViewers() {
         projectViewers.value = response.data
       } else {
         console.error('Failed to load project viewers:', response.error)
-        ElMessage.error(`無法載入存取者清單: ${response.error?.message || '未知錯誤'}`)
+        ElMessage.error(`無法載入存取者清單: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
       }
     } catch (error) {
       console.error('Error loading project viewers:', error)
@@ -85,7 +86,7 @@ export function useProjectViewers() {
           if (response.success) {
             allResults.push(...response.data)
           } else {
-            errors.push(`搜尋「${query}」失敗: ${response.error?.message || '未知錯誤'}`)
+            errors.push(`搜尋「${query}」失敗: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
           }
         } catch (error) {
           console.error(`Error searching for "${query}":`, error)
@@ -175,7 +176,7 @@ export function useProjectViewers() {
           failCount++
           errors.push({
             email: userEmail,
-            message: response.error?.message || '未知錯誤'
+            message: apiErrorMessage(errorOf(response)) || '未知錯誤'
           })
         }
       }
@@ -246,7 +247,7 @@ export function useProjectViewers() {
         // Reload viewers
         await loadProjectViewers(projectId)
       } else {
-        ElMessage.error(`更新失敗: ${response.error?.message || '未知錯誤'}`)
+        ElMessage.error(`更新失敗: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
       }
     } catch (error) {
       console.error('Error updating viewer role:', error)
@@ -279,7 +280,7 @@ export function useProjectViewers() {
         // Reload viewers
         await loadProjectViewers(projectId)
       } else {
-        ElMessage.error(`移除失敗: ${response.error?.message || '未知錯誤'}`)
+        ElMessage.error(`移除失敗: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
       }
     } catch (error) {
       console.error('Error removing viewer:', error)

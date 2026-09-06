@@ -17,6 +17,7 @@ import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'
 import { useCurrentUser } from '@/composables/useAuth'
 import type { PropertiesConfig } from '@/types/admin-properties'
+import { apiErrorCode, apiErrorMessage, errorOf } from '@/utils/api-types'
 
 // ============================================================================
 // Types
@@ -65,7 +66,7 @@ export function useSystemProperties(): UseQueryReturnType<PropertiesConfig, Erro
       const response = await adminApi.properties.getAll()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入系統配置失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入系統配置失敗')
       }
 
       return response.data as unknown as PropertiesConfig
@@ -100,10 +101,10 @@ export function useUpdateProperties(): UseMutationReturnType<
 
       if (!response.success) {
         // Handle specific error codes
-        if (response.error?.code === 'NO_CHANGES') {
+        if (apiErrorCode(errorOf(response)) === 'NO_CHANGES') {
           throw new Error('沒有可更新的欄位')
         }
-        throw new Error(response.error?.message || '儲存配置失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '儲存配置失敗')
       }
 
       return response.data as unknown as UpdatePropertiesResult
@@ -136,7 +137,7 @@ export function useResetProperties(): UseMutationReturnType<void, Error, void, u
       const response = await adminApi.properties.reset()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '重設配置失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '重設配置失敗')
       }
     },
     onSuccess: () => {
@@ -164,7 +165,7 @@ export function useTestSmtpConnection(): UseMutationReturnType<void, Error, Smtp
       const response = await adminApi.smtp.testConnection({ config })
 
       if (!response.success) {
-        throw new Error(response.error?.message || 'SMTP 連接測試失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || 'SMTP 連接測試失敗')
       }
     },
     onSuccess: () => {

@@ -240,6 +240,7 @@ import EmptyState from './shared/EmptyState.vue'
 import MdEditorWrapper from './MdEditorWrapper.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 
 // Drawer Breadcrumb
@@ -837,7 +838,7 @@ async function submitComment() {
       ElMessage.success('評論提交成功')
       handleClose()
     } else {
-      ElMessage.error(`評論提交失敗：${response.error?.message || '未知錯誤'}`)
+      ElMessage.error(`評論提交失敗：${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
     }
   } catch (error) {
     console.error('提交評論錯誤:', error)

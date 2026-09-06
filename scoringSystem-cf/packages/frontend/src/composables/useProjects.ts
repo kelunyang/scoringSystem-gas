@@ -12,6 +12,7 @@
 import { useQuery, useMutation, useQueryClient, type UseQueryReturnType } from '@tanstack/vue-query'
 import { computed, type ComputedRef } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { ElMessage } from 'element-plus'
 import { useCurrentUser } from './useAuth'
 import type { Project, Stage } from '@/types'
@@ -77,7 +78,7 @@ export function useProjects(): UseQueryReturnType<Project[], Error> {
       const response = await httpResponse.json() as ApiResponse<{ projects: Project[] }>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入專案列表失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入專案列表失敗')
       }
 
       return response.data.projects || []
@@ -121,7 +122,7 @@ export function useProjectsWithStages(): UseQueryReturnType<ProjectWithStages[],
       const response = await httpResponse.json() as ApiResponse<ProjectWithStages[] | { projects: ProjectWithStages[] }>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入專案列表失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入專案列表失敗')
       }
 
       // Backend returns either:
@@ -164,7 +165,7 @@ export function useCreateProject() {
       const response = await httpResponse.json() as ApiResponse<Project>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '建立專案失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '建立專案失敗')
       }
 
       return response.data
@@ -197,7 +198,7 @@ export function useUpdateProject() {
       const response = await httpResponse.json() as ApiResponse<Project>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '更新專案失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '更新專案失敗')
       }
 
       return response.data

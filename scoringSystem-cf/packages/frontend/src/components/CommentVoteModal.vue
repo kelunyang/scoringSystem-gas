@@ -181,6 +181,7 @@ import VersionTimeline from './common/VersionTimeline.vue'
 import RankingComparison from './common/RankingComparison.vue'
 import AllGroupsChart from './shared/ContributionChart/AllGroupsChart.vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { useAuth } from '@/composables/useAuth'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
@@ -610,7 +611,7 @@ async function checkVotingEligibility(): Promise<void> {
     } else {
       votingEligibility.value = {
         canVote: false,
-        message: response.error?.message || '檢查投票資格失敗'
+        message: apiErrorMessage(errorOf(response)) || '檢查投票資格失敗'
       }
     }
   } catch (error) {
@@ -771,7 +772,7 @@ async function submitVote(): Promise<void> {
       // 不自動關閉 - 讓用戶查看結果後手動關閉
       // handleClose()
     } else {
-      alert(`投票失敗：${response.error?.message || '未知錯誤'}`)
+      alert(`投票失敗：${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
     }
   } catch (error) {
     console.error('投票錯誤:', error)

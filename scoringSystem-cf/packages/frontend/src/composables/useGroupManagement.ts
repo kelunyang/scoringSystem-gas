@@ -15,6 +15,7 @@
 import { useQuery, useMutation, useQueryClient, type UseQueryReturnType } from '@tanstack/vue-query'
 import { computed, toValue, type Ref, type ComputedRef } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { ElMessage } from 'element-plus'
 import type { Group, Member, ApiResponse } from '@/types'
 import { getErrorMessage } from '@/utils/errorHandler'
@@ -108,7 +109,7 @@ export function useGroupMembers(projectId: Ref<string | null>, groupId: Ref<stri
       const response = await httpResponse.json() as ApiResponse<GroupDetailsResponse>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入群組成員失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入群組成員失敗')
       }
 
       return response.data || { members: [], groupInfo: null }
@@ -142,7 +143,7 @@ export function useProjectGroups(projectId: Ref<string | null>): UseQueryReturnT
       const response = await httpResponse.json() as ApiResponse<Group[]>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入專案群組失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入專案群組失敗')
       }
 
       const groups = response.data || []
@@ -183,7 +184,7 @@ export function useAvailableGroupUsers(projectId: Ref<string | null>): UseQueryR
       const response = await httpResponse.json() as ApiResponse<ProjectViewer[]>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入可用成員失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入可用成員失敗')
       }
 
       // Filter to only members with role='member'
@@ -235,7 +236,7 @@ export function useBatchAddGroupMembers() {
       const response = await httpResponse.json() as ApiResponse<BatchAddMembersResponse>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '批量新增成員失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '批量新增成員失敗')
       }
 
       return response.data
@@ -274,7 +275,7 @@ export function useRemoveGroupMember() {
       const response = await httpResponse.json() as ApiResponse<RemoveMemberResponse>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '移除成員失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '移除成員失敗')
       }
 
       return response.data
@@ -313,7 +314,7 @@ export function useUpdateGroup() {
       const response = await httpResponse.json() as ApiResponse<Group>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '更新群組資訊失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '更新群組資訊失敗')
       }
 
       return response.data

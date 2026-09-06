@@ -363,6 +363,7 @@ import TotpSetup from './settings/TotpSetup.vue'
 import PasskeySetup from './settings/PasskeySetup.vue'
 import { useBreadcrumb } from '@/composables/useBreadcrumb'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { apiClient } from '@/utils/api'
 import { getUserPreferences, setUserPreference } from '@/utils/userPreferences'
 import { parseAvatarOptions } from '@/utils/avatar'
@@ -688,7 +689,7 @@ async function handleCommentPageSizeChange(rawValue: number | number[]) {
         detail: { userId: props.user?.userId, commentPageSize: value }
       }))
     } else {
-      ElMessage.error('儲存設定失敗：' + (response.error?.message || '未知錯誤'))
+      ElMessage.error('儲存設定失敗：' + (apiErrorMessage(errorOf(response)) || '未知錯誤'))
       // Revert to previous value
       await loadCommentPageSizePreference()
     }
@@ -730,7 +731,7 @@ async function regenerateAvatar() {
       ElMessage.success('頭像已重新生成！')
       emit('user-command', 'refresh-user-data')
     } else {
-      ElMessage.error('重新生成頭像失敗：' + (response.error?.message || '未知錯誤'))
+      ElMessage.error('重新生成頭像失敗：' + (apiErrorMessage(errorOf(response)) || '未知錯誤'))
     }
   } catch (error) {
     console.error('Regenerate avatar error:', error)
@@ -749,7 +750,7 @@ async function saveAvatarSettings(data: AvatarData) {
       ElMessage.success('頭像設定已儲存！')
       emit('user-command', 'refresh-user-data')
     } else {
-      ElMessage.error('儲存頭像設定失敗：' + (response.error?.message || '未知錯誤'))
+      ElMessage.error('儲存頭像設定失敗：' + (apiErrorMessage(errorOf(response)) || '未知錯誤'))
     }
   } catch (error) {
     console.error('Save avatar settings error:', error)
@@ -808,7 +809,7 @@ async function saveProfile() {
       editingProfile.value = false
       emit('user-command', 'refresh-user-data')
     } else {
-      ElMessage.error('更新個人資料失敗：' + (response.error?.message || '未知錯誤'))
+      ElMessage.error('更新個人資料失敗：' + (apiErrorMessage(errorOf(response)) || '未知錯誤'))
     }
   } catch (error) {
     console.error('Update profile error:', error)
@@ -879,7 +880,7 @@ async function savePassword() {
       }
       emit('user-command', 'refresh-user-data')
     } else {
-      ElMessage.error('更新密碼失敗：' + (response.error?.message || '未知錯誤'))
+      ElMessage.error('更新密碼失敗：' + (apiErrorMessage(errorOf(response)) || '未知錯誤'))
     }
   } catch (error) {
     console.error('Change password error:', error)

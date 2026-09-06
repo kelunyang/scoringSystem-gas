@@ -382,6 +382,7 @@
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { handleError } from '@/utils/errorHandler'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import { getAvatarUrl, generateInitialsAvatar } from '@/utils/avatar'
@@ -712,11 +713,11 @@ const handleLoadFromProjects = async () => {
         }
         ElMessage.success(message)
       } else if (!data.success) {
-        ElMessage.error(data.error?.message || '載入失敗')
+        ElMessage.error(apiErrorMessage(errorOf(data)) || '載入失敗')
       }
     } else {
       const errData = await response.json()
-      ElMessage.error(errData.error?.message || '載入失敗')
+      ElMessage.error(apiErrorMessage(errorOf(errData)) || '載入失敗')
     }
   } catch (error) {
     handleError(error instanceof Error ? error : String(error), { action: '從專案載入參與者' })

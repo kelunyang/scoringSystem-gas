@@ -5,6 +5,7 @@
 import { useQuery, type UseQueryReturnType } from '@tanstack/vue-query'
 import { computed, type Ref, type ComputedRef } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 
 export interface ActivityStats {
   loginSuccess: number
@@ -116,7 +117,7 @@ export function useActivityData(options: UseActivityDataOptions): UseActivityDat
       const response = (await httpResponse.json()) as ActivityResponse
 
       if (!response.success) {
-        throw new Error(response.error?.message || '無法載入活動資料')
+        throw new Error(apiErrorMessage(errorOf(response)) || '無法載入活動資料')
       }
 
       return response.data

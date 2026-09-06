@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { computed, type Ref } from 'vue'
 import type { ComputedRef } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { useAuth } from './useAuth'
 
 interface Project {
@@ -107,7 +108,7 @@ export function useAdminProjects(options?: UseAdminProjectsOptions): UseQueryRet
       const response = await httpResponse.json() as AdminProjectsResponse
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入專案列表失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入專案列表失敗')
       }
 
       // Backend returns either:

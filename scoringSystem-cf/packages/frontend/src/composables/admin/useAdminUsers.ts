@@ -14,6 +14,7 @@ import { useInfiniteQuery } from '@tanstack/vue-query'
 import { computed, type Ref, type ComputedRef } from 'vue'
 import { fetchWithAuth, type ApiResponse } from '@/utils/api-helpers'
 import { useCurrentUser } from '@/composables/useAuth'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 
 // ============================================================================
 // Types
@@ -171,7 +172,7 @@ export function useAdminUsers(
       )
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入使用者列表失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入使用者列表失敗')
       }
 
       // Backend returns either:

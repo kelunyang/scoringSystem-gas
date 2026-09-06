@@ -15,6 +15,7 @@ import { useInfiniteQuery, useQuery, useMutation } from '@tanstack/vue-query'
 import { computed, type Ref, type ComputedRef } from 'vue'
 import { fetchWithAuth, type ApiResponse } from '@/utils/api-helpers'
 import { useCurrentUser } from '@/composables/useAuth'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 
 // ============================================================================
 // Types
@@ -168,7 +169,7 @@ export function useSystemLogs(
       )
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入系統日誌失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入系統日誌失敗')
       }
 
       const logs = response.data?.logs || []
@@ -215,7 +216,7 @@ export function useLogStatistics(): UseQueryReturnType<LogStatistics, Error> {
       )
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入日誌統計失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入日誌統計失敗')
       }
 
       return response.data as LogStatistics
@@ -254,7 +255,7 @@ export function useEntityDetails(): UseMutationReturnType<
       )
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入實體詳情失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入實體詳情失敗')
       }
 
       return response.data as EntityDetailsResult

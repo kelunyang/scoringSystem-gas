@@ -15,6 +15,7 @@ import { computed, type Ref, type ComputedRef } from 'vue'
 import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'
 import { useCurrentUser } from '@/composables/useAuth'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 
 // ============================================================================
 // Types
@@ -95,7 +96,7 @@ export function useGlobalGroups(
       })
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入全域群組列表失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入全域群組列表失敗')
       }
 
       const data = response.data
@@ -170,7 +171,7 @@ export function useCreateGlobalGroup(): UseMutationReturnType<
       })
 
       if (!response.success) {
-        throw new Error(response.error?.message || '建立群組失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '建立群組失敗')
       }
 
       return response.data as { groupId: string }
@@ -206,7 +207,7 @@ export function useUpdateGlobalGroup(): UseMutationReturnType<
       })
 
       if (!response.success) {
-        throw new Error(response.error?.message || '更新群組失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '更新群組失敗')
       }
     },
     onSuccess: () => {
@@ -243,7 +244,7 @@ export function useToggleGlobalGroupStatus(): UseMutationReturnType<
         : await adminApi.globalGroups.deactivate(groupId)
 
       if (!response.success) {
-        throw new Error(response.error?.message || (activate ? '啟用群組失敗' : '停用群組失敗'))
+        throw new Error(apiErrorMessage(errorOf(response)) || (activate ? '啟用群組失敗' : '停用群組失敗'))
       }
     },
     onSuccess: (_data, variables) => {
@@ -277,7 +278,7 @@ export function useAddUserToGlobalGroup(): UseMutationReturnType<
       })
 
       if (!response.success) {
-        throw new Error(response.error?.message || '添加成員失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '添加成員失敗')
       }
     },
     onSuccess: (_data, variables) => {
@@ -312,7 +313,7 @@ export function useRemoveUserFromGlobalGroup(): UseMutationReturnType<
       })
 
       if (!response.success) {
-        throw new Error(response.error?.message || '移除成員失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '移除成員失敗')
       }
     },
     onSuccess: (_data, variables) => {
@@ -354,7 +355,7 @@ export function useBatchAddUsersToGlobalGroup(): UseMutationReturnType<
       })
 
       if (!response.success) {
-        throw new Error(response.error?.message || '批量添加成員失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '批量添加成員失敗')
       }
 
       return response.data as BatchAddResult
@@ -401,7 +402,7 @@ export function useBatchRemoveUsersFromGlobalGroup(): UseMutationReturnType<
       })
 
       if (!response.success) {
-        throw new Error(response.error?.message || '批量移除成員失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '批量移除成員失敗')
       }
 
       return response.data as BatchRemoveResult

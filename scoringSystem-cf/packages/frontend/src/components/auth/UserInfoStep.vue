@@ -101,7 +101,8 @@ import * as AvatarConfig from '../../utils/avatarConfig';
 import AvatarEditor from '@/components/shared/AvatarEditor.vue';
 import type { AvatarData } from '@/components/shared/AvatarEditor.vue';
 import { useAvatarGenerator } from '../../composables/auth/useAvatarGenerator';
-import { rpcClient } from '@/utils/rpc-client';
+import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types';
 import TurnstileWidget from '../TurnstileWidget.vue';
 import { useTurnstile } from '../../composables/auth/useTurnstile';
 
@@ -284,7 +285,7 @@ async function handleAvatarRegenerate() {
       ElMessage.success('頭像已重新生成！');
     } else {
       console.error('Failed to regenerate avatar:', response.error);
-      ElMessage.error('重新生成頭像失敗：' + (response.error?.message || '未知錯誤'));
+      ElMessage.error('重新生成頭像失敗：' + (apiErrorMessage(errorOf(response)) || '未知錯誤'));
     }
   } catch (error) {
     console.error('Error regenerating avatar:', error);

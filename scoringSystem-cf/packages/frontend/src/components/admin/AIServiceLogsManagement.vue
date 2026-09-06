@@ -489,6 +489,7 @@ import type {
 } from '@repo/shared/types/admin'
 
 import { getErrorMessage } from '@/utils/errorHandler'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 // ================== TanStack Query ==================
 const aiServiceLogDetailMutation = useAIServiceLogDetail()
 
@@ -754,7 +755,7 @@ const loadAIServiceLogs = async (append: boolean = false): Promise<void> => {
 
       totalCount.value = response.data.totalCount || logsList.length
     } else {
-      const errorMessage = response.error?.message || '無法載入 AI 紀錄'
+      const errorMessage = apiErrorMessage(errorOf(response)) || '無法載入 AI 紀錄'
       ElMessage.error(errorMessage)
     }
   } catch (error) {

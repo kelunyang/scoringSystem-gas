@@ -15,7 +15,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { rpcClient } from '@/utils/rpc-client'
 import { useCurrentUser } from './useAuth'
 import { usePermissions } from './usePermissions'
-import { apiErrorCode, apiErrorMessage } from '@/utils/api-types'
+import { apiErrorCode, apiErrorMessage, errorOf } from '@/utils/api-types'
 import { hasProjectAdminRole } from './useProjectAdminRole'
 
 /**
@@ -76,7 +76,7 @@ export function useProjectRole(projectId: string | Ref<string | null>) {
       })
       const response = await httpResponse.json()
       if (!response.success) {
-        throw new Error(response.error?.message || 'Failed to fetch project core data')
+        throw new Error(apiErrorMessage(errorOf(response)) || 'Failed to fetch project core data')
       }
       return response.data
     },

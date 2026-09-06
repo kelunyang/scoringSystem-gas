@@ -16,6 +16,7 @@ import { computed, type Ref, type ComputedRef } from 'vue'
 import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'
 import { useCurrentUser } from '@/composables/useAuth'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 
 // ============================================================================
 // Types
@@ -122,7 +123,7 @@ export function useAdminNotifications(
       const response = await adminApi.notifications.list(queryParams as any)
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入通知列表失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入通知列表失敗')
       }
 
       const data = response.data as any
@@ -197,7 +198,7 @@ export function useDeleteNotification(): UseMutationReturnType<
       const response = await adminApi.notifications.delete({ notificationId } as any)
 
       if (!response.success) {
-        throw new Error(response.error?.message || '刪除通知失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '刪除通知失敗')
       }
     },
     onSuccess: () => {
@@ -231,7 +232,7 @@ export function useSendNotificationEmail(): UseMutationReturnType<
       const response = await adminApi.notifications.sendSingle({ notificationId } as any)
 
       if (!response.success) {
-        throw new Error(response.error?.message || '發送郵件失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '發送郵件失敗')
       }
     },
     onSuccess: () => {
@@ -271,7 +272,7 @@ export function useSendBatchNotificationEmails(): UseMutationReturnType<
       const response = await adminApi.notifications.sendBatch({ notificationIds } as any)
 
       if (!response.success) {
-        throw new Error(response.error?.message || '批量發送郵件失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '批量發送郵件失敗')
       }
 
       return response.data as unknown as BatchEmailSendResult

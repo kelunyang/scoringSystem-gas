@@ -572,6 +572,7 @@ import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { useVotingData } from '@/composables/useVotingData'
 import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorCode, apiErrorMessage, errorOf } from '@/utils/api-types'
 import { getErrorMessage } from '@/utils/errorHandler'
 
 // 註冊 markdown 語言以支援語法高亮
@@ -1352,12 +1353,12 @@ async function confirmDelete() {
       handleClose()
       emit('submission-deleted')
     } else {
-      const errorMsg = response.error?.message || '未知錯誤'
+      const errorMsg = apiErrorMessage(errorOf(response)) || '未知錯誤'
       console.error('刪除報告失敗:', {
         projectId: props.projectId,
         submissionId: props.submissionId,
         error: response.error,
-        errorCode: response.error?.code
+        errorCode: apiErrorCode(errorOf(response))
       })
       ElMessage.error('刪除報告失敗：' + errorMsg)
     }
@@ -1550,7 +1551,7 @@ async function confirmRestore() {
       await votingDataComposable.refreshAll()
       emit('submission-restored')
     } else {
-      ElMessage.error('恢復版本失敗：' + (response.error?.message || '未知錯誤'))
+      ElMessage.error('恢復版本失敗：' + (apiErrorMessage(errorOf(response)) || '未知錯誤'))
     }
   } catch (error) {
     console.error('恢復版本失敗:', error)

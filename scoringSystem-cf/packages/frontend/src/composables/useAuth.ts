@@ -12,6 +12,7 @@ import { useQuery, useMutation, useQueryClient, type UseQueryReturnType, type Us
 import { computed, ref, readonly, type ComputedRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorCode, errorOf } from '@/utils/api-types'
 import { isTokenExpired } from '@/utils/jwt'
 import { ElMessage } from 'element-plus'
 import type { AuthUser } from '@/types/models'
@@ -90,7 +91,7 @@ export function useCurrentUser(): UseQueryReturnType<AuthUser, Error> {
       const response = await httpResponse.json() as ApiResponse<{ user: AuthUser }>
 
       if (!response.success) {
-        const errorCode = response.error?.code || 'AUTH_FAILED'
+        const errorCode = apiErrorCode(errorOf(response)) || 'AUTH_FAILED'
         throw new Error(errorCode)
       }
 

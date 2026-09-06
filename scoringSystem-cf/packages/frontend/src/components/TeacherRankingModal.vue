@@ -118,6 +118,7 @@ import RankingComparison from './common/RankingComparison.vue'
 import DraggableRankingList from './common/DraggableRankingList.vue'
 import DrawerAlertZone from './common/DrawerAlertZone.vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { useStageConsensusAlert } from '@/composables/useStageConsensusAlert'
@@ -292,7 +293,7 @@ const loadVersionHistory = async (): Promise<void> => {
         latestRankings.value = [...teacherRankings.value]
       }
     } else {
-      console.error('載入版本歷史失敗:', response.error?.message)
+      console.error('載入版本歷史失敗:', apiErrorMessage(errorOf(response)))
     }
   } catch (error) {
     console.error('載入版本歷史失敗:', error)
@@ -364,7 +365,7 @@ const submitTeacherRanking = async (): Promise<void> => {
       // 關閉彈窗
       handleClose()
     } else {
-      ElMessage.error('提交失敗：' + (response.error?.message || '未知錯誤'))
+      ElMessage.error('提交失敗：' + (apiErrorMessage(errorOf(response)) || '未知錯誤'))
     }
   } catch (error) {
     console.error('提交教師排名失敗:', error)

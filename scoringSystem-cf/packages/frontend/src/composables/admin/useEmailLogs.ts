@@ -15,6 +15,7 @@ import { computed, type Ref, type ComputedRef } from 'vue'
 import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'
 import { useCurrentUser } from '@/composables/useAuth'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 
 // ============================================================================
 // Types
@@ -116,7 +117,7 @@ export function useEmailLogs(
       const response = await adminApi.emailLogs.query(queryParams as any)
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入郵件日誌失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入郵件日誌失敗')
       }
 
       const data = response.data as any
@@ -161,7 +162,7 @@ export function useEmailStatistics(): UseQueryReturnType<EmailStatistics, Error>
       const response = await adminApi.emailLogs.statistics()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入郵件統計失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入郵件統計失敗')
       }
 
       return response.data as unknown as EmailStatistics
@@ -187,7 +188,7 @@ export function useResendEmail(): UseMutationReturnType<void, Error, ResendEmail
       const response = await adminApi.emailLogs.resendSingle({ logId } as any)
 
       if (!response.success) {
-        throw new Error(response.error?.message || '重新發送郵件失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '重新發送郵件失敗')
       }
     },
     onSuccess: () => {
@@ -226,7 +227,7 @@ export function useBatchResendEmails(): UseMutationReturnType<
       const response = await adminApi.emailLogs.resendBatch({ logIds } as any)
 
       if (!response.success) {
-        throw new Error(response.error?.message || '批量重新發送郵件失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '批量重新發送郵件失敗')
       }
 
       return response.data as unknown as BatchResendResult

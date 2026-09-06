@@ -347,6 +347,7 @@ import { getAvatarUrl, generateInitialsAvatar } from '@/utils/avatar'
 import type { AuthUser, Project, Group, Member } from '@/types'
 import type { GroupMember } from '@/composables/useGroupManagement'
 import type { PermissionFlags } from '@/composables/useProjectPermissions'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 
 // ========================================
 // Props & Emits
@@ -864,7 +865,7 @@ const handleRemoveMemberConfirm = async () => {
       const response = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '批次移除成員失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '批次移除成員失敗')
       }
 
       showSuccess(`成功移除 ${selectedMembersToRemove.value.length} 位成員`)

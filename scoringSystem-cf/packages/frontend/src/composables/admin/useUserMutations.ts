@@ -20,6 +20,7 @@ import type { UseMutationReturnType } from '@tanstack/vue-query'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
 import { fetchWithAuth, type ApiResponse } from '@/utils/api-helpers'
+import { apiErrorCode, apiErrorMessage, errorOf } from '@/utils/api-types'
 
 // ============================================================================
 // Types - Match actual backend API parameters
@@ -132,7 +133,7 @@ export function useUpdateUserStatus(): UseMutationReturnType<
       )
 
       if (!response.success) {
-        throw new Error(response.error?.message || '更新使用者狀態失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '更新使用者狀態失敗')
       }
     },
     onSuccess: (_data, variables) => {
@@ -186,7 +187,7 @@ export function useBatchUpdateUserStatus(): UseMutationReturnType<
       )
 
       if (!response.success) {
-        throw new Error(response.error?.message || '批量更新使用者狀態失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '批量更新使用者狀態失敗')
       }
 
       return response.data as BatchUpdateStatusResult
@@ -236,7 +237,7 @@ export function useResetPassword(): UseMutationReturnType<void, Error, ResetPass
       )
 
       if (!response.success) {
-        throw new Error(response.error?.message || '密碼重設失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '密碼重設失敗')
       }
     },
     onSuccess: () => {
@@ -380,12 +381,12 @@ export function useUnlockUser(): UseMutationReturnType<void, Error, UnlockUserPa
 
       if (!response.success) {
         // Handle specific error codes
-        if (response.error?.code === 'USER_NOT_LOCKED') {
+        if (apiErrorCode(errorOf(response)) === 'USER_NOT_LOCKED') {
           throw new Error('該使用者帳戶目前並未被鎖定')
-        } else if (response.error?.code === 'USER_NOT_FOUND') {
+        } else if (apiErrorCode(errorOf(response)) === 'USER_NOT_FOUND') {
           throw new Error('找不到該使用者')
         }
-        throw new Error(response.error?.message || '解鎖失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '解鎖失敗')
       }
     },
     onSuccess: (_data, variables) => {
@@ -443,7 +444,7 @@ export function useUpdateUserProfile(): UseMutationReturnType<
       )
 
       if (!response.success) {
-        throw new Error(response.error?.message || '更新用戶資料失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '更新用戶資料失敗')
       }
     },
     onSuccess: () => {

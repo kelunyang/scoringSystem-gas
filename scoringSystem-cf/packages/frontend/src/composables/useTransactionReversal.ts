@@ -8,6 +8,7 @@
 
 import { ref, type Ref } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { handleError, showSuccess, showWarning } from '@/utils/errorHandler'
 import type { NormalizedTransaction } from './useWallet'
 
@@ -88,7 +89,7 @@ export function useTransactionReversal(projectId: string | Ref<string | null>, o
 
         return true
       } else {
-        throw new Error(response.error?.message || '撤銷交易失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '撤銷交易失敗')
       }
     } catch (error) {
       console.error('Error reversing transaction:', error)

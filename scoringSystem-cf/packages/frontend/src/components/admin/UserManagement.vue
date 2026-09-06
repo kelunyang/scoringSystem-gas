@@ -560,6 +560,7 @@ import { useExpandable } from '@/composables/useExpandable'
 import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import { useWindowInfiniteScroll } from '@/composables/useWindowInfiniteScroll'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { adminApi } from '@/api/admin'
 // TanStack Query composables for admin operations
 import {
@@ -997,7 +998,7 @@ const loadUsers = async (append: boolean = false) => {
       if (!append) {
         users.value = [] // 確保有預設值
       }
-      ElMessage.error(`無法載入使用者資料: ${response.error?.message || '未知錯誤'}`)
+      ElMessage.error(`無法載入使用者資料: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
     }
   } catch (error) {
     console.error('Error loading users:', error)
@@ -1596,7 +1597,7 @@ const updateGroupAllowChange = async (projectGroup: ProjectGroupMembership) => {
     } else {
       // 回復原始狀態
       projectGroup.allowChange = !projectGroup.allowChange
-      ElMessage.error(`更新失敗: ${response.error?.message || '未知錯誤'}`)
+      ElMessage.error(`更新失敗: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
     }
   } catch (error) {
     // 回復原始狀態
@@ -1627,7 +1628,7 @@ const removeUserFromProjectGroup = async (projectGroup: ProjectGroupMembership) 
       // 重新載入專案群組列表
       await loadUserProjectGroups(editingUser.value!.userEmail)
     } else {
-      ElMessage.error(`移除失敗: ${response.error?.message || '未知錯誤'}`)
+      ElMessage.error(`移除失敗: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
     }
   } catch (error) {
     console.error('Error removing user from project group:', error)

@@ -323,6 +323,7 @@ import EmptyState from '@/components/shared/EmptyState.vue'
 import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
 import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { getErrorMessage } from '@/utils/errorHandler'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
@@ -668,7 +669,7 @@ async function queryAI(): Promise<void> {
 
       ElMessage.info('AI 排名請求已送出，請等待處理...')
     } else {
-      const errorMsg = response.error?.message || 'AI 查詢失敗'
+      const errorMsg = apiErrorMessage(errorOf(response)) || 'AI 查詢失敗'
       ElMessage.error(errorMsg)
       showAlertError(errorMsg, 'AI 查詢錯誤')
       isProcessing.value = false

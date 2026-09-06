@@ -15,6 +15,7 @@ import { computed, type Ref, type ComputedRef } from 'vue'
 import { adminApi } from '@/api/admin'
 import { useCurrentUser } from '@/composables/useAuth'
 import type { AIServiceLog } from '@repo/shared'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 
 // ============================================================================
 // Types
@@ -116,7 +117,7 @@ export function useAIServiceLogs(
       const response = await adminApi.aiServiceLogs.query(queryParams as any)
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入 AI 服務日誌失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入 AI 服務日誌失敗')
       }
 
       const data = response.data as any
@@ -168,7 +169,7 @@ export function useAIServiceLogDetail(): UseMutationReturnType<
       const response = await adminApi.aiServiceLogs.detail(callId)
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入 AI 服務日誌詳情失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入 AI 服務日誌詳情失敗')
       }
 
       return response.data as unknown as AIServiceLogDetailResult

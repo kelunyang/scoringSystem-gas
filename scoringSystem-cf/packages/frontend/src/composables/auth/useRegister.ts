@@ -165,7 +165,7 @@ export function useRegister(): UseRegisterReturn {
         invitationStatusMessage.value = '邀請碼有效';
       } else {
         // Parse error to determine specific status
-        const errorMsg = response.error?.message || '';
+        const errorMsg = apiErrorMessage(errorOf(response)) || '';
         if (errorMsg.includes('already been used') || errorMsg.includes('maximum uses')) {
           invitationStatus.value = 'used';
           invitationStatusMessage.value = '此邀請碼已被使用';

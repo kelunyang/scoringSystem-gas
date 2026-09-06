@@ -2735,7 +2735,7 @@ async function openGroupSubmissionApprovalModal(stage: ExtendedStage) {
 
     // ✅ 嚴格驗證 API 響應
     if (!submissionsResponse.success) {
-      throw new Error(submissionsResponse.error?.message || '獲取提交數據失敗')
+      throw new Error(apiErrorMessage(errorOf(submissionsResponse)) || '獲取提交數據失敗')
     }
 
     const activeGroupsCount = submissionsResponse.data?.activeGroupsWithSubmissions

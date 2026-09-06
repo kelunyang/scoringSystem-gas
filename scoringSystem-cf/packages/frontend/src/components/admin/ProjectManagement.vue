@@ -1573,7 +1573,7 @@ const assignTagToProject = async (tagId) => {
       await loadProjectTags(selectedProject.value.projectId)
       ElMessage.success('標籤指派成功')
     } else {
-      ElMessage.error(`指派失敗: ${response.error?.message || '未知錯誤'}`)
+      ElMessage.error(`指派失敗: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
     }
   } catch (error) {
     console.error('Assign tag error:', error)
@@ -1596,7 +1596,7 @@ const removeTagFromProject = async (tagId) => {
       await loadProjectTags(selectedProject.value.projectId)
       ElMessage.success('標籤已移除')
     } else {
-      ElMessage.error(`移除失敗: ${response.error?.message || '未知錯誤'}`)
+      ElMessage.error(`移除失敗: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
     }
   } catch (error) {
     console.error('Remove tag error:', error)

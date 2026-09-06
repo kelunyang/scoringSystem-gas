@@ -89,6 +89,7 @@ import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
 import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 
 // Props & Emits
 const props = defineProps<{
@@ -139,7 +140,7 @@ async function confirmResume() {
       emit('confirmed')
       closeDrawer()
     } else {
-      ElMessage.error(`操作失敗: ${response.error?.message || '未知錯誤'}`)
+      ElMessage.error(`操作失敗: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
     }
   } catch (error) {
     console.error('Error resuming stage:', error)

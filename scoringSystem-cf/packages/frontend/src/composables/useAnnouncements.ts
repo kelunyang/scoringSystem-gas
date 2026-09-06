@@ -16,6 +16,7 @@ import { handleError, showSuccess } from '@/utils/errorHandler'
 import { isTokenExpired } from '@/utils/jwt'
 import { useAuth } from './useAuth'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import type { ApiResponse } from '@/types'
 import type {
   AnnouncementType,
@@ -87,7 +88,7 @@ export function useActiveAnnouncements(): UseQueryReturnType<PublicAnnouncement[
       const response = await httpResponse.json() as ApiResponse<PublicAnnouncement[]>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入公告失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入公告失敗')
       }
 
       const announcements = response.data || []
@@ -150,7 +151,7 @@ export function useAdminAnnouncements(
       const response = await httpResponse.json() as ApiResponse<AdminListResponse>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入公告列表失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入公告列表失敗')
       }
 
       console.log(`✅ [useAnnouncements] 公告列表載入成功，共 ${response.data?.announcements?.length || 0} 條`)
@@ -204,7 +205,7 @@ export function useCreateAnnouncement() {
       const response = await httpResponse.json() as ApiResponse<AdminAnnouncement>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '創建公告失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '創建公告失敗')
       }
 
       return response.data
@@ -243,7 +244,7 @@ export function useUpdateAnnouncement() {
       const response = await httpResponse.json() as ApiResponse<AdminAnnouncement>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '更新公告失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '更新公告失敗')
       }
 
       return response.data
@@ -285,7 +286,7 @@ export function useDeleteAnnouncement() {
       const response = await httpResponse.json() as ApiResponse<{ success: boolean }>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '刪除公告失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '刪除公告失敗')
       }
 
       return response.data

@@ -69,6 +69,7 @@ import DrawerAlertZone from './common/DrawerAlertZone.vue'
 import MdEditorWrapper from './MdEditorWrapper.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 
@@ -179,7 +180,7 @@ async function submitReply() {
         success: false,
         error: response.error
       })
-      throw new Error(response.error?.message || '回覆失敗')
+      throw new Error(apiErrorMessage(errorOf(response)) || '回覆失敗')
     }
   } catch (error) {
     console.error('提交回覆失敗:', error)

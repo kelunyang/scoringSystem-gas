@@ -22,6 +22,7 @@ import { computed, type ComputedRef, type Ref } from 'vue'
 import { useQuery, type UseQueryReturnType } from '@tanstack/vue-query'
 import { adminApi } from '@/api/admin'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import type { LogStatistics } from '@repo/shared/types/admin'
 import type {
   SystemStats,
@@ -107,7 +108,7 @@ export function useSystemStats(
       const response = await adminApi.system.stats()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '無法載入系統統計數據')
+        throw new Error(apiErrorMessage(errorOf(response)) || '無法載入系統統計數據')
       }
 
       // 添加 lastUpdate 時間戳
@@ -142,7 +143,7 @@ export function useSystemStats(
       const response = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '無法載入邀請碼統計數據')
+        throw new Error(apiErrorMessage(errorOf(response)) || '無法載入邀請碼統計數據')
       }
 
       const invitations = response.data as InvitationCode[]
@@ -182,7 +183,7 @@ export function useSystemStats(
       const response = await adminApi.system.logStatistics()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '無法載入日誌統計數據')
+        throw new Error(apiErrorMessage(errorOf(response)) || '無法載入日誌統計數據')
       }
 
       return response.data

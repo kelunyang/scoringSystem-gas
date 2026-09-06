@@ -8,6 +8,7 @@
 
 import { ref, watch, type Ref } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import type { NormalizedTransaction } from './useWallet'
 import { handleError, getErrorMessage } from '@/utils/errorHandler'
 import type { Transaction } from '@repo/shared' // Use shared Transaction type for consistency
@@ -218,7 +219,7 @@ export function useTransactionDetailsLoader(projectId: string | Ref<string | nul
           if (data.success) {
             details[type] = data.data
           } else {
-            details[`${type}Error`] = data.error?.message || '載入失敗'
+            details[`${type}Error`] = apiErrorMessage(errorOf(data)) || '載入失敗'
           }
         } else if (result.status === 'rejected') {
           console.warn(`Failed to load transaction detail:`, result.reason)

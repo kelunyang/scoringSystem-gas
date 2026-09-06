@@ -5,7 +5,8 @@
 
 import { ref, computed } from 'vue';
 import { useQueryClient } from '@tanstack/vue-query';
-import { rpcClient } from '@/utils/rpc-client';
+import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types';
 import { apiClient } from '@/utils/api';
 import type { Ref, ComputedRef } from 'vue';
 import { getErrorMessage } from '@/utils/errorHandler'
@@ -135,7 +136,7 @@ export function usePasskey(): UsePasskeyReturn {
       if (response.success) {
         status.value = response.data;
       } else {
-        errorMessage.value = response.error?.message || '無法取得 Passkey 狀態';
+        errorMessage.value = apiErrorMessage(errorOf(response)) || '無法取得 Passkey 狀態';
       }
     } catch (error) {
       errorMessage.value = getErrorMessage(error) || '取得狀態時發生錯誤';
@@ -168,7 +169,7 @@ export function usePasskey(): UsePasskeyReturn {
       const initResult = await initResponse.json();
 
       if (!initResult.success) {
-        errorMessage.value = initResult.error?.message || '初始化失敗';
+        errorMessage.value = apiErrorMessage(errorOf(initResult)) || '初始化失敗';
         return false;
       }
 
@@ -228,7 +229,7 @@ export function usePasskey(): UsePasskeyReturn {
         await fetchStatus();
         return true;
       } else {
-        errorMessage.value = verifyResult.error?.message || '驗證失敗';
+        errorMessage.value = apiErrorMessage(errorOf(verifyResult)) || '驗證失敗';
         return false;
       }
     } catch (error) {
@@ -263,7 +264,7 @@ export function usePasskey(): UsePasskeyReturn {
         await fetchStatus();
         return true;
       } else {
-        errorMessage.value = response.error?.message || '重新命名失敗';
+        errorMessage.value = apiErrorMessage(errorOf(response)) || '重新命名失敗';
         return false;
       }
     } catch (error) {
@@ -293,7 +294,7 @@ export function usePasskey(): UsePasskeyReturn {
         await fetchStatus();
         return true;
       } else {
-        errorMessage.value = response.error?.message || '刪除失敗';
+        errorMessage.value = apiErrorMessage(errorOf(response)) || '刪除失敗';
         return false;
       }
     } catch (error) {
@@ -332,7 +333,7 @@ export function usePasskey(): UsePasskeyReturn {
       const initResult = await initResponse.json();
 
       if (!initResult.success) {
-        errorMessage.value = initResult.error?.message || '初始化認證失敗';
+        errorMessage.value = apiErrorMessage(errorOf(initResult)) || '初始化認證失敗';
         return null;
       }
 
@@ -435,7 +436,7 @@ export function usePasskey(): UsePasskeyReturn {
         pendingCredential = null;
         return true;
       } else {
-        errorMessage.value = response.error?.message || '驗證失敗';
+        errorMessage.value = apiErrorMessage(errorOf(response)) || '驗證失敗';
         return false;
       }
     } catch (error) {

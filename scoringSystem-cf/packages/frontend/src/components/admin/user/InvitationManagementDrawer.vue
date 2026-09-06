@@ -613,6 +613,7 @@ import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
 import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import type { ApiData } from '@/utils/api-types'
 import { fetchWithAuth } from '@/utils/api-helpers'
 import AdminFilterToolbar from '@/components/admin/shared/AdminFilterToolbar.vue'
@@ -1011,7 +1012,7 @@ const handleGenerateInvite = async (): Promise<void> => {
           return {
             success: false,
             batchIndex,
-            error: response.error?.message || '批次請求失敗',
+            error: apiErrorMessage(errorOf(response)) || '批次請求失敗',
             emailCount: batch.length,
             failedEmails: batch // Include the specific emails that failed
           }
@@ -1170,7 +1171,7 @@ const handleResendInvite = async (invitation: Invitation): Promise<void> => {
       ElMessage.success('邀請郵件已重新發送')
       await loadInvitations()
     } else {
-      ElMessage.error(`重新發送失敗: ${response.error?.message || '未知錯誤'}`)
+      ElMessage.error(`重新發送失敗: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
     }
   } catch (error) {
     // Ignore AbortError when request is cancelled
@@ -1248,7 +1249,7 @@ const handleConfirmAction = async (): Promise<void> => {
       await loadInvitations()
       confirmDrawerVisible.value = false
     } else {
-      ElMessage.error(`${action}失敗: ${response.error?.message || '未知錯誤'}`)
+      ElMessage.error(`${action}失敗: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
     }
   } catch (error) {
     console.error('Error toggling invite status:', error)

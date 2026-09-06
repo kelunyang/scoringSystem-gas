@@ -415,6 +415,7 @@ import { useFilterPersistence } from '@/composables/useFilterPersistence'
 import { useWindowInfiniteScroll } from '@/composables/useWindowInfiniteScroll'
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import {
   useDeleteNotification,
   useSendNotificationEmail,
@@ -646,7 +647,7 @@ const loadNotifications = async (): Promise<void> => {
       // projectName is now returned directly from API via LEFT JOIN
       notifications.value = notificationArray as unknown as Notification[]
     } else {
-      throw new Error(response.error?.message || '無法載入通知資料')
+      throw new Error(apiErrorMessage(errorOf(response)) || '無法載入通知資料')
     }
   } catch (error) {
     console.error('Error loading notifications:', error)

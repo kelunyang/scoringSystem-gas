@@ -129,6 +129,7 @@ import DrawerAlertZone from '@/components/common/DrawerAlertZone.vue'
 import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { getErrorMessage } from '@/utils/errorHandler'
 
 const props = defineProps<{
@@ -209,7 +210,7 @@ async function confirmClearVotes() {
       emit('confirmed')
       closeDrawer()
     } else {
-      ElMessage.error(`清空投票失敗：${response.error?.message || '未知錯誤'}`)
+      ElMessage.error(`清空投票失敗：${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
     }
   } catch (err) {
     console.error('清空投票發生錯誤:', err)

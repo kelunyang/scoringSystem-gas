@@ -850,7 +850,7 @@ async function loadStageGrowth() {
       // 同時載入專案階段信息（用於繪製分隔線）
       await loadProjectStages()
     } else {
-      handleError(response.error?.message || '載入成長數據失敗', { type: 'error' })
+      handleError(apiErrorMessage(errorOf(response)) || '載入成長數據失敗', { type: 'error' })
       stageGrowthData.value = null
     }
   } catch (err) {

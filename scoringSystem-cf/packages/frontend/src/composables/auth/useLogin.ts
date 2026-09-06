@@ -5,7 +5,8 @@
 
 import { ref, computed } from 'vue';
 import { useQueryClient } from '@tanstack/vue-query';
-import { rpcClient } from '@/utils/rpc-client';
+import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorCode, apiErrorMessage, errorOf } from '@/utils/api-types';
 import { apiClient } from '@/utils/api';
 import type { Ref, ComputedRef } from 'vue';
 import type { LoginCredentials, TwoFactorData, TwoFactorMethod } from '../../types/auth';
@@ -161,7 +162,7 @@ export function useLogin(): UseLoginReturn {
         return true;
       } else {
         applyRateLimitCountdown(response);
-        errorMessage.value = response.error?.message || '密碼驗證失敗';
+        errorMessage.value = apiErrorMessage(errorOf(response)) || '密碼驗證失敗';
         return false;
       }
     } catch (error) {
@@ -226,7 +227,7 @@ export function useLogin(): UseLoginReturn {
       }
 
       // Same dead end as above: without a valid proof no code can be accepted.
-      if (response.error?.code === 'PRE_AUTH_REQUIRED') {
+      if (apiErrorCode(errorOf(response)) === 'PRE_AUTH_REQUIRED') {
         emailPasswordVerified.value = false;
         preAuthToken.value = '';
         lastEmailSentAt.value = 0;
@@ -234,7 +235,7 @@ export function useLogin(): UseLoginReturn {
         return false;
       }
 
-      errorMessage.value = response.error?.message || '驗證碼錯誤';
+      errorMessage.value = apiErrorMessage(errorOf(response)) || '驗證碼錯誤';
       return false;
     } catch (error) {
       errorMessage.value = getErrorMessage(error) || '驗證過程發生錯誤';
@@ -280,7 +281,7 @@ export function useLogin(): UseLoginReturn {
       // end — there is nothing the user can type that will work — so send them
       // back to the password step instead of showing an error next to an input
       // that can no longer succeed.
-      if (response.error?.code === 'PRE_AUTH_REQUIRED') {
+      if (apiErrorCode(errorOf(response)) === 'PRE_AUTH_REQUIRED') {
         emailPasswordVerified.value = false;
         preAuthToken.value = '';
         lastEmailSentAt.value = 0;
@@ -289,7 +290,7 @@ export function useLogin(): UseLoginReturn {
       }
 
       applyRateLimitCountdown(response);
-      errorMessage.value = response.error?.message || '重新發送失敗';
+      errorMessage.value = apiErrorMessage(errorOf(response)) || '重新發送失敗';
       return false;
     } catch {
       errorMessage.value = '重新發送失敗';

@@ -16,6 +16,7 @@ import { useQuery, useInfiniteQuery } from '@tanstack/vue-query'
 import type { UseQueryReturnType } from '@tanstack/vue-query'
 import { computed, unref } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { useCurrentUser } from './useAuth'
 import { useProjectsWithStages } from './useProjects'
 import type { Stage, User, Project } from '@/types'
@@ -195,7 +196,7 @@ export function useWalletTransactions(
 
       if (!response.success) {
         debugLog('✅ [useWalletTransactions] API response: 失敗', response.error)
-        throw new Error(response.error?.message || '載入交易記錄失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入交易記錄失敗')
       }
 
       debugLog('✅ [useWalletTransactions] API response:', {
@@ -308,7 +309,7 @@ export function useInfiniteWalletTransactions(
       const response = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入交易記錄失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入交易記錄失敗')
       }
 
       const rawTransactions = response.data.transactions || []
@@ -389,7 +390,7 @@ export function useWalletLeaderboard(
       const response = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入排行榜失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入排行榜失敗')
       }
 
       // Return full response data including globalMinBalance/globalMaxBalance
@@ -437,7 +438,7 @@ export function useWalletProjectStages(
       const response = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入專案階段失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入專案階段失敗')
       }
 
       const stages = response.data?.stages || []
@@ -504,7 +505,7 @@ export function useWalletData(
       })
       const response = await httpResponse.json()
       if (!response.success) {
-        throw new Error(response.error?.message || '載入專案參與者失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入專案參與者失敗')
       }
       return response.data?.users || []
     },

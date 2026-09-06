@@ -116,6 +116,7 @@ import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { handleError, showSuccess } from '@/utils/errorHandler'
 
 // ===== Drawer Breadcrumb =====
@@ -248,7 +249,7 @@ async function confirmWithdraw() {
       emit('withdrawn')
       closeDrawer()
     } else {
-      handleError(result.error?.message || '撤回失敗')
+      handleError(apiErrorMessage(errorOf(result)) || '撤回失敗')
     }
   } catch (error) {
     handleError(error as Error)

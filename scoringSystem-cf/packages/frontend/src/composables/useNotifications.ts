@@ -12,6 +12,7 @@ import { handleError, showSuccess } from '@/utils/errorHandler'
 import { isTokenExpired } from '@/utils/jwt'
 import { useAuth } from './useAuth'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import type { Notification, ApiResponse } from '@/types'
 
 /**
@@ -51,7 +52,7 @@ export function useNotificationCount(): UseQueryReturnType<number, Error> {
       const response = await httpResponse.json() as ApiResponse<{ unreadCount: number }>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入通知數量失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入通知數量失敗')
       }
 
       const count = response.data?.unreadCount || 0
@@ -130,7 +131,7 @@ export function useNotifications(options: NotificationListOptions | ComputedRef<
       const response = await httpResponse.json() as ApiResponse<NotificationListResponse>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入通知列表失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入通知列表失敗')
       }
 
       console.log(`✅ [useNotifications] 通知列表載入成功，共 ${response.data?.notifications?.length || 0} 條`)
@@ -187,7 +188,7 @@ export function useMarkNotificationAsRead() {
       const response = await httpResponse.json() as ApiResponse<any>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '標記失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '標記失敗')
       }
 
       return response.data
@@ -227,7 +228,7 @@ export function useMarkAllNotificationsAsRead() {
       const response = await httpResponse.json() as ApiResponse<any>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '標記失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '標記失敗')
       }
 
       return response.data
@@ -272,7 +273,7 @@ export function useDeleteNotification() {
       const response = await httpResponse.json() as ApiResponse<any>
 
       if (!response.success) {
-        throw new Error(response.error?.message || '刪除失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '刪除失敗')
       }
 
       return response.data

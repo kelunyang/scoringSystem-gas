@@ -14,6 +14,7 @@ import type { UseMutationReturnType } from '@tanstack/vue-query'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import type { ApiInput } from '@/utils/api-types'
 
 // ============================================================================
@@ -162,7 +163,7 @@ export function useCreateProject(): UseMutationReturnType<any, Error, CreateProj
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '創建專案失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '創建專案失敗')
       }
 
       return response.data
@@ -191,7 +192,7 @@ export function useUpdateProject(): UseMutationReturnType<any, Error, UpdateProj
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '更新專案失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '更新專案失敗')
       }
 
       return response.data
@@ -226,7 +227,7 @@ export function useUpdateScoringConfig(): UseMutationReturnType<any, Error, Upda
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '更新評分配置失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '更新評分配置失敗')
       }
 
       return response.data
@@ -249,7 +250,7 @@ export function useCloneProject(): UseMutationReturnType<any, Error, CloneProjec
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '複製專案失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '複製專案失敗')
       }
 
       return response.data
@@ -280,7 +281,7 @@ export function useListProjectViewers(): UseMutationReturnType<any, Error, { pro
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入存取者清單失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入存取者清單失敗')
       }
 
       return response.data
@@ -300,7 +301,7 @@ export function useAddViewersBatch(): UseMutationReturnType<any, Error, AddViewe
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '新增存取者失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '新增存取者失敗')
       }
 
       return response.data
@@ -324,7 +325,7 @@ export function useAddViewer(): UseMutationReturnType<any, Error, AddSingleViewe
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '新增存取者失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '新增存取者失敗')
       }
 
       return response.data
@@ -350,7 +351,7 @@ export function useUpdateViewerRole(): UseMutationReturnType<any, Error, UpdateV
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '更新角色失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '更新角色失敗')
       }
 
       return response.data
@@ -376,7 +377,7 @@ export function useRemoveViewer(): UseMutationReturnType<any, Error, RemoveViewe
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '移除存取者失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '移除存取者失敗')
       }
 
       return response.data
@@ -403,7 +404,7 @@ export function useBatchUpdateViewerRoles(): UseMutationReturnType<any, Error, B
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '批次轉換角色失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '批次轉換角色失敗')
       }
 
       return response.data
@@ -428,7 +429,7 @@ export function useBatchRemoveViewers(): UseMutationReturnType<any, Error, Batch
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '批次刪除存取者失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '批次刪除存取者失敗')
       }
 
       return response.data
@@ -456,7 +457,7 @@ export function useSearchUsers(): UseMutationReturnType<any, Error, { query: str
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '搜尋用戶失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '搜尋用戶失敗')
       }
 
       return response.data
@@ -480,7 +481,7 @@ export function useListStages(): UseMutationReturnType<any, Error, { projectId: 
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入階段列表失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入階段列表失敗')
       }
 
       return response.data
@@ -500,7 +501,7 @@ export function useGetStage(): UseMutationReturnType<any, Error, GetStageParams,
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入階段詳情失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入階段詳情失敗')
       }
 
       return response.data
@@ -520,7 +521,7 @@ export function useCreateStage(): UseMutationReturnType<any, Error, CreateStageP
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '創建階段失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '創建階段失敗')
       }
 
       return response.data
@@ -546,7 +547,7 @@ export function useUpdateStage(): UseMutationReturnType<any, Error, UpdateStageP
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '更新階段失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '更新階段失敗')
       }
 
       return response.data
@@ -572,7 +573,7 @@ export function useUpdateStageOrder(): UseMutationReturnType<any, Error, UpdateS
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '更新階段順序失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '更新階段順序失敗')
       }
 
       return response.data
@@ -593,7 +594,7 @@ export function useCheckVotingLock(): UseMutationReturnType<any, Error, CheckVot
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '檢查投票狀態失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '檢查投票狀態失敗')
       }
 
       return response.data
@@ -615,7 +616,7 @@ export function useCloneStageToProjects(): UseMutationReturnType<any, Error, Clo
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '複製階段失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '複製階段失敗')
       }
 
       return response.data

@@ -12,6 +12,7 @@
 import { computed, type Ref, isRef, ref } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 
 // ===== 类型定义 =====
 
@@ -175,7 +176,7 @@ export function useVotingData(
       const response: VersionsResponse = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '無法載入版本資料')
+        throw new Error(apiErrorMessage(errorOf(response)) || '無法載入版本資料')
       }
 
       return response.data
@@ -199,7 +200,7 @@ export function useVotingData(
       const response: VotingHistoryResponse = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '無法載入投票歷史')
+        throw new Error(apiErrorMessage(errorOf(response)) || '無法載入投票歷史')
       }
 
       return response.data
@@ -224,7 +225,7 @@ export function useVotingData(
       const response: VoteSubmitResponse = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '投票失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '投票失敗')
       }
 
       return response.data

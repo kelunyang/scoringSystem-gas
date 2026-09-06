@@ -4,7 +4,8 @@
  */
 
 import { ref, computed, onBeforeUnmount } from 'vue';
-import { rpcClient } from '@/utils/rpc-client';
+import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorCode, apiErrorMessage, errorOf } from '@/utils/api-types';
 import type { Ref, ComputedRef } from 'vue';
 import type { EmailVerificationResponse, Project } from '../../types/auth';
 
@@ -155,7 +156,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
         // No longer receives projects here - moved to step 2
         return true;
       } else {
-        errorMessage.value = response.error?.message || 'Email 驗證失敗';
+        errorMessage.value = apiErrorMessage(errorOf(response)) || 'Email 驗證失敗';
         return false;
       }
     } catch (error) {
@@ -195,12 +196,12 @@ export function useForgotPassword(): UseForgotPasswordReturn {
         projects.value = response.data.projects || [];
         return true;
       } else {
-        errorMessage.value = response.error?.message || '驗證碼錯誤';
+        errorMessage.value = apiErrorMessage(errorOf(response)) || '驗證碼錯誤';
 
         // If code verification fails, restart the entire flow
-        if (response.error?.code === 'INVALID_CODE' ||
-            response.error?.code === 'CODE_NOT_FOUND' ||
-            response.error?.code === 'TOO_MANY_ATTEMPTS') {
+        if (apiErrorCode(errorOf(response)) === 'INVALID_CODE' ||
+            apiErrorCode(errorOf(response)) === 'CODE_NOT_FOUND' ||
+            apiErrorCode(errorOf(response)) === 'TOO_MANY_ATTEMPTS') {
           // Allow user to try again or restart
           return false;
         }
@@ -239,7 +240,7 @@ export function useForgotPassword(): UseForgotPasswordReturn {
         return true;
       } else {
         applyRateLimitCountdown(response);
-        errorMessage.value = response.error?.message || '重新發送失敗';
+        errorMessage.value = apiErrorMessage(errorOf(response)) || '重新發送失敗';
         return false;
       }
     } catch (error) {

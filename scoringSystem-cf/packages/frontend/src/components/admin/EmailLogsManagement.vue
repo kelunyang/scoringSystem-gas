@@ -471,6 +471,7 @@ import {
 } from '@/composables/admin/useEmailLogs'
 
 import { getErrorMessage } from '@/utils/errorHandler'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 // ================== TanStack Query Mutations ==================
 const emailStatisticsQuery = useEmailStatistics()
 const resendEmailMutation = useResendEmail()
@@ -816,7 +817,7 @@ const loadEmailLogs = async (append: boolean = false, withFilters: boolean = fal
 
       totalCount.value = response.data.totalCount || logsList.length
     } else {
-      const errorMessage = response.error?.message || '無法載入郵件紀錄'
+      const errorMessage = apiErrorMessage(errorOf(response)) || '無法載入郵件紀錄'
       ElMessage.error(errorMessage)
     }
   } catch (error) {

@@ -243,6 +243,7 @@ import BatchCreateGroupsDrawer from './group-management/project-groups/BatchCrea
 import DeactivateGroupConfirmDrawer from './group-management/project-groups/DeactivateGroupConfirmDrawer.vue'
 import ViewerManagementDrawer from './project/ViewerManagementDrawer.vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import type { Project, ProjectGroup, GlobalGroup, GroupMember, User, MemberRole } from '@/types/group-management'
 import type { ProjectViewer, SearchUser, SelectedUser, ViewerRole } from './project/ViewerManagementDrawer.vue'
 import type { Member as RemovableMember } from './group-management/shared/RemoveMemberConfirmDrawer.vue'
@@ -706,7 +707,7 @@ const createBatchGroups = async (payload: { groupCount: number; allowChange: boo
       // 重新載入群組列表
       await loadProjectGroups()
     } else {
-      handleError(response.error?.message || '建立分組失敗', { type: 'error' })
+      handleError(apiErrorMessage(errorOf(response)) || '建立分組失敗', { type: 'error' })
     }
 
   } catch (error) {
@@ -1333,7 +1334,7 @@ const addSelectedMembersToProjectGroup = async (group: ProjectGroup) => {
       await loadProjectGroupMembersInline(group.groupId)
       await loadProjectGroups() // Refresh group list to update member count
     } else {
-      handleError(response.error?.message || '新增成員失敗', { type: 'error' })
+      handleError(apiErrorMessage(errorOf(response)) || '新增成員失敗', { type: 'error' })
     }
   } catch (error) {
     console.error('Error adding members:', error)
@@ -1655,7 +1656,7 @@ const loadProjectViewers = async (projectId: string) => {
     } else {
       console.error('❌ [loadProjectViewers] Failed to load:', response.error)
       projectViewers.value = []
-      handleError(`無法載入存取者清單: ${response.error?.message || '未知錯誤'}`, { type: 'error' })
+      handleError(`無法載入存取者清單: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`, { type: 'error' })
     }
   } catch (error) {
     console.error('❌ [loadProjectViewers] Exception:', error)
@@ -1703,7 +1704,7 @@ const searchUsers = async (payload: { searchText: string; role: ViewerRole } | s
         if (response.success) {
           allResults.push(...response.data)
         } else {
-          errors.push(`搜尋「${query}」失敗: ${response.error?.message || '未知錯誤'}`)
+          errors.push(`搜尋「${query}」失敗: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
         }
       } catch (error) {
         console.error(`Error searching for "${query}":`, error)
@@ -1802,7 +1803,7 @@ const addSelectedViewers = async (payload: { users: SelectedUser[]; role: Viewer
       selectedUsers.value = []
       await loadProjectViewers(selectedProjectForViewers.value.projectId)
     } else {
-      handleError(response.error?.message || '新增存取者失敗', { type: 'error' })
+      handleError(apiErrorMessage(errorOf(response)) || '新增存取者失敗', { type: 'error' })
     }
   } catch (error) {
     console.error('Error adding selected viewers:', error)
@@ -1832,7 +1833,7 @@ const updateViewerRole = async ({ userEmail, newRole }: { userEmail: string; new
       showSuccess('角色已更新')
       await loadProjectViewers(selectedProjectForViewers.value.projectId)
     } else {
-      handleError(`更新失敗: ${response.error?.message || '未知錯誤'}`, { type: 'error' })
+      handleError(`更新失敗: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`, { type: 'error' })
     }
   } catch (error) {
     console.error('Error updating viewer role:', error)
@@ -1859,7 +1860,7 @@ const removeViewer = async (userEmail: string) => {
       showSuccess('存取者已移除')
       await loadProjectViewers(selectedProjectForViewers.value.projectId)
     } else {
-      handleError(`移除失敗: ${response.error?.message || '未知錯誤'}`, { type: 'error' })
+      handleError(`移除失敗: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`, { type: 'error' })
     }
   } catch (error) {
     console.error('Error removing viewer:', error)
@@ -1914,7 +1915,7 @@ const batchUpdateRoles = async (payload: { users: string[]; newRole: ViewerRole 
 
       await loadProjectViewers(selectedProjectForViewers.value.projectId)
     } else {
-      handleError(response.error?.message || '批量轉換失敗', { type: 'error' })
+      handleError(apiErrorMessage(errorOf(response)) || '批量轉換失敗', { type: 'error' })
     }
   } catch (error) {
     console.error('Error batch updating roles:', error)
@@ -1961,7 +1962,7 @@ const batchRemoveViewers = async (userEmails: string[]) => {
 
       await loadProjectViewers(selectedProjectForViewers.value.projectId)
     } else {
-      handleError(response.error?.message || '批量刪除失敗', { type: 'error' })
+      handleError(apiErrorMessage(errorOf(response)) || '批量刪除失敗', { type: 'error' })
     }
   } catch (error) {
     console.error('Error batch removing viewers:', error)

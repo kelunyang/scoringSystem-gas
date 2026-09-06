@@ -18,6 +18,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { useCurrentUser } from '@/composables/useAuth'
 import type { AIProviderPublic } from '@repo/shared'
 
@@ -97,7 +98,7 @@ export function useAIProviders(): UseQueryReturnType<AIProvidersResponse, Error>
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入 AI 服務列表失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入 AI 服務列表失敗')
       }
 
       return response.data as AIProvidersResponse
@@ -132,7 +133,7 @@ export function useCreateAIProvider(): UseMutationReturnType<
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '新增 AI 服務失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '新增 AI 服務失敗')
       }
 
       return response.data as AIProviderPublic
@@ -172,7 +173,7 @@ export function useUpdateAIProvider(): UseMutationReturnType<
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '更新 AI 服務失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '更新 AI 服務失敗')
       }
 
       return response.data as AIProviderPublic
@@ -215,7 +216,7 @@ export function useToggleAIProvider(): UseMutationReturnType<
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '更新 AI 服務狀態失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '更新 AI 服務狀態失敗')
       }
 
       return response.data as AIProviderPublic
@@ -255,7 +256,7 @@ export function useDeleteAIProvider(): UseMutationReturnType<
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '刪除 AI 服務失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '刪除 AI 服務失敗')
       }
     },
     onSuccess: () => {
@@ -291,7 +292,7 @@ export function useTestAIProvider(): UseMutationReturnType<
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '連線測試失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '連線測試失敗')
       }
 
       return response.data as TestAIProviderResult
@@ -325,7 +326,7 @@ export function useAIPrompts(): UseQueryReturnType<AIPromptsConfig, Error> {
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入 AI 評分標準失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入 AI 評分標準失敗')
       }
 
       return response.data as AIPromptsConfig
@@ -360,7 +361,7 @@ export function useUpdateAIPrompts(): UseMutationReturnType<
       const response = await httpResponse.json() as any
 
       if (!response.success) {
-        throw new Error(response.error?.message || '儲存 AI 評分標準失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '儲存 AI 評分標準失敗')
       }
     },
     onSuccess: () => {

@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tansta
 import type { UseQueryReturnType, UseMutationReturnType } from '@tanstack/vue-query'
 import { computed, unref } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import type { ApiData, ApiInput } from '@/utils/api-types'
 import { useCurrentUser } from './useAuth'
 import { ElMessage } from 'element-plus'
@@ -78,7 +79,7 @@ export function useProjectCore(projectId: Ref<string | null> | string | Ref<stri
       const response = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入專案資料失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入專案資料失敗')
       }
 
       return response.data
@@ -116,7 +117,7 @@ export function useStages(projectId: Ref<string> | string): UseQueryReturnType<S
       const response = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入階段列表失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入階段列表失敗')
       }
 
       return response.data.stages || []
@@ -156,7 +157,7 @@ export function useCreateStage(): UseMutationReturnType<CreatedStage, Error, Cre
       const response = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '建立階段失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '建立階段失敗')
       }
 
       return response.data
@@ -205,7 +206,7 @@ export function useUpdateStage(): UseMutationReturnType<UpdatedStage, Error, Upd
       const response = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '更新階段失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '更新階段失敗')
       }
 
       return response.data
@@ -284,7 +285,7 @@ export function useInfiniteStageComments(
       const response = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入評論失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入評論失敗')
       }
 
       return {

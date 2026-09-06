@@ -228,6 +228,7 @@
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { generateAvatarUrl } from '@/utils/walletHelpers'
 import { getErrorMessage } from '@/utils/errorHandler'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
@@ -430,7 +431,7 @@ async function handleSubmit() {
         const response = await httpResponse.json()
 
         if (!response.success) {
-          errors.push(`${userEmail}: ${response.error?.message || '發放失敗'}`)
+          errors.push(`${userEmail}: ${apiErrorMessage(errorOf(response)) || '發放失敗'}`)
         }
 
         submittedCount.value++

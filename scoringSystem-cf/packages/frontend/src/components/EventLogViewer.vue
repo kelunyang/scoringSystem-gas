@@ -265,6 +265,7 @@ import { Refresh } from '@element-plus/icons-vue'
 import { useDebounceFn } from '@vueuse/core'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { getErrorMessage } from '@/utils/errorHandler'
 import type { EventLog } from '@/types'
 import type { ApiData } from '@/utils/api-types'
@@ -598,7 +599,7 @@ const loadEventLogs = async (useBackendFilters = true) => {
       allLogs.value = []
       availableUsers.value = []
       totalCount.value = 0
-      ElMessage.error(response.error?.message || '加载事件日志失败')
+      ElMessage.error(apiErrorMessage(errorOf(response)) || '加载事件日志失败')
     }
   } catch (error) {
     console.error('加载事件日志失败:', error)
@@ -699,7 +700,7 @@ const loadResourceForEvent = async (event: ProjectEventLog) => {
     if (response.success) {
       resourceContentMap.value.set(logId, response.data)
     } else {
-      ElMessage.error(response.error?.message || '加载资源详情失败')
+      ElMessage.error(apiErrorMessage(errorOf(response)) || '加载资源详情失败')
     }
   } catch (error) {
     console.error('加载资源详情失败:', error)

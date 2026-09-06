@@ -19,6 +19,7 @@ import type { Ref, ComputedRef } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { computed, ref, unref, watch } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { useCurrentUser } from './useAuth'
 import { ElMessage } from 'element-plus'
 
@@ -196,7 +197,7 @@ export function useRankingProposals(
       const response = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入提案失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入提案失敗')
       }
 
       return response.data as ProposalsResponseData
@@ -222,7 +223,7 @@ export function useRankingProposals(
       const response = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入專案配置失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入專案配置失敗')
       }
 
       return response.data as ProjectScoringConfig
@@ -253,7 +254,7 @@ export function useRankingProposals(
       const response = await httpResponse.json()
 
       if (!response.success) {
-        throw new Error(response.error?.message || '載入組別失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '載入組別失敗')
       }
 
       // Transform submissions to SubmittedGroup format
@@ -352,7 +353,7 @@ export function useRankingProposals(
       })
       const response = await httpResponse.json()
       if (!response.success) {
-        throw new Error(response.error?.message || '投票失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '投票失敗')
       }
       return response
     },
@@ -379,7 +380,7 @@ export function useRankingProposals(
       })
       const response = await httpResponse.json()
       if (!response.success) {
-        throw new Error(response.error?.message || '提交提案失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '提交提案失敗')
       }
       return response
     },
@@ -405,7 +406,7 @@ export function useRankingProposals(
       })
       const response = await httpResponse.json()
       if (!response.success) {
-        throw new Error(response.error?.message || '撤回失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '撤回失敗')
       }
       return response
     },
@@ -429,7 +430,7 @@ export function useRankingProposals(
       })
       const response = await httpResponse.json()
       if (!response.success) {
-        throw new Error(response.error?.message || '重置失敗')
+        throw new Error(apiErrorMessage(errorOf(response)) || '重置失敗')
       }
       return response
     },

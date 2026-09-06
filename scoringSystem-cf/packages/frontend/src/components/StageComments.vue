@@ -303,6 +303,7 @@ import { processMentions } from '@/utils/mention-processor'
 import { getNumericPermissionLevel, type PermissionLevel } from '@/composables/useProjectPermissions'
 import { useInfiniteStageComments, flattenInfiniteComments, getInfiniteCommentsTotal, getInfiniteVotingEligible } from '@/composables/useProjectDetail'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { generateAvatarUrl } from '@/utils/walletHelpers'
 import type { Comment } from '@/types'
 
@@ -885,7 +886,7 @@ async function addReaction(comment: ProcessedComment, reactionType: string) {
       }
       ElMessage.success(reactionType === 'helpful' ? '已標記為有幫助' : '已標記為不實用')
     } else {
-      ElMessage.error(response.error?.message || '操作失敗：後端未返回 reaction 統計數據')
+      ElMessage.error(apiErrorMessage(errorOf(response)) || '操作失敗：後端未返回 reaction 統計數據')
     }
   } catch (error) {
     console.error('添加 reaction 失敗:', error)
@@ -914,7 +915,7 @@ async function removeReaction(comment: ProcessedComment) {
       }
       ElMessage.success('已取消標記')
     } else {
-      ElMessage.error(response.error?.message || '操作失敗：後端未返回 reaction 統計數據')
+      ElMessage.error(apiErrorMessage(errorOf(response)) || '操作失敗：後端未返回 reaction 統計數據')
     }
   } catch (error) {
     console.error('移除 reaction 失敗:', error)

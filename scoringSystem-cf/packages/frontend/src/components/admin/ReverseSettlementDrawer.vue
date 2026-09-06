@@ -197,6 +197,7 @@ import ConfirmationInput from '@/components/common/ConfirmationInput.vue'
 import { useDrawerAlerts } from '@/composables/useDrawerAlerts'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { getErrorMessage } from '@/utils/errorHandler'
 
 // ===== Drawer Breadcrumb =====
@@ -335,7 +336,7 @@ async function loadPreviewData(): Promise<void> {
         const historyResponse = await historyHttpResponse.json()
 
         if (!historyResponse.success) {
-          ElMessage.error(`獲取結算記錄失敗: ${historyResponse.error?.message || '未知錯誤'}`)
+          ElMessage.error(`獲取結算記錄失敗: ${apiErrorMessage(errorOf(historyResponse)) || '未知錯誤'}`)
           closeDrawer()
           return
         }
@@ -358,7 +359,7 @@ async function loadPreviewData(): Promise<void> {
         const previewResponse = await previewHttpResponse.json()
 
         if (!previewResponse.success) {
-          ElMessage.error(`載入撤銷預覽失敗: ${previewResponse.error?.message || '未知錯誤'}`)
+          ElMessage.error(`載入撤銷預覽失敗: ${apiErrorMessage(errorOf(previewResponse)) || '未知錯誤'}`)
           closeDrawer()
           return
         }
@@ -447,7 +448,7 @@ async function confirmReverseSettlement(): Promise<void> {
 
             closeDrawer()
           } else {
-            ElMessage.error(`撤銷並清空投票失敗：${clearResponse.error?.message || '未知錯誤'}`)
+            ElMessage.error(`撤銷並清空投票失敗：${apiErrorMessage(errorOf(clearResponse)) || '未知錯誤'}`)
           }
 
           return
@@ -489,7 +490,7 @@ async function confirmReverseSettlement(): Promise<void> {
           // Close drawer
           closeDrawer()
         } else {
-          ElMessage.error(`撤銷失敗：${reverseResponse.error?.message || '未知錯誤'}`)
+          ElMessage.error(`撤銷失敗：${apiErrorMessage(errorOf(reverseResponse)) || '未知錯誤'}`)
         }
 
       } catch (error) {

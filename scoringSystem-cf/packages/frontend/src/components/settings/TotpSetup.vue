@@ -219,7 +219,8 @@
 import { ref, onMounted, nextTick, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import QRCode from 'qrcode';
-import { rpcClient } from '@/utils/rpc-client';
+import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types';
 import type {
   TotpSetupInitResponse,
   TotpSetupVerifyResponse,
@@ -298,7 +299,7 @@ async function startSetup() {
       await nextTick();
       renderQR();
     } else {
-      ElMessage.error(response.error?.message || '無法初始化 TOTP 設定');
+      ElMessage.error(apiErrorMessage(errorOf(response)) || '無法初始化 TOTP 設定');
     }
   } catch {
     ElMessage.error('無法初始化 TOTP 設定');
@@ -358,7 +359,7 @@ async function confirmSetup() {
       step.value = 'recovery';
       ElMessage.success('驗證器已成功啟用！');
     } else {
-      verifyError.value = response.error?.message || '驗證碼錯誤';
+      verifyError.value = apiErrorMessage(errorOf(response)) || '驗證碼錯誤';
     }
   } catch {
     verifyError.value = '驗證失敗，請重試';
@@ -412,7 +413,7 @@ async function confirmDisable() {
       disableConfirmText.value = '';
       ElMessage.success('驗證器已停用');
     } else {
-      disableError.value = response.error?.message || '停用失敗';
+      disableError.value = apiErrorMessage(errorOf(response)) || '停用失敗';
     }
   } catch {
     disableError.value = '停用失敗，請重試';
@@ -447,7 +448,7 @@ async function confirmRegenerate() {
       step.value = 'recovery';
       ElMessage.success('備用碼已重新產生');
     } else {
-      regenerateError.value = response.error?.message || '重新產生失敗';
+      regenerateError.value = apiErrorMessage(errorOf(response)) || '重新產生失敗';
     }
   } catch {
     regenerateError.value = '重新產生失敗，請重試';

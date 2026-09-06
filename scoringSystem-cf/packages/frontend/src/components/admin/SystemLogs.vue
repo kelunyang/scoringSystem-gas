@@ -874,6 +874,7 @@ import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 import { jsonToMarkdown } from '@/utils/json-preview'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 
 // 获取路由
 const route = useRoute()
@@ -1204,7 +1205,7 @@ const loadLoginLogs = async () => {
       await markSuspiciousLogs()
     } else {
       allLoginLogs.value = []
-      ElMessage.error(response.error?.message || '載入登入記錄失敗')
+      ElMessage.error(apiErrorMessage(errorOf(response)) || '載入登入記錄失敗')
     }
   } catch (error: unknown) {
     console.error('載入登入記錄失敗:', error)
@@ -1277,7 +1278,7 @@ const searchLoginLogsBackend = async () => {
     } else {
       allLoginLogs.value = []
       totalLoginLogsCount.value = 0
-      ElMessage.error(response.error?.message || '后端搜索失败')
+      ElMessage.error(apiErrorMessage(errorOf(response)) || '后端搜索失败')
     }
   } catch (error: unknown) {
     console.error('后端搜索失败:', error)
@@ -1367,7 +1368,7 @@ const loadEmailLogs = async () => {
       allEmailLogs.value = response.data?.logs || []
     } else {
       allEmailLogs.value = []
-      ElMessage.error(response.error?.message || '載入 Email 記錄失敗')
+      ElMessage.error(apiErrorMessage(errorOf(response)) || '載入 Email 記錄失敗')
     }
   } catch (error: unknown) {
     console.error('載入 Email 記錄失敗:', error)
@@ -1417,7 +1418,7 @@ const searchEmailLogsBackend = async () => {
     } else {
       allEmailLogs.value = []
       totalEmailLogsCount.value = 0
-      ElMessage.error(response.error?.message || '后端搜索失败')
+      ElMessage.error(apiErrorMessage(errorOf(response)) || '后端搜索失败')
     }
   } catch (error: unknown) {
     console.error('后端搜索失败:', error)

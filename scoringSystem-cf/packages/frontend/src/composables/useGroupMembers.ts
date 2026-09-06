@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { adminApi } from '@/api/admin'
 import type { ApiResponse } from '@/utils/api-helpers'
 
@@ -131,7 +132,7 @@ export function useGroupMembers() {
         groupMembers.value = response.data.members || []
         ElMessage.success(`成員列表載入完成（${response.data.members.length} 人）`)
       } else {
-        ElMessage.error(`無法載入群組成員: ${!response.success ? response.error?.message : '未知錯誤'}`)
+        ElMessage.error(`無法載入群組成員: ${!response.success ? apiErrorMessage(errorOf(response)) : '未知錯誤'}`)
         groupMembers.value = []
       }
     } catch (error) {
@@ -261,7 +262,7 @@ export function useGroupMembers() {
         if (onSuccess) await onSuccess()
         return true
       } else {
-        ElMessage.error(`新增成員失敗: ${!response.success ? response.error?.message : '未知錯誤'}`)
+        ElMessage.error(`新增成員失敗: ${!response.success ? apiErrorMessage(errorOf(response)) : '未知錯誤'}`)
         return false
       }
     } catch (error) {
@@ -317,7 +318,7 @@ export function useGroupMembers() {
         if (onSuccess) await onSuccess()
         return true
       } else {
-        ElMessage.error(response.error?.message || '新增成員失敗')
+        ElMessage.error(apiErrorMessage(errorOf(response)) || '新增成員失敗')
         return false
       }
     } catch (error) {
@@ -353,7 +354,7 @@ export function useGroupMembers() {
         if (onSuccess) await onSuccess()
         return true
       } else {
-        ElMessage.error(`移除成員失敗: ${response.error?.message || '未知錯誤'}`)
+        ElMessage.error(`移除成員失敗: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
         return false
       }
     } catch (error) {
@@ -394,7 +395,7 @@ export function useGroupMembers() {
         if (onSuccess) await onSuccess()
         return true
       } else {
-        ElMessage.error(`移除成員失敗: ${response.error?.message || '未知錯誤'}`)
+        ElMessage.error(`移除成員失敗: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
         return false
       }
     } catch (error) {

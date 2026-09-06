@@ -322,6 +322,7 @@ import AnimatedStatistic from '../shared/AnimatedStatistic.vue'
 // Drawer Breadcrumb
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import type { ApiData } from '@/utils/api-types'
 import type { GroupClickData } from '@/types/components'
 
@@ -780,7 +781,7 @@ async function handleSettlementGroupClick(groupData: GroupClickData): Promise<vo
         console.log('✅ Loaded transactions:', settlementGroupTransactions.value.length)
       }
     } else {
-      ElMessage.warning(`無法載入該組的交易記錄: ${response.error?.message || '未知錯誤'}`)
+      ElMessage.warning(`無法載入該組的交易記錄: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
       settlementGroupTransactions.value = []
     }
   } catch (error) {
@@ -996,7 +997,7 @@ async function settleStage(stage: Stage, forceSettle = false): Promise<void> {
 
       if (!validationResponse.success) {
         settlementStatus.value = 'idle'
-        ElMessage.error(`驗證失敗: ${validationResponse.error?.message || '未知錯誤'}`)
+        ElMessage.error(`驗證失敗: ${apiErrorMessage(errorOf(validationResponse)) || '未知錯誤'}`)
         return
       }
 
@@ -1064,11 +1065,11 @@ async function settleStage(stage: Stage, forceSettle = false): Promise<void> {
       ElMessage.success(`階段「${stage.stageName}」結算完成！獎金已按照系統規則自動分配。`)
     } else {
       settlementStatus.value = 'idle'
-      ElMessage.error(`結算失敗: ${response.error?.message || '未知錯誤'}`)
+      ElMessage.error(`結算失敗: ${apiErrorMessage(errorOf(response)) || '未知錯誤'}`)
       // Emit error event to parent
       emit('settlement-error', {
         stageId: stage.stageId,
-        error: response.error?.message || '未知錯誤'
+        error: apiErrorMessage(errorOf(response)) || '未知錯誤'
       })
     }
   } catch (error) {

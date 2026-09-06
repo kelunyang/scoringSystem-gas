@@ -293,6 +293,7 @@ import DraggableRankingList from './common/DraggableRankingList.vue'
 import AllGroupsChart from './shared/ContributionChart/AllGroupsChart.vue'
 import AIRankingSuggestionDrawer from './common/AIRankingSuggestionDrawer.vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { apiErrorMessage, errorOf } from '@/utils/api-types'
 import { getErrorMessage } from '@/utils/errorHandler'
 import { useAuth } from '@/composables/useAuth'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
@@ -1325,7 +1326,7 @@ async function submitSubmissionRankings(): Promise<void> {
         needRefresh: true
       })
     } else {
-      throw new Error(response.error?.message || '提交失敗')
+      throw new Error(apiErrorMessage(errorOf(response)) || '提交失敗')
     }
   } catch (error) {
     console.error('提交成果排名失敗:', error)
@@ -1378,7 +1379,7 @@ async function submitCommentRankings(): Promise<void> {
         needRefresh: true
       })
     } else {
-      throw new Error(response.error?.message || '提交失敗')
+      throw new Error(apiErrorMessage(errorOf(response)) || '提交失敗')
     }
   } catch (error) {
     console.error('提交評論排名失敗:', error)
