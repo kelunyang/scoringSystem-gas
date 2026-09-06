@@ -181,8 +181,30 @@
  * 父組件負責數據載入和狀態管理
  */
 
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, type PropType } from 'vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
+
+/** 天梯圖上的一個人（父層由 project-ladder API 整理後傳入） */
+interface LadderPerson {
+  userEmail: string
+  displayName?: string | null
+  currentBalance: number
+  /** 學生視角下被遮蔽的資料列 */
+  isMasked?: boolean
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | Record<string, unknown> | null
+}
+
+/** 父層傳進來的天梯資料 */
+interface LadderData {
+  hasFullAccess?: boolean
+  walletData: LadderPerson[]
+  globalMinBalance?: number | null
+  globalMaxBalance?: number | null
+  scoreRangeMin?: number | null
+  scoreRangeMax?: number | null
+}
 
 // KaTeX 從 CDN 載入，使用全域變數
 declare const katex: {
@@ -192,7 +214,7 @@ declare const katex: {
 // Props
 const props = defineProps({
   ladderData: {
-    type: Object,
+    type: Object as PropType<LadderData | null>,
     default: null
   },
   scoreRangeMin: {
@@ -238,7 +260,7 @@ const ladderStats = computed(() => {
   }
 
   const data = props.ladderData.walletData
-  const balances = data.map((d: any) => d.currentBalance).filter((b: any) => b != null)
+  const balances = data.map(d => d.currentBalance).filter(b => b != null)
 
   // Use global min/max from backend (ensures correct score calculation for students)
   // Falls back to local calculation if backend doesn't provide global values
@@ -280,11 +302,11 @@ const queriedUserData = computed(() => {
 
   // 按餘額排序以計算排名
   const sortedData = [...props.ladderData.walletData].sort(
-    (a: any, b: any) => (b.currentBalance || 0) - (a.currentBalance || 0)
+    (a, b) => (b.currentBalance || 0) - (a.currentBalance || 0)
   )
 
   // 找到用戶在排序後數據中的位置（即排名）
-  const userIndex = sortedData.findIndex((d: any) => d.userEmail === targetEmail)
+  const userIndex = sortedData.findIndex(d => d.userEmail === targetEmail)
   if (userIndex === -1) return null
 
   const userData = sortedData[userIndex]
@@ -364,8 +386,12 @@ async function renderChart() {
 /**
  * 創建 D3 天梯圖
  */
-function createLadderChart(container: any) {
-  const data = props.ladderData.walletData
+function createLadderChart(container: HTMLElement) {
+  // ensureD3Loaded() 保證這裡拿得到，型別上仍要收窄
+  const d3 = window.d3
+  if (!d3) return
+
+  const data = props.ladderData?.walletData
   if (!data || data.length === 0) {
     container.innerHTML = '<div class="no-data"><i class="fas fa-coins"></i><p>沒有可顯示的天梯數據</p></div>'
     return
@@ -378,7 +404,7 @@ function createLadderChart(container: any) {
   const height = Math.max(400, Math.min(600, data.length * 60)) - margin.top - margin.bottom
 
   // 創建 SVG
-  const svg = (window as any).d3.select(container)
+  const svg = d3.select(container)
     .append('svg')
     .attr('width', '100%')
     .attr('height', height + margin.top + margin.bottom)
@@ -391,27 +417,27 @@ function createLadderChart(container: any) {
   // 處理數據
   const sortedData = [...data].sort((a, b) => b.currentBalance - a.currentBalance)
   // Use global min/max for Y-axis scale (ensures consistent view for students)
-  const minWealth = props.ladderData?.globalMinBalance ?? (window as any).d3.min(sortedData, (d: any) => d.currentBalance) ?? 0
-  const maxWealth = props.ladderData?.globalMaxBalance ?? (window as any).d3.max(sortedData, (d: any) => d.currentBalance) ?? 100
+  const minWealth = props.ladderData?.globalMinBalance ?? d3.min(sortedData, d => d.currentBalance) ?? 0
+  const maxWealth = props.ladderData?.globalMaxBalance ?? d3.max(sortedData, d => d.currentBalance) ?? 100
 
   // Get threshold for death zone
   const threshold = props.zeroScoreThreshold
 
   // 建立比例尺
-  const xScale = (window as any).d3.scaleLinear()
+  const xScale = d3.scaleLinear()
     .domain([0, maxWealth * 1.1])
     .range([0, width])
 
   // Y軸：當啟用閾值時，從0開始以顯示死亡區
   const yMin = threshold > 0 ? 0 : minWealth
-  const yScale = (window as any).d3.scaleLinear()
+  const yScale = d3.scaleLinear()
     .domain([yMin, maxWealth])
     .range([height, 0])
 
   // 繪製 X 軸
-  const xAxis = (window as any).d3.axisBottom(xScale)
+  const xAxis = d3.axisBottom(xScale)
     .ticks(8)
-    .tickFormat((d: any) => formatPoints(d))
+    .tickFormat(d => formatPoints(Number(d)))
 
   g.append('g')
     .attr('transform', `translate(0,${height})`)
@@ -514,7 +540,7 @@ function createLadderChart(container: any) {
 
     // 計算 effectiveMinBalance：及格者中的最低餘額
     const balancesAboveThreshold = sortedData
-      .map((d: any) => d.currentBalance)
+      .map(d => d.currentBalance)
       .filter((b: number) => b >= threshold)
     const effectiveMinBalance = balancesAboveThreshold.length > 0
       ? Math.min(...balancesAboveThreshold)
@@ -733,14 +759,14 @@ function createLadderChart(container: any) {
       .style('opacity', 1)
 
     // 計算並顯示預估百分制分數
-    const scoreRangeMin = props.ladderData.scoreRangeMin || props.scoreRangeMin
-    const scoreRangeMax = props.ladderData.scoreRangeMax || props.scoreRangeMax
+    const scoreRangeMin = props.ladderData?.scoreRangeMin || props.scoreRangeMin
+    const scoreRangeMax = props.ladderData?.scoreRangeMax || props.scoreRangeMax
     // threshold 已在函數開頭宣告
     let estimatedScore: number
 
     // 計算 effectiveMinWealth（考慮閾值）
     const balancesAboveThreshold = sortedData
-      .map((d: any) => d.currentBalance)
+      .map(d => d.currentBalance)
       .filter((b: number) => b >= threshold)
     const effectiveMinWealth = balancesAboveThreshold.length > 0
       ? Math.min(...balancesAboveThreshold)
@@ -778,7 +804,7 @@ function createLadderChart(container: any) {
 /**
  * 生成頭像 URL
  */
-function generateAvatarUrl(person: any) {
+function generateAvatarUrl(person: LadderPerson) {
   if (person.avatarSeed && person.avatarStyle) {
     const style = person.avatarStyle || 'avataaars'
     const seed = person.avatarSeed
@@ -807,7 +833,7 @@ function generateAvatarUrl(person: any) {
 /**
  * 格式化點數
  */
-function formatPoints(value: any) {
+function formatPoints(value: number) {
   if (value >= 10000) {
     return `${(value / 10000).toFixed(1)}萬`
   } else if (value >= 1000) {
@@ -819,7 +845,7 @@ function formatPoints(value: any) {
 /**
  * 渲染 LaTeX 公式
  */
-function renderLatex(latex: any) {
+function renderLatex(latex: string) {
   try {
     return katex.renderToString(latex, {
       throwOnError: false,
@@ -862,7 +888,7 @@ const affineFormulaLatex = computed(() => {
 /**
  * 計算示例分數（考慮閾值）
  */
-function calculateExampleScore(balance: any) {
+function calculateExampleScore(balance: number) {
   if (!ladderStats.value) return null
 
   const { scoreMin, scoreMax, effectiveMinBalance, maxBalance, zeroScoreThreshold } = ladderStats.value

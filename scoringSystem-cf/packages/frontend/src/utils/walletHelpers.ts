@@ -6,7 +6,7 @@
  * 提供格式化、计算等辅助功能
  */
 
-import type { Stage, StageStatus } from './stageStatus'
+import type { StageStatus } from './stageStatus'
 
 export interface Transaction {
   transactionId?: string
@@ -24,10 +24,30 @@ export interface Person {
   userEmail?: string
   avatarSeed?: string
   avatarStyle?: string
-  avatarOptions?: string | Record<string, any>
+  avatarOptions?: string | Record<string, unknown>
 }
 
-export interface StageWithEarnings extends Stage {
+/** 這個函式從階段物件讀到的欄位；其餘欄位原樣保留 */
+export interface StageEarningsInput {
+  stageId: string
+  stageOrder?: number
+  stageName?: string
+  stageTitle?: string
+}
+
+/** isTransactionReversed 實際會讀的欄位（呼叫端傳的是後端的 Transaction，欄位比這裡多） */
+export interface ReversalCheckTransaction {
+  transactionId?: string
+  id?: string
+  transactionType?: string
+  relatedTransactionId?: string
+}
+
+/** 由 calculateStagesWithEarnings 補上的欄位 */
+export interface StageEarnings {
+  stageId: string
+  stageOrder: number
+  stageName: string
   points: number
 }
 
@@ -115,16 +135,22 @@ export function getStageClass(status: StageStatus | string): string {
   }
 }
 
+/** 這個函式從交易物件讀到的欄位 */
+export interface StageEarningsTransaction {
+  points: number
+  stage?: number
+}
+
 /**
  * 计算所有阶段与收入信息
  * @param projectStages - 项目阶段列表
  * @param projectTransactions - 项目交易列表
  * @returns 包含收入信息的阶段列表
  */
-export function calculateStagesWithEarnings(
-  projectStages: any[] | null | undefined,
-  projectTransactions: any[] | null | undefined
-): StageWithEarnings[] {
+export function calculateStagesWithEarnings<T extends StageEarningsInput>(
+  projectStages: T[] | null | undefined,
+  projectTransactions: StageEarningsTransaction[] | null | undefined
+): Array<T & StageEarnings> {
   if (!projectStages || projectStages.length === 0) return []
 
   // 先计算每个阶段的收入
@@ -192,7 +218,10 @@ export function generateAvatarUrl(person: Person): string {
  * @param allTransactions - 所有交易列表
  * @returns 是否已撤销
  */
-export function isTransactionReversed(transaction: Transaction, allTransactions: Transaction[]): boolean {
+export function isTransactionReversed(
+  transaction: ReversalCheckTransaction,
+  allTransactions: ReversalCheckTransaction[]
+): boolean {
   // 检查是否已经是撤销交易
   if (transaction.transactionType === 'reversal') {
     return true

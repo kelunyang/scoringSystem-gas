@@ -32,29 +32,47 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, watch, nextTick, onMounted, onUnmounted, type PropType } from 'vue'
 import * as d3 from 'd3'
 import EmptyState from '@/components/shared/EmptyState.vue'
+
+/** 折線上的一個點：某階段結束時的累計點數 */
+interface GrowthPoint {
+  endTime: string | number
+  cumulativePoints: number
+}
+
+/** 一位使用者的成長曲線 */
+export interface UserGrowthData {
+  stageGrowth: GrowthPoint[]
+  displayName?: string
+  totalPoints?: number
+}
+
+/** 只用來畫階段分隔線，其餘欄位這個元件不讀 */
+interface ChartStage {
+  endTime?: string | number | Date | null
+}
 
 const props = defineProps({
   // 第一名用戶數據
   topUserData: {
-    type: Object,
+    type: Object as PropType<UserGrowthData | null>,
     default: null
   },
   // 當前查詢用戶數據
   targetUserData: {
-    type: Object,
+    type: Object as PropType<UserGrowthData | null>,
     default: null
   },
   // 從甘特圖同步的時間範圍 [startDate, endDate]
   xScaleDomain: {
-    type: Array,
+    type: Array as PropType<Array<Date | null> | null>,
     default: null
   },
   // 階段信息（用於繪製分隔線）
   stages: {
-    type: Array,
+    type: Array as PropType<ChartStage[]>,
     default: () => []
   },
   // 圖表寬度
@@ -117,20 +135,20 @@ function renderLineChart() {
   // 合併兩組數據以確定 Y 軸範圍
   let allPoints: number[] = []
   if (hasTopUser) {
-    allPoints = allPoints.concat(props.topUserData.stageGrowth.map((d: any) => d.cumulativePoints))
+    allPoints = allPoints.concat(props.topUserData!.stageGrowth.map(d => d.cumulativePoints))
   }
   if (hasTargetUser) {
-    allPoints = allPoints.concat(props.targetUserData.stageGrowth.map((d: any) => d.cumulativePoints))
+    allPoints = allPoints.concat(props.targetUserData!.stageGrowth.map(d => d.cumulativePoints))
   }
 
   // X 軸比例尺（時間）
-  let xScaleDomain: any
+  let xScaleDomain: Array<Date | null>
   if (props.xScaleDomain && props.xScaleDomain.length === 2) {
     // 使用甘特圖同步的 domain
     xScaleDomain = props.xScaleDomain
   } else {
     // 使用數據的時間範圍
-    const dataToUse = hasTopUser ? props.topUserData.stageGrowth : props.targetUserData.stageGrowth
+    const dataToUse = hasTopUser ? props.topUserData!.stageGrowth : props.targetUserData!.stageGrowth
     xScaleDomain = [
       new Date(dataToUse[0].endTime),
       new Date(dataToUse[dataToUse.length - 1].endTime)
@@ -150,12 +168,12 @@ function renderLineChart() {
   // 繪製 X 軸
   const xAxis = d3.axisBottom(xScale)
     .ticks(6)
-    .tickFormat(d3.timeFormat('%m/%d') as any)
+    .tickFormat(d => d3.timeFormat('%m/%d')(d as Date))
 
   g.append('g')
     .attr('class', 'x-axis')
     .attr('transform', `translate(0,${height})`)
-    .call(xAxis as any)
+    .call(xAxis)
     .selectAll('text')
     .style('font-size', '11px')
 
@@ -182,7 +200,7 @@ function renderLineChart() {
 
   // 繪製階段垂直虛線 (使用裁切容器)
   if (props.stages && props.stages.length > 0) {
-    props.stages.forEach((stage: any) => {
+    props.stages.forEach(stage => {
       if (!stage.endTime) return
 
       const stageEndTime = new Date(stage.endTime)
@@ -203,15 +221,15 @@ function renderLineChart() {
   }
 
   // 折線生成器
-  const line = d3.line()
-    .x((d: any) => xScale(new Date(d.endTime)))
-    .y((d: any) => yScale(d.cumulativePoints))
+  const line = d3.line<GrowthPoint>()
+    .x(d => xScale(new Date(d.endTime)))
+    .y(d => yScale(d.cumulativePoints))
     .curve(d3.curveMonotoneX)
 
   // 繪製第一名折線 (使用裁切容器)
   if (hasTopUser) {
     clippedGroup.append('path')
-      .datum(props.topUserData.stageGrowth)
+      .datum(props.topUserData!.stageGrowth)
       .attr('class', 'line-top-user')
       .attr('fill', 'none')
       .attr('stroke', '#409eff')
@@ -220,12 +238,12 @@ function renderLineChart() {
 
     // 繪製第一名數據點
     clippedGroup.selectAll('.dot-top')
-      .data(props.topUserData.stageGrowth)
+      .data(props.topUserData!.stageGrowth)
       .enter()
       .append('circle')
       .attr('class', 'dot-top')
-      .attr('cx', (d: any) => xScale(new Date(d.endTime)))
-      .attr('cy', (d: any) => yScale(d.cumulativePoints))
+      .attr('cx', d => xScale(new Date(d.endTime)))
+      .attr('cy', d => yScale(d.cumulativePoints))
       .attr('r', 5)
       .attr('fill', '#409eff')
       .attr('stroke', 'white')
@@ -233,23 +251,23 @@ function renderLineChart() {
 
     // 繪製第一名數據標籤
     clippedGroup.selectAll('.label-top')
-      .data(props.topUserData.stageGrowth)
+      .data(props.topUserData!.stageGrowth)
       .enter()
       .append('text')
       .attr('class', 'label-top')
-      .attr('x', (d: any) => xScale(new Date(d.endTime)))
-      .attr('y', (d: any) => yScale(d.cumulativePoints) - 12)
+      .attr('x', d => xScale(new Date(d.endTime)))
+      .attr('y', d => yScale(d.cumulativePoints) - 12)
       .attr('text-anchor', 'middle')
       .attr('font-size', '10px')
       .attr('font-weight', 'bold')
       .attr('fill', '#409eff')
-      .text((d: any) => Math.round(d.cumulativePoints))
+      .text(d => Math.round(d.cumulativePoints))
   }
 
   // 繪製當前用戶折線 (使用裁切容器)
   if (hasTargetUser) {
     clippedGroup.append('path')
-      .datum(props.targetUserData.stageGrowth)
+      .datum(props.targetUserData!.stageGrowth)
       .attr('class', 'line-target-user')
       .attr('fill', 'none')
       .attr('stroke', '#f56c6c')
@@ -258,12 +276,12 @@ function renderLineChart() {
 
     // 繪製當前用戶數據點
     clippedGroup.selectAll('.dot-target')
-      .data(props.targetUserData.stageGrowth)
+      .data(props.targetUserData!.stageGrowth)
       .enter()
       .append('circle')
       .attr('class', 'dot-target')
-      .attr('cx', (d: any) => xScale(new Date(d.endTime)))
-      .attr('cy', (d: any) => yScale(d.cumulativePoints))
+      .attr('cx', d => xScale(new Date(d.endTime)))
+      .attr('cy', d => yScale(d.cumulativePoints))
       .attr('r', 5)
       .attr('fill', '#f56c6c')
       .attr('stroke', 'white')
@@ -271,17 +289,17 @@ function renderLineChart() {
 
     // 繪製當前用戶數據標籤
     clippedGroup.selectAll('.label-target')
-      .data(props.targetUserData.stageGrowth)
+      .data(props.targetUserData!.stageGrowth)
       .enter()
       .append('text')
       .attr('class', 'label-target')
-      .attr('x', (d: any) => xScale(new Date(d.endTime)))
-      .attr('y', (d: any) => yScale(d.cumulativePoints) + 18)
+      .attr('x', d => xScale(new Date(d.endTime)))
+      .attr('y', d => yScale(d.cumulativePoints) + 18)
       .attr('text-anchor', 'middle')
       .attr('font-size', '10px')
       .attr('font-weight', 'bold')
       .attr('fill', '#f56c6c')
-      .text((d: any) => Math.round(d.cumulativePoints))
+      .text(d => Math.round(d.cumulativePoints))
   }
 
   // 繪製圖例（右側）

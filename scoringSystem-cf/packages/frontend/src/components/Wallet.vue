@@ -351,6 +351,8 @@ import PhysicsDrawerContainer from './shared/PhysicsDrawerContainer.vue'
 import WalletLadder from './charts/WalletLadder.vue'
 import StageGrowthChart from './charts/StageGrowthChart.vue'
 import StageGanttChart from './charts/StageGanttChart.vue'
+import type { ViewportChangePayload, GanttStage } from './charts/StageGanttChart.vue'
+import type { UserGrowthData } from './charts/StageGrowthChart.vue'
 import ProjectDescriptionDialog from './shared/ProjectDescriptionDialog.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import TransactionReversalDrawer from './TransactionReversalDrawer.vue'
@@ -424,9 +426,8 @@ const showProjectDescriptionDialog = ref(false)
 
 // ===== Type Definitions =====
 interface StageGrowthData {
-  topUser?: any
-  targetUser?: any
-  [key: string]: any
+  topUser?: UserGrowthData | null
+  targetUser?: UserGrowthData | null
 }
 
 // ===== Coordinated Drawers =====
@@ -451,8 +452,8 @@ const stageGrowthData = ref<StageGrowthData | null>(null)
 const loadingStageGrowth = ref(false)
 
 // ===== Gantt Chart Sync State =====
-const ganttXScaleDomain = ref<unknown[] | undefined>(undefined)
-const projectStagesForGrowth = ref<any[]>([])
+const ganttXScaleDomain = ref<Array<Date | null> | undefined>(undefined)
+const projectStagesForGrowth = ref<GanttStage[]>([])
 
 // ===== Voting Analysis Modal State =====
 const showVotingAnalysisModal = ref(false)
@@ -887,7 +888,7 @@ async function loadProjectStages() {
 /**
  * 處理甘特圖 viewport 變化
  */
-function handleGanttViewportChange(data: any) {
+function handleGanttViewportChange(data: ViewportChangePayload) {
   ganttXScaleDomain.value = data.xScale.domain
   if (import.meta.env.DEV) {
     console.log('🔄 Gantt viewport changed:', ganttXScaleDomain.value)
@@ -952,7 +953,7 @@ async function handleExportProjectGrades() {
 
     // 轉換為 CSV 字串（每個欄位用雙引號包覆，處理內部雙引號）
     const csvContent = rows.map(row =>
-      row.map((cell: any) => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+      row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
     ).join('\n')
 
     // 加入 BOM for Excel UTF-8 support
@@ -1063,7 +1064,7 @@ function getTransactionDetails(transactionId: string) {
  * 檢查交易是否已撤銷
  */
 function checkTransactionReversed(transaction: Transaction) {
-  return isTransactionReversed(transaction as any, transactions.value as any)
+  return isTransactionReversed(transaction, transactions.value)
 }
 
 /**

@@ -7,8 +7,13 @@
  * 3. 生命週期管理
  */
 
-import { ref, onBeforeUnmount } from 'vue'
+import { ref, onBeforeUnmount, type Ref } from 'vue'
 import * as d3 from 'd3'
+
+/**
+ * 容器可以直接傳 DOM 元素，也可以傳持有它的 ref
+ */
+type ChartContainer = HTMLElement | Ref<HTMLElement | null | undefined> | null | undefined
 
 /**
  * D3 Chart options
@@ -30,7 +35,7 @@ export function useD3Chart(options: D3ChartOptions = {}) {
   const chartRenderDebounceTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 
   // 當前活躍的 tooltip 引用
-  const currentTooltip = ref<d3.Selection<HTMLDivElement, unknown, HTMLElement, any> | null>(null)
+  const currentTooltip = ref<d3.Selection<HTMLDivElement, unknown, HTMLElement, undefined> | null>(null)
 
   /**
    * 創建 D3 Tooltip
@@ -79,7 +84,7 @@ export function useD3Chart(options: D3ChartOptions = {}) {
    * @param {Function} renderFn - 渲染函數
    * @param {Number} delay - 延遲時間（毫秒），默認使用配置的 debounceDelay
    */
-  function debouncedRender(renderFn: any, delay = debounceDelay) {
+  function debouncedRender(renderFn: () => void, delay = debounceDelay) {
     // 清除之前的計時器
     if (chartRenderDebounceTimer.value) {
       clearTimeout(chartRenderDebounceTimer.value)
@@ -108,8 +113,8 @@ export function useD3Chart(options: D3ChartOptions = {}) {
    * 清空容器內容
    * @param {HTMLElement|Ref} container - 容器元素或 ref
    */
-  function clearContainer(container: any) {
-    const element = container?.value || container
+  function clearContainer(container: ChartContainer) {
+    const element = container && 'value' in container ? container.value : container
     if (element) {
       element.innerHTML = ''
     }
@@ -122,7 +127,7 @@ export function useD3Chart(options: D3ChartOptions = {}) {
    * @param {Number} height - 高度
    * @returns {Object} D3 SVG selection
    */
-  function createSvg(container: any, width: any, height: any) {
+  function createSvg(container: HTMLElement | null, width: number, height: number) {
     return d3.select(container)
       .append('svg')
       .attr('width', width)
@@ -136,8 +141,8 @@ export function useD3Chart(options: D3ChartOptions = {}) {
    * @param {Number} defaultHeight - 預設高度
    * @returns {Object} { width, height }
    */
-  function getContainerSize(container: any, defaultWidth = 600, defaultHeight = 300) {
-    const element = container?.value || container
+  function getContainerSize(container: ChartContainer, defaultWidth = 600, defaultHeight = 300) {
+    const element = container && 'value' in container ? container.value : container
     if (!element) {
       return { width: defaultWidth, height: defaultHeight }
     }
