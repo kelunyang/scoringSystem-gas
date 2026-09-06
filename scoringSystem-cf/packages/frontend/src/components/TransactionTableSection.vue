@@ -79,7 +79,7 @@
                 <div v-if="transaction.relatedSubmissionId" class="detail-section">
                   <h4><i class="fas fa-file-alt"></i> 相關成果</h4>
                   <div v-if="getTransactionDetails(transaction.transactionId)?.submission" class="detail-content">
-                    <div class="submission-content" v-html="sanitizeHtml(getTransactionDetails(transaction.transactionId)!.submission!.contentMarkdown || getTransactionDetails(transaction.transactionId)!.submission!.content)"></div>
+                    <div class="submission-content" v-html="sanitizeHtml(getTransactionDetails(transaction.transactionId)!.submission!.content || '')"></div>
                     <div class="detail-meta">
                       <span v-if="getTransactionDetails(transaction.transactionId)?.submission?.submitTime" class="meta-time">
                         <i class="fas fa-clock"></i>
@@ -148,25 +148,10 @@
  */
 
 import type { NormalizedTransaction } from '@/composables/useWallet'
+import type { TransactionDetails } from '@/composables/useTransactionLoader'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import { formatTime, getTransactionTypeText } from '@/utils/walletHelpers'
 import { sanitizeHtml } from '@/utils/sanitize'
-
-interface TransactionDetail {
-  submission?: {
-    content: string
-    contentMarkdown?: string
-    submitTime?: number
-    submitterEmail?: string
-  }
-  submissionError?: string
-  comment?: {
-    content: string
-    createdTime?: number
-    authorEmail?: string
-  }
-  commentError?: string
-}
 
 export interface Props {
   filteredTransactions: NormalizedTransaction[]
@@ -177,7 +162,7 @@ export interface Props {
   // Functions passed from parent composables
   isExpanded: (transactionId: string) => boolean
   isLoadingDetails: (transactionId: string) => boolean
-  getTransactionDetails: (transactionId: string) => TransactionDetail | undefined
+  getTransactionDetails: (transactionId: string) => TransactionDetails | undefined
   checkTransactionReversed: (transaction: NormalizedTransaction) => boolean
   isReversing: (transactionId: string) => boolean
 }

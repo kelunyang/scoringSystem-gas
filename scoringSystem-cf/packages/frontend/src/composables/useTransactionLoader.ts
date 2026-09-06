@@ -21,6 +21,40 @@ const DEFAULT_TRANSACTION_LIMIT = 1000
  * @param {import('vue').Ref<string>} [userEmail] - 用戶郵箱 (可選，用於過濾特定用戶)
  * @returns {Object} 加載狀態和方法
  */
+/**
+ * 交易明細抽屜裡會顯示的東西。成果與評論各自可能失敗，故分開存；
+ * 整批載入失敗時放 `error`。
+ *
+ * 欄位取畫面實際會讀的那些（見 TransactionTableSection.vue 的模板），
+ * 端點回的東西比這裡多。
+ */
+export interface TransactionDetails {
+  submission?: {
+    /** submissions.contentMarkdown，可為 NULL */
+    content: string | null
+    submitTime?: number
+    submitterEmail?: string
+  }
+  comment?: {
+    content: string
+    createdTime?: number
+    authorEmail?: string
+  }
+  submissionError?: string
+  commentError?: string
+  error?: string
+}
+
+type SubmissionDetailResult = {
+  type: 'submission'
+  data: Awaited<ReturnType<Awaited<ReturnType<typeof rpcClient.api.submissions.details.$post>>['json']>>
+}
+
+type CommentDetailResult = {
+  type: 'comment'
+  data: Awaited<ReturnType<Awaited<ReturnType<typeof rpcClient.api.comments.details.$post>>['json']>>
+}
+
 export function useTransactionLoader(projectId: string, userEmail = null) {
   const loading = ref(false)
   const error = ref<unknown | null>(null)
@@ -57,7 +91,7 @@ export function useTransactionLoader(projectId: string, userEmail = null) {
 
         // 數據規範化並排序（只排序一次）
         transactions.value = rawTransactions
-          .map((t: any) => ({
+          .map(t => ({
             id: t.transactionId,
             transactionId: t.transactionId,
             points: t.amount,
@@ -67,8 +101,7 @@ export function useTransactionLoader(projectId: string, userEmail = null) {
             timestamp: t.timestamp,
             transactionType: t.type || t.transactionType,
             relatedSubmissionId: t.relatedSubmissionId,
-            relatedCommentId: t.relatedCommentId,
-            relatedTransactionId: t.relatedTransactionId
+            relatedCommentId: t.relatedCommentId
           } as unknown as Transaction))
           .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0)) // 只排序一次
 
@@ -106,7 +139,7 @@ export function useTransactionLoader(projectId: string, userEmail = null) {
  */
 export function useTransactionDetailsLoader(projectId: string | Ref<string | null>) {
   const MAX_CACHE_SIZE = 50 // LRU cache limit
-  const detailsCache = ref<Record<string, any>>({})
+  const detailsCache = ref<Record<string, TransactionDetails>>({})
   const loadingIds = ref<string[]>([])
   const cacheAccessOrder = ref<string[]>([]) // Track access order for LRU
 
@@ -177,30 +210,36 @@ export function useTransactionDetailsLoader(projectId: string | Ref<string | nul
     evictLRU()
 
     try {
-      const promises = []
+      const promises: Array<Promise<SubmissionDetailResult | CommentDetailResult>> = []
 
       // 只為存在的關聯創建 promise
       if (transaction.relatedSubmissionId) {
         const pid = typeof projectId === 'string' ? projectId : projectId.value
         promises.push(
-          rpcClient.api.submissions.details.$post({
-            json: {
-              projectId: pid || '',
-              submissionId: transaction.relatedSubmissionId
-            }
-          }).then((httpResponse: any) => httpResponse.json()).then((r: any) => ({ type: 'submission', data: r }))
+          (async () => {
+            const httpResponse = await rpcClient.api.submissions.details.$post({
+              json: {
+                projectId: pid || '',
+                submissionId: transaction.relatedSubmissionId!
+              }
+            })
+            return { type: 'submission' as const, data: await httpResponse.json() }
+          })()
         )
       }
 
       if (transaction.relatedCommentId) {
         const pid = typeof projectId === 'string' ? projectId : projectId.value
         promises.push(
-          rpcClient.api.comments.details.$post({
-            json: {
-              projectId: pid || '',
-              commentId: transaction.relatedCommentId
-            }
-          }).then((httpResponse: any) => httpResponse.json()).then((r: any) => ({ type: 'comment', data: r }))
+          (async () => {
+            const httpResponse = await rpcClient.api.comments.details.$post({
+              json: {
+                projectId: pid || '',
+                commentId: transaction.relatedCommentId!
+              }
+            })
+            return { type: 'comment' as const, data: await httpResponse.json() }
+          })()
         )
       }
 
@@ -210,19 +249,25 @@ export function useTransactionDetailsLoader(projectId: string | Ref<string | nul
       }
 
       const results = await Promise.allSettled(promises)
-      const details: Record<string, any> = {}
+      const details: TransactionDetails = {}
 
       results.forEach(result => {
-        if (result.status === 'fulfilled' && result.value) {
-          const { type, data } = result.value
-
-          if (data.success) {
-            details[type] = data.data
-          } else {
-            details[`${type}Error`] = apiErrorMessage(errorOf(data)) || '載入失敗'
-          }
-        } else if (result.status === 'rejected') {
+        if (result.status === 'rejected') {
           console.warn(`Failed to load transaction detail:`, result.reason)
+          return
+        }
+        if (!result.value) return
+
+        // 分開處理而不是用 details[type] 動態索引：兩個端點的 data
+        // 形狀不同，動態索引在聯集上推不出型別
+        if (result.value.type === 'submission') {
+          const res = result.value.data
+          if (res.success) details.submission = res.data
+          else details.submissionError = apiErrorMessage(errorOf(res)) || '載入失敗'
+        } else {
+          const res = result.value.data
+          if (res.success) details.comment = res.data
+          else details.commentError = apiErrorMessage(errorOf(res)) || '載入失敗'
         }
       })
 

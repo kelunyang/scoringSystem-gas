@@ -1038,7 +1038,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch, inject, onBefor
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getStageStatusText, getStageStatusType } from '@/utils/stageStatus'
-import type { Stage, User } from '@repo/shared'
+import type { User } from '@repo/shared'
 
 // Extended Project type with additional frontend-specific properties
 /**
@@ -1052,14 +1052,22 @@ type ExtendedProject = Extract<AdminProject, { isCreator: boolean }> & {
 }
 
 // Viewer type for project viewer management
-interface ProjectViewer {
-  viewerId: string
-  userId: string
-  displayName: string
-  userEmail: string
-  role: string
-  assignedAt?: number
-  assignedBy?: string
+/**
+ * 專案存取者清單的一列。從端點推導——原本手寫的版本有
+ * `viewerId` / `userId`，端點回的是 `id` 且沒有 userId，
+ * 而且 displayName 可為 null（沒人讀那兩個欄位，是純粹的謊）。
+ */
+type ProjectViewer = ApiData<typeof rpcClient.api.projects.viewers.list.$post>[number]
+
+/** 使用者搜尋結果的一列 */
+type SearchedUser = ApiData<typeof rpcClient.api.users.search.$post>[number]
+
+/**
+ * 管理端展開專案時列出的階段。從 /stages/list 推導，並補上呼叫端
+ * 自己塞進去的 projectId（端點本身不回這欄）。
+ */
+type AdminStage = ApiData<typeof rpcClient.api.stages.list.$post>['stages'][number] & {
+  projectId: string
 }
 
 // Settlement details type
@@ -1128,6 +1136,8 @@ import {
 import AdminFilterToolbar from './shared/AdminFilterToolbar.vue'
 import AnimatedStatistic from '@/components/shared/AnimatedStatistic.vue'
 import type { ViewerRole } from '@/composables/admin/useProjects'
+import { rpcClient } from '@/utils/rpc-client'
+import type { ApiData } from '@/utils/api-types'
 
 defineOptions({ name: 'ProjectManagement' })
 
@@ -1211,7 +1221,7 @@ const showEditStageModal = ref(false)
 const showVotingAnalysisModal = ref(false)
 const showCommentAnalysisModal = ref(false)
 const selectedProject = ref<ExtendedProject | null>(null)
-const selectedStageForAnalysis = ref<Stage | null>(null)
+const selectedStageForAnalysis = ref<AdminStage | null>(null)
 const updating = ref(false)
 // Use query loading state instead of manual loading ref
 const loading = computed(() => {
@@ -1221,19 +1231,19 @@ const archivingProjects = ref(new Set<string>())  // Track which projects are be
 const archivingStages = ref(new Set<string>())    // Track which stages are being archived
 const settlingStages = ref(new Set<string>())
 const showPauseStageDrawer = ref(false)   // Pause stage drawer visibility
-const pauseStageData = ref<{ stage: Stage; project: ExtendedProject } | null>(null) // Data for pause stage drawer
+const pauseStageData = ref<{ stage: AdminStage; project: ExtendedProject } | null>(null) // Data for pause stage drawer
 const showResumeStageDrawer = ref(false)  // Resume stage drawer visibility
-const resumeStageData = ref<{ stage: Stage; project: ExtendedProject } | null>(null) // Data for resume stage drawer
+const resumeStageData = ref<{ stage: AdminStage; project: ExtendedProject } | null>(null) // Data for resume stage drawer
 const showSettlementDrawer = ref(false)  // Settlement progress drawer visibility
 const selectedStageForSettlement = ref<(SettlementStage & { projectId?: string }) | null>(null) // Selected stage for settlement
 const showSettlementConfirmDrawer = ref(false) // Settlement confirmation drawer visibility
-const selectedStageForConfirm = ref<Stage | null>(null) // Selected stage for confirmation
+const selectedStageForConfirm = ref<AdminStage | null>(null) // Selected stage for confirmation
 const showArchivedStages = ref(false)     // Toggle to show/hide archived stages
 const showGanttChart = ref(new Map<string, boolean>())     // Track gantt chart open/close state for each project
 const ganttCenterTime = ref(new Map<string, number>())    // Store centerTime for each project's gantt chart
-const projectStages = ref<Stage[]>([])
-const draggedStage = ref<Stage | null>(null)
-const editingStage = ref<Stage | null>(null)
+const projectStages = ref<AdminStage[]>([])
+const draggedStage = ref<AdminStage | null>(null)
+const editingStage = ref<AdminStage | null>(null)
 
 // DISABLED: Tag management - tags system disabled
 // const showTagModal = ref(false)
@@ -1290,15 +1300,15 @@ const selectedProjectForClone = ref<ExtendedProject | null>(null)
 
 // Clone Stage Drawer State
 const showCloneStageDrawer = ref(false)
-const selectedStageForClone = ref<Stage | null>(null)
+const selectedStageForClone = ref<AdminStage | null>(null)
 
 // Force Voting Drawer State
 const showForceVotingDrawer = ref(false)
-const selectedForceVotingStage = ref<Stage | null>(null)
+const selectedForceVotingStage = ref<AdminStage | null>(null)
 
 // Clear Stage Votes Drawer State (force-revert to pre-voting)
 const showClearVotesDrawer = ref(false)
-const clearVotesStage = ref<(Stage & { projectId?: string; stageName?: string }) | null>(null)
+const clearVotesStage = ref<AdminStage | null>(null)
 
 // Archive Project Drawer State
 const showArchiveProjectDrawer = ref(false)
@@ -1307,7 +1317,7 @@ const selectedProjectForArchive = ref<ExtendedProject | null>(null)
 // Reverse Settlement Drawer State
 const showReverseSettlementDrawer = ref(false)
 const reversingSettlement = ref(false)  // Loading state for reverse settlement
-const selectedStageForReverse = ref<Stage | null>(null)
+const selectedStageForReverse = ref<AdminStage | null>(null)
 const selectedProjectForReverse = ref<ExtendedProject | null>(null)
 
 // Project expansion state - using useExpandable composable with URL sync
@@ -1317,7 +1327,7 @@ const {
   loadingIds: loadingProjectStages,
   isExpanded: isProjectExpanded,
   collapseAll: collapseAllProjects
-} = useExpandable<Stage[]>({ singleMode: true })
+} = useExpandable<AdminStage[]>({ singleMode: true })
 
 // Keep currentProjectId for backwards compatibility (used in other watchers)
 const currentProjectId = computed(() => {
@@ -1343,7 +1353,8 @@ const newViewer = reactive({
   searchText: '',
   role: 'teacher'
 })
-const searchResults = ref<User[]>([])
+// 使用者搜尋結果的形狀由端點決定（不是 shared 的 User 實體）
+const searchResults = ref<SearchedUser[]>([])
 const selectedUsers = ref<User[]>([])
 const searchingUsers = ref(false)
 const stats = computed(() => ({
@@ -1900,7 +1911,7 @@ const loadProjectViewers = async (projectId: string) => {
     // Use TanStack Query mutation
     const result = await listViewersMutation.mutateAsync({ projectId })
     console.log('🔍 [loadProjectViewers] API response:', result)
-    projectViewers.value = result as ProjectViewer[]
+    projectViewers.value = result
     console.log('✅ [loadProjectViewers] Loaded viewers:', projectViewers.value)
   } catch (error) {
     console.error('❌ [loadProjectViewers] Exception:', error)
@@ -2206,8 +2217,8 @@ const loadProjectStagesForExpansion = async (projectId: string) => {
     if (result?.stages) {
       // Inject projectId into each stage for later use
       const sortedStages = result.stages
-        .map((stage: Stage) => ({ ...stage, projectId }))
-        .sort((a: Stage, b: Stage) => a.stageOrder - b.stageOrder)
+        .map(stage => ({ ...stage, projectId }))
+        .sort((a, b) => a.stageOrder - b.stageOrder)
       projectStagesMap.set(projectId, sortedStages)
     } else {
       projectStagesMap.set(projectId, [])
@@ -2292,7 +2303,7 @@ const addMemberToProject = async () => {
 }
 
 
-const editStage = async (stage: Stage, project: ExtendedProject | null = null) => {
+const editStage = async (stage: AdminStage, project: ExtendedProject | null = null) => {
   // Clear any previous errors
   stageFormError.value = null
 
@@ -2303,7 +2314,7 @@ const editStage = async (stage: Stage, project: ExtendedProject | null = null) =
     // Find the project that contains this stage
     const projectForStage = projects.value.find(p =>
       expandedProjects.has(p.projectId) &&
-      projectStagesMap.get(p.projectId)?.some((s: Stage) => s.stageId === stage.stageId)
+      projectStagesMap.get(p.projectId)?.some((s) => s.stageId === stage.stageId)
     )
     if (projectForStage) {
       selectedProject.value = projectForStage
@@ -2334,7 +2345,9 @@ const editStage = async (stage: Stage, project: ExtendedProject | null = null) =
     editStageForm.stageId = stageDetails.stageId
     editStageForm.stageName = stageDetails.stageName
     // 修正時區問題：使用本地時區而不是UTC
-    const formatDatetimeLocal = (timestamp: number): string => {
+    // stages 的 startTime / endTime 可為 NULL（尚未排定）
+    const formatDatetimeLocal = (timestamp: number | null): string => {
+      if (timestamp === null) return ''
       const date = new Date(timestamp)
       // 獲取本地時間的YYYY-MM-DDTHH:MM格式，避免時區轉換
       const year = date.getFullYear()
@@ -2490,7 +2503,7 @@ const updateStageDetails = async (formData: StageForm) => {
 
 
 // Drag and Drop Functions
-const handleDragStart = (stage: Stage, event: DragEvent) => {
+const handleDragStart = (stage: AdminStage, event: DragEvent) => {
   draggedStage.value = stage
   if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
 }
@@ -2508,7 +2521,7 @@ const handleDrop = (event: DragEvent, projectId: string, targetIndex: number) =>
   }
 
   const stages = projectStagesMap.get(projectId) || []
-  const draggedIndex = stages.findIndex((s: Stage) => s.stageId === draggedStage.value!.stageId)
+  const draggedIndex = stages.findIndex((s) => s.stageId === draggedStage.value!.stageId)
   
   if (draggedIndex === -1 || draggedIndex === targetIndex) {
     return
@@ -2550,7 +2563,7 @@ const moveStageUpInProject = async (projectId: string, currentIndex: number) => 
   newStages[currentIndex - 1] = temp
 
   // 更新順序
-  newStages.forEach((stage: Stage, index: number) => {
+  newStages.forEach((stage, index) => {
     stage.stageOrder = index + 1
   })
 
@@ -2573,7 +2586,7 @@ const moveStageDownInProject = async (projectId: string, currentIndex: number) =
   newStages[currentIndex + 1] = temp
 
   // 更新順序
-  newStages.forEach((stage: Stage, index: number) => {
+  newStages.forEach((stage, index) => {
     stage.stageOrder = index + 1
   })
 
@@ -2593,7 +2606,7 @@ const formatDate = (timestamp: number | null | undefined): string => {
 
 // Settlement progress helper functions
 
-const saveStageOrder = async (projectId: string | null = null, stages: Stage[] | null = null) => {
+const saveStageOrder = async (projectId: string | null = null, stages: AdminStage[] | null = null) => {
   const targetProjectId = projectId || selectedProject.value?.projectId
   const targetStages = stages || projectStages.value
 
@@ -2623,7 +2636,7 @@ const saveStageOrder = async (projectId: string | null = null, stages: Stage[] |
 }
 
 // Open settlement confirmation drawer
-const openSettlementConfirmDrawer = (stage: Stage & { projectId?: string }, project: ExtendedProject) => {
+const openSettlementConfirmDrawer = (stage: AdminStage, project: ExtendedProject) => {
   // Attach projectId to stage for drawer access
   stage.projectId = project.projectId
   selectedStageForConfirm.value = stage
@@ -2656,7 +2669,7 @@ const handleSettlementComplete = async ({ stageId }: { stageId: string; settleme
   // Update in projectStagesMap
   if (projectId && projectStagesMap.has(projectId)) {
     const stages = projectStagesMap.get(projectId)!
-    const stageIndex = stages.findIndex((s: Stage) => s.stageId === stageId)
+    const stageIndex = stages.findIndex((s) => s.stageId === stageId)
     if (stageIndex !== -1) {
       stages[stageIndex].status = 'completed'
     }
@@ -2691,7 +2704,7 @@ const handleDrawerClosed = async ({ projectId }: { projectId: string }) => {
   }
 }
 
-const handleDistributionCommand = (command: string, stage: Stage, projectId: string) => {
+const handleDistributionCommand = (command: string, stage: AdminStage, projectId: string) => {
   if (stage.status === 'completed') {
     // 設定要顯示的階段資訊
     selectedStageForAnalysis.value = {
@@ -2711,7 +2724,7 @@ const handleDistributionCommand = (command: string, stage: Stage, projectId: str
 }
 
 // Open reverse settlement drawer
-const reverseSettlement = (stage: Stage, project: ExtendedProject | null) => {
+const reverseSettlement = (stage: AdminStage, project: ExtendedProject | null) => {
   selectedStageForReverse.value = stage
   selectedProjectForReverse.value = project || selectedProject.value
   showReverseSettlementDrawer.value = true
@@ -2720,7 +2733,7 @@ const reverseSettlement = (stage: Stage, project: ExtendedProject | null) => {
 // Handle successful reversal from the drawer component
 const handleReverseSuccess = async ({ stageId, projectId }: { reversalId: string; transactionCount: number; stageId: string; projectId: string }) => {
   // Update stage status in local state
-  const stageIndex = projectStages.value.findIndex((s: Stage) => s.stageId === stageId)
+  const stageIndex = projectStages.value.findIndex((s) => s.stageId === stageId)
   if (stageIndex !== -1) {
     projectStages.value[stageIndex].status = 'voting'
   }
@@ -2728,7 +2741,7 @@ const handleReverseSuccess = async ({ stageId, projectId }: { reversalId: string
   // Update in projectStagesMap
   const projectStagesList = projectStagesMap.get(projectId)
   if (projectStagesList) {
-    const mapStageIndex = projectStagesList.findIndex((s: Stage) => s.stageId === stageId)
+    const mapStageIndex = projectStagesList.findIndex((s) => s.stageId === stageId)
     if (mapStageIndex !== -1) {
       projectStagesList[mapStageIndex].status = 'voting'
     }
@@ -2738,7 +2751,7 @@ const handleReverseSuccess = async ({ stageId, projectId }: { reversalId: string
   await loadProjectStagesForExpansion(projectId)
 }
 
-const archiveStage = async (stage: Stage, project: ExtendedProject | null) => {
+const archiveStage = async (stage: AdminStage, project: ExtendedProject | null) => {
   try {
     // Add to archiving set
     archivingStages.value.add(stage.stageId)
@@ -2768,7 +2781,7 @@ const archiveStage = async (stage: Stage, project: ExtendedProject | null) => {
   }
 }
 
-const unarchiveStage = async (stage: Stage, project: ExtendedProject | null) => {
+const unarchiveStage = async (stage: AdminStage, project: ExtendedProject | null) => {
   try {
     // Add to archiving set (reuse the same tracking set)
     archivingStages.value.add(stage.stageId)
@@ -2803,7 +2816,7 @@ const getFilteredStages = (projectId: string) => {
   if (showArchivedStages.value) {
     return stages  // Show all stages including archived
   }
-  return stages.filter((s: Stage) => s.status !== 'archived')  // Hide archived stages
+  return stages.filter((s) => s.status !== 'archived')  // Hide archived stages
 }
 
 // Gantt chart helper functions
@@ -2818,7 +2831,7 @@ const toggleGanttChart = (projectId: string, value: boolean) => {
 
 const transformStagesForGantt = (projectId: string) => {
   const stages = getFilteredStages(projectId)
-  return stages.map((stage: Stage & { settledTime?: number }) => ({
+  return stages.map(stage => ({
     stageName: stage.stageName,
     startTime: stage.startTime,
     endTime: stage.endTime,
@@ -2832,7 +2845,7 @@ const handleGanttStageClick = (stage: unknown, _projectId: string) => {
   console.log('Gantt stage clicked:', stage)
 }
 
-const focusStageInGantt = (stage: Stage, projectId: string) => {
+const focusStageInGantt = (stage: AdminStage, projectId: string) => {
   if (!showGanttChart.value.get(projectId)) return
   if (stage.startTime == null || stage.endTime == null) return
 
@@ -2851,7 +2864,7 @@ const openCloneProjectDrawer = (project: ExtendedProject) => {
 }
 
 // Open clone stage drawer
-const openCloneStageDrawer = (stage: Stage) => {
+const openCloneStageDrawer = (stage: AdminStage) => {
   selectedStageForClone.value = stage
   showCloneStageDrawer.value = true
 }
@@ -2866,7 +2879,7 @@ const handleStageCloned = async (targetProjectIds: string[]) => {
 }
 
 // Force Voting Drawer Functions
-const openForceVotingDrawer = (stage: Stage & { projectId?: string }) => {
+const openForceVotingDrawer = (stage: AdminStage) => {
   selectedForceVotingStage.value = stage
   showForceVotingDrawer.value = true
 }
@@ -2880,7 +2893,7 @@ const handleForceVotingConfirmed = () => {
 }
 
 // Clear Stage Votes Drawer Functions (force-revert to pre-voting)
-const openClearVotesDrawer = (stage: Stage & { projectId?: string; stageName?: string }) => {
+const openClearVotesDrawer = (stage: AdminStage) => {
   clearVotesStage.value = stage
   showClearVotesDrawer.value = true
 }
@@ -2894,7 +2907,7 @@ const handleClearVotesConfirmed = () => {
 }
 
 // Pause Stage Drawer Functions
-const openPauseStageDrawer = (stage: Stage, project: ExtendedProject) => {
+const openPauseStageDrawer = (stage: AdminStage, project: ExtendedProject) => {
   pauseStageData.value = { stage, project }
   showPauseStageDrawer.value = true
 }
@@ -2908,7 +2921,7 @@ const handlePauseStageConfirmed = () => {
 }
 
 // Resume Stage Drawer Functions
-const openResumeStageDrawer = (stage: Stage, project: ExtendedProject) => {
+const openResumeStageDrawer = (stage: AdminStage, project: ExtendedProject) => {
   resumeStageData.value = { stage, project }
   showResumeStageDrawer.value = true
 }

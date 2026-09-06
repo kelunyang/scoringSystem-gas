@@ -442,7 +442,7 @@ export async function getSubmissionDetails(
       LEFT JOIN users u ON s.submitterEmail = u.userEmail
       JOIN stages st ON s.stageId = st.stageId
       WHERE s.submissionId = ? AND s.projectId = ?
-    `).bind(submissionId, projectId).first();
+    `).bind(submissionId, projectId).first<SubmissionDetailRow>();
 
     if (!submission) {
       return errorResponse('SUBMISSION_NOT_FOUND', 'Submission not found');
@@ -501,10 +501,10 @@ export async function updateSubmission(
   try {
     // Get submission to verify ownership
     const submission = await env.DB.prepare(`
-      SELECT s.submissionId, s.groupId, s.status, s.submitterEmail
+      SELECT s.submissionId, s.groupId, s.status, s.submitterEmail, s.withdrawnTime
       FROM submissions_with_status s
       WHERE s.submissionId = ? AND s.projectId = ?
-    `).bind(submissionId, projectId).first();
+    `).bind(submissionId, projectId).first<SubmissionOwnershipRow>();
 
     if (!submission) {
       return errorResponse('SUBMISSION_NOT_FOUND', 'Submission not found');
@@ -590,7 +590,7 @@ export async function withdrawSubmission(
              withdrawnTime, approvedTime, participationProposal
       FROM submissions_with_status
       WHERE submissionId = ? AND projectId = ?
-    `).bind(submissionId, projectId).first();
+    `).bind(submissionId, projectId).first<SubmissionLifecycleRow>();
 
     if (!submission) {
       return errorResponse('SUBMISSION_NOT_FOUND', 'Submission not found');
@@ -797,6 +797,66 @@ export async function deleteSubmission(
  * Get participation confirmations (approval votes) for a submission
  * Used for group self-governance voting on participation proposals
  */
+/** getSubmissionDetails 的查詢結果：submissions_with_status JOIN groups/users/stages */
+export interface SubmissionDetailRow {
+  submissionId: string;
+  projectId: string;
+  stageId: string;
+  groupId: string;
+  contentMarkdown: string | null;
+  actualAuthors: string | null;
+  participationProposal: string | null;
+  submitTime: number;
+  status: string;
+  groupName: string;
+  submitterEmail: string;
+  submitterName: string | null;
+  stageName: string;
+  stageStatus: string;
+}
+
+/**
+ * updateSubmission 驗證用的查詢。
+ *
+ * `withdrawnTime` 是 2026-09-07 補進 SELECT 的：下面那道
+ * 「已撤回的成果不能再編輯」的防線一直在讀這個欄位，但查詢沒撈它，
+ * 所以值恆為 undefined，防線從未生效。
+ */
+export interface SubmissionOwnershipRow {
+  submissionId: string;
+  groupId: string;
+  status: string;
+  submitterEmail: string;
+  withdrawnTime: number | null;
+}
+
+/** 撤回／恢復等生命週期操作用的查詢結果 */
+export interface SubmissionLifecycleRow {
+  submissionId: string;
+  groupId: string;
+  stageId: string;
+  status: string;
+  submitterEmail: string;
+  submitTime: number;
+  withdrawnTime: number | null;
+  approvedTime: number | null;
+  participationProposal: string | null;
+}
+
+/** forceWithdrawSubmission 的查詢結果（欄位和 SubmissionDetailRow 不同） */
+export interface ForceWithdrawSubmissionRow {
+  submissionId: string;
+  groupId: string;
+  stageId: string;
+  status: string;
+  submitterEmail: string;
+  submitTime: number;
+  withdrawnTime: number | null;
+  approvedTime: number | null;
+  groupName: string | null;
+  stageName: string | null;
+}
+
 /** submissionapprovalvotes JOIN users 的一列 */
 export interface ApprovalVoteRow {
   voteId: string;
@@ -1548,7 +1608,7 @@ export async function forceWithdrawSubmission(
       LEFT JOIN groups g ON s.groupId = g.groupId
       LEFT JOIN stages st ON s.stageId = st.stageId AND s.projectId = st.projectId
       WHERE s.submissionId = ? AND s.projectId = ?
-    `).bind(submissionId, projectId).first();
+    `).bind(submissionId, projectId).first<ForceWithdrawSubmissionRow>();
 
     if (!submission) {
       return errorResponse('SUBMISSION_NOT_FOUND', 'Submission not found');

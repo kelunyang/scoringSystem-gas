@@ -996,6 +996,22 @@ export async function getStageComments(
 /**
  * Get single comment details
  */
+/** getCommentDetails 的主查詢：comments JOIN users */
+interface CommentDetailRow {
+  commentId: string;
+  stageId: string;
+  content: string;
+  parentCommentId: string | null;
+  createdTime: number;
+  authorEmail: string;
+  mentionedGroups: string | null;
+  mentionedUsers: string | null;
+  displayName: string | null;
+  avatarSeed: string | null;
+  avatarStyle: string | null;
+  avatarOptions: string | null;
+}
+
 export async function getCommentDetails(
   env: Env,
   userEmail: string,
@@ -1015,7 +1031,7 @@ export async function getCommentDetails(
       FROM comments c
       LEFT JOIN users u ON c.authorEmail = u.userEmail
       WHERE c.commentId = ? AND c.projectId = ?
-    `).bind(commentId, projectId).first();
+    `).bind(commentId, projectId).first<CommentDetailRow>();
 
     if (!comment) {
       return errorResponse('COMMENT_NOT_FOUND', 'Comment not found');
