@@ -983,9 +983,9 @@ Hono 的 RPC 型別靠串接時累積在回傳值上，寫成獨立述句
 2. **handler 資料**：`.first()` / `.all()` 沒帶泛型時每一列都是
    `Record<string, unknown>`。前端真的會讀到的端點都補上了 row 型別。
 
-三個套件的 `any` 已全部歸零，細節見
-[typing-cleanup.md](typing-cleanup.md)。過程中照出來的契約落差記在
-本檔 #013 / #014。`utils/rpc-client.ts` 的 `ensureApiPrefix` runtime
+frontend 的 `any` 從 820 降到 66（backend／shared 早先已是 0），
+細節與剩餘清單見 [typing-cleanup.md](typing-cleanup.md)。
+過程中照出來的契約落差已修完（原 #013 / #014）。`utils/rpc-client.ts` 的 `ensureApiPrefix` runtime
 補丁也隨之刪除——178 個呼叫點都補上 `.api.` 之後，缺前綴會變成編譯錯誤。
 
 **維持這個狀態的前提**：backend 的 router 必須維持串接式註冊。

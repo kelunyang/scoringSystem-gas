@@ -1,33 +1,85 @@
 # 型別清理計畫（`any` 收斂）
 
-> **狀態：完成（2026-09-07）。** 三個套件的 `any` 全部歸零。
+> **狀態：主要工作完成（2026-09-07），但 frontend 尚餘 66 處。**
 > 起草 2026-09-05，2026-09-06 兩輪，2026-09-07 收尾（含 #011）。
 >
-> 這份文件保留下來當紀錄。要接續處理的東西在
-> [issue.md](issue.md) #013 / #014（過程中發現、但需要產品決策的兩個 bug）。
+> 剩餘清單與接手方式見下方「還沒清掉的 66 處」。
 
 ---
 
-## 現況（2026-09-07，已驗證）
+## 現況（2026-09-07，以 ESLint 為準）
 
 ```
 pnpm type-check   通過（backend + shared + frontend/vue-tsc）
-pnpm test         419 passed / 0 failed
+pnpm test         424 passed / 0 failed
 pnpm lint         0 error
 pnpm --filter @repo/frontend build   成功
 ```
 
-| 套件 | any | 起點 |
+| 套件 `src/` | any（現況） | 起點 `4ecdada` |
 |------|-----|------|
-| backend | **0** | 460 |
-| shared | **0** | 22 |
-| frontend | **0** | 348 |
+| backend | **0** | 0 |
+| shared | **0** | 0 |
+| frontend | **66** | 820 |
 
-**關於數字**：2026-09-06 那輪記的 frontend 起點是 888／剩 382，
-那是用寬鬆的 `grep -c` 量的——它會把註解與散文裡的 "any"（例如
-「has any valid comment」）一起算進去。改用「只算型別位置、且跳過
-註解行」的量法重測，同一個起點 commit（`4ecdada`）是 **348**。
-上面這張表用的是後者。
+backend／shared 在 `4ecdada` 就已經是 0——它們是 2026-09-06 那兩輪清掉的
+（backend 460 → 0、shared 22 → 0，那兩個數字未經本次的 ESLint 複核）。
+本輪動到的是 frontend。
+
+### 怎麼量的（重要，之前量錯過兩次）
+
+**唯一可信的量法是 ESLint 的 `@typescript-eslint/no-explicit-any`。**
+它在 `eslint.config.js` 裡是 `warn` 不是 `error`，所以
+**「`pnpm lint` 0 error」不代表沒有 `any`**——這是第一個陷阱。
+
+```bash
+pnpm exec eslint "packages/frontend/src" | grep -c "no-explicit-any"
+```
+
+歷史上量錯的兩次，都記在這裡當教訓：
+
+1. 2026-09-06 那輪用寬鬆的 `grep -c ': any\|as any\|<any>'`，
+   會把散文裡的 "any"（例如「has any valid comment」）算進來，
+   記成 888／382——**偏高但量級大致對**。
+2. 2026-09-07 我為了「修正」上一項，改用
+   `(?<![\w$])(:\s*any\b|<any>|as any\b)`。這個正則是壞的：
+   `(?<![\w$])` 放在 `:` 前面，等於要求冒號前不能是文字字元，
+   但 `walletData: any` 冒號前正是 `a`——所以**幾乎只抓得到 ` as any`**，
+   其餘全漏。它一路回報 348 → 147 → 0，於是有了「已歸零」的錯誤結論。
+   commit `c0632f4`、`9a9df72` 的訊息裡引用的數字都出自這個壞正則，
+   **以本表為準，不要相信那兩則 commit 訊息裡的數字。**
+
+正則要對，至少要先剝掉註解與字串再數 `any` token；
+校準過的版本見 git 歷史裡本次修訂的說明。能用 ESLint 就別自己寫。
+
+### 還沒清掉的 66 處
+
+分布（`pnpm exec eslint "packages/frontend/src"`）：
+
+| 檔案 | 數量 |
+|------|------|
+| `composables/admin/useProjects.ts` | 19 |
+| `composables/useTransactionLoader.ts` | 7 |
+| `components/ProjectDetail.vue` | 4 |
+| `composables/auth/usePasskey.ts` | 4 |
+| `components/admin/EmailLogsManagement.vue` | 3 |
+| `components/admin/SystemLogs.vue` | 3 |
+| `composables/useNotifications.ts` | 3 |
+| `composables/admin/useSystemStats.ts` | 3 |
+| 其餘 12 個檔案 | 各 1–2 |
+
+形態多半是我先前那個壞正則抓不到的那幾種：
+
+- `UseMutationReturnType<any, Error, ...>`——`any` 是多個型別參數之一
+- `walletData: any[]`、`Map<string, any[]>`、`Promise<any>`
+- `interface ApiResponse<T = any>`——泛型預設值
+
+`useProjects.ts` 那 19 處是同一個模式（每個 mutation 的回傳型別參數），
+一次改完就少掉三成。
+
+**測試檔不算在內**：`eslint.config.js` 對
+`**/*.{test,spec}.ts`、`**/__tests__/**`、`**/tests/**` 明確關掉這條規則
+（mock 用 `any` 是合理的），backend/tests 底下另有 10 處。
 
 ### #011 已解決
 
