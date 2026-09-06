@@ -4,6 +4,7 @@
  */
 
 import type { Env, SqlBindValue } from '@/types';
+import type { Stage } from '@repo/shared';
 import { successResponse, errorResponse } from '@utils/response';
 import { parseJSON, stringifyJSON } from '@utils/json';
 import { generateStageId } from '@utils/id-generator';
@@ -155,6 +156,25 @@ export async function createStage(
   }
 }
 
+/** `getStage` 那句 SELECT 選出來的欄位（來自 stages_with_status VIEW） */
+interface GetStageRow {
+  stageId: string;
+  projectId: string;
+  stageName: string;
+  stageOrder: number;
+  stageType: string | null;
+  status: Stage['status'];
+  startTime: number | null;
+  endTime: number | null;
+  reportRewardPool: number | null;
+  commentRewardPool: number | null;
+  config: string | null;
+  description: string | null;
+  createdTime: number;
+  submissionCount: number;
+  commentCount: number;
+}
+
 /**
  * Get stage details
  */
@@ -176,7 +196,7 @@ export async function getStage(
         (SELECT COUNT(*) FROM comments WHERE stageId = s.stageId) as commentCount
       FROM stages_with_status s
       WHERE s.stageId = ? AND s.projectId = ?
-    `).bind(stageId, projectId).first();
+    `).bind(stageId, projectId).first<GetStageRow>();
 
     if (!stage) {
       return errorResponse('STAGE_NOT_FOUND', 'Stage not found');

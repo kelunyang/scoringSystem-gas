@@ -595,9 +595,11 @@ export async function getStageSettlementRankings(
 
     if (stageStatus !== 'completed') {
       console.log('[getStageSettlementRankings] Stage not settled, returning empty rankings');
+      // 具型別的空 map：讓兩個分支的 rankings 型別一致，前端才不必猜
+      const emptyRankings: Record<string, StageSettlementRanking> = {};
       return successResponse({
         settled: false,
-        rankings: {},
+        rankings: emptyRankings,
         message: 'Stage not yet settled'
       });
     }
@@ -722,9 +724,10 @@ export async function getCommentSettlementRankings(
     }
 
     if (stageStatus !== 'completed') {
+      const emptyRankings: Record<string, CommentSettlementRanking> = {};
       return successResponse({
         settled: false,
-        rankings: {},
+        rankings: emptyRankings,
         message: 'Stage not yet settled'
       });
     }
