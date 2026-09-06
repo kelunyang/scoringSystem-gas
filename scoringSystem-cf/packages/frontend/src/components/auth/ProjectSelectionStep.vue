@@ -97,7 +97,7 @@ function handleTurnstileExpired() {
   onExpired();
 }
 
-function handleAllParticipatedChange(checked: any) {
+function handleAllParticipatedChange(checked: boolean | string | number) {
   if (checked) {
     // Clear project selection when checking "all participated"
     selectedProjectIds.value = [];

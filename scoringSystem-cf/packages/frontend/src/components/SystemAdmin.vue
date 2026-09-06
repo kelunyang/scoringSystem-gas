@@ -104,14 +104,14 @@
           <!-- Navigation Tabs Container -->
           <div ref="navRef" class="admin-nav" @scroll="updateScrollState">
             <router-link
-              v-for="tab in (visibleTabs as any[])"
-              :key="(tab as any).key"
-              :to="{ name: `admin-${(tab as any).key}` }"
+              v-for="tab in visibleTabs"
+              :key="tab.key"
+              :to="{ name: `admin-${tab.key}` }"
               class="nav-tab"
               active-class="active"
             >
-              <i :class="(tab as any).icon"></i>
-              <span>{{ (tab as any).label }}</span>
+              <i :class="tab.icon"></i>
+              <span>{{ tab.label }}</span>
             </router-link>
           </div>
 
@@ -408,15 +408,15 @@ const currentPageTitle = computed(() => {
   const key = routeName.replace('admin-', '')
 
   // Try exact match first
-  let tab = visibleTabs.value.find((t: any) => t.key === key)
+  let tab = visibleTabs.value.find(t => t.key === key)
 
   // If not found, try matching the first part (e.g., 'groups-global' -> 'groups')
   if (!tab && key.includes('-')) {
     const baseKey = key.split('-')[0]
-    tab = visibleTabs.value.find((t: any) => t.key === baseKey)
+    tab = visibleTabs.value.find(t => t.key === baseKey)
   }
 
-  return (tab as any)?.label || '系統管理'
+  return tab?.label || '系統管理'
 })
 
 // Compute dynamic page icon based on current route
@@ -425,15 +425,15 @@ const currentPageIcon = computed(() => {
   const key = routeName.replace('admin-', '')
 
   // Try exact match first
-  let tab = visibleTabs.value.find((t: any) => t.key === key)
+  let tab = visibleTabs.value.find(t => t.key === key)
 
   // If not found, try matching the first part (e.g., 'groups-global' -> 'groups')
   if (!tab && key.includes('-')) {
     const baseKey = key.split('-')[0]
-    tab = visibleTabs.value.find((t: any) => t.key === baseKey)
+    tab = visibleTabs.value.find(t => t.key === baseKey)
   }
 
-  return (tab as any)?.icon || 'fas fa-cog'
+  return tab?.icon || 'fas fa-cog'
 })
 
 // ========================================

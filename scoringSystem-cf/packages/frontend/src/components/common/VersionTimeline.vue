@@ -57,7 +57,7 @@
     >
       <el-step
         v-for="(version, index) in versions"
-        :key="(version as any)[versionIdKey]"
+        :key="String(readField(version, versionIdKey))"
         :status="getStepStatus(version, index)"
         class="version-step clickable-step"
       >
@@ -95,47 +95,38 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup lang="ts" generic="T extends object">
 import { computed } from 'vue'
 
-const props = defineProps({
-  versions: {
-    type: Array,
-    required: true,
-    default: () => []
-  },
-  currentVersionId: {
-    type: String,
-    default: ''
-  },
-  formatTitleFn: {
-    type: Function,
-    default: null
-  },
-  formatDescriptionFn: {
-    type: Function,
-    default: null
-  },
-  versionIdKey: {
-    type: String,
-    default: 'versionId'
-  },
-  createdTimeKey: {
-    type: String,
-    default: 'createdTime'
-  },
-  displayNameKey: {
-    type: String,
-    default: 'teacherDisplayName'
-  },
-  statusKey: {
-    type: String,
-    default: 'status'
-  },
-  customStepClass: {
-    type: String,
-    default: ''
-  }
+/**
+ * 這個元件不認識版本的內容：欄位名由 `versionIdKey`／`createdTimeKey`／
+ * `displayNameKey`／`statusKey` 指定，元素型別由呼叫端決定（泛型 T）。
+ */
+
+/** 依 props 指定的欄位名動態取值 */
+function readField(version: T, key: string): unknown {
+  return (version as Record<string, unknown>)[key]
+}
+
+const props = withDefaults(defineProps<{
+  versions: T[]
+  currentVersionId?: string
+  formatTitleFn?: ((version: T, index: number) => string) | null
+  formatDescriptionFn?: ((version: T) => string) | null
+  versionIdKey?: string
+  createdTimeKey?: string
+  displayNameKey?: string
+  statusKey?: string
+  customStepClass?: string
+}>(), {
+  currentVersionId: '',
+  formatTitleFn: null,
+  formatDescriptionFn: null,
+  versionIdKey: 'versionId',
+  createdTimeKey: 'createdTime',
+  displayNameKey: 'teacherDisplayName',
+  statusKey: 'status',
+  customStepClass: ''
 })
 
 const emit = defineEmits(['version-change'])
@@ -145,12 +136,12 @@ const currentStepIndex = computed(() => {
   if (!props.currentVersionId || props.versions.length === 0) {
     return 0
   }
-  const index = (props.versions as any[]).findIndex((v: any) => v[props.versionIdKey] === props.currentVersionId)
+  const index = props.versions.findIndex(v => readField(v, props.versionIdKey) === props.currentVersionId)
   return index >= 0 ? index : 0
 })
 
 // 格式化標題
-function formatTitle(version: any, index: number) {
+function formatTitle(version: T, index: number) {
   if (props.formatTitleFn) {
     return props.formatTitleFn(version, index)
   }
@@ -160,7 +151,7 @@ function formatTitle(version: any, index: number) {
     return '最終版本'
   }
 
-  const date = new Date(version[props.createdTimeKey])
+  const date = new Date(readField(version, props.createdTimeKey) as string | number)
   return date.toLocaleDateString('zh-TW', {
     month: '2-digit',
     day: '2-digit',
@@ -170,16 +161,16 @@ function formatTitle(version: any, index: number) {
 }
 
 // 格式化描述
-function formatDescription(version: any) {
+function formatDescription(version: T) {
   if (props.formatDescriptionFn) {
     return props.formatDescriptionFn(version)
   }
 
-  return `提交者：${version[props.displayNameKey] || '未知'}`
+  return `提交者：${readField(version, props.displayNameKey) || '未知'}`
 }
 
 // 獲取步驟狀態
-function getStepStatus(version: any, index: number) {
+function getStepStatus(version: T, index: number) {
   // 最新版本顯示為 process（藍色高亮）
   if (index === props.versions.length - 1) {
     return 'process'
@@ -189,8 +180,8 @@ function getStepStatus(version: any, index: number) {
 }
 
 // 處理版本點擊
-function handleVersionClick(version: any) {
-  emit('version-change', version[props.versionIdKey])
+function handleVersionClick(version: T) {
+  emit('version-change', readField(version, props.versionIdKey))
 }
 </script>
 

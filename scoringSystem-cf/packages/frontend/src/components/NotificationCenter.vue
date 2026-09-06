@@ -430,6 +430,7 @@ import { ElMessageBox, ElMessage } from 'element-plus'
 import type { ScrollbarDirection } from 'element-plus'
 import { useDebounceFn } from '@vueuse/core'
 import { useNotificationLog } from '@/composables/useNotificationLog'
+import type { NotificationEntry } from '@/types/utils'
 import {
   useNotificationCount,
   useNotifications,
@@ -799,7 +800,7 @@ function copyNotificationAsJSON(notification: Notification) {
 /**
  * Copy notification log entry as JSON to clipboard
  */
-function copyNotificationLogAsJSON(notification: any) {
+function copyNotificationLogAsJSON(notification: NotificationEntry) {
   try {
     // Create a serializable copy (convert Date to ISO string)
     const serializable = {

@@ -18,9 +18,11 @@ export interface PermissionRule {
 
 /** 分頁（tab）設定 */
 export interface TabConfig {
+  key?: string
+  label?: string
+  icon?: string
   order?: number
   permissions?: PermissionRule
-  [key: string]: unknown
 }
 
 /** 一個區塊（section）的設定 */

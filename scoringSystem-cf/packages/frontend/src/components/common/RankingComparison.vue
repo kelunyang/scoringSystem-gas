@@ -4,55 +4,47 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { computed, type PropType } from 'vue'
+<script setup lang="ts" generic="T extends object">
+import { computed } from 'vue'
 import { html as diff2html } from 'diff2html'
 import { createTwoFilesPatch } from 'diff'
 import 'diff2html/bundles/css/diff2html.min.css'
 
-const props = defineProps({
-  leftTitle: {
-    type: String,
-    default: '最新版本'
-  },
-  rightTitle: {
-    type: String,
-    default: '歷史版本'
-  },
-  leftItems: {
-    type: Array as PropType<any[]>,
-    required: true,
-    default: () => []
-  },
-  rightItems: {
-    type: Array as PropType<any[]>,
-    required: true,
-    default: () => []
-  },
-  itemKey: {
-    type: String,
-    default: 'id'
-  },
-  itemLabel: {
-    type: String,
-    default: 'name'
-  },
-  itemDisplayFn: {
-    type: Function as PropType<(item: any) => string>,
-    default: null
-  }
+/**
+ * 這個元件不認識項目的內容：顯示欄位名由 `itemLabel` 指定，
+ * 或由呼叫端提供 `itemDisplayFn`。元素型別由呼叫端決定（泛型 T）。
+ */
+const props = withDefaults(defineProps<{
+  leftTitle?: string
+  rightTitle?: string
+  leftItems: T[]
+  rightItems: T[]
+  itemKey?: string
+  itemLabel?: string
+  itemDisplayFn?: ((item: T) => string) | null
+}>(), {
+  leftTitle: '最新版本',
+  rightTitle: '歷史版本',
+  itemKey: 'id',
+  itemLabel: 'name',
+  itemDisplayFn: null
 })
+
+/** 依 props 指定的欄位名動態取值 */
+function readField(item: T, key: string): unknown {
+  return (item as Record<string, unknown>)[key]
+}
 
 /**
  * 將排名陣列轉為純文字（每行一個排名）
  */
-function rankingsToText(items: any[]): string {
+function rankingsToText(items: T[]): string {
   if (!items || items.length === 0) return ''
 
   return items.map((item, i) => {
     const label = props.itemDisplayFn
       ? props.itemDisplayFn(item)
-      : item[props.itemLabel] || item.groupName || item.name || '未命名'
+      : readField(item, props.itemLabel) || readField(item, 'groupName') || readField(item, 'name') || '未命名'
     return `${i + 1}. ${label}`
   }).join('\n')
 }

@@ -28,14 +28,14 @@ import { addNotificationGlobally, clearNotificationLogGlobally } from '@/composa
 export function addToNotificationLog(
   message: string,
   level: 'error' | 'warning' | 'success' | 'info' = 'error',
-  context: Record<string, any> = {},
+  context: Record<string, unknown> = {},
   stack: string | null = null
 ): void {
   addNotificationGlobally({
     timestamp: new Date(),
     message,
     level,
-    type: context.type || level,
+    type: typeof context.type === 'string' ? context.type : level,
     context,
     stack
   })
@@ -53,7 +53,7 @@ export function clearNotificationLog(): void {
  * @param error - Error object or string
  * @param context - Additional context
  */
-export function addToErrorLog(error: Error | string, context: Record<string, any> = {}): void {
+export function addToErrorLog(error: Error | string, context: Record<string, unknown> = {}): void {
   addToNotificationLog(
     typeof error === 'string' ? error : error.message || String(error),
     'error',
@@ -72,7 +72,7 @@ const originalElMessage = {
 
 type MessageOptions = string | {
   message?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 // @ts-expect-error - Overriding ElMessage methods for logging
@@ -158,7 +158,7 @@ async function initializeApp(): Promise<void> {
         defaultOptions: {
           queries: {
             staleTime: 1000 * 60 * 10, // 10分钟，与JWT有效期对齐
-            retry: (failureCount: number, error: any) => {
+            retry: (failureCount: number, error: Error) => {
               // 认证错误不重试
               const authErrors = ['NO_SESSION', 'TOKEN_EXPIRED', 'UNAUTHORIZED', 'FORBIDDEN']
               if (authErrors.includes(error.message)) {
@@ -187,9 +187,12 @@ async function initializeApp(): Promise<void> {
     // 这样就不需要在每个组件单独导入了
 
     // 全局错误处理
-    app.config.errorHandler = (err: any, vm: any, info: string) => {
+    app.config.errorHandler = (err, vm, info: string) => {
+      // Vue 的 errorHandler 給的是 unknown；下游兩個函式都只吃 Error | string
+      const error = err instanceof Error ? err : new Error(String(err))
+
       // 记录到全域错误日志
-      addToErrorLog(err, {
+      addToErrorLog(error, {
         source: 'Vue Global',
         type: 'render-error',
         component: vm?.$options?.name || 'Unknown',
@@ -197,7 +200,7 @@ async function initializeApp(): Promise<void> {
       })
 
       // 调用原有的错误处理
-      handleError(err, {
+      handleError(error, {
         title: '应用程序错误',
         action: info,
         type: 'error',
@@ -220,9 +223,8 @@ async function initializeApp(): Promise<void> {
     console.log('✅ Vue应用启动完成')
 
     // 隐藏初始载入画面
-    const win = window as any
-    if (win.hideInitialLoading) {
-      win.hideInitialLoading()
+    if (window.hideInitialLoading) {
+      window.hideInitialLoading()
     }
 
   } catch (error) {

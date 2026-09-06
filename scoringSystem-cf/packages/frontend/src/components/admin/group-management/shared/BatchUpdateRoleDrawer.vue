@@ -147,7 +147,7 @@ export interface MemberWithChange {
   joinTime?: number | string
   avatarSeed?: string
   avatarStyle?: string
-  avatarOptions?: string | Record<string, any>
+  avatarOptions?: string | Record<string, unknown>
 }
 
 export interface Props {

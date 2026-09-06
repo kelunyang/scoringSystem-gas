@@ -288,7 +288,7 @@ interface GroupedMember {
 const groupedMembers = computed<GroupedMember[]>(() => {
   if (!projectCore.value) return []
 
-  const data = projectCore.value as any
+  const data = projectCore.value
   const userGroups = data.userGroups || []
   const groups = data.groups || []
   const users = data.users || []
@@ -303,9 +303,9 @@ const groupedMembers = computed<GroupedMember[]>(() => {
   const userMap = new Map<string, { displayName: string; userId: string; avatarSeed?: string; avatarStyle?: string }>()
   for (const u of users) {
     userMap.set(u.userEmail, {
-      displayName: u.displayName,
+      displayName: u.displayName ?? '',
       userId: u.userId,
-      avatarSeed: u.avatarSeed,
+      avatarSeed: u.avatarSeed ?? undefined,
       avatarStyle: u.avatarStyle
     })
   }

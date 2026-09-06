@@ -1225,7 +1225,7 @@ const pauseStageData = ref<{ stage: Stage; project: ExtendedProject } | null>(nu
 const showResumeStageDrawer = ref(false)  // Resume stage drawer visibility
 const resumeStageData = ref<{ stage: Stage; project: ExtendedProject } | null>(null) // Data for resume stage drawer
 const showSettlementDrawer = ref(false)  // Settlement progress drawer visibility
-const selectedStageForSettlement = ref<Stage | null>(null) // Selected stage for settlement
+const selectedStageForSettlement = ref<(SettlementStage & { projectId?: string }) | null>(null) // Selected stage for settlement
 const showSettlementConfirmDrawer = ref(false) // Settlement confirmation drawer visibility
 const selectedStageForConfirm = ref<Stage | null>(null) // Selected stage for confirmation
 const showArchivedStages = ref(false)     // Toggle to show/hide archived stages
@@ -2635,11 +2635,11 @@ const handleSettlementConfirmed = (stage: SettlementStage, projectId: string) =>
   // Close confirmation drawer
   showSettlementConfirmDrawer.value = false
   // Open progress drawer and trigger settlement
-  settleStage(stage as Stage & { projectId?: string }, projectId)
+  settleStage(stage, projectId)
 }
 
 // Open settlement drawer for a stage
-const settleStage = async (stage: Stage & { projectId?: string }, projectId: string, _forceSettle = false) => {
+const settleStage = async (stage: SettlementStage & { projectId?: string }, projectId: string, _forceSettle = false) => {
   console.log('[ProjectManagement] settleStage called with:', { stageId: stage.stageId, projectId })
   // Attach projectId to stage object so drawer can access it
   stage.projectId = projectId

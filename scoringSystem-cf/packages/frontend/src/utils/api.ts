@@ -26,7 +26,7 @@ interface SessionInfo {
   sessionTimeout?: number
 }
 
-interface ApiResponse<T = any> {
+interface ApiResponse<T = unknown> {
   success: boolean
   data?: T
   error?: {
@@ -50,8 +50,8 @@ class APIClient {
     this.baseURL = import.meta.env.VITE_API_URL || ''
 
     // For development: allow custom API URL
-    if (typeof window !== 'undefined' && (window as any).CLOUDFLARE_API_URL) {
-      this.baseURL = (window as any).CLOUDFLARE_API_URL
+    if (typeof window !== 'undefined' && window.CLOUDFLARE_API_URL) {
+      this.baseURL = window.CLOUDFLARE_API_URL
     }
   }
 
@@ -113,8 +113,8 @@ class APIClient {
       console.warn(`⚠️ Session 將在 ${remainingMinutes} 分鐘後過期`)
 
       // Trigger global event for UI warning
-      if (typeof (window as any).showSessionWarning === 'function') {
-        (window as any).showSessionWarning(remainingMinutes)
+      if (typeof window.showSessionWarning === 'function') {
+        window.showSessionWarning(remainingMinutes)
       }
     }
 
@@ -153,9 +153,9 @@ class APIClient {
    * // POST request with data
    * await apiClient.call('/projects/create', { projectData: {...} }, 'POST')
    */
-  async call<T = any>(
+  async call<T = unknown>(
     endpoint: string,
-    data: Record<string, any> = {},
+    data: Record<string, unknown> = {},
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'POST',
     options: ApiCallOptions = {}
   ): Promise<ApiResponse<T>> {
@@ -198,7 +198,10 @@ class APIClient {
       // Build URL with query params for GET requests
       let url = `${this.baseURL}${endpoint}`
       if (method === 'GET' && Object.keys(data).length > 0) {
-        const params = new URLSearchParams(data)
+        // URLSearchParams 只吃字串值，這裡與原本行為一致地字串化
+        const params = new URLSearchParams(
+          Object.entries(data).map(([key, value]) => [key, String(value)])
+        )
         url += `?${params.toString()}`
       }
 
@@ -327,9 +330,9 @@ class APIClient {
    * // Silent mode (no error messages)
    * await apiClient.callWithAuth('/projects/viewers/list', { projectId }, 'POST', { silent: true })
    */
-  async callWithAuth<T = any>(
+  async callWithAuth<T = unknown>(
     endpoint: string,
-    data: Record<string, any> = {},
+    data: Record<string, unknown> = {},
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'POST',
     options: ApiCallOptions = {}
   ): Promise<ApiResponse<T>> {

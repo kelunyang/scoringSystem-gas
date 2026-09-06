@@ -91,15 +91,15 @@
         }"
         :style="physics.isStarted.value
           ? {
-              top: `${physics.positions.value.get(stage.id)?.y ?? -20}px`,
-              opacity: physics.positions.value.has(stage.id) ? '1' : '0'
+              top: `${physics.positions.value.get(stage.id ?? '')?.y ?? -20}px`,
+              opacity: physics.positions.value.has(stage.id ?? '') ? '1' : '0'
             }
           : { top: getStagePosition(index as number) + '%' }"
         :data-stage-index="index"
         :data-stage-id="stage.id"
         :title="getStageTooltip(stage)"
         @click="handleStageClick(stage.id || '')"
-        @mouseenter="hoveredStageId = stage.id"
+        @mouseenter="hoveredStageId = stage.id ?? null"
         @mouseleave="hoveredStageId = null"
       >
         <div class="stage-dot">
@@ -142,12 +142,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch, toRef, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, toRef, nextTick, type Ref, type ComputedRef, type PropType } from 'vue'
 import { useActiveScroll } from 'vue-use-active-scroll'
 import { useViewportStageTracking } from '@/composables/useViewportStageTracking'
 import { usePhysicsAnimation } from '@/composables/usePhysicsAnimation'
 import Matter from 'matter-js'
-import type { Stage } from '@/types'
 
 // ==================== 常量定义 ====================
 const COLLISION_TOLERANCE = 8
@@ -188,7 +187,7 @@ const SWAY_MAX = 20        // 最大水平擺幅（px）
 // ==================== Props & Emits ====================
 const props = defineProps({
   stages: {
-    type: Array,
+    type: Array as PropType<TimelineStage[]>,
     required: true,
     validator: (stages) => {
       if (!Array.isArray(stages)) return false
@@ -211,12 +210,30 @@ const emit = defineEmits(['stage-clicked', 'stage-changed'])
 
 // ==================== Composables ====================
 
+/** 這個元件只讀階段的這幾個欄位（呼叫端傳的是精簡過的物件） */
+interface TimelineStage {
+  id?: string
+  shortTitle?: string
+  title?: string
+  status?: string
+  originalStatus?: string
+  startTime?: number | string | null
+  endTime?: number | string | null
+}
+
+/** useNormalizedStages 產出的階段：原階段加上快取好的時間戳 */
+type NormalizedStage = TimelineStage & {
+  _startTime: number | string | null | undefined
+  _endTime: number | string | null | undefined
+  _midTime: number
+}
+
 // 标准化阶段数据（缓存时间戳）
-function useNormalizedStages(stages: any) {
+function useNormalizedStages(stages: Ref<TimelineStage[] | null | undefined>) {
   return computed(() => {
     if (!stages.value?.length) return []
 
-    return stages.value.map((stage: Stage) => {
+    return stages.value.map((stage): NormalizedStage => {
       // startTime and endTime are already timestamps (numbers)
       const startTime = stage.startTime
       const endTime = stage.endTime
@@ -225,14 +242,14 @@ function useNormalizedStages(stages: any) {
         ...stage,
         _startTime: startTime,
         _endTime: endTime,
-        _midTime: startTime && endTime ? (startTime + endTime) / 2 : 0
+        _midTime: startTime && endTime ? (Number(startTime) + Number(endTime)) / 2 : 0
       }
     })
   })
 }
 
 // 时间轴映射逻辑（基於順序的累積時長，而非絕對時間戳）
-function useTimelineMapping(normalizedStages: any) {
+function useTimelineMapping(normalizedStages: ComputedRef<NormalizedStage[]>) {
   const projectTimeRange = computed(() => {
     if (!normalizedStages.value.length) {
       return { start: 0, end: 0, duration: 0, stageCumulatives: [] }
@@ -244,7 +261,7 @@ function useTimelineMapping(normalizedStages: any) {
 
     for (let i = 0; i < normalizedStages.value.length; i++) {
       const stage = normalizedStages.value[i]
-      const stageDuration = stage._endTime - stage._startTime
+      const stageDuration = Number(stage._endTime ?? 0) - Number(stage._startTime ?? 0)
       const startCumulative = cumulativeTime
       cumulativeTime += stageDuration
 
@@ -421,8 +438,8 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 // ==================== State ====================
-const hoveredStageId = ref(null)
-const activeTooltipStageId = ref(null)
+const hoveredStageId = ref<string | null>(null)
+const activeTooltipStageId = ref<string | null>(null)
 
 // 計時器和顯示狀態控制
 const hoverTimer = ref<ReturnType<typeof setTimeout> | null>(null)
@@ -445,7 +462,7 @@ const { projectTimeRange, timelineSegments, getStagePosition } =
   useTimelineMapping(normalizedStages)
 
 // Stage IDs（需要在 useViewportStageTracking 之前定義）
-const stageIds = computed(() => normalizedStages.value.map((s: Stage) => s.id || ''))
+const stageIds = computed(() => normalizedStages.value.map(s => s.id || ''))
 
 // 為 VueUse composable 準備資料
 const stageCumulatives = computed(() =>
@@ -544,12 +561,12 @@ async function initPhysics() {
   // 建立錨點鏈（由上而下）：起始旗標 → 各導航點 → 結束旗標
   // 起始/結束旗標讓繩子覆蓋整條時間軸（修正第一/最後線段缺失），且一起參與 bungee
   const stages = normalizedStages.value
-  const firstStatus = (stages[0] as any)?.originalStatus || 'pending'
-  const lastStatus = (stages[stages.length - 1] as any)?.originalStatus || 'pending'
+  const firstStatus = stages[0]?.originalStatus || 'pending'
+  const lastStatus = stages[stages.length - 1]?.originalStatus || 'pending'
   const chain: { id: string; y: number; status: string }[] = [
     { id: START_ID, y: 0, status: firstStatus },
-    ...stages.map((s: any, i: number) => ({
-      id: s.id,
+    ...stages.map((s, i) => ({
+      id: s.id ?? '',
       y: (getStagePosition(i) / 100) * H,
       status: s.originalStatus || 'pending'
     })),
@@ -655,7 +672,7 @@ async function initPhysics() {
 
 // ==================== Methods ====================
 
-const getStatusText = (status: string) => {
+const getStatusText = (status: string | undefined) => {
   const statusMap: Record<string, string> = {
     'pending': '未開始',
     'active': '進行中',
@@ -663,10 +680,11 @@ const getStatusText = (status: string) => {
     'completed': '已結束',
     'archived': '已歸檔'
   }
+  if (!status) return ''
   return statusMap[status] || status
 }
 
-const getStageTooltip = (stage: Stage) => {
+const getStageTooltip = (stage: TimelineStage) => {
   return `${stage.shortTitle || stage.title} - ${getStatusText(stage.originalStatus || '')}`
 }
 
@@ -765,7 +783,7 @@ const checkScrollIndicatorCollision = () => {
   }
 
   if (closestStage && minDistance <= COLLISION_TOLERANCE) {
-    activeTooltipStageId.value = closestStage.id
+    activeTooltipStageId.value = closestStage.id ?? null
   } else {
     activeTooltipStageId.value = null
   }
@@ -970,7 +988,7 @@ watch(activeTooltipStageId, async (newId, oldId) => {
 //         const position = getStagePosition(i)
 //         return {
 //           index: i,
-//           id: s.id,
+//           id: s.id ?? '',
 //           title: s.shortTitle || s.title,
 //           status: s.originalStatus,
 //           duration: `${duration.toFixed(1)} 天`,

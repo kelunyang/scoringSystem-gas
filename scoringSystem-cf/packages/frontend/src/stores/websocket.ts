@@ -47,8 +47,12 @@ export const useWebSocketStore = defineStore('websocket', () => {
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
   // Event handlers registry
-  // Use any type for handler storage to allow different handler types
-  const eventHandlers = new Map<string, Set<WebSocketEventHandler<any>>>()
+  //
+  // 註冊表得同時裝下所有 MessageType 的 handler，彼此的參數型別不相容，
+  // 所以存的時候一律窄化成「收 unknown」，取用時再由 on()／off() 的
+  // 泛型簽章保證呼叫端拿到正確的型別。
+  type StoredHandler = (data: unknown) => void
+  const eventHandlers = new Map<string, Set<StoredHandler>>()
 
   /**
    * Connect to WebSocket server
@@ -291,7 +295,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     if (!eventHandlers.has(eventType)) {
       eventHandlers.set(eventType, new Set())
     }
-    eventHandlers.get(eventType)!.add(handler as any)
+    eventHandlers.get(eventType)!.add(handler as StoredHandler)
   }
 
   /**
@@ -308,14 +312,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
     const handlers = eventHandlers.get(eventType)
     if (handlers) {
-      handlers.delete(handler as any)
+      handlers.delete(handler as StoredHandler)
     }
   }
 
   /**
    * Trigger event handlers
    */
-  const triggerEvent = (eventType: string, data: any) => {
+  const triggerEvent = (eventType: string, data: unknown) => {
     if (!eventHandlers.has(eventType)) {
       return
     }
@@ -323,8 +327,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     const handlers = eventHandlers.get(eventType)
     handlers?.forEach((handler) => {
       try {
-        // Type assertion needed due to generic handler storage
-        ;(handler as (data: any) => void)(data)
+        handler(data)
       } catch (error) {
         console.error(`Error in event handler for ${eventType}:`, error)
       }

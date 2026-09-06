@@ -54,7 +54,7 @@ export interface InvitationCode {
   /** 使用時間 (如已使用) */
   usedAt?: number
   /** 元數據 */
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 /**

@@ -12,7 +12,8 @@ export interface NotificationData {
   projectId?: string
   stageId?: string
   userId?: string
-  data?: any
+  /** 各種通知自帶的額外欄位，形狀依 type 而定 */
+  data?: unknown
 }
 
 /**

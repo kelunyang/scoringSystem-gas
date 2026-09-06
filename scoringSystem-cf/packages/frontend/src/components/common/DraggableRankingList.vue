@@ -118,18 +118,33 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, type PropType } from 'vue'
 import { denseRanksToMidRanks } from '@repo/shared'
 import EmptyState from '@/components/shared/EmptyState.vue'
 
+/**
+ * 一個可拖曳的項目。這個元件不認識項目的內容，只透過
+ * `itemKey`／`itemLabel` 指定的欄位名去取值，其餘原樣傳回。
+ */
+interface RankingItem {
+  rank?: number
+  groupName?: string
+  name?: string
+}
+
+/** 依 props.itemKey／props.itemLabel 指定的欄位名動態取值 */
+function readField(item: RankingItem | undefined, key: string): unknown {
+  return item ? (item as Record<string, unknown>)[key] : undefined
+}
+
 interface Bar {
   id: string
-  members: any[]
+  members: RankingItem[]
 }
 
 const props = defineProps({
   items: {
-    type: Array,
+    type: Array as PropType<RankingItem[]>,
     required: true,
     default: () => []
   },
@@ -169,20 +184,20 @@ function nextBarId(): string {
 }
 
 // 取得項目唯一標識
-function getItemKey(item: any, index: number) {
-  return item?.[props.itemKey] ?? `item-${index}`
+function getItemKey(item: RankingItem | undefined, index: number) {
+  return readField(item, props.itemKey) ?? `item-${index}`
 }
 
 // 取得項目顯示標籤
-function getItemLabel(item: any) {
-  return item?.[props.itemLabel] || item?.groupName || item?.name || '未命名'
+function getItemLabel(item: RankingItem | undefined) {
+  return readField(item, props.itemLabel) || item?.groupName || item?.name || '未命名'
 }
 
 /**
  * 由 props.items 重建 bars。
  * 若項目已帶相同 rank（重新載入已存的同名排名），則合併為群組 bar。
  */
-function buildBarsFromItems(items: any[]): Bar[] {
+function buildBarsFromItems(items: RankingItem[]): Bar[] {
   if (!Array.isArray(items) || items.length === 0) return []
 
   // 是否有可用的 rank 欄位可據以分組
@@ -192,7 +207,7 @@ function buildBarsFromItems(items: any[]): Bar[] {
   }
 
   // 依 rank 分組（rank 相同 = 同名），並依 rank 排序
-  const byRank = new Map<number, any[]>()
+  const byRank = new Map<number, RankingItem[]>()
   for (const it of items) {
     const r = it.rank as number
     if (!byRank.has(r)) byRank.set(r, [])
@@ -206,7 +221,7 @@ function buildBarsFromItems(items: any[]): Bar[] {
 watch(
   () => props.items,
   (newItems) => {
-    bars.value = buildBarsFromItems(newItems as any[])
+    bars.value = buildBarsFromItems(newItems)
     // 清掉已不存在的選取
     const validIds = new Set(bars.value.map(b => b.id))
     selectedBarIds.value = new Set(
@@ -269,7 +284,7 @@ function toggleSelect(barId: string) {
 
 /** 將輸出 emit 出去：攤平成 items，每個成員帶上 dense rank */
 function emitUpdate() {
-  const result: any[] = []
+  const result: RankingItem[] = []
   bars.value.forEach((bar, idx) => {
     bar.members.forEach(m => {
       result.push({ ...m, rank: idx + 1 })
@@ -307,9 +322,10 @@ function ungroup(index: number) {
 }
 
 // 拖拽開始
-function handleDragStart(index: number, event: any) {
+function handleDragStart(index: number, event: DragEvent) {
   if (props.disabled) return
   draggedIndex.value = index
+  if (!event.dataTransfer) return
   event.dataTransfer.effectAllowed = 'move'
   event.dataTransfer.setData('text/plain', String(index))
 }

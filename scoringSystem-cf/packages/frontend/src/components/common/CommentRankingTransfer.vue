@@ -18,14 +18,14 @@
       <transition-group name="available" tag="div" class="panel-body">
         <div
           v-for="item in availableItems"
-          :key="item[itemKey]"
+          :key="readText(item, itemKey)"
           class="item-card"
           :class="{ disabled: isItemDisabled(item) }"
           @click="!props.disabled && !isItemDisabled(item) && moveToSelected(item)"
         >
           <div class="item-content">
             <div v-if="!isExpanded(item)" class="content-text">
-              {{ truncateContent(item[displayFields.content]) }}
+              {{ truncateContent(readText(item, displayFields.content)) }}
               <a
                 v-if="itemNeedsTruncation(item)"
                 class="show-more-link"
@@ -39,7 +39,7 @@
               <a class="collapse-link" @click.stop="toggleExpand(item)">摺疊評論</a>
             </div>
             <div class="item-meta">
-              {{ getAuthorDisplay(item) }} · {{ formatTime(item[displayFields.timestamp]) }}
+              {{ getAuthorDisplay(item) }} · {{ formatTime(readText(item, displayFields.timestamp)) }}
             </div>
           </div>
           <div v-if="!isItemDisabled(item)" class="move-icon">→</div>
@@ -91,7 +91,7 @@
       <transition-group name="selected" tag="div" class="panel-body">
         <div
           v-for="(item, index) in selectedItems"
-          :key="item[itemKey]"
+          :key="readText(item, itemKey)"
           class="item-card selected-item"
           :class="{ dragging: draggedIndex === index }"
           :draggable="!props.disabled"
@@ -103,7 +103,7 @@
           <div class="rank-badge">{{ index + 1 }}</div>
           <div class="item-content">
             <div v-if="!isExpanded(item)" class="content-text">
-              {{ truncateContent(item[displayFields.content]) }}
+              {{ truncateContent(readText(item, displayFields.content)) }}
               <a
                 v-if="itemNeedsTruncation(item)"
                 class="show-more-link"
@@ -117,7 +117,7 @@
               <a class="collapse-link" @click.stop="toggleExpand(item)">摺疊評論</a>
             </div>
             <div class="item-meta">
-              {{ getAuthorDisplay(item) }} · {{ formatTime(item[displayFields.timestamp]) }}
+              {{ getAuthorDisplay(item) }} · {{ formatTime(readText(item, displayFields.timestamp)) }}
             </div>
           </div>
           <div class="item-actions">
@@ -154,37 +154,37 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+<script setup lang="ts" generic="T extends object">
+import { ref, computed, watch, type Ref } from 'vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import MdPreviewWrapper from '@/components/MdPreviewWrapper.vue'
 
 // Types
-interface DisplayFields {
-  content: string
-  author: string
-  timestamp: string
+
+
+/**
+ * 這個元件不認識項目的內容：欄位名由 `itemKey`／`uniqueByField`／
+ * `displayFields` 指定，元素型別由呼叫端決定（泛型 T）。
+ */
+
+/** 依 props 指定的欄位名動態取字串值 */
+function readText(item: T, key: string): string {
+  const value = (item as Record<string, unknown>)[key]
+  return value == null ? '' : String(value)
 }
 
-interface CommentItem {
-  [key: string]: any
-}
 
-interface DuplicateDetectedPayload {
-  field: string
-  value: any
-}
 
 // Props
 const props = withDefaults(defineProps<{
-  items: CommentItem[]
+  items: T[]
   itemKey?: string
   uniqueByField?: string
-  displayFields?: DisplayFields
+  displayFields?: { content: string; author: string; timestamp: string }
   maxSelections: number  // Required: dynamically passed from parent (loaded from project config)
-  initialSelected?: CommentItem[]
+  initialSelected?: T[]
   disabled?: boolean  // Preview mode: disable all interactions
-  authorDisplayFn?: (item: CommentItem) => string  // Custom author display function
+  authorDisplayFn?: (item: T) => string  // Custom author display function
 }>(), {
   itemKey: 'id',
   uniqueByField: 'authorEmail',
@@ -200,14 +200,14 @@ const props = withDefaults(defineProps<{
 
 // Emits
 const emit = defineEmits<{
-  'update:selected': [items: CommentItem[]]
-  'duplicate-detected': [payload: DuplicateDetectedPayload]
+  'update:selected': [items: T[]]
+  'duplicate-detected': [payload: { field: string; value: unknown }]
   'max-limit-reached': []
 }>()
 
 // State
-const availableItems = ref<CommentItem[]>([])
-const selectedItems = ref<CommentItem[]>([])
+const availableItems = ref<T[]>([]) as Ref<T[]>
+const selectedItems = ref<T[]>([]) as Ref<T[]>
 const draggedIndex = ref<number | null>(null)
 const expandedItemIds = ref<Set<string>>(new Set())
 
@@ -226,21 +226,21 @@ const canMoveAnyToSelected = computed(() => {
 /**
  * 獲取作者顯示文字（支持自訂顯示函數）
  */
-const getAuthorDisplay = (item: CommentItem): string => {
+const getAuthorDisplay = (item: T): string => {
   if (props.authorDisplayFn) {
     return props.authorDisplayFn(item)
   }
-  return item[props.displayFields.author] || ''
+  return readText(item, props.displayFields.author)
 }
 
-const isItemDisabled = (item: CommentItem): boolean => {
-  const uniqueValue = item[props.uniqueByField]
+const isItemDisabled = (item: T): boolean => {
+  const uniqueValue = readText(item, props.uniqueByField)
   return selectedItems.value.some(
-    selected => selected[props.uniqueByField] === uniqueValue
+    selected => readText(selected, props.uniqueByField) === uniqueValue
   )
 }
 
-const moveToSelected = (item: CommentItem): void => {
+const moveToSelected = (item: T): void => {
   // 检查数量限制
   if (selectedItems.value.length >= props.maxSelections) {
     emit('max-limit-reached')
@@ -251,22 +251,22 @@ const moveToSelected = (item: CommentItem): void => {
   if (isItemDisabled(item)) {
     emit('duplicate-detected', {
       field: props.uniqueByField,
-      value: item[props.uniqueByField]
+      value: readText(item, props.uniqueByField)
     })
     return
   }
 
   // 执行移动
   availableItems.value = availableItems.value.filter(
-    i => i[props.itemKey] !== item[props.itemKey]
+    i => readText(i, props.itemKey) !== readText(item, props.itemKey)
   )
   selectedItems.value.push(item)
   emit('update:selected', selectedItems.value)
 }
 
-const moveToAvailable = (item: CommentItem): void => {
+const moveToAvailable = (item: T): void => {
   selectedItems.value = selectedItems.value.filter(
-    i => i[props.itemKey] !== item[props.itemKey]
+    i => readText(i, props.itemKey) !== readText(item, props.itemKey)
   )
   availableItems.value.push(item)
   emit('update:selected', selectedItems.value)
@@ -347,15 +347,15 @@ const formatTime = (timestamp: string | number | Date): string => {
 /**
  * 檢查項目是否展開
  */
-const isExpanded = (item: CommentItem): boolean => {
-  return expandedItemIds.value.has(item[props.itemKey])
+const isExpanded = (item: T): boolean => {
+  return expandedItemIds.value.has(readText(item, props.itemKey))
 }
 
 /**
  * 切換項目展開/收合狀態
  */
-const toggleExpand = (item: CommentItem): void => {
-  const itemId = item[props.itemKey]
+const toggleExpand = (item: T): void => {
+  const itemId = readText(item, props.itemKey)
   if (expandedItemIds.value.has(itemId)) {
     expandedItemIds.value.delete(itemId)
   } else {
@@ -369,8 +369,8 @@ const toggleExpand = (item: CommentItem): void => {
  * 取得項目的 Markdown 內容
  * 優先使用 fullContent（完整內容），若無則使用 displayFields.content
  */
-const getItemContent = (item: CommentItem): string => {
-  return item.fullContent || item[props.displayFields.content] || ''
+const getItemContent = (item: T): string => {
+  return readText(item, 'fullContent') || readText(item, props.displayFields.content)
 }
 
 const truncateContent = (content: string, maxLength: number = 10): string => {
@@ -385,9 +385,9 @@ const needsTruncation = (content: string, maxLength: number = 10): boolean => {
 /**
  * 檢查項目是否需要展開（有完整內容且比截斷內容長）
  */
-const itemNeedsTruncation = (item: CommentItem): boolean => {
-  const displayContent = item[props.displayFields.content]
-  const fullContent = item.fullContent
+const itemNeedsTruncation = (item: T): boolean => {
+  const displayContent = readText(item, props.displayFields.content)
+  const fullContent = readText(item, 'fullContent')
   // 如果有 fullContent 且比 display 內容長，就需要展開
   if (fullContent && fullContent.length > displayContent.length) {
     return true
@@ -404,8 +404,8 @@ watch(() => props.items, (newItems) => {
     return
   }
 
-  const selectedIds = new Set(selectedItems.value.map(item => item[props.itemKey]))
-  availableItems.value = newItems.filter(item => !selectedIds.has(item[props.itemKey]))
+  const selectedIds = new Set(selectedItems.value.map(item => readText(item, props.itemKey)))
+  availableItems.value = newItems.filter(item => !selectedIds.has(readText(item, props.itemKey)))
 }, { immediate: true })
 
 watch(() => props.initialSelected, (newSelected) => {
@@ -417,8 +417,8 @@ watch(() => props.initialSelected, (newSelected) => {
       availableItems.value = []
       return
     }
-    const selectedIds = new Set(newSelected.map(item => item[props.itemKey]))
-    availableItems.value = props.items.filter(item => !selectedIds.has(item[props.itemKey]))
+    const selectedIds = new Set(newSelected.map(item => readText(item, props.itemKey)))
+    availableItems.value = props.items.filter(item => !selectedIds.has(readText(item, props.itemKey)))
   }
 }, { immediate: true })
 </script>

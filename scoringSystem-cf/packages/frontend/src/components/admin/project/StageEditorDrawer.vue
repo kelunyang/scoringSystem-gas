@@ -134,7 +134,7 @@ export interface StageForm {
 export interface Stage {
   stageId: string
   stageName: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export interface ErrorInfo {

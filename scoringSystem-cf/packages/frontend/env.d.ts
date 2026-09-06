@@ -40,8 +40,14 @@ declare global {
     // D3.js library (loaded dynamically)
     d3?: typeof import('d3')
 
-    // Vue DevTools instance reference
-    __VUE_INSTANCE__?: any
+    /** 開發用：覆寫後端 API base URL（utils/api.ts 會讀） */
+    CLOUDFLARE_API_URL?: string
+
+    /** App.vue 掛上的 session 即將逾期提示 */
+    showSessionWarning?: (remainingMinutes: number) => void
+
+    /** index.html 的初始載入畫面移除函式 */
+    hideInitialLoading?: () => void
   }
 }
 
