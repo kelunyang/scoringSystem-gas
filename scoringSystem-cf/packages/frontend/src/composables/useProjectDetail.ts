@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tansta
 import type { UseQueryReturnType, UseMutationReturnType } from '@tanstack/vue-query'
 import { computed, unref } from 'vue'
 import { rpcClient } from '@/utils/rpc-client'
+import type { ApiData, ApiInput } from '@/utils/api-types'
 import { useCurrentUser } from './useAuth'
 import { ElMessage } from 'element-plus'
 import type { Stage, Comment, User, Group } from '@/types'
@@ -24,49 +25,24 @@ import type { UserGroupRecord } from '@repo/shared'
 /**
  * Project core data structure
  */
-export interface ProjectCoreData {
-  project: {
-    projectId: string
-    projectName: string
-    description: string | null
-    createdBy: string // userId of the project creator
-    creationTime: number
-    status: 'active' | 'archived' | 'deleted'
-    settings: string
-    lastActivityTime: number | null
-  }
-  users: User[]
-  groups: Group[]
-  stages: Stage[]
-  userGroups?: UserGroupRecord[] // usergroups 關聯列（不是 Group）
-  viewerRole?: 'teacher' | 'observer' | 'member' | null // User's role in project_viewers
-}
+/** 專案核心資料的形狀從端點推導（見 plan/issue.md #011） */
+export type ProjectCoreData = ApiData<typeof rpcClient.api.projects.core.$post>
 
 /**
- * Stage data for creation
+ * 建立／更新階段的請求形狀，從端點的 Zod schema 推導。
+ *
+ * 手寫版本跟契約對不上：宣告了後端不收的 `stageOrder`／`settings`／
+ * `status`，而後端真正必填的 `startTime`／`endTime` 卻標成選填。
  */
-interface StageCreateData {
-  stageName: string
-  stageOrder: number
-  description?: string
-  startTime?: number
-  endTime?: number
-  status?: 'draft' | 'active' | 'closed'
-  settings?: string
-}
+type StageCreateData = ApiInput<typeof rpcClient.api.stages.create.$post>['stageData']
+type StageUpdateData = ApiInput<typeof rpcClient.api.stages.update.$post>['updates']
 
-/**
- * Stage update data
- */
-interface StageUpdateData {
-  stageName?: string
-  stageOrder?: number
-  description?: string
-  startTime?: number
-  endTime?: number
-  status?: 'draft' | 'active' | 'closed'
-  settings?: string
-}
+/** 階段列表回傳的階段（含 statistics，和 shared 的 Stage 不同） */
+export type StageListItem = ApiData<typeof rpcClient.api.stages.list.$post>['stages'][number]
+/** 建立階段回傳的資料 */
+type CreatedStage = ApiData<typeof rpcClient.api.stages.create.$post>
+/** 更新階段回傳的資料（目前是 null） */
+type UpdatedStage = ApiData<typeof rpcClient.api.stages.update.$post>
 
 /**
  * Helper to safely unwrap ref values
@@ -96,7 +72,7 @@ export function useProjectCore(projectId: Ref<string | null> | string | Ref<stri
     queryFn: async (): Promise<ProjectCoreData> => {
       const httpResponse = await rpcClient.api.projects.core.$post({
         json: {
-          projectId: getValue(projectId)
+          projectId: getValue(projectId) ?? ''
         }
       })
       const response = await httpResponse.json()
@@ -121,7 +97,7 @@ export function useProjectCore(projectId: Ref<string | null> | string | Ref<stri
  * @param projectId - Reactive project ID
  * @returns Query result
  */
-export function useStages(projectId: Ref<string> | string): UseQueryReturnType<Stage[], Error> {
+export function useStages(projectId: Ref<string> | string): UseQueryReturnType<StageListItem[], Error> {
   const userQuery = useCurrentUser()
 
   const isEnabled = computed(() => {
@@ -131,10 +107,10 @@ export function useStages(projectId: Ref<string> | string): UseQueryReturnType<S
 
   return useQuery({
     queryKey: ['stages', projectId],
-    queryFn: async (): Promise<Stage[]> => {
+    queryFn: async (): Promise<StageListItem[]> => {
       const httpResponse = await rpcClient.api.stages.list.$post({
         json: {
-          projectId: getValue(projectId)
+          projectId: getValue(projectId) ?? ''
         }
       })
       const response = await httpResponse.json()
@@ -166,11 +142,11 @@ interface CreateStageVariables {
  *
  * @returns Mutation object
  */
-export function useCreateStage(): UseMutationReturnType<Stage, Error, CreateStageVariables, unknown> {
+export function useCreateStage(): UseMutationReturnType<CreatedStage, Error, CreateStageVariables, unknown> {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ projectId, stageData }: CreateStageVariables): Promise<Stage> => {
+    mutationFn: async ({ projectId, stageData }: CreateStageVariables): Promise<CreatedStage> => {
       const httpResponse = await rpcClient.api.stages.create.$post({
         json: {
           projectId,
@@ -214,11 +190,11 @@ interface UpdateStageVariables {
  *
  * @returns Mutation object
  */
-export function useUpdateStage(): UseMutationReturnType<Stage, Error, UpdateStageVariables, unknown> {
+export function useUpdateStage(): UseMutationReturnType<UpdatedStage, Error, UpdateStageVariables, unknown> {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ projectId, stageId, updates }: UpdateStageVariables): Promise<Stage> => {
+    mutationFn: async ({ projectId, stageId, updates }: UpdateStageVariables): Promise<UpdatedStage> => {
       const httpResponse = await rpcClient.api.stages.update.$post({
         json: {
           projectId,
@@ -253,7 +229,8 @@ export function useUpdateStage(): UseMutationReturnType<Stage, Error, UpdateStag
  * Infinite Query 評論頁面資料結構
  */
 interface InfiniteCommentsPage {
-  comments: Comment[]
+  /** 從端點推導：後端回的是巢狀評論（帶 replies），不是扁平的 Comment */
+  comments: ApiData<typeof rpcClient.api.comments.stage.$post>['comments']
   total: number
   totalWithReplies: number
   votingEligible: boolean

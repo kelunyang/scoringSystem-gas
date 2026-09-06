@@ -15,7 +15,11 @@
  * type ProjectGroup = ApiData<typeof rpcClient.api.groups.list.$post>[number]
  */
 
-import type { InferResponseType } from 'hono/client'
+import type { InferRequestType, InferResponseType } from 'hono/client'
+
+/** 端點的 JSON 請求 body 型別 */
+export type ApiInput<T extends (...args: never[]) => unknown> =
+  InferRequestType<T> extends { json: infer J } ? J : never
 
 /** 端點成功回應（success: true）裡 `data` 的型別 */
 export type ApiData<T extends (...args: never[]) => unknown> =
@@ -47,4 +51,15 @@ export function apiErrorMessage(error: unknown): string | undefined {
     if (typeof message === 'string') return message
   }
   return undefined
+}
+
+/**
+ * 從回應本身取出 `error`（成功回應沒有這個欄位，回 undefined）。
+ *
+ * 用在診斷訊息：那些地方只想把錯誤內容印出來，不想為此把整段
+ * console.log 搬進 `if (!r.success)` 分支。要對錯誤做判斷時，
+ * 請用 `if (r.success)` 收窄，或搭配 `apiErrorCode()`。
+ */
+export function errorOf(response: { success: boolean }): unknown {
+  return 'error' in response ? (response as { error: unknown }).error : undefined
 }

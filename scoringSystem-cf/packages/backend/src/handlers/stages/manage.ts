@@ -156,6 +156,26 @@ export async function createStage(
   }
 }
 
+/** `listProjectStages` 那句 SELECT 選出來的欄位 */
+interface ListStageRow {
+  stageId: string;
+  projectId: string;
+  stageName: string;
+  stageOrder: number;
+  stageType: string | null;
+  status: Stage['status'];
+  startTime: number | null;
+  endTime: number | null;
+  updatedAt: number | null;
+  settledTime: number | null;
+  reportRewardPool: number | null;
+  commentRewardPool: number | null;
+  createdTime: number;
+  description: string | null;
+  submissionCount: number;
+  commentCount: number;
+}
+
 /** `getStage` 那句 SELECT 選出來的欄位（來自 stages_with_status VIEW） */
 interface GetStageRow {
   stageId: string;
@@ -569,7 +589,7 @@ export async function listProjectStages(
 
     query += ` ORDER BY s.stageOrder ASC`;
 
-    const result = await env.DB.prepare(query).bind(projectId).all();
+    const result = await env.DB.prepare(query).bind(projectId).all<ListStageRow>();
 
     const stages = result.results.map(stage => ({
       stageId: stage.stageId,

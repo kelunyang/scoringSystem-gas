@@ -256,6 +256,16 @@ export async function listUserProjects(
 /**
  * Get project core data (project + groups + stages)
  */
+/** `getProjectCore` 撈使用者那句 SELECT 的欄位 */
+export interface ProjectCoreUserRow {
+  userId: string;
+  userEmail: string;
+  displayName: string | null;
+  avatarSeed: string | null;
+  avatarStyle: string | null;
+  avatarOptions: string | null;
+}
+
 export async function getProjectCore(
   env: Env,
   userEmail: string,
@@ -325,13 +335,15 @@ export async function getProjectCore(
     ])].filter(Boolean);  // Remove null/undefined
 
     // Fetch users (handle empty array case)
-    let users = { results: [] };
+    // 空陣列的初值要標型別，否則 results 推導成 never[]，前端拿到的
+    // 每個 user 欄位都會變成 never。
+    let users: { results: ProjectCoreUserRow[] } = { results: [] };
     if (allUserEmails.length > 0) {
       users = await env.DB.prepare(`
         SELECT userId, userEmail, displayName, avatarSeed, avatarStyle, avatarOptions
         FROM users
         WHERE userEmail IN (${allUserEmails.map(() => '?').join(',')})
-      `).bind(...allUserEmails).all();
+      `).bind(...allUserEmails).all<ProjectCoreUserRow>();
     }
 
     return successResponse({

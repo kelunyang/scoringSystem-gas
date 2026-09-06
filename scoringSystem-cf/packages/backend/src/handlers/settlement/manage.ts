@@ -598,7 +598,8 @@ export async function getStageSettlementRankings(
       // 具型別的空 map：讓兩個分支的 rankings 型別一致，前端才不必猜
       const emptyRankings: Record<string, StageSettlementRanking> = {};
       return successResponse({
-        settled: false,
+        // as const：讓 settled 成為判別欄位，前端可以靠它收窄兩種形狀
+        settled: false as const,
         rankings: emptyRankings,
         message: 'Stage not yet settled'
       });
@@ -629,7 +630,7 @@ export async function getStageSettlementRankings(
     console.log('[getStageSettlementRankings] Successfully prepared response with', settlements.length, 'settlements');
 
     return successResponse({
-      settled: true,
+      settled: true as const,
       rankings: rankingMap,
       stageId: stageId,
       settlementId: settlements.length > 0 ? settlements[0].settlementId : null,
@@ -726,7 +727,8 @@ export async function getCommentSettlementRankings(
     if (stageStatus !== 'completed') {
       const emptyRankings: Record<string, CommentSettlementRanking> = {};
       return successResponse({
-        settled: false,
+        // as const：讓 settled 成為判別欄位，前端可以靠它收窄兩種形狀
+        settled: false as const,
         rankings: emptyRankings,
         message: 'Stage not yet settled'
       });
@@ -755,7 +757,7 @@ export async function getCommentSettlementRankings(
     });
 
     return successResponse({
-      settled: true,
+      settled: true as const,
       rankings: rankingMap,
       stageId: stageId,
       settlementCount: settlements.length

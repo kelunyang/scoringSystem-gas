@@ -300,6 +300,7 @@ import { useSudoStore } from '@/stores/sudo'
 const { currentPageName, currentPageIcon } = useDrawerBreadcrumb()
 import { rpcClient } from '@/utils/rpc-client'
 import type { ApiData } from '@/utils/api-types'
+import { apiErrorMessage } from '@/utils/api-types'
 import { ElMessage } from 'element-plus'
 
 // TypeScript interfaces
@@ -633,7 +634,7 @@ const submitReport = async (): Promise<void> => {
 
       localVisible.value = false
     } else {
-      ElMessage.error(response.error?.message || '提交報告失敗')
+      ElMessage.error(apiErrorMessage(response.error) || '提交報告失敗')
     }
   } catch (error) {
     console.error('提交報告錯誤:', error)
@@ -862,27 +863,33 @@ const handleHistoricalVersionChange = async (versionId: string): Promise<void> =
     content.value = selectedVersion.content || ''
     console.log('填入歷史版本內容，長度:', content.value.length)
 
+    // participationProposal 只在「看得到百分比」的版本上才有
+    // （後端依權限決定要不要帶，見 handlers/submissions/versions.ts）
+    const proposal = 'participationProposal' in selectedVersion
+      ? selectedVersion.participationProposal
+      : undefined
+
     console.log('🔍 完整歷史版本數據:', {
       submissionId: selectedVersion.submissionId,
       content: selectedVersion.content?.substring(0, 50) + '...',
-      participationProposal: selectedVersion.participationProposal,
+      participationProposal: proposal,
       actualAuthors: selectedVersion.actualAuthors,
       groupMembers: groupMembers.value.map(m => ({ email: m.email, displayName: m.displayName }))
     })
 
-    if (selectedVersion.participationProposal && Object.keys(selectedVersion.participationProposal).length > 0) {
-      console.log('填入歷史版本的參與度分配:', selectedVersion.participationProposal)
+    if (proposal && Object.keys(proposal).length > 0) {
+      console.log('填入歷史版本的參與度分配:', proposal)
 
       groupMembers.value.forEach(member => {
         member.selected = false
         member.contribution = 0
       })
 
-      Object.entries(selectedVersion.participationProposal).forEach(([email, ratio]) => {
+      Object.entries(proposal).forEach(([email, ratio]) => {
         const member = groupMembers.value.find(m => m.email === email)
         if (member) {
           member.selected = true
-          member.contribution = Math.round(ratio * 100)
+          member.contribution = Math.round(Number(ratio) * 100)
           console.log(`設定成員 ${member.displayName}: ${member.contribution}%`)
         }
       })
@@ -902,7 +909,7 @@ const resetHistoricalVersions = (): void => {
   loadingHistoricalVersions.value = false
 }
 
-const formatVersionTime = (timestamp: string): string => {
+const formatVersionTime = (timestamp: number | string): string => {
   if (!timestamp) return '未知時間'
   const date = new Date(timestamp)
   return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`

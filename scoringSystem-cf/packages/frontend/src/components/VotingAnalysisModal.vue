@@ -291,6 +291,7 @@ import AllGroupsChart from './shared/ContributionChart/AllGroupsChart.vue'
 import OurGroupChart from './shared/ContributionChart/OurGroupChart.vue'
 import ScoringExplanationDrawer from './shared/ScoringExplanationDrawer.vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { errorOf } from '@/utils/api-types'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 import type { GroupClickData } from '@/types/components'
 
@@ -340,9 +341,10 @@ export interface SelectedGroupMember {
   displayName: string
   points: number
   contribution: number
-  avatarSeed?: string
-  avatarStyle?: string
-  avatarOptions?: string
+  // 後端 users 表這三個欄位可為 null
+  avatarSeed?: string | null
+  avatarStyle?: string | null
+  avatarOptions?: string | null
 }
 
 export interface SelectedGroup {
@@ -539,7 +541,7 @@ const loadVotingAnalysis = async (): Promise<void> => {
       console.log('📊 結算API響應:', settlementData)
 
       if (stageResponse.success && settlementData.success && settlementData.data.settled) {
-        settlementId.value = settlementData.data.settlementId || null
+        settlementId.value = settlementData.data.settled ? settlementData.data.settlementId : null
         console.log('📊 Stored settlementId:', settlementId.value)
 
         stageRewardPool.value = stageResponse.data.reportRewardPool || 0
@@ -592,9 +594,9 @@ const loadVotingAnalysis = async (): Promise<void> => {
         console.error('階段尚未結算或數據不完整', {
           stageSuccess: stageResponse.success,
           settlementSuccess: settlementData.success,
-          settled: settlementData.data?.settled,
-          stageError: stageResponse.error,
-          settlementError: settlementData.error
+          settled: (settlementData.success ? settlementData.data.settled : undefined),
+          stageError: errorOf(stageResponse),
+          settlementError: errorOf(settlementData)
         })
         resetData()
       }
@@ -648,7 +650,7 @@ const loadVotingAnalysis = async (): Promise<void> => {
 
         calculateRankingsAndScores()
       } else {
-        console.error('載入計票分析失敗:', votingResponse.error || stageResponse.error)
+        console.error('載入計票分析失敗:', errorOf(votingResponse) || errorOf(stageResponse))
         resetData()
       }
     }
@@ -1078,7 +1080,7 @@ const handleGroupClick = async (groupData: GroupClickData): Promise<void> => {
     console.log('📊 Transaction API response:', response)
 
     if (response.success && response.data.transactions) {
-      const members: SelectedGroupMember[] = response.data.transactions.map((tx: Transaction) => {
+      const members: SelectedGroupMember[] = response.data.transactions.map(tx => {
         let metadata: any = {}
         try {
           metadata = JSON.parse(tx.metadata || '{}')
@@ -1107,7 +1109,7 @@ const handleGroupClick = async (groupData: GroupClickData): Promise<void> => {
         members
       }
     } else {
-      console.error('Failed to fetch transactions:', response.error)
+      console.error('Failed to fetch transactions:', errorOf(response))
       selectedGroup.value = {
         groupId: groupData.groupId,
         groupName: groupData.groupName,

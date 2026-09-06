@@ -237,6 +237,7 @@ import EmptyState from '@/components/shared/EmptyState.vue'
 import randomColor from 'randomcolor'
 import AllGroupsChart from './shared/ContributionChart/AllGroupsChart.vue'
 import { rpcClient } from '@/utils/rpc-client'
+import { errorOf } from '@/utils/api-types'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 
 // Drawer Breadcrumb
@@ -493,10 +494,10 @@ const loadCommentAnalysis = async (): Promise<void> => {
           stageSuccess: stageResponse.success,
           settlementSuccess: settlementResponse.success,
           commentVotingSuccess: commentVotingResponse.success,
-          settled: settlementResponse.data?.settled,
-          stageError: stageResponse.error,
-          settlementError: settlementResponse.error,
-          commentVotingError: commentVotingResponse.error
+          settled: (settlementResponse.success ? settlementResponse.data.settled : undefined),
+          stageError: errorOf(stageResponse),
+          settlementError: errorOf(settlementResponse),
+          commentVotingError: errorOf(commentVotingResponse)
         })
         resetData()
       }
@@ -537,7 +538,7 @@ const loadCommentAnalysis = async (): Promise<void> => {
         // 計算排名和獎金分配
         calculateCommentRankingsAndScores()
       } else {
-        console.error('載入評論計票分析失敗:', commentVotingResponse.error || stageResponse.error)
+        console.error('載入評論計票分析失敗:', errorOf(commentVotingResponse) || errorOf(stageResponse))
         resetData()
       }
     }
