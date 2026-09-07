@@ -29,8 +29,11 @@ backend／shared 在 `4ecdada` 就已經是 0——它們是 2026-09-06 那兩�
 ### 怎麼量的（重要，之前量錯過兩次）
 
 **唯一可信的量法是 ESLint 的 `@typescript-eslint/no-explicit-any`。**
-它在 `eslint.config.js` 裡是 `warn` 不是 `error`，所以
-**「`pnpm lint` 0 error」不代表沒有 `any`**——這是第一個陷阱。
+
+**2026-09-07 起這條規則已經是 `error`**（測試檔仍為 `off`），
+所以現在 `pnpm lint` 過就代表 `src/` 沒有 `any`，不會再回頭。
+在那之前它是 `warn`，「`pnpm lint` 0 error」並不代表沒有 `any`——
+這正是「已歸零」的錯誤結論連續發生三次的第一個原因。
 
 ```bash
 pnpm exec eslint "packages/frontend/src" | grep -c "no-explicit-any"
@@ -51,6 +54,26 @@ pnpm exec eslint "packages/frontend/src" | grep -c "no-explicit-any"
 
 正則要對，至少要先剝掉註解與字串再數 `any` token；
 校準過的版本見 git 歷史裡本次修訂的說明。能用 ESLint 就別自己寫。
+
+### 守門：規則已升為 error
+
+清到 0 之後把 `no-explicit-any` 從 `warn` 升成 `error`
+（backend / frontend / 共用三個區塊；測試檔維持 `off`）。
+升級後 `pnpm lint` 仍是 0 error，並實測過加一個 `any` 會被擋下。
+
+**還沒處理的型別鬆動處**（不算 `any`，但風險同源，另案）：
+
+| 項目 | 數量 | 說明 |
+|------|------|------|
+| backend `.first()` 無泛型 | 351 | 回 `Record<string, unknown>` |
+| backend `.all()` 無泛型 | 86 | 同上 |
+| `as unknown as` | 58 | 部分是合理邊界，部分是舊逃生門 |
+| `@ts-ignore` | 0 | — |
+
+其中 `.first()` / `.all()` 那批**比 `any` 更值得處理**：這輪找到的
+bug 有好幾個源自「SELECT 沒撈這個欄位，但程式在讀它」，
+而那在 `Record<string, unknown>` 底下同樣看不出來
+（`withdrawnTime` 那道失效的防線、`isActive` 那個 teacher 權限 bug）。
 
 ### 收尾的 66 處（2026-09-07 最後兩批）
 

@@ -36,7 +36,7 @@ export default withVueTs(
     },
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
     },
   },
 
@@ -47,8 +47,7 @@ export default withVueTs(
       globals: { ...globals.browser },
     },
     rules: {
-      // 首次導入 lint，噪音規則先降為 warn，逐步清理
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
       'vue/multi-word-component-names': 'warn',
       // Vue 3 沒有 filter；此規則會把 template 中 TS union type 的 | 誤判為 Vue 2 filter
       'vue/no-deprecated-filter': 'off',
@@ -83,9 +82,11 @@ export default withVueTs(
       // shallowOnly：僅禁止整個 prop 重新賦值；深層欄位寫入是本專案
       // 「父層共享 form 物件、子層 v-model 欄位」的刻意模式
       'vue/no-mutating-props': ['error', { shallowOnly: true }],
-      // 剩餘 lint 債（型別大翻修另案處理）：
-      // TODO(lint-debt): no-explicit-any 約 1600 處，逐模組清理後升回 error
-      '@typescript-eslint/no-explicit-any': 'warn',
+      // 2026-09-07 清到 0 之後升回 error。規則是 warn 的期間，
+      // 「pnpm lint 0 error」並不代表沒有 any——那讓「已歸零」的錯誤
+      // 結論連續發生三次，見 plan/pitfalls.md 同日條目。
+      // 測試檔仍為 off（下方區塊），mock 用 any 是合理的。
+      '@typescript-eslint/no-explicit-any': 'error',
     },
   },
 
