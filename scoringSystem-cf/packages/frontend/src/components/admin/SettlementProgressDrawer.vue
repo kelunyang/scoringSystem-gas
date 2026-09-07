@@ -377,7 +377,7 @@ export interface Transaction {
   amount: number
   participationPercentage: number
   timestamp: string
-  metadata?: string | Record<string, any>
+  metadata?: string | Record<string, unknown>
   avatarSeed?: string
   avatarStyle?: string
   avatarOptions?: string | Record<string, unknown> | null

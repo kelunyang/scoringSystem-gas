@@ -71,13 +71,17 @@ export interface TransactionFilters {
   searchUser?: string
 }
 
+/** 財富排行榜的一列（/wallets/project-ladder） */
+export type WalletLadderEntry =
+  ApiData<typeof rpcClient.api.wallets['project-ladder']['$post']>['walletData'][number]
+
 /**
  * Wallet ladder response (full API response)
  * Contains global min/max for accurate score estimation across all permission levels
  */
 export interface WalletLadderData {
   hasFullAccess: boolean
-  walletData: any[]
+  walletData: WalletLadderEntry[]
   globalMinBalance: number
   globalMaxBalance: number
   currentUserEmail: string
@@ -557,7 +561,9 @@ export const MIN_WEALTH_RANKINGS = 1       // 最少顯示 1 人
  * @param walletData - 已按財富排序的使用者陣列（從 project-ladder API）
  * @returns 前 3% 富豪的排名陣列，包含 userEmail, rank, balance
  */
-export function extractTopWealthRankings(walletData: any[]): Array<{userEmail: string, rank: number, balance: number}> {
+export function extractTopWealthRankings(
+  walletData: WalletLadderEntry[]
+): Array<{ userEmail: string; rank: number; balance: number }> {
   if (!walletData || walletData.length === 0) return []
 
   const totalUsers = walletData.length
@@ -569,6 +575,6 @@ export function extractTopWealthRankings(walletData: any[]): Array<{userEmail: s
   return walletData.slice(0, top3PercentCount).map((user, index) => ({
     userEmail: user.userEmail,
     rank: index + 1,
-    balance: user.currentBalance || user.balance
+    balance: user.currentBalance
   }))
 }

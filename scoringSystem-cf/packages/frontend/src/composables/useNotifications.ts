@@ -185,7 +185,7 @@ export function useMarkNotificationAsRead() {
           notificationId
         }
       })
-      const response = await httpResponse.json() as ApiResponse<any>
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '標記失敗')
@@ -225,7 +225,7 @@ export function useMarkAllNotificationsAsRead() {
       console.log('📬 [useNotifications] 標記所有通知為已讀')
 
       const httpResponse = await rpcClient.api.notifications['mark-all-read'].$post()
-      const response = await httpResponse.json() as ApiResponse<any>
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '標記失敗')
@@ -270,7 +270,7 @@ export function useDeleteNotification() {
           notificationId
         }
       })
-      const response = await httpResponse.json() as ApiResponse<any>
+      const response = await httpResponse.json()
 
       if (!response.success) {
         throw new Error(apiErrorMessage(errorOf(response)) || '刪除失敗')

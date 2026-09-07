@@ -472,6 +472,8 @@ import {
 
 import { getErrorMessage } from '@/utils/errorHandler'
 import { apiErrorMessage, errorOf } from '@/utils/api-types'
+import type { EmailLogsQueryRequest } from '@repo/shared/types/admin'
+import type { CheckboxValueType } from 'element-plus'
 // ================== TanStack Query Mutations ==================
 const emailStatisticsQuery = useEmailStatistics()
 const resendEmailMutation = useResendEmail()
@@ -758,7 +760,7 @@ const loadEmailLogs = async (append: boolean = false, withFilters: boolean = fal
   }
 
   try {
-    const queryFilters: any = {
+    const queryFilters: NonNullable<EmailLogsQueryRequest['filters']> = {
       limit: BATCH_SIZE,
       offset: append ? currentOffset.value : 0
     }
@@ -769,8 +771,8 @@ const loadEmailLogs = async (append: boolean = false, withFilters: boolean = fal
       if (triggerFilter.value && triggerFilter.value !== 'all') {
         queryFilters.trigger = triggerFilter.value
       }
-      // status filter (後端欄位是 status: 'sent' | 'failed')
-      if (statusFilter.value && statusFilter.value !== 'all') {
+      // status filter (後端欄位是 status: 'sent' | 'failed'；下拉只有這三個值)
+      if (statusFilter.value === 'sent' || statusFilter.value === 'failed') {
         queryFilters.status = statusFilter.value
       }
       // recipient search (後端欄位是 recipient)
@@ -799,7 +801,7 @@ const loadEmailLogs = async (append: boolean = false, withFilters: boolean = fal
 
     if (response.success) {
       const logsList = response.data.logs || []
-      const newLogs = logsList.map((l: any) => ({
+      const newLogs = logsList.map(l => ({
         ...l,
         selected: false
       }))
@@ -856,7 +858,7 @@ const resetFilters = (): void => {
   ElMessage.success('已清除所有篩選條件')
 }
 
-const toggleSelectAll = (value: any): void => {
+const toggleSelectAll = (value: CheckboxValueType): void => {
   const boolValue = !!value
   displayedLogs.value.forEach(l => {
     l.selected = boolValue

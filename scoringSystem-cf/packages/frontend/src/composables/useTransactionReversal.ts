@@ -15,10 +15,13 @@ import type { NormalizedTransaction } from './useWallet'
 /**
  * 交易撤銷 composable（Drawer 模式）
  * @param {import('vue').Ref<string>} projectId - 項目 ID (必需)
- * @param {Function} [onSuccess] - 撤銷成功回調
+ * @param [onSuccess] - 撤銷成功回調
  * @returns {Object} 撤銷管理相關函數和狀態
  */
-export function useTransactionReversal(projectId: string | Ref<string | null>, onSuccess: any) {
+export function useTransactionReversal(
+  projectId: string | Ref<string | null>,
+  onSuccess?: () => void
+) {
   console.log('🔧 [useTransactionReversal] composable 初始化')
 
   // 使用數組而不是 Set，避免手動觸發響應式
@@ -56,7 +59,7 @@ export function useTransactionReversal(projectId: string | Ref<string | null>, o
    * @param {string} reason - 撤銷理由
    * @returns {Promise<boolean>} 是否成功
    */
-  async function reverseTransaction(transactionId: string, reason: any) {
+  async function reverseTransaction(transactionId: string, reason: string) {
     const pid = typeof projectId === 'string' ? projectId : projectId.value
     if (!pid) {
       showWarning('請先選擇專案')

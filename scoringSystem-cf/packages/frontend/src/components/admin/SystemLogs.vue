@@ -1495,9 +1495,10 @@ const availableProjects = computed(() => {
 // 实体展开（行內展開，無需 dialog）
 const expandedLogId = ref<string | null>(null)
 const entityDialogTitle = ref('')
-const entityContent = ref<any>(null)
-const relatedEntitiesData = ref<any>(null)
-const contextData = ref<any>(null)
+// 這三個是後端存的 JSON blob，形狀依 log 種類而異，畫面用 v-for / jsonToMarkdown 泛用渲染
+const entityContent = ref<Record<string, unknown> | null>(null)
+const relatedEntitiesData = ref<Record<string, unknown> | null>(null)
+const contextData = ref<Record<string, unknown> | null>(null)
 const loadingEntity = ref(false)
 const expandingId = ref<string | null>(null)
 

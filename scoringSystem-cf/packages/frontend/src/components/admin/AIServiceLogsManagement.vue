@@ -485,7 +485,8 @@ import type {
   AIServiceLog,
   AIServiceType,
   AIServiceStatus,
-  AIServiceStatisticsResponse
+  AIServiceStatisticsResponse,
+  AIServiceLogsQueryRequest
 } from '@repo/shared/types/admin'
 
 import { getErrorMessage } from '@/utils/errorHandler'
@@ -732,7 +733,7 @@ const loadAIServiceLogs = async (append: boolean = false): Promise<void> => {
   }
 
   try {
-    const queryFilters: any = {
+    const queryFilters: NonNullable<AIServiceLogsQueryRequest['filters']> = {
       limit: BATCH_SIZE,
       offset: append ? currentOffset.value : 0
     }

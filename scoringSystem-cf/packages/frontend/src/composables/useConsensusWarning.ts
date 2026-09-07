@@ -13,9 +13,10 @@ import type { ExtendedStage } from './useStageContentManagement'
 export interface ConsensusGroupData {
   submissionId?: string
   submission?: {
-    participationProposal?: string | Record<string, number> | null
+    participationProposal?: string | Record<string, number | null> | null
   }
-  participationProposal?: string | Record<string, number> | null
+  /** 值可為 null：沒有權限看百分比的人拿到的是遮蔽過的版本 */
+  participationProposal?: string | Record<string, number | null> | null
   votingData?: {
     votes?: Array<{ voterEmail?: string }>
   } | null
@@ -203,7 +204,7 @@ export function useConsensusWarning() {
    * @param {Object} groupData - 群組數據
    * @returns {string}
    */
-  function getConsensusWarningDescription(stage: Stage, groupData: ConsensusGroupData) {
+  function getConsensusWarningDescription(stage: Stage, groupData: ConsensusGroupData | null | undefined) {
     // 使用組內投票狀態的警告文本
     if (groupData) {
       const warningText = getGroupConsensusWarningText(groupData)

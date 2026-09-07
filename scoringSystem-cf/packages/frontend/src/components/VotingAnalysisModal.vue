@@ -251,7 +251,7 @@ v-for="candidate in candidateGroups"
 
       <!-- 空狀態 -->
       <EmptyState
-        v-if="!loading && rankingDetails.length === 0"
+        v-if="!loading && candidateGroups.length === 0"
         :icons="['fa-vote-yea']"
         title="暫無計票數據"
         parent-icon="fa-chart-bar"
@@ -425,7 +425,6 @@ const emit = defineEmits<Emits>()
 
 // State
 const loading = ref<boolean>(false)
-const rankingDetails = ref<any[]>([])
 const candidateGroups = ref<CandidateGroup[]>([])
 const votersList = ref<VoterInfo[]>([])
 const teacherVotes = ref<TeacherVote[]>([])
@@ -1081,7 +1080,8 @@ const handleGroupClick = async (groupData: GroupClickData): Promise<void> => {
 
     if (response.success && response.data.transactions) {
       const members: SelectedGroupMember[] = response.data.transactions.map(tx => {
-        let metadata: any = {}
+        // metadata 是後端存的 JSON 字串，這裡只讀 participationPercentage
+        let metadata: Record<string, unknown> = {}
         try {
           metadata = JSON.parse(tx.metadata || '{}')
         } catch (err) {
@@ -1092,7 +1092,7 @@ const handleGroupClick = async (groupData: GroupClickData): Promise<void> => {
           email: tx.userEmail,
           displayName: tx.displayName || tx.userEmail,
           points: tx.amount,
-          contribution: (metadata?.participationPercentage || 0) * 100,
+          contribution: (Number(metadata.participationPercentage) || 0) * 100,
           avatarSeed: tx.avatarSeed,
           avatarStyle: tx.avatarStyle,
           avatarOptions: tx.avatarOptions

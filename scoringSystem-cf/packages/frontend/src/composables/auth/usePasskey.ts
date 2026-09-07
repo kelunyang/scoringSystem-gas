@@ -42,7 +42,7 @@ export interface UsePasskeyReturn {
   deletePasskey: (credentialId: string, password: string) => Promise<boolean>;
 
   // Authentication methods
-  initAuthentication: (userEmail: string, preAuthToken: string, crossDevice?: boolean) => Promise<any>;
+  initAuthentication: (userEmail: string, preAuthToken: string, crossDevice?: boolean) => Promise<PublicKeyCredential | null>;
   verifyAuthentication: (userEmail: string, turnstileToken: string, preAuthToken: string) => Promise<boolean>;
 }
 
@@ -64,6 +64,22 @@ function normalizeTransports(transports: string[] | undefined): PasskeyTransport
     (t): t is PasskeyTransport => (PASSKEY_TRANSPORTS as readonly string[]).includes(t)
   );
   return known.length > 0 ? known : ['internal', 'hybrid'];
+}
+
+/**
+ * 把伺服器給的 transports 收斂成 DOM 的 AuthenticatorTransport。
+ *
+ * 和 normalizeTransports 不同：那個是註冊時要送給後端的，空值有預設；
+ * 這裡是給瀏覽器的提示，伺服器沒給就該留 undefined，不能自己編。
+ */
+function toAuthenticatorTransports(
+  transports: string[] | undefined
+): AuthenticatorTransport[] | undefined {
+  if (!transports) return undefined
+  const known = transports.filter(
+    (t): t is PasskeyTransport => (PASSKEY_TRANSPORTS as readonly string[]).includes(t)
+  )
+  return known.length > 0 ? known : undefined
 }
 
 function checkWebAuthnSupport(): boolean {
@@ -203,10 +219,10 @@ export function usePasskey(): UsePasskeyReturn {
         authenticatorSelection: options.authenticatorSelection,
         attestation: options.attestation,
         timeout: options.timeout,
-        excludeCredentials: options.excludeCredentials.map((cred: any) => ({
+        excludeCredentials: options.excludeCredentials.map(cred => ({
           id: base64UrlToArrayBuffer(cred.id),
           type: cred.type,
-          transports: cred.transports
+          transports: toAuthenticatorTransports(cred.transports)
         }))
       };
 
@@ -332,7 +348,7 @@ export function usePasskey(): UsePasskeyReturn {
     userEmail: string,
     preAuthToken: string,
     crossDevice = false
-  ): Promise<any> {
+  ): Promise<PublicKeyCredential | null> {
     if (!isSupported.value) {
       errorMessage.value = '您的瀏覽器不支援 Passkey';
       return null;
@@ -362,10 +378,10 @@ export function usePasskey(): UsePasskeyReturn {
         rpId: options.rpId,
         timeout: options.timeout,
         userVerification: options.userVerification,
-        allowCredentials: options.allowCredentials.map((cred: any) => ({
+        allowCredentials: options.allowCredentials.map(cred => ({
           id: base64UrlToArrayBuffer(cred.id),
           type: cred.type,
-          transports: cred.transports
+          transports: toAuthenticatorTransports(cred.transports)
         }))
       };
 

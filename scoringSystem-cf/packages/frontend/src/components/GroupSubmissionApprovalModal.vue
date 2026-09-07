@@ -560,7 +560,7 @@ import ParticipationComparisonChart from './shared/ContributionChart/Participati
 import ScoringExplanationDrawer from './shared/ScoringExplanationDrawer.vue'
 import AnimatedStatistic from './shared/AnimatedStatistic.vue'
 import StageDescriptionDrawer from './shared/StageDescriptionDrawer.vue'
-import VoteTrendTsumTsumChart from './charts/VoteTrendTsumTsumChart.vue'
+import VoteTrendTsumTsumChart, { type VoteData } from './charts/VoteTrendTsumTsumChart.vue'
 import { useDrawerBreadcrumb } from '@/composables/useDrawerBreadcrumb'
 
 // Drawer Breadcrumb
@@ -1070,7 +1070,7 @@ const chartSelectedMembers = computed(() => {
       ? JSON.parse(participationSource)
       : participationSource
 
-    const selectedMembers = Object.entries(participationProposal).map(([email, percentage]: [string, any]) => {
+    const selectedMembers = Object.entries(participationProposal).map(([email, percentage]) => {
       const member = props.groupMembers.find(m => (m.userEmail || m.email) === email)
       return {
         email,
@@ -1078,7 +1078,7 @@ const chartSelectedMembers = computed(() => {
         avatarSeed: member?.avatarSeed,
         avatarStyle: member?.avatarStyle,
         avatarOptions: member?.avatarOptions,
-        contribution: percentage * 100,
+        contribution: Number(percentage) * 100,
         // 下面若百分比不足 100 會直接回傳這份沒算過點數的清單，
         // 補 0 讓兩條分支的形狀一致
         points: 0,
@@ -1121,7 +1121,7 @@ const tsumTsumVoteData = computed(() => {
   const votingHistory = votingDataComposable.votingHistory.value
   if (!votingHistory) return {}
 
-  const voteData: Record<string, any> = {}
+  const voteData: VoteData = {}
 
   votingHistory.forEach(version => {
     voteData[version.submissionId] = {

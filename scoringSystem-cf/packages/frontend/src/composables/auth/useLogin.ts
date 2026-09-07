@@ -95,8 +95,12 @@ export function useLogin(): UseLoginReturn {
    *
    * @param response - Parsed error body; `error.retryAfter` is in seconds
    */
-  function applyRateLimitCountdown(response: any): void {
-    const retryAfter = Number(response?.error?.retryAfter);
+  function applyRateLimitCountdown(response: { error?: unknown }): void {
+    // 錯誤回應有好幾種形狀，只有被速率限制擋下的那種帶 retryAfter
+    const error = response?.error;
+    if (!error || typeof error !== 'object' || !('retryAfter' in error)) return;
+
+    const retryAfter = Number((error as { retryAfter?: unknown }).retryAfter);
     if (!Number.isFinite(retryAfter) || retryAfter <= 0) return;
 
     resendCooldownSeconds.value = Math.ceil(retryAfter);

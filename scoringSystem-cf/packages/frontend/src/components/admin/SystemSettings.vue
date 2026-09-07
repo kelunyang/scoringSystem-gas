@@ -111,6 +111,7 @@ import {
   useTestSmtpConnection
 } from '@/composables/admin/useSystemProperties'
 import type { PropertiesConfig } from '@/types/admin-properties'
+import type { ConfigValue } from '@/types/config-panel'
 
 // ================== TanStack Query Mutations ==================
 const updatePropertiesMutation = useUpdateProperties()
@@ -213,8 +214,11 @@ const isGmailSmtp = computed<boolean>(() => {
 /**
  * 處理 ConfigPanel 的配置更新事件
  */
-const handleConfigUpdate = (key: string, value: any): void => {
-  propertiesConfig.value[key] = value
+const handleConfigUpdate = (key: string, value: ConfigValue | undefined): void => {
+  // PropertiesConfig 的欄位都是字串（KV 存的是字串），ConfigPanel 可能
+  // 送來 number / boolean（slider、switch），統一轉成字串再存
+  propertiesConfig.value[key as keyof PropertiesConfig] =
+    value === undefined ? undefined : String(value)
 }
 
 // PropertiesService 配置相關方法

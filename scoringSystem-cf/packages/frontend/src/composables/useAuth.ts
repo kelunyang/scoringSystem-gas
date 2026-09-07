@@ -49,7 +49,7 @@ if (typeof window !== 'undefined') {
 /**
  * API 响应类型
  */
-interface ApiResponse<T = any> {
+interface ApiResponse<T = unknown> {
   success: boolean
   data?: T
   error?: {

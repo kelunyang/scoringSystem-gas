@@ -1,9 +1,9 @@
 # 型別清理計畫（`any` 收斂）
 
-> **狀態：主要工作完成（2026-09-07），但 frontend 尚餘 66 處。**
+> **狀態：完成（2026-09-07）。三個套件的 `src/` 都是 0。**
 > 起草 2026-09-05，2026-09-06 兩輪，2026-09-07 收尾（含 #011）。
 >
-> 剩餘清單與接手方式見下方「還沒清掉的 66 處」。
+> 驗收以 ESLint 為準（見下方「怎麼量的」）——這件事量錯過兩次。
 
 ---
 
@@ -20,7 +20,7 @@ pnpm --filter @repo/frontend build   成功
 |------|-----|------|
 | backend | **0** | 0 |
 | shared | **0** | 0 |
-| frontend | **66** | 820 |
+| frontend | **0** | 820 |
 
 backend／shared 在 `4ecdada` 就已經是 0——它們是 2026-09-06 那兩輪清掉的
 （backend 460 → 0、shared 22 → 0，那兩個數字未經本次的 ESLint 複核）。
@@ -52,30 +52,21 @@ pnpm exec eslint "packages/frontend/src" | grep -c "no-explicit-any"
 正則要對，至少要先剝掉註解與字串再數 `any` token；
 校準過的版本見 git 歷史裡本次修訂的說明。能用 ESLint 就別自己寫。
 
-### 還沒清掉的 66 處
+### 收尾的 66 處（2026-09-07 最後兩批）
 
-分布（`pnpm exec eslint "packages/frontend/src"`）：
+形態多半是壞正則抓不到的那幾種：`UseMutationReturnType<any, ...>`、
+`any[]`、`Map<string, any>`、`Promise<any>`、`<T = any>`。
 
-| 檔案 | 數量 |
-|------|------|
-| `composables/admin/useProjects.ts` | 19 |
-| `composables/useTransactionLoader.ts` | 7 |
-| `components/ProjectDetail.vue` | 4 |
-| `composables/auth/usePasskey.ts` | 4 |
-| `components/admin/EmailLogsManagement.vue` | 3 |
-| `components/admin/SystemLogs.vue` | 3 |
-| `composables/useNotifications.ts` | 3 |
-| `composables/admin/useSystemStats.ts` | 3 |
-| 其餘 12 個檔案 | 各 1–2 |
+清理方式以「讓型別自己推導」為主，而不是手寫替代型別：
 
-形態多半是我先前那個壞正則抓不到的那幾種：
-
-- `UseMutationReturnType<any, Error, ...>`——`any` 是多個型別參數之一
-- `walletData: any[]`、`Map<string, any[]>`、`Promise<any>`
-- `interface ApiResponse<T = any>`——泛型預設值
-
-`useProjects.ts` 那 19 處是同一個模式（每個 mutation 的回傳型別參數），
-一次改完就少掉三成。
+- 19 個 mutation 的 `UseMutationReturnType<any, ...>` 直接刪掉回傳型別
+  標註（eslint 沒開 `explicit-module-boundary-types`）。
+- 手寫的介面改成從端點推導（`ProjectViewer`、`AdminStage`、
+  `WalletLadderEntry`、`ProjectWithStages`…）。
+- 真正動態的 JSON blob（log 的 context、entity）用
+  `Record<string, unknown>` 而不是 `any`——畫面本來就是泛用渲染。
+- 兩處合理的邊界轉型保留並加註解：`request-dedup` 的異質快取、
+  `ProjectManagement` 只有管理員進得來的清單收窄。
 
 **測試檔不算在內**：`eslint.config.js` 對
 `**/*.{test,spec}.ts`、`**/__tests__/**`、`**/tests/**` 明確關掉這條規則

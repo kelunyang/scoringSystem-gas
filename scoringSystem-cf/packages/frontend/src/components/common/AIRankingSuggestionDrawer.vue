@@ -613,61 +613,36 @@ async function queryAI(): Promise<void> {
       metadata: item.metadata
     }))
 
-    // 三個端點的請求／回應形狀不同，聯集型別讓 hc 無法解析，
-    // 所以宣告成字面值聯集並在下面分開呼叫
-    let endpoint: 'ai-multi-agent-suggestion' | 'ai-bt-suggestion' | 'ai-suggestion'
-    let payload: any
-
-    // Build maxCommentSelections for comment mode
-    const commentSelectionsParam = activeMode.value === 'comment' && props.maxCommentSelections
-      ? props.maxCommentSelections
-      : undefined
-
-    if (isMultiAgentMode.value) {
-      // Multi-Agent mode: 2+ providers selected
-      endpoint = 'ai-multi-agent-suggestion'
-      payload = {
-        projectId: props.projectId,
-        stageId: props.stageId,
-        rankingType: activeMode.value,
-        providerIds: selectedProviderIds.value,
-        items: requestItems,
-        customPrompt: customPrompt.value.trim() || undefined,
-        maxCommentSelections: commentSelectionsParam
-      }
-    } else if (useBTMode.value) {
-      // BT mode: single provider with pairwise comparison
-      endpoint = 'ai-bt-suggestion'
-      payload = {
-        projectId: props.projectId,
-        stageId: props.stageId,
-        rankingType: activeMode.value,
-        providerId: selectedProviderIds.value[0],
-        items: requestItems,
-        customPrompt: customPrompt.value.trim() || undefined,
-        pairsPerItem: pairsPerItem.value,
-        maxCommentSelections: commentSelectionsParam
-      }
-    } else {
-      // Direct mode: single provider direct ranking
-      endpoint = 'ai-suggestion'
-      payload = {
-        projectId: props.projectId,
-        stageId: props.stageId,
-        rankingType: activeMode.value,
-        providerId: selectedProviderIds.value[0],
-        items: requestItems,
-        customPrompt: customPrompt.value.trim() || undefined,
-        maxCommentSelections: commentSelectionsParam
-      }
+    // 共用欄位；三個端點各自多帶一兩個參數
+    const basePayload = {
+      projectId: props.projectId,
+      stageId: props.stageId,
+      rankingType: activeMode.value,
+      items: requestItems,
+      customPrompt: customPrompt.value.trim() || undefined,
+      maxCommentSelections:
+        activeMode.value === 'comment' && props.maxCommentSelections
+          ? props.maxCommentSelections
+          : undefined
     }
 
-    const httpResponse =
-      endpoint === 'ai-multi-agent-suggestion'
-        ? await rpcClient.api.rankings['ai-multi-agent-suggestion'].$post({ json: payload })
-        : endpoint === 'ai-bt-suggestion'
-          ? await rpcClient.api.rankings['ai-bt-suggestion'].$post({ json: payload })
-          : await rpcClient.api.rankings['ai-suggestion'].$post({ json: payload })
+    // 每個分支直接送出自己的請求，payload 就能由端點各自推導
+    // （原本共用一個 `payload: any` 變數，形狀全靠人工維持）
+    const httpResponse = isMultiAgentMode.value
+      ? await rpcClient.api.rankings['ai-multi-agent-suggestion'].$post({
+          json: { ...basePayload, providerIds: selectedProviderIds.value }
+        })
+      : useBTMode.value
+        ? await rpcClient.api.rankings['ai-bt-suggestion'].$post({
+            json: {
+              ...basePayload,
+              providerId: selectedProviderIds.value[0],
+              pairsPerItem: pairsPerItem.value
+            }
+          })
+        : await rpcClient.api.rankings['ai-suggestion'].$post({
+            json: { ...basePayload, providerId: selectedProviderIds.value[0] }
+          })
     const response = await httpResponse.json()
 
     if (response.success) {

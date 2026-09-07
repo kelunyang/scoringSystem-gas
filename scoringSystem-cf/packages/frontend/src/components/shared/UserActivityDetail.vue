@@ -139,7 +139,7 @@ const isMounted = ref(true)
 // Use shallowRef for collections (no deep reactivity needed)
 const expandedEventIds = shallowRef(new Set<string>())
 const loadingContextIds = shallowRef(new Set<string>())
-const eventContexts = shallowRef(new Map<string, any>())
+const eventContexts = shallowRef(new Map<string, Record<string, unknown> | null>())
 
 /**
  * Sorted events (chronological order)
@@ -262,7 +262,7 @@ async function loadEventContext(event: Event, eventKey: string): Promise<void> {
   loadingContextIds.value = newLoadingIds
 
   try {
-    let context: any = null
+    let context: Record<string, unknown> | null = null
 
     // For login events, context is in the event object
     if (event.eventType === 'login_success' || event.eventType === 'login_failed') {

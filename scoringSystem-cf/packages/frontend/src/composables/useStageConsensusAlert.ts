@@ -43,7 +43,7 @@ export function useStageConsensusAlert() {
 
       if (response.success && response.data?.hasPendingConsensus) {
         const names = (response.data.pendingGroups || [])
-          .map((g: any) => g.groupName)
+          .map(g => g.groupName)
           .filter(Boolean)
           .join('、')
 

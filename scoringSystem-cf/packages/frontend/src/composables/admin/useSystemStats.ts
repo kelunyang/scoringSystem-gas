@@ -53,12 +53,12 @@ export interface UseSystemStatsReturn {
   invitationsError: Ref<Error | null>
   /** 日誌統計錯誤 */
   logsError: Ref<Error | null>
-  /** 刷新系統統計（直接暴露 TanStack Query refetch）*/
-  refetchSystem: () => Promise<any>
-  /** 刷新邀請碼統計（直接暴露 TanStack Query refetch）*/
-  refetchInvitations: () => Promise<any>
-  /** 刷新日誌統計（直接暴露 TanStack Query refetch）*/
-  refetchLogs: () => Promise<any>
+  /** 刷新系統統計（直接暴露 TanStack Query refetch；呼叫端只 await，不讀回傳）*/
+  refetchSystem: () => Promise<unknown>
+  /** 刷新邀請碼統計（同上）*/
+  refetchInvitations: () => Promise<unknown>
+  /** 刷新日誌統計（同上）*/
+  refetchLogs: () => Promise<unknown>
   /** 刷新所有統計數據 */
   refreshAll: () => Promise<void>
 }

@@ -997,7 +997,7 @@
  */
 
 import { ref, reactive, computed, watch, watchEffect, onMounted, onBeforeUnmount, nextTick, provide, type Ref } from 'vue'
-import type { Stage, Group } from '@/types'
+import type { Stage, Group, GroupVotingData } from '@/types'
 import type { ExtendedStage } from '@/composables/useStageContentManagement'
 import TopBarUserControls from './TopBarUserControls.vue'
 import StageTimeline from './StageTimeline.vue'
@@ -1207,7 +1207,7 @@ const projectDescriptionDrawer = useCoordinatedDrawer({
 // <i class="fas fa-check-circle text-success"></i> 使用 reactive() 包裹 Map，確保響應式更新
 // Vue 3 無法追蹤 ref(new Map()) 的內部變化，必須使用 reactive()
 const stageTimelinesVisible = reactive(new Map<string, boolean>())
-const stageMilestonesData = reactive(new Map<string, any[]>())
+const stageMilestonesData = reactive(new Map<string, StageMilestone[]>())
 const loadingMilestones = reactive(new Map<string, boolean>())
 
 // ===== Mention 相關數據 =====
@@ -1229,11 +1229,11 @@ const commentVoteReadOnly = ref(false)
 const groupApprovalReadOnly = ref(false)
 
 // ===== Modal 數據 =====
-const currentStageSubmissions = ref<any[]>([])
+const currentStageSubmissions = ref<StageParticipantGroup[]>([])
 
 // ===== 群組投票狀態緩存 =====
 // <i class="fas fa-check-circle text-success"></i> 使用 reactive() 包裹 Map，確保響應式更新
-const groupApprovalVotesCache = reactive(new Map<string, any>())
+const groupApprovalVotesCache = reactive(new Map<string, GroupVotingData>())
 
 // ===== 數據載入追蹤器 =====
 const loadingTracker = useDataLoadingTracker()
@@ -1538,7 +1538,7 @@ const totalProjectGroups = computed(() => {
 // 🔧 修復無限循環：預計算每個 stage 的 groupData（避免在 computed 和 template 中重複調用函數）
 // 將 getCurrentGroupData 的邏輯提取到 computed 中，確保響應式依賴被正確追蹤
 const stageGroupDataMap = computed(() => {
-  const map = new Map<string, any>()
+  const map = new Map<string, Group | null>()
 
   if (!projectData.value?.userGroups || !props.user?.userEmail) {
     return map
@@ -2161,7 +2161,7 @@ async function loadStageMilestones(stage: ExtendedStage) {
   try {
     // <i class="fas fa-check-circle text-success"></i> reactive Map 不需要 .value
     loadingMilestones.set(stage.id, true)
-    const milestones = []
+    const milestones: StageMilestone[] = []
 
     // 1. 基礎階段事件
     if (stage.startTime) {
@@ -2556,6 +2556,13 @@ interface GroupApprovalVoteResult extends SubmitResult {
       totalMembers: number
     }
   }
+}
+
+/** 階段時間軸上的一個事件點 */
+interface StageMilestone {
+  eventName: string
+  eventTick: number
+  eventType: string
 }
 
 /** extractStageParticipants 回傳的一組：@mention 需要的最小欄位 */
@@ -3122,7 +3129,7 @@ function getConsensusWarningTitle(stage: ExtendedStage) {
 /**
  * 獲取共識警告描述
  */
-function getConsensusWarningDescription(stage: ExtendedStage, groupData: ConsensusGroupData) {
+function getConsensusWarningDescription(stage: ExtendedStage, groupData: ConsensusGroupData | null | undefined) {
   return consensusWarning.getConsensusWarningDescription(stage as Stage, groupData)
 }
 

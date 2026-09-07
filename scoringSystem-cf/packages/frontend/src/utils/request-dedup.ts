@@ -10,7 +10,8 @@
  */
 
 /** 進行中的請求 Map */
-const pendingRequests = new Map<string, Promise<any>>()
+// 值的型別隨呼叫端而異，取出時由 dedupRequest 的泛型還原
+const pendingRequests = new Map<string, Promise<unknown>>()
 
 /**
  * 對進行中的相同請求做去重
@@ -35,7 +36,9 @@ export async function dedupRequest<T>(
   // 如果已有相同請求進行中，直接返回該 Promise
   if (pendingRequests.has(key)) {
     console.log(`[dedupRequest] ♻️ 重用進行中的請求: ${key}`)
-    return pendingRequests.get(key)!
+    // Map 存的是異質的 Promise，取出時由呼叫端的泛型還原。
+    // 同一個 key 必須對應同一種請求，這是呼叫端的責任。
+    return pendingRequests.get(key) as Promise<T>
   }
 
   console.log(`[dedupRequest] 🚀 發起新請求: ${key}`)

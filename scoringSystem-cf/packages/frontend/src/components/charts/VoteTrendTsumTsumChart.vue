@@ -42,19 +42,20 @@ interface AvatarElement {
 
 interface Voter {
   voterEmail: string
-  voterDisplayName?: string
-  voterAvatarSeed?: string
-  voterAvatarStyle?: string
-  voterAvatarOptions?: string | Record<string, unknown>
+  // users 表這幾欄可為 NULL
+  voterDisplayName?: string | null
+  voterAvatarSeed?: string | null
+  voterAvatarStyle?: string | null
+  voterAvatarOptions?: string | Record<string, unknown> | null
   timestamp?: number
 }
 
-interface VoteDataEntry {
+export interface VoteDataEntry {
   support: Voter[]
   oppose?: Voter[]
 }
 
-type VoteData = Record<string, VoteDataEntry>
+export type VoteData = Record<string, VoteDataEntry>
 
 export interface Props {
   voteData: VoteData

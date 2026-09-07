@@ -97,8 +97,12 @@ export function useProjectRole(projectId: string | Ref<string | null>) {
       return null
     }
 
+    // 端點的 WHERE 已經是 `pv.isActive = 1`，回傳的每一列都是 active，
+    // 而且回應裡根本沒有 isActive 欄位——原本多的那個 `&& v.isActive`
+    // 恆為 undefined，導致 role 永遠是 null，teacher/observer 拿不到
+    // 對應的 permissionLevel。
     const viewer = viewersQuery.data.value.find(
-      (v: any) => v.userEmail === userEmail.value && v.isActive
+      v => v.userEmail === userEmail.value
     )
 
     return viewer ? viewer.role : null
