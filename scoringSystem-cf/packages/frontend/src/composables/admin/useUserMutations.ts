@@ -129,7 +129,7 @@ export function useUpdateUserStatus(): UseMutationReturnType<
     mutationFn: async ({ targetEmail, status }: UpdateUserStatusParams): Promise<void> => {
       const response = await fetchWithAuth<ApiResponse<void>>(
         '/api/admin/users/update-status',
-        { method: 'POST', body: { targetEmail, status } }
+        { method: 'POST', body: { userEmail: targetEmail, status } }
       )
 
       if (!response.success) {
@@ -183,7 +183,7 @@ export function useBatchUpdateUserStatus(): UseMutationReturnType<
     }: BatchUpdateStatusParams): Promise<BatchUpdateStatusResult> => {
       const response = await fetchWithAuth<ApiResponse<BatchUpdateStatusResult>>(
         '/api/admin/users/batch-update-status',
-        { method: 'POST', body: { targetEmails, status } }
+        { method: 'POST', body: { userEmails: targetEmails, status } }
       )
 
       if (!response.success) {
@@ -376,7 +376,7 @@ export function useUnlockUser(): UseMutationReturnType<void, Error, UnlockUserPa
     }: UnlockUserParams): Promise<void> => {
       const response = await fetchWithAuth<ApiResponse<void>>(
         '/api/admin/users/unlock',
-        { method: 'POST', body: { targetEmail, unlockReason, resetLockCount } }
+        { method: 'POST', body: { userEmail: targetEmail, unlockReason, resetLockCount } }
       )
 
       if (!response.success) {

@@ -18,6 +18,7 @@ import { logGlobalOperation } from '../../utils/logging';
 import { queueSingleNotification } from '../../queues/notification-producer';
 import { queueAccountLockedEmail } from '../../queues/email-producer';
 import type { Env } from '../../types';
+import { getFailureWindowStart } from '../../utils/security';
 import { PASSWORD_SECURITY, TWO_FA_SECURITY } from '../../config/security';
 
 // Note: Login configuration moved to ../../config/security.ts
@@ -483,9 +484,14 @@ async function checkFailureAndLock(
     );
 
     // Count this kind's failures in the current streak (last 24 hours, and only
-    // since the last successful login)
-    const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
-    const failureCount = await countRecentFailures(db, userId, pattern, twentyFourHoursAgo);
+    // since the last successful login — or since the last unlock, whichever is
+    // later:解鎖前的失敗紀錄再算進來的話，解完鎖打錯一次就會立刻被鎖回去)
+    const windowStart = await getFailureWindowStart(
+      db,
+      Date.now() - 24 * 60 * 60 * 1000,
+      [userId, userEmail]
+    );
+    const failureCount = await countRecentFailures(db, userId, pattern, windowStart);
 
     // Check if threshold exceeded
     if (failureCount >= maxAttempts) {

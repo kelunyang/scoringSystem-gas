@@ -92,6 +92,56 @@ export async function logSecurityAction(
 }
 
 /**
+ * 失敗次數的起算時間。
+ *
+ * 帳號解鎖之後（管理員手動解鎖、或暫時鎖定到期自動解鎖），解鎖之前的失敗紀錄
+ * 就不該再算進來，否則使用者剛被解鎖、再打錯一次密碼就會被同一批舊紀錄重新鎖住。
+ *
+ * 解鎖事件記在 sys_logs：管理員解鎖寫 `account_unlocked`、entityId 是 userEmail；
+ * 到期自動解鎖寫 `account_auto_unlocked`、entityId 是 userId，所以兩種 ID 都要比對。
+ * 若這兩處的 entityId 寫法改了，這裡會無聲失效（失敗次數變回跨解鎖累加）。
+ *
+ * @param db - D1 database instance
+ * @param defaultWindowStart - 原本的計算窗起點（now - window）
+ * @param identifiers - 該帳號在 log 中可能出現的 entityId（userEmail / userId）
+ * @returns 起算時間：預設窗起點與最後一次解鎖時間取較晚者
+ *
+ * @example
+ * const windowStart = await getFailureWindowStart(db, Date.now() - 24 * 60 * 60 * 1000, [userId, userEmail]);
+ */
+export async function getFailureWindowStart(
+  db: D1Database,
+  defaultWindowStart: number,
+  identifiers: Array<string | null | undefined>
+): Promise<number> {
+  const ids = identifiers.filter((id): id is string => Boolean(id));
+  if (ids.length === 0) {
+    return defaultWindowStart;
+  }
+
+  try {
+    const placeholders = ids.map(() => '?').join(', ');
+    const result = await db
+      .prepare(
+        `SELECT MAX(createdAt) as lastUnlockAt
+         FROM sys_logs
+         WHERE action IN ('account_unlocked', 'account_auto_unlocked')
+           AND entityId IN (${placeholders})
+           AND createdAt > ?`
+      )
+      .bind(...ids, defaultWindowStart)
+      .first();
+
+    const lastUnlockAt = (result?.lastUnlockAt as number | null) || 0;
+    return Math.max(defaultWindowStart, lastUnlockAt);
+  } catch (error) {
+    // Fail-safe: 查不到解鎖紀錄就用原本的窗，寧可鎖太嚴也不要漏鎖
+    console.error('Error resolving failure window start:', error);
+    return defaultWindowStart;
+  }
+}
+
+/**
  * Notify all admin users about a security event
  * Uses batched notifications for better performance
  *

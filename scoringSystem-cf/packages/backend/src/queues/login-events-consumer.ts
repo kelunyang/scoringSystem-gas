@@ -11,7 +11,7 @@ import type { LoginEvent } from './login-events-producer';
 import { queueSingleNotification } from './notification-producer';
 import { queueAccountLockedEmail } from './email-producer';
 import { logGlobalOperation } from '../utils/logging';
-import { notifyAdmins, logSecurityAction, disableUserAccount } from '../utils/security';
+import { notifyAdmins, logSecurityAction, disableUserAccount, getFailureWindowStart } from '../utils/security';
 import { THREAT_DETECTION, SECURITY_ACTION } from '../config/security';
 import { generateId, ID_PREFIXES } from '../utils/id-generator';
 
@@ -50,7 +50,13 @@ async function analyzeLoginEvent(
   try {
     const db = env.DB;
     const now = event.timestamp;
-    const twentyFourHoursAgo = now - THREAT_DETECTION.ANALYSIS_WINDOW_MS;
+    // 帳號解鎖之後，解鎖前的登入紀錄就不該再當成攻擊證據：不然管理員一解鎖，
+    // 使用者下一次登入（成功或失敗都算）就會被同一批舊紀錄重新永久停用。
+    const windowStart = await getFailureWindowStart(
+      db,
+      now - THREAT_DETECTION.ANALYSIS_WINDOW_MS,
+      [event.userId, event.userEmail]
+    );
 
     // Get recent login events for this user (last 24 hours)
     const recentEvents = await db
@@ -70,7 +76,7 @@ async function analyzeLoginEvent(
         ORDER BY createdAt DESC
         LIMIT 100
       `)
-      .bind(event.userId || event.userEmail, twentyFourHoursAgo)
+      .bind(event.userId || event.userEmail, windowStart)
       .all<{
         action: string;
         ipAddress: string | null;

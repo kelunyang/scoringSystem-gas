@@ -868,6 +868,10 @@ export async function unlockUser(
     let updateQuery = '';
     const updateParams: SqlBindValue[] = [];
 
+    // 只把「被鎖成 disabled」的帳號放回 active。管理員自己停用（inactive）的帳號
+    // 不該因為順手解一個暫時鎖定就被重新啟用。
+    const statusClause = `status = CASE WHEN status = 'disabled' THEN 'active' ELSE status END`;
+
     if (resetLockCount) {
       // Reset everything including lock count
       updateQuery = `
@@ -875,7 +879,7 @@ export async function unlockUser(
         SET lockUntil = NULL,
             lockReason = NULL,
             lockCount = 0,
-            status = 'active',
+            ${statusClause},
             lastActivityTime = ?
         WHERE userEmail = ?
       `;
@@ -886,7 +890,7 @@ export async function unlockUser(
         UPDATE users
         SET lockUntil = NULL,
             lockReason = NULL,
-            status = 'active',
+            ${statusClause},
             lastActivityTime = ?
         WHERE userEmail = ?
       `;

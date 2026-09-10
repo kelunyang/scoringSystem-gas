@@ -4,6 +4,60 @@
 > 新坑往上加，讓最近的教訓最先被看到。
 
 ---
+## 2026-09-10 ｜ 管理員按「解鎖帳戶」永遠失敗，而且就算成功也會馬上被鎖回去
+
+**症狀**：帳號因為多次登入失敗被鎖，管理員在使用者管理按「解鎖帳戶」、
+填完理由送出，只跳一行「解鎖失敗: API request failed with status 400」。
+
+**根因一（按了沒反應）**：前後端欄位名不同。
+`useUserMutations.ts` 的 `useUnlockUser` 送 `{ targetEmail, unlockReason, resetLockCount }`，
+後端 `router/admin.ts` 的 `UnlockUserRequestSchema`（`shared/src/schemas/admin.ts:180`）
+收的是 `userEmail`。zValidator 直接回 400，request 根本沒進 handler。
+同一支檔案裡的 `useUpdateUserStatus`、`useBatchUpdateUserStatus` 也是同一個病
+（送 `targetEmail` / `targetEmails`）。
+
+**根因二（就算解開也會被鎖回去）**：解鎖只清了 `users` 的
+`lockUntil` / `lockReason` / `status`，但**判斷要不要鎖的證據不在 users，在 sys_logs**：
+
+| 判斷點 | 計算窗 | 門檻 |
+|--------|--------|------|
+| `handlers/auth/login.ts` `countRecentFailures` | 24 小時，下界是「最後一次成功登入」 | 密碼 3 次 / 2FA 7 次 |
+| `queues/login-events-consumer.ts` `analyzeLoginEvent` | 24 小時 | 3 個不同 IP 的失敗登入 → 永久停用 |
+
+「最後一次成功登入」那條下界在這個情境**不存在**——人正是因為登不進去才被鎖的。
+所以解鎖後那批舊紀錄還算數：再打錯一次密碼就立刻回到門檻、被鎖第二段（15 分 → 1 小時 → 永久）；
+Layer 2 更狠，使用者解鎖後**下一次登入（成功也算，consumer 對成功事件一樣掃）**
+就會被同一批紀錄重新判定分散式攻擊、永久停用。
+去重鍵擋不住：`sys_logs` 的唯一索引是 `(dedupKey, createdAt / 60000)`，只保護一分鐘。
+
+**修法**：
+1. 前端改送 `userEmail` / `userEmails`。
+2. 新增 `utils/security.ts` 的 `getFailureWindowStart()`：計算窗起點取
+   「原本的窗起點」與「最後一次解鎖時間」較晚者，解鎖之前的紀錄一律不算。
+   解鎖事件本來就寫在 sys_logs（管理員解鎖 `account_unlocked`、entityId 是 userEmail；
+   到期自動解鎖 `account_auto_unlocked`、entityId 是 userId），兩種 ID 都比對。
+   `checkFailureAndLock` 與 Layer 2 的 `analyzeLoginEvent` 都改用它。
+3. `unlockUser` 的 `status` 改成 `CASE WHEN status = 'disabled' THEN 'active' ELSE status END`，
+   不要順手把管理員自己停用的帳號重新啟用。
+
+**教訓與防護**：
+
+1. **元件測試把整個 composable `vi.mock` 掉，就守不住 request 的欄位名。**
+   `UserManagement.spec.ts` 把 `useUnlockUser` 換成 spy，前後端欄位名對不上它照樣全綠。
+   守這件事要驗**真正送出去的 body**：新增的
+   `composables/admin/__tests__/useUserMutations.spec.ts` 直接拿後端的 zod schema
+   `safeParse(body)`，schema 改名時前端會立刻紅。
+2. **「解鎖」不是清欄位，是把計數的起算點往後推。** 只要鎖定條件是「某個時間窗內
+   累積 N 次」，解鎖就一定要有對應的 barrier，否則解了等於沒解。
+3. **「成功登入就重算」不等於「解鎖就重算」。** 用 `login_success` 當下界看起來夠用，
+   但被鎖的人的特徵正是「還沒成功登入過」——下界不存在，等於沒有下界。
+4. **測解鎖要測「解鎖後再登入一次」**，不是只測欄位有沒有被清乾淨。
+   `tests/handlers/auth/account-unlock.test.ts` 跑真 SQLite，
+   把 logging / security 兩個模組留成真的——這兩層全是 SQL 行為，mock 掉等於沒測。
+5. 時間相關的斷言要自己控時鐘（`vi.useFakeTimers({ toFake: ['Date'] })`），
+   不然一分鐘的去重桶會讓「應該被鎖」的測試偶爾綠、偶爾紅。
+
+---
 ## 2026-09-07 ｜ 「lint 0 error」不等於沒有 `any`，自己寫的正則又把數字量成 0
 
 **症狀**：連續三次回報「`any` 已歸零」，實際上前端還有 66 處。

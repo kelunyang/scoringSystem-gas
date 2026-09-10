@@ -15,6 +15,35 @@
 
 ## A. 未解決 Issues
 
+### #015 ｜ 使用者管理的「停用」開關送 disabled，後端只收 active / inactive（2026-09-10）｜ 中
+
+**問題**：`UserManagement.vue:1038` 的狀態開關與 `:1139` 的批次停用都送 `status: 'disabled'`，
+但後端兩支都不收：
+
+| 端點 | 擋在哪 | 結果 |
+|------|--------|------|
+| `POST /admin/users/update-status` | `handlers/admin/users.ts` 白名單 `['active','inactive']` | `INVALID_INPUT` |
+| `POST /admin/users/batch-update-status` | `BatchUpdateUserStatusRequestSchema` 的 `z.enum(['active','inactive'])` | zod 400 |
+
+**這不只是名字對不上，是語意沒定案**：擋登入的只有 `disabled`
+（`handlers/auth/account-guard.ts:68`、`middleware/auth.ts` 都只認這個值），
+`inactive` 對登入完全沒作用——只有 `handlers/admin/system.ts:21` 拿它算統計。
+所以「管理員按停用」目前是：送 `disabled` 被拒（沒作用），
+改送 `inactive` 會成功但**帳號照樣能登入**（假的停用，更糟）。
+
+**要先決定的是哪一邊**：
+
+1. 後端放行 `disabled`（schema + handler 白名單），停用＝真的擋登入。
+   代價：使用者管理的「解鎖帳戶」按鈕會對所有 `disabled` 帳號亮起來
+   （`isUserLocked()` 認 `status === 'disabled'`），管理員手動停用與系統鎖定被混為一談。
+2. 或讓 `inactive` 也擋登入，前端改送 `inactive`，把「停用」與「鎖定」分成兩個狀態。
+
+**相關**：2026-09-10 修解鎖時，`unlockUser` 已改成只把 `disabled` 放回 `active`，
+`inactive` 的帳號解鎖後維持 `inactive`（見 pitfalls 2026-09-10）。
+選 1 之前要先想清楚這一條要怎麼改。
+
+---
+
 ### #012 ｜ shared 的 `Stage['status']` 含兩個後端不會產生的值（2026-09-06）
 
 **已修的部分**：`utils/stageStatus.ts` 的 `getStageStatusText()` 與
