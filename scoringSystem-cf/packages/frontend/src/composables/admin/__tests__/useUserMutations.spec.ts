@@ -8,6 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { ApiRequestError, fetchWithAuth } from '@/utils/api-helpers'
 import {
   UnlockUserRequestSchema,
   UpdateUserStatusRequestSchema,
@@ -17,7 +18,9 @@ import {
 
 const requests: Array<{ url: string; body: Record<string, unknown> }> = []
 
-vi.mock('@/utils/api-helpers', () => ({
+// 留著真的 ApiRequestError：mutation 用 instanceof 判斷它，mock 掉就判斷不到
+vi.mock('@/utils/api-helpers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/utils/api-helpers')>()),
   fetchWithAuth: vi.fn(async (url: string, options: { body?: Record<string, unknown> }) => {
     requests.push({ url, body: options.body ?? {} })
     return { success: true, data: { successCount: 1, failureCount: 0, results: [] } }
@@ -92,5 +95,36 @@ describe('useUserMutations 送出的 body', () => {
     })
 
     expect(BatchUpdateUserStatusRequestSchema.safeParse(request.body).success).toBe(true)
+  })
+})
+
+describe('useUnlockUser 的錯誤訊息', () => {
+  // 後端的錯誤一律是 4xx，fetchWithAuth 會直接 throw，
+  // 錯誤碼要從拋出來的 ApiRequestError 拿，不是從 response.success
+  it('後端回 USER_NOT_LOCKED（400）時顯示中文說明，不是「API 400」', async () => {
+    vi.mocked(fetchWithAuth).mockRejectedValueOnce(
+      new ApiRequestError('User is not currently locked', 400, 'USER_NOT_LOCKED')
+    )
+
+    await expect(
+      callMutation(useUnlockUser(), {
+        targetEmail: 'student@school.tw',
+        unlockReason: '使用者本人來電確認身分，確認是自己打錯密碼',
+        resetLockCount: false
+      })
+    ).rejects.toThrow('該使用者帳戶目前並未被鎖定')
+  })
+
+  it('沒有對應中文的錯誤碼就沿用後端訊息', async () => {
+    vi.mocked(fetchWithAuth).mockRejectedValueOnce(
+      new ApiRequestError('Unlock reason must be at least 10 characters', 400, 'INVALID_INPUT')
+    )
+
+    await expect(
+      callMutation(useUnlockUser(), {
+        targetEmail: 'student@school.tw',
+        unlockReason: '使用者本人來電確認身分，確認是自己打錯密碼'
+      })
+    ).rejects.toThrow('Unlock reason must be at least 10 characters')
   })
 })

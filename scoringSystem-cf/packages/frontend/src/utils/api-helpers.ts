@@ -17,6 +17,21 @@ function getApiBaseUrl(): string {
 }
 
 /**
+ * fetchWithAuth 收到非 2xx 時拋出的錯誤，帶著後端 errorResponse 的 code。
+ * 呼叫端要依錯誤碼分流（例如 USER_NOT_LOCKED）就看 `code`。
+ */
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string
+  ) {
+    super(message)
+    this.name = 'ApiRequestError'
+  }
+}
+
+/**
  * Fetch with automatic authentication header injection
  * Use this for endpoints that have special characters in their paths
  * that cause issues with Hono RPC client type inference
@@ -56,13 +71,19 @@ export async function fetchWithAuth<T = unknown>(
   const response = await fetch(fullUrl, fetchOptions)
 
   if (!response.ok) {
-    // Try to parse error response
+    // 解析和 throw 要分開：throw 寫在 try 裡會被同一個 catch 接走，
+    // 後端的 message / code 全被蓋成 "API request failed with status 400"。
+    let error: { code?: string; message?: string } | undefined
     try {
-      const errorData = await response.json() as { error?: { message?: string } }
-      throw new Error(errorData.error?.message || `API request failed with status ${response.status}`)
-    } catch (e) {
-      throw new Error(`API request failed with status ${response.status}`, { cause: e })
+      error = (await response.json() as { error?: { code?: string; message?: string } }).error
+    } catch {
+      // 非 JSON 回應（例如 Cloudflare 的 HTML 錯誤頁），只能報狀態碼
     }
+    throw new ApiRequestError(
+      error?.message || `API request failed with status ${response.status}`,
+      response.status,
+      error?.code
+    )
   }
 
   return response.json()

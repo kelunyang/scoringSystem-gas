@@ -19,7 +19,7 @@
 import type { UseMutationReturnType } from '@tanstack/vue-query'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
-import { fetchWithAuth, type ApiResponse } from '@/utils/api-helpers'
+import { ApiRequestError, fetchWithAuth, type ApiResponse } from '@/utils/api-helpers'
 import { apiErrorCode, apiErrorMessage, errorOf } from '@/utils/api-types'
 
 // ============================================================================
@@ -345,6 +345,11 @@ export function useChangeUserEmail(): UseMutationReturnType<ChangeUserEmailResul
   })
 }
 
+const UNLOCK_ERROR_MESSAGES: Record<string, string> = {
+  USER_NOT_LOCKED: '該使用者帳戶目前並未被鎖定',
+  USER_NOT_FOUND: '找不到該使用者'
+}
+
 // ============================================================================
 // useUnlockUser - Unlock user account
 // ============================================================================
@@ -374,19 +379,23 @@ export function useUnlockUser(): UseMutationReturnType<void, Error, UnlockUserPa
       unlockReason,
       resetLockCount
     }: UnlockUserParams): Promise<void> => {
-      const response = await fetchWithAuth<ApiResponse<void>>(
-        '/api/admin/users/unlock',
-        { method: 'POST', body: { userEmail: targetEmail, unlockReason, resetLockCount } }
-      )
+      let response: ApiResponse<void>
+      try {
+        response = await fetchWithAuth<ApiResponse<void>>(
+          '/api/admin/users/unlock',
+          { method: 'POST', body: { userEmail: targetEmail, unlockReason, resetLockCount } }
+        )
+      } catch (error) {
+        // 後端的錯誤都是 4xx，會走 fetchWithAuth 的 throw，不會進到下面的 success 判斷
+        if (error instanceof ApiRequestError && error.code && UNLOCK_ERROR_MESSAGES[error.code]) {
+          throw new Error(UNLOCK_ERROR_MESSAGES[error.code], { cause: error })
+        }
+        throw error
+      }
 
       if (!response.success) {
-        // Handle specific error codes
-        if (apiErrorCode(errorOf(response)) === 'USER_NOT_LOCKED') {
-          throw new Error('該使用者帳戶目前並未被鎖定')
-        } else if (apiErrorCode(errorOf(response)) === 'USER_NOT_FOUND') {
-          throw new Error('找不到該使用者')
-        }
-        throw new Error(apiErrorMessage(errorOf(response)) || '解鎖失敗')
+        const code = apiErrorCode(errorOf(response))
+        throw new Error((code && UNLOCK_ERROR_MESSAGES[code]) || apiErrorMessage(errorOf(response)) || '解鎖失敗')
       }
     },
     onSuccess: (_data, variables) => {

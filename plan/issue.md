@@ -17,7 +17,7 @@
 
 ### #015 ｜ 使用者管理的「停用」開關送 disabled，後端只收 active / inactive（2026-09-10）｜ 中
 
-**問題**：`UserManagement.vue:1038` 的狀態開關與 `:1139` 的批次停用都送 `status: 'disabled'`，
+**問題**：`UserManagement.vue` 的狀態開關（`toggleUserStatus`）與批次停用都送 `status: 'disabled'`，
 但後端兩支都不收：
 
 | 端點 | 擋在哪 | 結果 |
@@ -37,6 +37,10 @@
    代價：使用者管理的「解鎖帳戶」按鈕會對所有 `disabled` 帳號亮起來
    （`isUserLocked()` 認 `status === 'disabled'`），管理員手動停用與系統鎖定被混為一談。
 2. 或讓 `inactive` 也擋登入，前端改送 `inactive`，把「停用」與「鎖定」分成兩個狀態。
+
+**2026-10-18 補充**：開關改綁布林、被鎖帳號的開關停用（見 pitfalls 2026-10-18），
+「啟用」方向已正常；「停用」方向仍送 `'disabled'`、仍會被拒，等本項裁決。
+若選 1，記得 `isUserLocked()` 會讓管理員手動停用的帳號開關也跟著停用、只能用解鎖 drawer 解開。
 
 **相關**：2026-09-10 修解鎖時，`unlockUser` 已改成只把 `disabled` 放回 `active`，
 `inactive` 的帳號解鎖後維持 `inactive`（見 pitfalls 2026-09-10）。

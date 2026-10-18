@@ -14,8 +14,8 @@
 
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach, type MockInstance } from 'vitest'
 import { mount, flushPromises, config } from '@vue/test-utils'
-import { nextTick } from 'vue'
-import ElementPlus from 'element-plus'
+import { nextTick, type Component } from 'vue'
+import ElementPlus, { ElSwitch } from 'element-plus'
 import { useQuery } from '@tanstack/vue-query'
 import { adminApi } from '@/api/admin'
 import UserManagement from '../UserManagement.vue'
@@ -77,7 +77,7 @@ const fixtureUsers = [
 const useQueryMock = vi.mocked(useQuery)
 const listMock = vi.mocked(adminApi.users.list)
 
-function mountUserManagement() {
+function mountUserManagement(extraStubs: Record<string, Component | boolean> = {}) {
   return mount(UserManagement, {
     global: {
       // main.ts 是 app.use(ElementPlus) 全域註冊，測試掛載時比照辦理，
@@ -101,7 +101,8 @@ function mountUserManagement() {
         'el-avatar': true,
         'el-dropdown': true,
         'el-dropdown-menu': true,
-        'el-dropdown-item': true
+        'el-dropdown-item': true,
+        ...extraStubs
       }
     }
   })
@@ -160,6 +161,22 @@ describe('UserManagement', () => {
     expect(text).toContain('顯示 2 / 2 位使用者')
 
     wrapper.unmount()
+  })
+
+  it('被永久鎖定（disabled）的帳號：一渲染不會被自動啟用，開關停用', async () => {
+    // 用真的 el-switch：它建立時若值不是 active-value / inactive-value 會自己 emit change。
+    // 舊寫法 v-model="user.status" 遇到 'disabled' 就因此替 Bob 送出「啟用」——
+    // 管理員只是打開列表，被鎖的帳號就全被解開了。
+    const wrapper = mountUserManagement({ 'el-switch': ElSwitch })
+    await flushPromises()
+
+    expect(spies.updateStatus).not.toHaveBeenCalled()
+
+    const bobRow = wrapper.findAll('tr').find(tr => tr.text().includes('bob@example.com'))
+    expect(bobRow?.find('.el-switch').classes()).toContain('is-disabled')
+
+    const aliceRow = wrapper.findAll('tr').find(tr => tr.text().includes('alice@example.com'))
+    expect(aliceRow?.find('.el-switch').classes()).not.toContain('is-disabled')
   })
 
   it('列表為空時顯示 EmptyState', async () => {

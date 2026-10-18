@@ -224,13 +224,13 @@
                 <td>{{ user.displayName || '-' }}</td>
                 <td @click.stop>
                   <el-switch
-                    v-model="user.status"
-                    active-value="active"
-                    inactive-value="inactive"
+                    :model-value="user.status === 'active'"
+                    :disabled="isUserLocked(user)"
+                    :title="isUserLocked(user) ? '帳戶已鎖定，請用「解鎖帳戶」' : undefined"
                     inline-prompt
                     active-text="啟用"
                     inactive-text="停用"
-                    @change="toggleUserStatus(user)"
+                    @change="(val) => toggleUserStatus(user, val === true)"
                   />
                 </td>
                 <td class="actions" @click.stop>
@@ -302,13 +302,13 @@
               <!-- 豎屏第二行：操作 -->
               <template #actions>
                 <el-switch
-                  v-model="user.status"
-                  active-value="active"
-                  inactive-value="inactive"
+                  :model-value="user.status === 'active'"
+                  :disabled="isUserLocked(user)"
+                  :title="isUserLocked(user) ? '帳戶已鎖定，請用「解鎖帳戶」' : undefined"
                   inline-prompt
                   active-text="啟用"
                   inactive-text="停用"
-                  @change="toggleUserStatus(user)"
+                  @change="(val) => toggleUserStatus(user, val === true)"
                   @click.stop
                 />
                 <el-button
@@ -1035,8 +1035,14 @@ const openInviteManagement = () => {
   router.push({ name: 'admin-users-invitation' })
 }
 
-const toggleUserStatus = async (user: ExtendedUser) => {
-  const newStatus = user.status === 'active' ? 'disabled' : 'active'
+// 開關綁布林、不用 v-model="user.status"：el-switch 建立時若值不是 active-value /
+// inactive-value（例如被永久鎖定的 'disabled'），會自己 emit change。舊寫法因此一打開
+// 列表就替每個被鎖的帳號送出「啟用」，等於靜默解鎖；而 v-model 先改值、@change 再反轉，
+// 使用者手動切換時送出去的又剛好是相反的值。被鎖的帳號開關停用，只能走解鎖 drawer。
+//
+// 「停用」送 'disabled' 目前會被後端拒絕（只收 active / inactive），語意待定，見 issue #015。
+const toggleUserStatus = async (user: ExtendedUser, enabled: boolean) => {
+  const newStatus = enabled ? 'active' : 'disabled'
 
   // 使用 TanStack Query mutation
   await updateUserStatusMutation.mutateAsync({

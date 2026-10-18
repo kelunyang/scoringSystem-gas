@@ -4,6 +4,47 @@
 > 新坑往上加，讓最近的教訓最先被看到。
 
 ---
+## 2026-10-18 ｜ 打開使用者管理就把被永久鎖定的帳號全解開，toast 卻都寫「API 400」
+
+**症狀**：帳號被永久停用（`status = 'disabled'`），管理員按「解鎖帳戶」drawer 或
+切「啟用／停用」開關，toast 都只寫「API request failed with status 400」；
+但帳號事後卻是解開的，看起來像是「開關能解鎖、只是會報錯」，解鎖按鈕形同多餘。
+
+**根因一（其實沒人按就解開了）**：`UserManagement.vue` 的開關是
+`<el-switch v-model="user.status" active-value="active" inactive-value="inactive">`。
+Element Plus 的 el-switch **建立時**若 model 值不是 active-value / inactive-value，
+會自己 emit `update:modelValue` 與 `change`（值為 inactive-value，見
+`element-plus/es/components/switch/src/switch.vue_vue_type_script_setup_true_lang.mjs:71`）。
+`'disabled'` 正好兩個都不是 → 一渲染就觸發 `toggleUserStatus`，它看到 `'inactive'`
+就算出 `'active'` 送給後端，後端接受。**管理員只是打開列表，所有被鎖的帳號就被解開了**，
+不留解鎖理由、不寫 `account_unlocked`，`getFailureWindowStart()` 也就不知道有這次解鎖。
+
+**根因二（之後怎麼按都 400）**：
+- 開關：`v-model` 先改值、`@change` 再反轉一次，手動切換送出去的永遠是相反的值；
+  切成「啟用」送 `'disabled'`，被後端白名單拒絕（issue #015）。
+- 解鎖 drawer：帳號已經被根因一解開，後端回 `USER_NOT_LOCKED`（400）。
+- 兩者 toast 都看不出原因：`utils/api-helpers.ts` 的 `fetchWithAuth` 把 `throw`
+  寫在解析 JSON 的 `try` 裡，被同一個 `catch` 接走，後端 message / code 全被蓋成
+  「API request failed with status 400」。`useUnlockUser` 對 `USER_NOT_LOCKED` 的中文對照
+  寫在 `!response.success` 分支，但 4xx 根本走不到那裡——從沒生效過。
+
+**修法**：
+1. 開關改綁布林 `:model-value="user.status === 'active'"`，`@change` 直接用切換後的值；
+   被鎖的帳號（`isUserLocked()`）開關 `disabled`，解鎖只能走 drawer（要理由、有紀錄）。
+2. `fetchWithAuth` 解析與 throw 分開，拋 `ApiRequestError`（帶 `status`、`code`）。
+3. `useUnlockUser` 從 `ApiRequestError.code` 對照中文訊息。
+
+**教訓與防護**：
+- 第三方元件的 v-model 不只在使用者操作時改值；值域不在它預期內時，它可能在
+  mount 時「修正」並發 change。**有副作用的 handler 不要掛在會被元件自己觸發的事件上**，
+  或確保綁進去的值永遠合法（布林最安全）。
+- `UserManagement.spec.ts` 的 fixture 早就有一個 `disabled` 的 Bob，但 `el-switch`
+  被 stub 掉，所以從沒測到。新案例用真的 `ElSwitch` 掛載，斷言 mount 後
+  `updateStatus` 沒被呼叫；revert 元件修改會紅。
+- 錯誤包裝層的 `try { throw } catch { throw 另一個 }` 是經典的吞訊息寫法，
+  `utils/__tests__/api-helpers.test.ts` 鎖住 message / code 會被帶出。
+
+---
 ## 2026-09-10 ｜ 管理員按「解鎖帳戶」永遠失敗，而且就算成功也會馬上被鎖回去
 
 **症狀**：帳號因為多次登入失敗被鎖，管理員在使用者管理按「解鎖帳戶」、
