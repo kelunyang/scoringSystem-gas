@@ -24,7 +24,7 @@
           @click="handleSubmit"
         >
           <i v-if="loading" class="fas fa-spinner fa-spin"></i>
-          <span v-else>驗證email</span>
+          <span v-else>寄送新密碼</span>
         </button>
       </div>
     </div>

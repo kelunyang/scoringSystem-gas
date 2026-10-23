@@ -998,6 +998,34 @@ Vue template 內只出現在字串裡的元件名，可能被誤判為死碼—�
 
 ## B. 已裁決的疑問（封存，勿重啟）
 
+### 2026-10-23 ｜ 忘記密碼為什麼不直接把密碼換掉？→ 新密碼先「掛著」，第一次用它登入才生效
+
+**背景**：原本的忘記密碼要走三步（email → 收驗證碼回填 → 從 6 個專案裡勾出沒參加過的），
+第三步的專案題目最難用。改成一步：輸入 email，新密碼直接寄到信箱，身分驗證交給信箱本身。
+
+**問題**：如果一送出就覆寫 `users.password`，任何知道某位學生 email 的人都能在登入頁
+輸入它，讓對方的密碼當場失效。偷不到帳號（登入還要過 2FA），但能拿來惡作劇，
+例如上課前把全班密碼都重設掉。
+
+**結論（使用者裁決）**：新舊並存。
+
+- 新密碼的 hash 寫進 `users.pendingPassword`，24 小時後過期
+  （`migrations/0013_pending_password.sql`，`handlers/auth/password-reset.ts:50` `requestPasswordReset`）
+- 登入時（`router/auth.ts:448`）正式密碼和掛著的新密碼都收：
+  - 用新密碼登入 → 它變成正式密碼，`passwordChangedAt` 蓋章、舊 session 全部失效
+  - 用舊密碼登入 → 掛著的新密碼作廢（`password-reset.ts:152` `resolvePendingPassword`）
+- 自己改密碼（`handlers/auth/login.ts:293`）和管理員重設（`handlers/admin/users.ts:474`）都會清掉掛著的新密碼，
+  避免一封舊信事後蓋掉刻意設的新密碼
+- 帳號存不存在都回同一句話；PBKDF2 對不存在的帳號也照算，回應時間不洩漏帳號存在
+
+**沒選的做法**：「立刻換掉」最簡單，但只能靠 Turnstile 和寄信頻率限制擋惡作劇。
+
+**遺留**：`password_reset_2fa` 這種信件類型（`queues/types.ts`、`email-consumer.ts`、
+`email-templates.ts` 的 `buildPasswordReset2FAEmailContent`）已經沒有程式會送出，
+但部署當下佇列裡可能還有舊訊息，所以 consumer 端暫時留著。可在下一輪死碼清理時移除。
+
+---
+
 ### 2026-09-07 ｜ 前端的 `rpcClient` 為什麼是 `any`？→ backend router 用了敘述式註冊（原 #011，已修）
 
 **結論**：`rpcClient` 之所以被降級成 `any`，根因不是原註解宣稱的

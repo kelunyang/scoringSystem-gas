@@ -346,79 +346,55 @@ class TestTwoFactorAuth:
 # ============================================================================
 
 class TestPasswordReset:
-    """Test password reset flow security"""
+    """Test password reset flow security
+
+    Forgot password is one step: POST an email, a new password is mailed to
+    it. The new password is parked beside the old one until first used, so
+    posting someone else's address cannot lock them out.
+    """
 
     @pytest.mark.high
     @pytest.mark.auth
-    def test_password_reset_requires_valid_email(
+    def test_password_reset_does_not_reveal_account_existence(
+        self,
+        api_client: APIClient,
+        config: TestConfig
+    ):
+        """
+        Verify a registered and an unregistered address get the same answer.
+        """
+        known = api_client.post('/api/auth/reset-password', json={
+            'userEmail': config.admin_email,
+            'turnstileToken': 'test'
+        })
+        unknown = api_client.post('/api/auth/reset-password', json={
+            'userEmail': 'nonexistent@example.com',
+            'turnstileToken': 'test'
+        })
+
+        assert known.status_code in [200, 403, 429], \
+            f"Unexpected status for password reset: {known.status_code}"
+
+        if known.status_code == 200 and unknown.status_code == 200:
+            assert known.json().get('message') == unknown.json().get('message'), \
+                "Password reset response differs for registered vs unregistered email"
+
+    @pytest.mark.high
+    @pytest.mark.auth
+    def test_password_reset_rejects_malformed_email(
         self,
         api_client: APIClient
     ):
         """
-        Verify password reset requires valid email.
-
-        Note: Should not reveal if email exists (enumeration prevention)
+        Verify a malformed address is rejected before anything is sent.
         """
-        # Test with non-existent email
-        response = api_client.post('/api/auth/verify-email-for-reset', json={
-            'email': 'nonexistent@example.com',
+        response = api_client.post('/api/auth/reset-password', json={
+            'userEmail': 'not-an-email',
             'turnstileToken': 'test'
         })
 
-        # Should respond consistently (don't reveal if email exists)
-        # Could be 200 with generic message or specific error
-        assert response.status_code in [200, 400, 404], \
-            f"Unexpected status for password reset: {response.status_code}"
-
-    @pytest.mark.high
-    @pytest.mark.auth
-    def test_password_reset_code_validation(
-        self,
-        api_client: APIClient,
-        config: TestConfig
-    ):
-        """
-        Verify password reset requires valid code.
-        """
-        # Try to verify with fake code
-        response = api_client.post('/api/auth/password-reset-verify-code', json={
-            'email': config.admin_email,
-            'code': '000000',
-            'turnstileToken': 'test'
-        })
-
-        # Should reject invalid code
-        assert response.status_code in [400, 401, 403], \
-            f"Invalid reset code accepted (status: {response.status_code})"
-
-    @pytest.mark.high
-    @pytest.mark.auth
-    def test_password_reset_prevents_weak_passwords(
-        self,
-        api_client: APIClient,
-        config: TestConfig
-    ):
-        """
-        Verify password reset enforces password policy.
-        """
-        weak_passwords = [
-            '123',          # Too short
-            'password',     # Common password
-            '12345678',     # No letters
-            'abcdefgh',     # No numbers
-        ]
-
-        for weak_password in weak_passwords:
-            response = api_client.post('/api/auth/reset-password', json={
-                'email': config.admin_email,
-                'code': '123456',  # Fake code (will fail anyway)
-                'newPassword': weak_password,
-                'turnstileToken': 'test'
-            })
-
-            # Should reject weak passwords (or fail due to invalid code)
-            assert response.status_code in [400, 401, 403], \
-                f"Weak password '{weak_password}' may have been accepted"
+        assert response.status_code in [400, 403], \
+            f"Malformed email accepted (status: {response.status_code})"
 
 
 # ============================================================================

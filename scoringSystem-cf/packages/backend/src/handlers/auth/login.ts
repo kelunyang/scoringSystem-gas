@@ -290,7 +290,7 @@ export async function changePassword(
     console.log('[changePassword] Updating password in database...');
     const cutoff = passwordChangeCutoff();
     await db
-      .prepare('UPDATE users SET password = ?, passwordChangedAt = ? WHERE userId = ?')
+      .prepare('UPDATE users SET password = ?, passwordChangedAt = ?, pendingPassword = NULL, pendingPasswordExpiresAt = NULL WHERE userId = ?')
       .bind(hashedPassword, cutoff, userId)
       .run();
 

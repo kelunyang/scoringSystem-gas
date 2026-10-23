@@ -254,7 +254,7 @@ export default {
           }
 
           case 'password_reset': {
-            const { userEmail, displayName, newPassword } = parsedMessage.data;
+            const { userEmail, displayName, newPassword, pending, requestIp, requestCountry } = parsedMessage.data;
 
             // 🔥 NEW: Idempotency check
             const alreadyProcessed = await checkIdempotency(env, 'password_reset', userEmail, messageId);
@@ -269,7 +269,8 @@ export default {
               displayName,
               newPassword,
               systemTitle,
-              String(await getConfigValue(env, 'WEB_APP_URL'))
+              String(await getConfigValue(env, 'WEB_APP_URL')),
+              pending ? { requestIp, requestCountry } : undefined
             );
 
             // Send email

@@ -1,141 +1,55 @@
 /**
  * @fileoverview Forgot password composable
- * Handles three-step password reset flow: email verification → 2FA → project selection
+ * One step: submit an email, the server mails a new password to it.
  */
 
-import { ref, computed, onBeforeUnmount } from 'vue';
+import { ref } from 'vue';
 import { rpcClient } from '@/utils/rpc-client'
-import { apiErrorCode, apiErrorMessage, errorOf } from '@/utils/api-types';
-import type { Ref, ComputedRef } from 'vue';
-import type { Project } from '../../types/auth';
-
-/** Server default; a 429 replaces it with the actual remaining wait. */
-const DEFAULT_RESEND_COOLDOWN_SECONDS = 60;
+import { apiErrorMessage, errorOf } from '@/utils/api-types';
+import type { Ref } from 'vue';
 
 export interface UseForgotPasswordReturn {
   loading: Ref<boolean>;
-  resendLoading: Ref<boolean>;
-  /** Timestamp (ms) of the last verification mail sent. 0 = none sent yet. */
-  lastEmailSentAt: Ref<number>;
-  resendCooldownSeconds: Ref<number>;
-  emailVerified: Ref<boolean>;
-  codeVerified: Ref<boolean>;
-  resetSent: Ref<boolean>;
+  /** Address the last successful request was sent for; '' until then. */
+  sentTo: Ref<string>;
   errorMessage: Ref<string>;
-  projects: Ref<Project[]>;
-  userEmail: Ref<string>;
-  selectedProjectIds: Ref<string[]>;
-  allParticipated: Ref<boolean>;
-  canVerifyEmail: ComputedRef<boolean>;
-  canVerifyCode: ComputedRef<boolean>;
-  canResetPassword: ComputedRef<boolean>;
-  verifyEmail: (email: string, turnstileToken: string) => Promise<boolean>;
-  verifyCode: (code: string, turnstileToken: string) => Promise<boolean>;
-  resendCode: (turnstileToken: string) => Promise<boolean>;
-  resetPassword: (turnstileToken: string) => Promise<boolean>;
+  requestReset: (email: string, turnstileToken: string) => Promise<boolean>;
   reset: () => void;
 }
 
 /**
- * Composable for password reset flow management
+ * Composable for the forgot-password request
  *
- * Handles the three-step password reset process:
- * Step 1: Email verification → sends 2FA code with IP/country info
- * Step 2: 2FA verification → receives project list
- * Step 3: Project selection verification → password reset
+ * The server answers the same way whether or not the address has an account,
+ * so a success here only means "if it exists, mail is on its way". The only
+ * errors surfaced are a malformed address, the captcha, and the mail rate
+ * limit.
  *
- * Security feature: Always shows success message regardless of actual result
- * to prevent user enumeration attacks.
- *
- * @param apiClient - API client instance
  * @returns Forgot password state and methods
  *
  * @example
- * // In ForgotPasswordForm.vue
- * import { useForgotPassword } from '@/composables/auth/useForgotPassword';
- * import { inject } from 'vue';
- *
- * const {
- *   emailVerified,
- *   codeVerified,
- *   projects,
- *   verifyEmail,
- *   verifyCode,
- *   resetPassword
- * } = useForgotPassword();
- *
- * // Step 1: Verify email and send 2FA
- * await verifyEmail(userEmail);
- *
- * // Step 2: Verify 2FA code
- * await verifyCode(verificationCode);
- *
- * // Step 3: Reset password
- * await resetPassword(turnstileToken);
+ * const { loading, sentTo, errorMessage, requestReset } = useForgotPassword();
+ * await requestReset('student@example.com', turnstileToken);
  */
 export function useForgotPassword(): UseForgotPasswordReturn {
   const loading = ref(false);
-  const resendLoading = ref(false);
-  // Step 1 always sends a verification mail, so the 2FA step shows the resend
-  // countdown instead of the manual "send code" button.
-  const lastEmailSentAt = ref(0);
-  const resendCooldownSeconds = ref(DEFAULT_RESEND_COOLDOWN_SECONDS);
-
-  /**
-   * Restart the resend countdown from a rate-limited (429) response, so the
-   * button cannot be re-enabled before the server would accept another send.
-   *
-   * @param response - Parsed error body; `error.retryAfter` is in seconds
-   */
-  function applyRateLimitCountdown(response: { error?: unknown }): void {
-    // 錯誤回應有好幾種形狀，只有被速率限制擋下的那種帶 retryAfter
-    const error = response?.error;
-    if (!error || typeof error !== 'object' || !('retryAfter' in error)) return;
-
-    const retryAfter = Number((error as { retryAfter?: unknown }).retryAfter);
-    if (!Number.isFinite(retryAfter) || retryAfter <= 0) return;
-
-    resendCooldownSeconds.value = Math.ceil(retryAfter);
-    // Not an actual send, but it is the instant the countdown runs from.
-    lastEmailSentAt.value = Date.now();
-  }
-  const emailVerified = ref(false);
-  const codeVerified = ref(false);
-  const resetSent = ref(false);
+  const sentTo = ref('');
   const errorMessage = ref('');
-  const projects = ref<Project[]>([]);
-  const userEmail = ref('');
-  const selectedProjectIds = ref<string[]>([]);
-  const allParticipated = ref(false);
-
-  // Store timeout ID for cleanup
-  const resetTimeoutId = ref<number | null>(null);
-
-  const canVerifyEmail = computed(() => {
-    return userEmail.value.trim().length > 0 && !loading.value && !emailVerified.value;
-  });
-
-  const canVerifyCode = computed(() => {
-    return emailVerified.value && !loading.value && !codeVerified.value;
-  });
-
-  const canResetPassword = computed(() => {
-    return codeVerified.value &&
-           !loading.value &&
-           (allParticipated.value || selectedProjectIds.value.length > 0);
-  });
 
   /**
-   * Step 1: Verify email and send 2FA code
+   * Ask the server to mail a new password to `email`.
+   *
+   * @param email - Address the user typed
+   * @param turnstileToken - Single-use captcha token
+   * @returns Whether the request was accepted
    */
-  async function verifyEmail(email: string, turnstileToken: string): Promise<boolean> {
-    if (!email) {
+  async function requestReset(email: string, turnstileToken: string): Promise<boolean> {
+    const trimmed = email.trim();
+    if (!trimmed) {
       errorMessage.value = '請輸入電子郵件';
       return false;
     }
-
-    // Validate email format
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
       errorMessage.value = '請輸入有效的電子郵件地址';
       return false;
     }
@@ -144,221 +58,44 @@ export function useForgotPassword(): UseForgotPasswordReturn {
     errorMessage.value = '';
 
     try {
-      const httpResponse = await rpcClient.api.auth['verify-email-for-reset'].$post({
-        json: {
-          userEmail: email.trim(),
-          turnstileToken
-        }
-      });
-
-      const response = await httpResponse.json();
-
-      if (response.success) {
-        emailVerified.value = true;
-        lastEmailSentAt.value = Date.now();
-        userEmail.value = email;
-        // No longer receives projects here - moved to step 2
-        return true;
-      } else {
-        errorMessage.value = apiErrorMessage(errorOf(response)) || 'Email 驗證失敗';
-        return false;
-      }
-    } catch (error) {
-      console.error('Email verification error:', error);
-      errorMessage.value = '網路錯誤，請重試';
-      return false;
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  /**
-   * Step 2: Verify 2FA code and get project list
-   */
-  async function verifyCode(code: string, turnstileToken: string): Promise<boolean> {
-    if (!code) {
-      errorMessage.value = '請輸入驗證碼';
-      return false;
-    }
-
-    loading.value = true;
-    errorMessage.value = '';
-
-    try {
-      const httpResponse = await rpcClient.api.auth['password-reset-verify-code'].$post({
-        json: {
-          userEmail: userEmail.value.trim(),
-          code: code.trim().toUpperCase(),
-          turnstileToken
-        }
-      });
-
-      const response = await httpResponse.json();
-
-      if (response.success) {
-        codeVerified.value = true;
-        projects.value = response.data.projects || [];
-        return true;
-      } else {
-        errorMessage.value = apiErrorMessage(errorOf(response)) || '驗證碼錯誤';
-
-        // If code verification fails, restart the entire flow
-        if (apiErrorCode(errorOf(response)) === 'INVALID_CODE' ||
-            apiErrorCode(errorOf(response)) === 'CODE_NOT_FOUND' ||
-            apiErrorCode(errorOf(response)) === 'TOO_MANY_ATTEMPTS') {
-          // Allow user to try again or restart
-          return false;
-        }
-
-        return false;
-      }
-    } catch (error) {
-      console.error('2FA verification error:', error);
-      errorMessage.value = '網路錯誤，請重試';
-      return false;
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  /**
-   * Resend 2FA verification code
-   */
-  async function resendCode(turnstileToken: string): Promise<boolean> {
-    resendLoading.value = true;
-    errorMessage.value = '';
-
-    try {
-      const httpResponse = await rpcClient.api.auth['verify-email-for-reset'].$post({
-        json: {
-          userEmail: userEmail.value.trim(),
-          turnstileToken
-        }
-      });
-
-      const response = await httpResponse.json();
-
-      if (response.success) {
-        lastEmailSentAt.value = Date.now();
-        resendCooldownSeconds.value = DEFAULT_RESEND_COOLDOWN_SECONDS;
-        return true;
-      } else {
-        applyRateLimitCountdown(response);
-        errorMessage.value = apiErrorMessage(errorOf(response)) || '重新發送失敗';
-        return false;
-      }
-    } catch (error) {
-      console.error('Resend code error:', error);
-      errorMessage.value = '網路錯誤，請重試';
-      return false;
-    } finally {
-      resendLoading.value = false;
-    }
-  }
-
-  /**
-   * Step 2: Reset password with project verification
-   *
-   * Security note: Always returns success to prevent user enumeration
-   */
-  async function resetPassword(turnstileToken: string): Promise<boolean> {
-    loading.value = true;
-    errorMessage.value = '';
-
-    try {
       const httpResponse = await rpcClient.api.auth['reset-password'].$post({
         json: {
-          userEmail: userEmail.value.trim(),
-          selectedProjectIds: selectedProjectIds.value,
-          allParticipated: allParticipated.value,
+          userEmail: trimmed,
           turnstileToken
         }
       });
 
-      await httpResponse.json();
+      const response = await httpResponse.json();
 
-      // Always show success (security feature)
-      resetSent.value = true;
-
-      // Auto-reset form after 3 seconds (store timeout ID for cleanup)
-      resetTimeoutId.value = setTimeout(() => {
-        reset();
-        resetTimeoutId.value = null;
-      }, 3000) as unknown as number;
-
-      return true;
+      if (response.success) {
+        sentTo.value = trimmed;
+        return true;
+      }
+      errorMessage.value = apiErrorMessage(errorOf(response)) || '送出失敗，請稍後再試';
+      return false;
     } catch (error) {
-      console.error('Password reset error:', error);
-
-      // Still show success message (security feature)
-      resetSent.value = true;
-
-      // Auto-reset form after 3 seconds (store timeout ID for cleanup)
-      resetTimeoutId.value = setTimeout(() => {
-        reset();
-        resetTimeoutId.value = null;
-      }, 3000) as unknown as number;
-
-      return true; // Always return true for security
+      console.error('Password reset request error:', error);
+      errorMessage.value = '網路錯誤，請重試';
+      return false;
     } finally {
       loading.value = false;
     }
   }
 
   /**
-   * Reset forgot password state
+   * Back to the empty form, e.g. to try another address
    */
   function reset() {
-    // Clear timeout if exists
-    if (resetTimeoutId.value !== null) {
-      clearTimeout(resetTimeoutId.value);
-      resetTimeoutId.value = null;
-    }
-
     loading.value = false;
-    resendLoading.value = false;
-    lastEmailSentAt.value = 0;
-    resendCooldownSeconds.value = DEFAULT_RESEND_COOLDOWN_SECONDS;
-    emailVerified.value = false;
-    codeVerified.value = false;
-    resetSent.value = false;
+    sentTo.value = '';
     errorMessage.value = '';
-    projects.value = [];
-    userEmail.value = '';
-    selectedProjectIds.value = [];
-    allParticipated.value = false;
   }
-
-  /**
-   * Cleanup timeout on component unmount
-   */
-  onBeforeUnmount(() => {
-    if (resetTimeoutId.value !== null) {
-      clearTimeout(resetTimeoutId.value);
-      resetTimeoutId.value = null;
-    }
-  });
 
   return {
     loading,
-    resendLoading,
-    lastEmailSentAt,
-    resendCooldownSeconds,
-    emailVerified,
-    codeVerified,
-    resetSent,
+    sentTo,
     errorMessage,
-    projects,
-    userEmail,
-    selectedProjectIds,
-    allParticipated,
-    canVerifyEmail,
-    canVerifyCode,
-    canResetPassword,
-    verifyEmail,
-    verifyCode,
-    resendCode,
-    resetPassword,
+    requestReset,
     reset
   };
 }

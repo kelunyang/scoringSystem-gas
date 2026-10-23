@@ -54,9 +54,7 @@ X-Sudo-Project: <project_id>
 | POST | `/refresh-token` | Required | 刷新 Token |
 | POST | `/change-password` | Required | 更改密碼 |
 | GET | `/check-email` | Public | 檢查 Email 是否可用 |
-| POST | `/verify-email-for-reset` | Public | 密碼重設第一步 |
-| POST | `/password-reset-verify-code` | Public | 密碼重設第二步 |
-| POST | `/reset-password` | Public | 密碼重設第三步 |
+| POST | `/reset-password` | Public | 忘記密碼：寄新密碼到信箱（新密碼第一次登入才生效，舊密碼在那之前仍可用） |
 
 ---
 

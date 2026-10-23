@@ -40,23 +40,6 @@ export interface RegisterData {
 }
 
 /**
- * Password reset/forgot password data
- */
-export interface ForgotPasswordData {
-  userEmail: string;
-  selectedProjectIds: string[];
-  allParticipated: boolean;
-}
-
-/**
- * Project information for password reset
- */
-export interface Project {
-  projectId: string;
-  projectName: string;
-}
-
-/**
  * Avatar style options
  */
 export type AvatarStyle = 'avataaars' | 'bottts' | 'initials' | 'identicon' | 'lorelei' | 'micah' | 'pixel-art' | 'personas';
@@ -77,16 +60,6 @@ export interface AvatarOptions {
   style: AvatarStyle;
   options: AvatarCustomOptions;
 }
-
-/**
- * API response for email verification (forgot password)
- */
-export interface EmailVerificationData {
-  verified: boolean;
-  projects: Project[];
-}
-
-export type EmailVerificationResponse = ApiResponse<EmailVerificationData>;
 
 /**
  * API response for invitation code verification

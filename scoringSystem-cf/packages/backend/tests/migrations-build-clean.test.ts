@@ -94,7 +94,7 @@ describe.skipIf(!hasNodeSqlite)('migrations build a clean database', () => {
     // One column from each migration that came after the initial schema, so a
     // dropped or reordered file shows up here rather than in production.
     expect(columnsOf('users')).toEqual(expect.arrayContaining([
-      'totpSecret', 'passkeyEnabled', 'passwordChangedAt'
+      'totpSecret', 'passkeyEnabled', 'passwordChangedAt', 'pendingPassword'
     ]))
     expect(columnsOf('two_factor_codes')).toEqual(expect.arrayContaining([
       'context', 'passwordVerified'

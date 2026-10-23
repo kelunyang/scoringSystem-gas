@@ -65,7 +65,8 @@ export async function queuePasswordResetEmail(
   env: Env,
   userEmail: string,
   displayName: string,
-  newPassword: string
+  newPassword: string,
+  options: { pending?: boolean; requestIp?: string; requestCountry?: string } = {}
 ): Promise<void> {
   const message: EmailQueueMessage = {
     type: 'password_reset',
@@ -75,6 +76,7 @@ export async function queuePasswordResetEmail(
       userEmail,
       displayName,
       newPassword,
+      ...options,
     },
   };
 

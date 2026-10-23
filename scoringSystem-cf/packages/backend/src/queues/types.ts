@@ -42,6 +42,12 @@ export const EmailQueueMessageSchema = z.discriminatedUnion('type', [
       userEmail: z.string().email(),
       displayName: z.string(),
       newPassword: z.string(),
+      // Self-service reset: the old password still works until this one is
+      // used, and this one expires. Absent for admin resets, which replace
+      // the password outright.
+      pending: z.boolean().optional(),
+      requestIp: z.string().optional(),
+      requestCountry: z.string().optional(),
     }),
   }),
 

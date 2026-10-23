@@ -76,7 +76,7 @@ class TestRateLimiting:
         Expected: Strict rate limiting (429) quickly
         """
         endpoints = [
-            ('/api/auth/verify-email-for-reset', {'email': 'test@example.com', 'turnstileToken': 'test'}),
+            ('/api/auth/reset-password', {'userEmail': 'test@example.com', 'turnstileToken': 'test'}),
             ('/api/auth/resend-2fa', {'userEmail': 'test@example.com', 'turnstileToken': 'test'}),
         ]
 

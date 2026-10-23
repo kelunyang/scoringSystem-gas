@@ -324,9 +324,24 @@ export function buildPasswordResetEmailContent(
   displayName: string,
   newPassword: string,
   systemTitle: string,
-  webAppUrl: string
+  webAppUrl: string,
+  /** Present for self-service resets: the new password is pending, not yet in effect. */
+  selfService?: { requestIp?: string; requestCountry?: string }
 ): { subject: string; htmlBody: string; textBody: string } {
-  const subject = `[${systemTitle}] 密碼重置成功`;
+  const subject = selfService
+    ? `[${systemTitle}] 您申請的新密碼`
+    : `[${systemTitle}] 密碼重置成功`;
+  const intro = selfService
+    ? '有人在「忘記密碼」頁面輸入了您的電子郵件，以下是新密碼。'
+    : '您的密碼已成功重置。請使用以下新密碼登入系統。';
+  const requestOrigin = selfService
+    ? `申請來源 IP：${selfService.requestIp || '未知'}${selfService.requestCountry ? `（${selfService.requestCountry}）` : ''}`
+    : '';
+  const pendingNotes = [
+    '新密碼 24 小時內有效，第一次用它登入後就會正式生效',
+    '在那之前，您原本的密碼仍然可以登入；用舊密碼登入的話，這組新密碼會作廢',
+    '如果不是您本人申請的，不用理會這封信，帳號不受影響'
+  ];
 
   const htmlBody = `
 <!DOCTYPE html>
@@ -347,19 +362,26 @@ export function buildPasswordResetEmailContent(
 <body>
   <div class="container">
     <div class="header">
-      <h2>✓ 密碼重置成功</h2>
+      <h2>${selfService ? '🔑 您申請的新密碼' : '✓ 密碼重置成功'}</h2>
       <p>您的新密碼已生成</p>
     </div>
 
     <div class="content">
       <h3>${displayName}，您好</h3>
-      <p>您的密碼已成功重置。請使用以下新密碼登入系統。</p>
+      <p>${intro}</p>
 
       <div class="password-box">
         <p style="margin: 0 0 10px 0; color: #666;">您的新密碼：</p>
         <div class="new-password">${newPassword}</div>
       </div>
-
+${selfService ? `
+      <div class="warning">
+        <ul style="margin: 0; padding-left: 20px;">
+          ${pendingNotes.map(note => `<li>${note}</li>`).join('\n          ')}
+        </ul>
+        <p style="margin: 10px 0 0 0; font-size: 12px;">${requestOrigin}</p>
+      </div>
+` : ''}
       <div class="warning">
         <strong>⚠ 安全建議：</strong>
         <ul style="margin: 10px 0; padding-left: 20px;">
@@ -385,14 +407,17 @@ export function buildPasswordResetEmailContent(
   `;
 
   const textBody = `
-密碼重置成功
+${selfService ? '您申請的新密碼' : '密碼重置成功'}
 
 ${displayName}，您好
 
-您的密碼已成功重置。請使用以下新密碼登入系統。
+${intro}
 
 您的新密碼：${newPassword}
-
+${selfService ? `
+${pendingNotes.map(note => `- ${note}`).join('\n')}
+${requestOrigin}
+` : ''}
 安全建議：
 - 請立即登入並修改為您自己的密碼
 - 請勿與他人分享您的密碼

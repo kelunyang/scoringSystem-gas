@@ -471,7 +471,8 @@ export async function resetUserPassword(
     // Update password
     await env.DB.prepare(`
       UPDATE users
-      SET password = ?, lastActivityTime = ?, passwordChangedAt = ?
+      SET password = ?, lastActivityTime = ?, passwordChangedAt = ?,
+          pendingPassword = NULL, pendingPasswordExpiresAt = NULL
       WHERE userEmail = ?
     `).bind(hashedPassword, Date.now(), passwordChangeCutoff(), userEmail).run();
 

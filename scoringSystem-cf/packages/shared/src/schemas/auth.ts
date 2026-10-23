@@ -53,18 +53,6 @@ export const LoginVerifyPasswordRequestSchema = z.object({
 export type LoginVerifyPasswordRequest = z.infer<typeof LoginVerifyPasswordRequestSchema>;
 
 /**
- * Email verification code schema (6-digit OTP)
- * - Strips whitespace and hyphens (separators only)
- * - Same shape as an authenticator (TOTP) code: exactly 6 digits
- */
-const EmailVerificationCodeSchema = z.string()
-  .transform(val => val.trim().replace(/[\s-]/g, ''))
-  .refine(
-    (cleanCode) => /^\d{6}$/.test(cleanCode),
-    { message: 'Invalid verification code format' }
-  );
-
-/**
  * Flexible verification code schema for login 2FA
  * Accepts:
  * - 6-digit codes (email OTP and TOTP share the same format)
@@ -219,39 +207,15 @@ export const Resend2FARequestSchema = z.object({
 export type Resend2FARequest = z.infer<typeof Resend2FARequestSchema>;
 
 /**
- * Password reset - verify email request schema
+ * Password reset request schema
+ * Forgot password is one step: the address to mail a new password to.
  */
-export const VerifyEmailForResetRequestSchema = z.object({
+export const PasswordResetRequestSchema = z.object({
   userEmail: EmailSchema,
-  selectedProjectIds: z.array(z.string()).optional(),
-  allParticipated: z.boolean().optional(),
   turnstileToken: TurnstileTokenSchema
 });
 
-export type VerifyEmailForResetRequest = z.infer<typeof VerifyEmailForResetRequestSchema>;
-
-/**
- * Password reset - verify code request schema
- */
-export const PasswordResetVerifyCodeRequestSchema = z.object({
-  userEmail: EmailSchema,
-  code: EmailVerificationCodeSchema,
-  turnstileToken: TurnstileTokenSchema
-});
-
-export type PasswordResetVerifyCodeRequest = z.infer<typeof PasswordResetVerifyCodeRequestSchema>;
-
-/**
- * Password reset - reset password request schema
- */
-export const ResetPasswordRequestSchema = z.object({
-  userEmail: EmailSchema,
-  selectedProjectIds: z.array(z.string()).optional(),
-  allParticipated: z.boolean().optional(),
-  turnstileToken: TurnstileTokenSchema.optional()
-});
-
-export type ResetPasswordRequest = z.infer<typeof ResetPasswordRequestSchema>;
+export type PasswordResetRequest = z.infer<typeof PasswordResetRequestSchema>;
 
 /**
  * 2FA verification response schema

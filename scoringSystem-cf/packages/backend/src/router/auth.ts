@@ -31,9 +31,7 @@ import {
   ChangePasswordRequestSchema,
   CheckEmailQuerySchema,
   Resend2FARequestSchema,
-  VerifyEmailForResetRequestSchema,
-  PasswordResetVerifyCodeRequestSchema,
-  ResetPasswordRequestSchema,
+  PasswordResetRequestSchema,
   TotpSetupVerifyRequestSchema,
   TotpDisableRequestSchema,
   TotpRegenerateCodesRequestSchema,
@@ -445,7 +443,15 @@ const authRouter = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
     // Verify password
     const { verifyPassword } = await import('../handlers/auth/password');
-    const isValidPassword = await verifyPassword(body.password, user.password as string);
+    // A mailed reset password also opens the door, and its first use makes it
+    // the real one. See handlers/auth/password-reset.ts.
+    const { resolvePendingPassword } = await import('../handlers/auth/password-reset');
+    const isValidPassword = await resolvePendingPassword(
+      c.env,
+      user,
+      body.password,
+      await verifyPassword(body.password, user.password as string)
+    );
 
     if (!isValidPassword) {
       const now = Date.now();
@@ -1242,15 +1248,19 @@ const authRouter = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 )
 
 /**
- * POST /auth/verify-email-for-reset
- * Password reset step 1: Verify email and send 2FA code with IP/country info
+ * POST /auth/reset-password
+ * Forgot password: mail a new password to the given address.
  *
- * Body: { userEmail: string, selectedProjectIds?: string[], allParticipated?: boolean, turnstileToken: string }
- * Returns: { verified: true, message: string }
+ * The new password is parked beside the old one until it is first used (see
+ * handlers/auth/password-reset.ts), so a stranger submitting someone's email
+ * cannot lock them out.
+ *
+ * Body: { userEmail: string, turnstileToken: string }
+ * Returns: { success: true, message: string } — identical whether or not the account exists
  */
   .post(
-  '/verify-email-for-reset',
-  zValidator('json', VerifyEmailForResetRequestSchema),
+  '/reset-password',
+  zValidator('json', PasswordResetRequestSchema),
   async (c) => {
     const body = c.req.valid('json');
 
@@ -1274,7 +1284,7 @@ const authRouter = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
     const cf = c.req.raw.cf as IncomingRequestCfProperties | undefined;
     const country = cf?.country || 'unknown';
 
-    // Sends mail with no password, so per-IP applies. verifyEmailForReset
+    // Sends mail with no password, so per-IP applies. requestPasswordReset
     // deliberately returns success for unknown addresses to avoid user
     // enumeration; limiting here keeps that property, because the decision
     // never depends on whether the account exists.
@@ -1292,80 +1302,8 @@ const authRouter = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
       );
     }
 
-    const { verifyEmailForReset } = await import('../handlers/auth/password-reset');
-    const result = await verifyEmailForReset(c.env, body.userEmail, ipAddress, country);
-
-    return c.json(result, result.success ? 200 : 400);
-  }
-)
-
-/**
- * POST /auth/password-reset-verify-code
- * Password reset step 2: Verify 2FA code and return projects
- *
- * Body: { userEmail: string, code: string, turnstileToken: string }
- * Returns: { verified: true, projects: [...] }
- */
-  .post(
-  '/password-reset-verify-code',
-  zValidator('json', PasswordResetVerifyCodeRequestSchema),
-  async (c) => {
-    const body = c.req.valid('json');
-
-    // Bot protection: this is a 6-digit code check, so without it the endpoint
-    // is an unthrottled oracle for guessing reset codes.
-    const turnstileError = await verifyTurnstileMiddleware(
-      c.env,
-      body.turnstileToken,
-      c.req.header('CF-Connecting-IP')
-    );
-    if (turnstileError) {
-      return c.json(turnstileError, 403);
-    }
-
-    const { verifyCodeAndGetProjects } = await import('../handlers/auth/password-reset');
-    const result = await verifyCodeAndGetProjects(
-      c.env,
-      body.userEmail,
-      body.code
-    );
-
-    return c.json(result, result.success ? 200 : 400);
-  }
-)
-
-/**
- * POST /auth/reset-password
- * Password reset step 3: Reset password with new password
- *
- * Body: { userEmail: string, code: string, newPassword: string, turnstileToken: string }
- * Returns: { success: true, message: string }
- */
-  .post(
-  '/reset-password',
-  zValidator('json', ResetPasswordRequestSchema),
-  async (c) => {
-    const body = c.req.valid('json');
-
-    // Verify Turnstile token (automatically skipped if TURNSTILE_ENABLED=false)
-    const { verifyTurnstileMiddleware } = await import('../utils/turnstile');
-    const turnstileError = await verifyTurnstileMiddleware(
-      c.env,
-      body.turnstileToken,
-      c.req.header('CF-Connecting-IP')
-    );
-    if (turnstileError) {
-      return c.json(turnstileError, 403);
-    }
-
-    const { handlePasswordReset } = await import('../handlers/auth/password-reset');
-    const result = await handlePasswordReset(
-      c.env,
-      body.userEmail,
-      body.selectedProjectIds || [],
-      body.allParticipated || false,
-      body.turnstileToken
-    );
+    const { requestPasswordReset } = await import('../handlers/auth/password-reset');
+    const result = await requestPasswordReset(c.env, body.userEmail, ipAddress, country);
 
     return c.json(result, result.success ? 200 : 400);
   }

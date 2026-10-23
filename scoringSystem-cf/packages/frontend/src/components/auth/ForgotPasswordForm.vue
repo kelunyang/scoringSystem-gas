@@ -1,51 +1,8 @@
 <template>
   <div class="auth-form">
-    <!-- Steps Indicator -->
-    <div class="steps-container">
-      <el-steps
-        :active="codeVerified ? 2 : (emailVerified ? 1 : 0)"
-        finish-status="success"
-        align-center
-        role="navigation"
-        aria-label="密碼重設流程步驟"
-      >
-        <el-step
-          title="驗證帳號"
-          description="輸入email確認身份"
-          :status="step1Status"
-        >
-          <template #icon>
-            <i v-if="emailVerified" class="fas fa-check-circle step-icon step-icon--success"></i>
-            <i v-else class="fas fa-envelope step-icon step-icon--active"></i>
-          </template>
-        </el-step>
-        <el-step
-          title="兩階段驗證"
-          description="輸入驗證碼"
-          :status="step2Status"
-        >
-          <template #icon>
-            <i v-if="codeVerified" class="fas fa-check-circle step-icon step-icon--success"></i>
-            <i v-else-if="emailVerified" class="fas fa-shield-halved step-icon step-icon--active"></i>
-            <i v-else class="fas fa-shield-halved step-icon step-icon--wait"></i>
-          </template>
-        </el-step>
-        <el-step
-          title="選擇專案"
-          description="識別未參與專案"
-          :status="step3Status"
-        >
-          <template #icon>
-            <i v-if="codeVerified" class="fas fa-list-check step-icon step-icon--active"></i>
-            <i v-else class="fas fa-list-check step-icon step-icon--wait"></i>
-          </template>
-        </el-step>
-      </el-steps>
-    </div>
-
-    <!-- Success Message -->
+    <!-- Sent -->
     <div
-      v-if="resetSent"
+      v-if="sentTo"
       class="success-message"
       role="status"
       aria-live="polite"
@@ -53,39 +10,21 @@
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      密碼已重設，請收信並依據信中的新密碼登入
+      <div>
+        <p>如果 {{ sentTo }} 有註冊過，新密碼已經寄過去了，請收信後用新密碼登入。</p>
+        <p class="hint">新密碼 24 小時內有效。在你用新密碼登入之前，原本的密碼也還能用。</p>
+        <p class="hint">幾分鐘內沒收到的話，請看一下垃圾郵件匣。</p>
+        <button type="button" class="link-button" @click="reset">換一個信箱</button>
+      </div>
     </div>
 
-    <!-- Step 1: Email Verification -->
-    <EmailVerificationStep
-      v-if="!emailVerified && !resetSent"
-      key="email-verification-step"
-      :loading="loading"
-      @submit="handleEmailSubmit"
-    />
-
-    <!-- Step 2: Two-Factor Verification -->
-    <TwoFactorStep
-      v-else-if="emailVerified && !codeVerified && !resetSent"
-      key="twofactor-step"
-      :user-email="userEmail"
-      theme-color="#E17055"
-      :loading="loading"
-      :resend-loading="resendLoading"
-      :last-email-sent-at="lastEmailSentAt"
-      :cooldown-seconds="resendCooldownSeconds"
-      @submit="handleTwoFactorSubmit"
-      @resend="handleResendCode"
-    />
-
-    <!-- Step 3: Project Selection -->
-    <ProjectSelectionStep
-      v-else-if="codeVerified && !resetSent"
-      key="project-selection-step"
-      :projects="projects"
-      :loading="loading"
-      @submit="handleProjectSubmit"
-    />
+    <template v-else>
+      <p class="intro">輸入註冊時用的電子郵件，我們會把新密碼寄到這個信箱。</p>
+      <EmailVerificationStep
+        :loading="loading"
+        @submit="handleSubmit"
+      />
+    </template>
 
     <!-- Error Message -->
     <div
@@ -105,126 +44,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
-import { ElMessage } from 'element-plus';
 import EmailVerificationStep from './EmailVerificationStep.vue';
-import TwoFactorStep from './TwoFactorStep.vue';
-import ProjectSelectionStep from './ProjectSelectionStep.vue';
 import { useForgotPassword } from '../../composables/auth/useForgotPassword';
-import type { TwoFactorData } from '../../types/auth';
 
-// Props & Emits
-defineEmits<{
-  passwordResetSuccess: [];
-}>();
-
-// Forgot password composable
-const {
-  loading,
-  resendLoading,
-  emailVerified,
-  codeVerified,
-  lastEmailSentAt,
-  resendCooldownSeconds,
-  resetSent,
-  errorMessage,
-  projects,
-  userEmail,
-  selectedProjectIds,
-  allParticipated,
-  verifyEmail,
-  verifyCode,
-  resendCode,
-  resetPassword
-} = useForgotPassword();
-
-// Computed properties for step status
-const step1Status = computed(() => {
-  if (loading.value && !emailVerified.value) return 'process';
-  if (emailVerified.value) return 'success';
-  return 'wait';
-});
-
-const step2Status = computed(() => {
-  if (loading.value && emailVerified.value && !codeVerified.value) return 'process';
-  if (codeVerified.value) return 'success';
-  return 'wait';
-});
-
-const step3Status = computed(() => {
-  if (loading.value && codeVerified.value) return 'process';
-  return 'wait';
-});
+const { loading, sentTo, errorMessage, requestReset, reset } = useForgotPassword();
 
 /**
- * Handle email verification (Step 1)
+ * Submit the email to receive a new password
  */
-async function handleEmailSubmit(data: { email: string; turnstileToken: string }) {
+async function handleSubmit(data: { email: string; turnstileToken: string }) {
   // Guard against concurrent calls
   if (loading.value) return;
-
-  const success = await verifyEmail(data.email, data.turnstileToken);
-
-  if (success) {
-    ElMessage({
-      type: 'success',
-      message: '驗證碼已發送到您的郵箱，請查收',
-      duration: 3000
-    });
-  }
-}
-
-/**
- * Handle 2FA code verification (Step 2)
- */
-async function handleTwoFactorSubmit(data: TwoFactorData) {
-  // Guard against concurrent calls
-  if (loading.value) return;
-
-  const success = await verifyCode(data.code, data.turnstileToken || '');
-
-  if (success) {
-    ElMessage({
-      type: 'success',
-      message: '驗證成功！請選擇您未參與的專案',
-      duration: 2000
-    });
-  }
-  // Error message is already displayed via errorMessage reactive ref
-}
-
-/**
- * Handle resend verification code
- */
-async function handleResendCode(data: { turnstileToken: string }) {
-  // Guard against concurrent calls
-  if (resendLoading.value) return;
-
-  const success = await resendCode(data.turnstileToken);
-
-  if (success) {
-    ElMessage({
-      type: 'success',
-      message: '驗證碼已重新發送',
-      duration: 2000
-    });
-  }
-  // Error message is already displayed via errorMessage reactive ref
-}
-
-/**
- * Handle password reset (Step 3)
- */
-async function handleProjectSubmit(data: { selectedProjectIds: string[]; allParticipated: boolean; turnstileToken: string }) {
-  // Guard against concurrent calls
-  if (loading.value) return;
-
-  // Update composable's reactive refs with form data
-  // This ensures the resetPassword() function can read the correct values
-  selectedProjectIds.value = data.selectedProjectIds;
-  allParticipated.value = data.allParticipated;
-
-  await resetPassword(data.turnstileToken);
+  await requestReset(data.email, data.turnstileToken);
 }
 </script>
 
@@ -233,30 +64,9 @@ async function handleProjectSubmit(data: { selectedProjectIds: string[]; allPart
   padding: 20px 0;
 }
 
-.steps-container {
-  margin-bottom: 30px;
-  padding: 20px;
-}
-
-.step-icon {
-  font-size: inherit;
-}
-
-.step-icon--success {
-  color: #FAB1A0;
-}
-
-.step-icon--active {
-  color: #E17055;
-}
-
-.step-icon--wait {
-  color: #94a3b8;
-}
-
 .success-message {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 12px 16px;
   margin-bottom: 16px;
@@ -270,6 +80,32 @@ async function handleProjectSubmit(data: { selectedProjectIds: string[]; allPart
 .success-message svg {
   flex-shrink: 0;
   color: #FAB1A0;
+}
+
+.success-message p {
+  margin: 0 0 6px 0;
+}
+
+.success-message .hint {
+  color: #6b4423;
+  font-size: 13px;
+}
+
+.intro {
+  margin: 0;
+  color: #475569;
+  font-size: 14px;
+}
+
+.link-button {
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #D35400;
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .error-message {
