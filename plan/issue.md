@@ -15,6 +15,23 @@
 
 ## A. 未解決 Issues
 
+### #016 ｜ 讀 KV 設定一出錯，Turnstile 就安靜地關掉（2026-10-24）｜ 低
+
+**問題**：`getConfigValue`（`backend/src/utils/config.ts:213-216`）讀 KV 時只要拋例外，
+就直接回 `DEFAULT_VALUES`，而 `TURNSTILE_ENABLED` 的預設值是 `'false'`（同檔 `:96`）。
+`verifyTurnstileMiddleware`（`utils/turnstile.ts:160-166`）看到不是 `'true'` 就放行。
+也就是說 KV 暫時讀不到的那段時間，6 個端點（登入、重設密碼等）的防機器人驗證全部失效，
+而且只會在 console 留一行 log。
+
+**影響**：攻擊者無法主動讓 KV 出錯，要碰上 Cloudflare KV 本身故障才會發生；
+登入仍有密碼錯誤鎖定和 2FA，寄信端點仍有頻率限制。所以列「低」。
+
+**可能修法**：讓安全相關的開關在讀取失敗時「寧可擋下」，例如 `TURNSTILE_ENABLED`
+讀取例外時視為 `true`；或把 `wrangler.toml` 的 `TURNSTILE_ENABLED` 改成 `"true"`，
+讓第二層後備值也是開啟（但要注意：這樣 KV 被刪掉時，本地開發也會要求驗證碼）。
+
+---
+
 ### #015 ｜ 使用者管理的「停用」開關送 disabled，後端只收 active / inactive（2026-09-10）｜ 中
 
 **問題**：`UserManagement.vue` 的狀態開關（`toggleUserStatus`）與批次停用都送 `status: 'disabled'`，
@@ -997,6 +1014,24 @@ Vue template 內只出現在字串裡的元件名，可能被誤判為死碼—�
 
 
 ## B. 已裁決的疑問（封存，勿重啟）
+
+### 2026-10-24 ｜ 部署輸出寫 `TURNSTILE_ENABLED ("false")`，為什麼正式環境還要驗證碼？→ KV 設定優先，toml 只是後備
+
+**結論**：正式環境的 Turnstile 是開的，運作正常。
+
+- `getConfigValue` 的查找順序是 **KV（`CONFIG` namespace）→ `wrangler.toml` 的 `[vars]` → 程式內預設值**
+  （`backend/src/utils/config.ts` 函式說明「Priority: KV > Environment Variable > Default Value」）
+- 2026-10-24 讀正式 KV：`config:turnstile_enabled = true`、`config:turnstile_site_key` 有值、
+  `config:turnstile_secret_key` 有值（35 字元）。KV 有值，toml 的 `"false"` 就不會被讀到
+- 前端拿到的開關和 site key 也是同一個來源（`backend/src/router/system.ts:93-94` `/system/turnstile-config`），
+  所以前後端不會一邊開一邊關
+- 這三個值是從管理後台「系統設定 → 安全驗證配置」寫進 KV 的（`frontend/src/config/admin-settings-config.ts:135`）
+- 實測：不帶 token 打 `POST /api/auth/reset-password` 回 403 `MISSING_TURNSTILE_TOKEN`
+
+**`wrangler deploy` 顯示的是 toml 的值，不是實際生效的值。** 要知道實際狀態請看管理後台或 KV。
+toml 留 `"false"` 是讓本地開發不用設 Turnstile 金鑰。讀取出錯時會退回 `"false"`，這個風險另見 A 區 #016。
+
+---
 
 ### 2026-10-23 ｜ 忘記密碼為什麼不直接把密碼換掉？→ 新密碼先「掛著」，第一次用它登入才生效
 
