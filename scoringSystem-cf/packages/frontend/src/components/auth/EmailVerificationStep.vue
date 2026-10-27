@@ -3,21 +3,14 @@
     <div class="form-group">
       <label for="resetEmail">電子郵件</label>
       <div class="email-input-group">
-        <el-tooltip
-          :visible="hasUppercase"
-          content="你輸入了大寫，請注意大小寫"
-          placement="top"
-        >
-          <el-input
-            id="resetEmail"
-            v-model="email"
-            type="email"
-            placeholder="請輸入註冊時的電子郵件"
-            :disabled="loading"
-            :class="{ 'uppercase-warning': hasUppercase }"
-            @keyup.enter="handleSubmit"
-          />
-        </el-tooltip>
+        <el-input
+          id="resetEmail"
+          v-model="email"
+          type="email"
+          placeholder="請輸入註冊時的電子郵件"
+          :disabled="loading"
+          @keyup.enter="handleSubmit"
+        />
         <button
           class="btn btn-secondary"
           :disabled="!canSubmit || loading"
@@ -61,9 +54,6 @@ const emit = defineEmits<{
 // Form data
 const email = ref('');
 
-// Uppercase detection for warning
-const hasUppercase = computed(() => /[A-Z]/.test(email.value));
-
 // Turnstile
 const { token: turnstileToken, onVerify, onError, onExpired, reset: resetTurnstile } = useTurnstile();
 
@@ -86,7 +76,7 @@ const canSubmit = computed(() => {
 function handleSubmit() {
   if (!canSubmit.value) return;
   emit('submit', {
-    email: email.value,
+    email: email.value.trim().toLowerCase(),
     turnstileToken: turnstileToken.value || ''
   });
 
@@ -121,25 +111,6 @@ function handleSubmit() {
 /* el-input in flex container needs flex: 1 */
 .email-input-group :deep(.el-input) {
   flex: 1;
-}
-
-/* Uppercase warning style */
-.uppercase-warning :deep(.el-input__wrapper) {
-  border-color: #800020 !important;
-  border-width: 2px !important;
-  background-color: #fff5f5 !important;
-  animation: breathing 1.5s ease-in-out infinite !important;
-}
-
-@keyframes breathing {
-  0%, 100% {
-    box-shadow: 0 0 8px 2px rgba(128, 0, 32, 0.3);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 16px 6px rgba(128, 0, 32, 0.5);
-    transform: scale(1.02);
-  }
 }
 
 .btn {

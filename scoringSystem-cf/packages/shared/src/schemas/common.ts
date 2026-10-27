@@ -90,7 +90,9 @@ export const SettlementIdSchema = z.string().regex(/^(settle|reversal|stl)_[0-9a
  * Common field validations
  * OWASP 2023: Minimum 8 characters for passwords
  */
-export const EmailSchema = z.string().email('Invalid email format');
+// Stored addresses are always lowercase (register.ts, admin email change), and
+// the users lookups compare with `=`, so normalise here or "Student@x" fails login.
+export const EmailSchema = z.string().trim().toLowerCase().email('Invalid email format');
 export const PasswordSchema = z.string().min(8, 'Password must be at least 8 characters');
 export const DisplayNameSchema = z.string().min(1, 'Display name is required').max(100, 'Display name too long');
 export const TimestampSchema = z.number().int().positive();

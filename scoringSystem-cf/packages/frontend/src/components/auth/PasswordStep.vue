@@ -2,41 +2,35 @@
   <div class="password-step">
     <div class="form-group">
       <label for="loginEmail">電子郵件</label>
-      <el-tooltip
-        :visible="hasUppercase"
-        content="你輸入了大寫，請注意大小寫"
-        placement="top"
-      >
-        <el-input
-          id="loginEmail"
-          v-model="email"
-          type="email"
-          placeholder="請輸入電子郵件"
-          :disabled="loading"
-          :class="{ 'uppercase-warning': hasUppercase }"
-          @keyup.enter="handleSubmit"
-        />
-      </el-tooltip>
+      <el-input
+        id="loginEmail"
+        v-model="email"
+        type="email"
+        placeholder="請輸入電子郵件"
+        :disabled="loading"
+        @keyup.enter="handleSubmit"
+      />
     </div>
 
     <div class="form-group">
       <label for="loginPassword">密碼</label>
-      <el-tooltip
-        :visible="hasUppercasePassword"
-        content="你輸入了大寫，請注意大小寫"
-        placement="top"
-      >
-        <el-input
-          id="loginPassword"
-          v-model="password"
-          type="password"
-          placeholder="請輸入密碼"
-          :disabled="loading"
-          show-password
-          :class="{ 'uppercase-warning': hasUppercasePassword }"
-          @keyup.enter="handleSubmit"
-        />
-      </el-tooltip>
+      <el-input
+        id="loginPassword"
+        v-model="password"
+        type="password"
+        placeholder="請輸入密碼"
+        :disabled="loading"
+        show-password
+        aria-describedby="capsLockHint"
+        @keydown="updateCapsLock"
+        @keyup="updateCapsLock"
+        @keyup.enter="handleSubmit"
+        @blur="capsLockOn = false"
+      />
+      <p v-if="capsLockOn" id="capsLockHint" class="caps-lock-hint" role="status">
+        <i class="fas fa-arrow-up" aria-hidden="true"></i>
+        大寫鎖定（Caps Lock）已開啟
+      </p>
     </div>
 
     <!-- Turnstile CAPTCHA -->
@@ -89,9 +83,16 @@ const emit = defineEmits<{
 const email = ref('');
 const password = ref('');
 
-// Uppercase detection for warning
-const hasUppercase = computed(() => /[A-Z]/.test(email.value));
-const hasUppercasePassword = computed(() => /[A-Z]/.test(password.value));
+// Warn only when Caps Lock is actually on: a password that simply contains
+// capitals is fine, and warning on it read as "capitals are not allowed".
+// Most phone keyboards never report Caps Lock, so the hint stays hidden there.
+const capsLockOn = ref(false);
+
+function updateCapsLock(event: Event) {
+  if (event instanceof KeyboardEvent) {
+    capsLockOn.value = event.getModifierState('CapsLock');
+  }
+}
 
 // Turnstile
 const { token: turnstileToken, onVerify, onError, onExpired, reset: resetTurnstile } = useTurnstile();
@@ -161,7 +162,7 @@ function handleSubmit() {
 
   emit('submit', {
     credentials: {
-      email: email.value,
+      email: email.value.trim().toLowerCase(),
       password: password.value
     },
     turnstileToken: turnstileToken.value!
@@ -191,23 +192,13 @@ function handleSubmit() {
   font-size: 14px;
 }
 
-/* Uppercase warning style */
-.uppercase-warning :deep(.el-input__wrapper) {
-  border-color: #800020 !important;
-  border-width: 2px !important;
-  background-color: #fff5f5 !important;
-  animation: breathing 1.5s ease-in-out infinite !important;
-}
-
-@keyframes breathing {
-  0%, 100% {
-    box-shadow: 0 0 8px 2px rgba(128, 0, 32, 0.3);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 16px 6px rgba(128, 0, 32, 0.5);
-    transform: scale(1.02);
-  }
+.caps-lock-hint {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #b35900;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .form-actions {
