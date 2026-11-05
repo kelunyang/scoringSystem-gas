@@ -15,6 +15,10 @@
           <label>階段名稱:</label>
           <span>{{ sourceStage.stageName }}</span>
         </div>
+        <div v-if="sourceStage" class="detail-row">
+          <label>起訖時間:</label>
+          <span>{{ sourceTimeRangeText }}</span>
+        </div>
       </div>
 
       <!-- 新階段設定 -->
@@ -27,6 +31,20 @@
             placeholder="請輸入新階段名稱"
             clearable
           />
+        </div>
+        <div class="form-group">
+          <label>同時複製階段起訖時間</label>
+          <el-switch
+            v-model="copyTimes"
+            :disabled="!sourceHasTimes"
+            active-text="完整沿用原階段的起訖時間"
+            inactive-text="從現在開始，保留原本的長度"
+          />
+          <div class="field-hint">
+            <template v-if="!sourceHasTimes">原階段尚未排定起訖時間，無法沿用。</template>
+            <template v-else-if="copyTimes">新階段的起訖時間會跟原階段一模一樣：{{ sourceTimeRangeText }}</template>
+            <template v-else>新階段從按下複製的這一刻開始，長度與原階段相同（{{ sourceDurationText }}）。</template>
+          </div>
         </div>
       </div>
 
@@ -95,7 +113,13 @@ import { useCloneStageToProjects } from '@/composables/admin/useProjects'
 
 const props = defineProps<{
   visible: boolean
-  sourceStage: { stageId: string; stageName: string; projectId: string } | null
+  sourceStage: {
+    stageId: string
+    stageName: string
+    projectId: string
+    startTime?: number | null
+    endTime?: number | null
+  } | null
   projects: { projectId: string; projectName: string }[]
 }>()
 
@@ -111,6 +135,34 @@ const newStageName = ref('')
 const confirmText = ref('')
 const targetProjectIds = ref<string[]>([])
 const cloning = ref(false)
+const copyTimes = ref(false)
+
+/** 原階段是否有完整的起訖時間（stages 的時間欄位可能是 NULL） */
+const sourceHasTimes = computed(() => {
+  const start = props.sourceStage?.startTime
+  const end = props.sourceStage?.endTime
+  return typeof start === 'number' && start > 0 && typeof end === 'number' && end > start
+})
+
+function formatTime(ms: number): string {
+  return new Date(ms).toLocaleString('zh-TW', {
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+  })
+}
+
+const sourceTimeRangeText = computed(() => {
+  if (!sourceHasTimes.value) return '尚未排定'
+  return `${formatTime(props.sourceStage!.startTime!)} ～ ${formatTime(props.sourceStage!.endTime!)}`
+})
+
+const sourceDurationText = computed(() => {
+  if (!sourceHasTimes.value) return ''
+  const totalMinutes = Math.round((props.sourceStage!.endTime! - props.sourceStage!.startTime!) / 60000)
+  const days = Math.floor(totalMinutes / 1440)
+  const hours = Math.floor((totalMinutes % 1440) / 60)
+  const minutes = totalMinutes % 60
+  return [days && `${days} 天`, hours && `${hours} 小時`, minutes && `${minutes} 分`].filter(Boolean).join(' ') || '0 分'
+})
 
 const isCloneStageFormValid = computed(() => {
   return newStageName.value.trim() !== '' &&
@@ -147,7 +199,11 @@ async function executeCloneStage() {
       sourceProjectId: props.sourceStage!.projectId,
       stageId: props.sourceStage!.stageId,
       newStageName: newStageName.value.trim(),
-      targetProjectIds: clonedTargetIds
+      targetProjectIds: clonedTargetIds,
+      // 開關打開才帶時間；沒帶時後端以「現在」為起點、沿用原長度
+      ...(copyTimes.value && sourceHasTimes.value
+        ? { startTime: props.sourceStage!.startTime!, endTime: props.sourceStage!.endTime! }
+        : {})
     })
 
     // 父層據此刷新已展開目標專案的階段列表
@@ -166,6 +222,7 @@ watch(() => props.visible, (open) => {
   if (open) {
     newStageName.value = ''
     confirmText.value = ''
+    copyTimes.value = false
     targetProjectIds.value = props.sourceStage ? [props.sourceStage.projectId] : []
   }
 })

@@ -142,6 +142,9 @@ interface CloneStageParams {
   stageId: string
   newStageName: string
   targetProjectIds: string[]
+  /** 指定新階段起訖時間（ms）；不帶時後端從現在開始、沿用原長度 */
+  startTime?: number
+  endTime?: number
 }
 
 // ============================================================================
@@ -609,9 +612,9 @@ export function useCloneStageToProjects() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ sourceProjectId, stageId, newStageName, targetProjectIds }: CloneStageParams) => {
+    mutationFn: async ({ sourceProjectId, stageId, newStageName, targetProjectIds, startTime, endTime }: CloneStageParams) => {
       const httpResponse = await rpcClient.api.stages['clone-to-projects'].$post({
-        json: { sourceProjectId, stageId, newStageName, targetProjectIds }
+        json: { sourceProjectId, stageId, newStageName, targetProjectIds, startTime, endTime }
       })
       const response = await httpResponse.json()
 
