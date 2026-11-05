@@ -28,9 +28,6 @@
           <template #content>
             <div class="seg-tip">
               <div class="seg-tip-title">{{ seg.name }}</div>
-              <div v-if="seg.folded" class="seg-tip-row">
-                <span>合併 {{ seg.foldedCount }} 個階段</span>
-              </div>
               <div class="seg-tip-row">
                 <span>報告獎金</span><span>{{ seg.reportReward.toLocaleString('zh-TW') }} 點</span>
               </div>
@@ -105,6 +102,10 @@
  * 相鄰色差 CVD ΔE 9.1 / 一般視覺 ΔE 19.6，全數通過）。
  * 其中 aqua / yellow / magenta 對白底對比度低於 3:1，
  * 因此圖例固定顯示名稱、點數與百分比作為 relief（表格檢視）。
+ *
+ * 有幾個階段就畫幾段，不合併成「其他」。超過 8 個階段時，
+ * 第 9 個起改用黃金角分散色相自動產生顏色（不循環重用前 8 色），
+ * 這些顏色未經 CVD 驗證，辨識主要靠圖例與 hover 高亮。
  */
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
@@ -138,8 +139,6 @@ const SERIES_COLORS = [
   '#e34948'  // 8 red
 ] as const
 
-/** 最多用幾個色塊；超過就把尾端階段折成「其他」 */
-const MAX_SLOTS = SERIES_COLORS.length
 /** 區段寬度至少這麼寬才在裡面放百分比標籤（避免文字被切掉） */
 const LABEL_MIN_WIDTH = 42
 /** 區段之間的白色間隙寬度（px），與 CSS 的 gap 一致 */
@@ -183,6 +182,26 @@ function pickInk(hex: string): string {
   return contrastWithWhite >= contrastWithBlack ? '#ffffff' : '#0b0b0b'
 }
 
+/** HSL（h: 度、s/l: 0–1）轉 #rrggbb */
+function hslToHex(h: number, s: number, l: number): string {
+  const k = (n: number) => (n + h / 30) % 12
+  const a = s * Math.min(l, 1 - l)
+  const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))
+  return '#' + [0, 8, 4].map(n => Math.round(f(n) * 255).toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * 第 index 個階段的顏色：前 8 個用驗證過的色盤，
+ * 之後用黃金角（137.5°）分散色相，讓相鄰階段顏色差異最大且不重複
+ */
+function stageColor(index: number): string {
+  if (index < SERIES_COLORS.length) return SERIES_COLORS[index]
+  const extra = index - SERIES_COLORS.length
+  const hue = (20 + extra * 137.508) % 360
+  const lightness = extra % 2 === 0 ? 0.42 : 0.55
+  return hslToHex(hue, 0.6, lightness)
+}
+
 function formatPercent(share: number): string {
   if (share > 0 && share < 0.001) return '<0.1%'
   return `${(share * 100).toFixed(1)}%`
@@ -197,8 +216,6 @@ interface Segment {
   share: number
   color: string
   ink: string
-  folded: boolean
-  foldedCount: number
   pixelWidth: number
 }
 
@@ -207,34 +224,15 @@ const segments = computed<Segment[]>(() => {
   const total = totalPoints.value
   if (list.length === 0 || total <= 0) return []
 
-  // 超過色盤容量就把尾端階段折成「其他」，不循環用色
-  const needsFold = list.length > MAX_SLOTS
-  const head = needsFold ? list.slice(0, MAX_SLOTS - 1) : list
-  const tail = needsFold ? list.slice(MAX_SLOTS - 1) : []
-
-  const raw = head.map((stage, index) => ({
+  // 有幾個階段就畫幾段，不合併
+  const raw = list.map((stage, index) => ({
     key: stage.id,
     name: stage.title,
     reportReward: stage.reportReward,
     commentReward: stage.commentReward,
     points: stage.points,
-    color: SERIES_COLORS[index],
-    folded: false,
-    foldedCount: 0
+    color: stageColor(index)
   }))
-
-  if (tail.length > 0) {
-    raw.push({
-      key: '__other__',
-      name: `其他 ${tail.length} 個階段`,
-      reportReward: tail.reduce((sum, stage) => sum + stage.reportReward, 0),
-      commentReward: tail.reduce((sum, stage) => sum + stage.commentReward, 0),
-      points: tail.reduce((sum, stage) => sum + stage.points, 0),
-      color: SERIES_COLORS[MAX_SLOTS - 1],
-      folded: true,
-      foldedCount: tail.length
-    })
-  }
 
   // 扣掉間隙後才是色塊實際可分配的寬度
   const usableWidth = Math.max(0, barWidth.value - SEG_GAP * (raw.length - 1))

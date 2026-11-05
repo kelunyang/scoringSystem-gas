@@ -4,7 +4,7 @@
  * 這張圖的重點是「數字不能算錯」與「顏色不能循環用」，所以斷言集中在：
  * - 總點數 = 各階段（報告獎金 + 評論獎金）加總
  * - 每個區段的 flex-grow = 該階段占比（0 點的階段不進圖）
- * - 超過 8 個階段時，尾端折成單一「其他」區段，配色永不循環
+ * - 有幾個階段就畫幾段（不折成「其他」），超過 8 個時配色也不重複
  * - 全部 0 點時走 EmptyState
  *
  * 不斷言 DOM 包裹層級（el-tooltip 的實作細節），只錨定 .share-seg / .legend-row。
@@ -72,22 +72,23 @@ describe('StagePointsShareChart', () => {
     expect(wrapper.text()).not.toContain('空階段')
   })
 
-  it('超過 8 個階段時把尾端折成單一「其他」區段，顏色不循環', () => {
+  it('超過 8 個階段時每個階段都獨立一段，不折成「其他」，顏色不重複', () => {
     const stages = Array.from({ length: 11 }, (_, i) =>
       makeStage(`stg_${i + 1}`, `第 ${i + 1} 階段`, 100, 0)
     )
     const wrapper = mountChart(stages)
 
     const segs = wrapper.findAll('.share-seg')
-    expect(segs).toHaveLength(8) // 前 7 個階段 + 1 個「其他」
+    expect(segs).toHaveLength(11)
 
     const rows = wrapper.findAll('.legend-row')
-    expect(rows[7].text()).toContain('其他 4 個階段')
-    expect(rows[7].text()).toContain((400).toLocaleString('zh-TW'))
+    expect(rows).toHaveLength(11)
+    expect(rows[10].text()).toContain('第 11 階段')
+    expect(wrapper.text()).not.toContain('其他')
 
-    // 8 個色塊互不重複 = 沒有循環用色
+    // 11 個色塊互不重複 = 沒有循環用色
     const colors = wrapper.findAll('.legend-swatch').map(el => el.attributes('style'))
-    expect(new Set(colors).size).toBe(8)
+    expect(new Set(colors).size).toBe(11)
   })
 
   it('全部 0 點時顯示 EmptyState，不畫出長條', () => {
